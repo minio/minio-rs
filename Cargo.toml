@@ -6,3 +6,5 @@ edition = "2018"
 
 [dependencies]
 hyper = "0.12.28"
+ring = "0.14.6"
+time = "0.1.42"

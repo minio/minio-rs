@@ -1,15 +1,19 @@
-use hyper::Uri;
-use std::{env, string::String};
+mod sign;
 
-#[derive(Debug)]
+use hyper::{body::Body, header::HeaderMap, Method, Uri};
+use std::collections::HashMap;
+use std::{env, string::String};
+use time::Tm;
+
+#[derive(Debug, Clone)]
 pub struct Credentials {
     access_key: String,
     secret_key: String,
 }
 
-impl Credentials{
+impl Credentials {
     pub fn new(ak: &str, sk: &str) -> Credentials {
-        Credentials{
+        Credentials {
             access_key: ak.to_string(),
             secret_key: sk.to_string(),
         }
@@ -19,7 +23,9 @@ impl Credentials{
         let (ak, sk) = (env::var("MINIO_ACCESS_KEY"), env::var("MINIO_SECRET_KEY"));
         match (ak, sk) {
             (Ok(ak), Ok(sk)) => Ok(Credentials::new(ak.as_str(), sk.as_str())),
-            _ => Err(Err::InvalidEnv("Missing MINIO_ACCESS_KEY or MINIO_SECRET_KEY environment variables".to_string())),
+            _ => Err(Err::InvalidEnv(
+                "Missing MINIO_ACCESS_KEY or MINIO_SECRET_KEY environment variables".to_string(),
+            )),
         }
     }
 }
@@ -35,23 +41,27 @@ pub enum Err {
 #[derive(Debug)]
 pub struct Client {
     server: Uri,
-    credentials: Option<Credentials>,
+    region: Region,
+    pub credentials: Option<Credentials>,
 }
 
-impl Client{
+impl Client {
     pub fn new(server: &str) -> Result<Client, Err> {
         let v = server.parse::<Uri>();
         match v {
-            Ok(s) => if s.host().is_none() {
-                Err(Err::InvalidUrl("no host specified!".to_string()))
-            } else if s.scheme_str() != Some("http") && s.scheme_str() != Some("https") {
-                Err(Err::InvalidUrl("invalid scheme!".to_string()))
-            } else {
-                Ok(Client{
-                    server: s,
-                    credentials: None,
-                })
-            },
+            Ok(s) => {
+                if s.host().is_none() {
+                    Err(Err::InvalidUrl("no host specified!".to_string()))
+                } else if s.scheme_str() != Some("http") && s.scheme_str() != Some("https") {
+                    Err(Err::InvalidUrl("invalid scheme!".to_string()))
+                } else {
+                    Ok(Client {
+                        server: s,
+                        region: String::from(""),
+                        credentials: None,
+                    })
+                }
+            }
             Err(err) => Err(Err::InvalidUrl(err.to_string())),
         }
     }
@@ -60,11 +70,28 @@ impl Client{
         self.credentials = Some(credentials);
     }
 
+    pub fn set_region(&mut self, r: Region) {
+        self.region = r;
+    }
+
     pub fn get_play_client() -> Client {
         Client {
             server: "https://play.min.io:9000".parse::<Uri>().unwrap(),
-            credentials: Some(Credentials::new("Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG")),
+            region: String::from(""),
+            credentials: Some(Credentials::new(
+                "Q3AM3UQ867SPQQA43P2F",
+                "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
+            )),
         }
     }
+}
 
+pub struct S3Req {
+    method: Method,
+    bucket: Option<String>,
+    object: Option<String>,
+    headers: HeaderMap,
+    query: HashMap<String, Option<String>>,
+    body: Body,
+    ts: Tm,
 }
