@@ -1,0 +1,8 @@
+[package]
+name = "minio-rs"
+version = "0.1.0"
+authors = ["Aditya Manthramurthy <aditya.mmy@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+hyper = "0.12.28"
