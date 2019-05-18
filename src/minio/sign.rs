@@ -11,6 +11,10 @@ fn aws_format_time(t: &Tm) -> String {
     t.strftime("%Y%m%dT%H%M%SZ").unwrap().to_string()
 }
 
+fn aws_format_date(t: &Tm) -> String {
+    t.strftime("%Y%m%d").unwrap().to_string()
+}
+
 fn mk_scope(t: &Tm, r: &minio::Region) -> String {
     let scope_time = t.strftime("%Y%m%d").unwrap().to_string();
     format!("{}/{}/s3/aws4_request", scope_time, r)
@@ -53,7 +57,7 @@ fn uri_encode(c: char, encode_slash: bool) -> String {
     } else {
         let mut b = [0; 8];
         let cs = c.encode_utf8(&mut b).as_bytes();
-        cs.iter().map(|x| format!("%{:X}", x)).collect()
+        cs.iter().map(|x| format!("%{:02X}", x)).collect()
     }
 }
 
@@ -66,24 +70,15 @@ fn get_canonical_querystr(q: &HashMap<String, Option<String>>) -> String {
     hs.sort();
     let vs: Vec<String> = hs
         .drain(..)
-        .map(|(x, y)| match y {
-            Some(s) => uri_encode_str(&x, true) + "=" + &uri_encode_str(&s, true),
-            None => uri_encode_str(&x, true),
+        .map(|(x, y)| {
+            let val_str = match y {
+                Some(s) => uri_encode_str(&s, true),
+                None => "".to_string(),
+            };
+            uri_encode_str(&x, true) + "=" + &val_str
         })
         .collect();
     vs[..].join("&")
-}
-
-fn mk_path(r: &minio::S3Req) -> String {
-    let mut res: String = String::from("");
-    if let Some(s) = &r.bucket {
-        res.push_str(&s);
-        if let Some(o) = &r.object {
-            let s1 = format!("/{}", o);
-            res.push_str(&s1);
-        }
-    };
-    res
 }
 
 fn get_canonical_request(
@@ -91,7 +86,7 @@ fn get_canonical_request(
     hdrs_to_use: &Vec<(String, String)>,
     signed_hdrs_str: &str,
 ) -> String {
-    let path_str = mk_path(r);
+    let path_str = r.mk_path();
     let canonical_qstr = get_canonical_querystr(&r.query);
     let canonical_hdrs: String = hdrs_to_use
         .iter()
@@ -116,7 +111,7 @@ fn string_to_sign(ts: &Tm, scope: &str, canonical_request: &str) -> String {
     let sha256_digest: String = digest::digest(&digest::SHA256, canonical_request.as_bytes())
         .as_ref()
         .iter()
-        .map(|x| format!("{:X}", x))
+        .map(|x| format!("{:02x}", x))
         .collect();
     vec![
         "AWS4-HMAC-SHA256",
@@ -134,7 +129,7 @@ fn hmac_sha256(msg: &str, key: &[u8]) -> hmac::Signature {
 
 fn get_signing_key(ts: &Tm, region: &str, secret_key: &str) -> Vec<u8> {
     let kstr = format!("AWS4{}", secret_key);
-    let s1 = hmac_sha256(&aws_format_time(&ts), kstr.as_bytes());
+    let s1 = hmac_sha256(&aws_format_date(&ts), kstr.as_bytes());
     let s2 = hmac_sha256(&region, s1.as_ref());
     let s3 = hmac_sha256("s3", s2.as_ref());
     let s4 = hmac_sha256("aws4_request", s3.as_ref());
@@ -144,12 +139,11 @@ fn get_signing_key(ts: &Tm, region: &str, secret_key: &str) -> Vec<u8> {
 
 fn compute_sign(str_to_sign: &str, key: &Vec<u8>) -> String {
     let s1 = hmac_sha256(&str_to_sign, key.as_slice());
-    s1.as_ref().iter().map(|x| format!("{:X}", x)).collect()
+    s1.as_ref().iter().map(|x| format!("{:02x}", x)).collect()
 }
 
-pub fn sign_v4(r: &minio::S3Req, c: &minio::Client) -> Option<Vec<(HeaderName, HeaderValue)>> {
-    let creds = c.credentials.clone();
-    creds.map(|creds| {
+pub fn sign_v4(r: &minio::S3Req, c: &minio::Client) -> Vec<(HeaderName, HeaderValue)> {
+    c.credentials.clone().map_or(Vec::new(), |creds| {
         let scope = mk_scope(&r.ts, &c.region);
         let date_hdr = (
             HeaderName::from_static("x-amz-date"),
@@ -157,6 +151,7 @@ pub fn sign_v4(r: &minio::S3Req, c: &minio::Client) -> Option<Vec<(HeaderName, H
         );
         let mut hmap = r.headers.clone();
         hmap.insert(date_hdr.0.clone(), date_hdr.1.clone());
+
         let hs = get_headers_to_sign(&hmap);
         let signed_hdrs_str: String = hs
             .iter()
@@ -164,9 +159,13 @@ pub fn sign_v4(r: &minio::S3Req, c: &minio::Client) -> Option<Vec<(HeaderName, H
             .collect::<Vec<String>>()
             .join(";");
         let cr = get_canonical_request(r, &hs, &signed_hdrs_str);
+        println!("canonicalreq: {}", cr);
         let s2s = string_to_sign(&r.ts, &scope, &cr);
+        println!("s2s: {}", s2s);
         let skey = get_signing_key(&r.ts, &c.region, &creds.secret_key);
+        println!("skey: {:?}", skey);
         let signature = compute_sign(&s2s, &skey);
+        println!("sign: {}", signature);
 
         let auth_hdr_val = format!(
             "AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders={}, Signature={}",
