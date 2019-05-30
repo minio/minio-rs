@@ -117,7 +117,7 @@ impl Client {
     pub fn get_play_client() -> Client {
         Client {
             server: "https://play.min.io:9000".parse::<Uri>().unwrap(),
-            region: Region::empty(),
+            region: Region::new("us-east-1"),
             conn_client: {
                 let https = HttpsConnector::new(4).unwrap();
                 ConnClient::HttpsCC(client::Client::builder().build::<_, hyper::Body>(https))
@@ -162,6 +162,33 @@ impl Client {
                 .and_then(move |chunk| b2s(chunk.into_bytes()))
                 .and_then(|s| xml::parse_bucket_location(s))
         })
+    }
+
+    pub fn delete_bucket(&self, b: &str) -> impl Future<Item = (), Error = Err> {
+        let qp = HashMap::new();
+        let mut hmap = HeaderMap::new();
+
+        self.add_host_header(&mut hmap);
+        let body_hash_hdr = (
+            HeaderName::from_static("x-amz-content-sha256"),
+            HeaderValue::from_static("UNSIGNED-PAYLOAD"),
+        );
+        hmap.insert(body_hash_hdr.0.clone(), body_hash_hdr.1.clone());
+        let s3_req = S3Req {
+            method: Method::DELETE,
+            bucket: Some(b.to_string()),
+            object: None,
+            headers: hmap,
+            query: qp,
+            body: Body::empty(),
+            ts: time::now_utc(),
+        };
+
+        let sign_hdrs = sign::sign_v4(&s3_req, &self);
+        println!("signout: {:?}", sign_hdrs);
+        let req_result = api::mk_request(&s3_req, &self, &sign_hdrs);
+        let conn_client = self.conn_client.clone();
+        run_req_future(req_result, conn_client).and_then(|_| Ok(()))
     }
 }
 

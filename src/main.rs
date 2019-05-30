@@ -17,8 +17,17 @@ fn main() {
     rt::run(rt::lazy(|| {
         // let c = get_local_default_server();
         let c = minio::Client::get_play_client();
-        c.get_bucket_location("txp")
+
+        let region_req = c
+            .get_bucket_location("yyy")
             .map(|res| println!("{}", res.to_string()))
-            .map_err(|err| println!("{:?}", err))
+            .map_err(|err| println!("{:?}", err));
+
+        let del_req = c
+            .delete_bucket("yyy")
+            .map(|_| println!("Deleted!"))
+            .map_err(|err| println!("del err: {:?}", err));
+
+        del_req.join(region_req).map(|_| ())
     }));
 }
