@@ -17,7 +17,7 @@ fn aws_format_date(t: &Tm) -> String {
 
 fn mk_scope(t: &Tm, r: &minio::Region) -> String {
     let scope_time = t.strftime("%Y%m%d").unwrap().to_string();
-    format!("{}/{}/s3/aws4_request", scope_time, r)
+    format!("{}/{}/s3/aws4_request", scope_time, r.to_string())
 }
 
 // Returns list of SORTED headers that will be signed. TODO: verify
@@ -162,7 +162,7 @@ pub fn sign_v4(r: &minio::S3Req, c: &minio::Client) -> Vec<(HeaderName, HeaderVa
         println!("canonicalreq: {}", cr);
         let s2s = string_to_sign(&r.ts, &scope, &cr);
         println!("s2s: {}", s2s);
-        let skey = get_signing_key(&r.ts, &c.region, &creds.secret_key);
+        let skey = get_signing_key(&r.ts, &c.region.to_string(), &creds.secret_key);
         println!("skey: {:?}", skey);
         let signature = compute_sign(&s2s, &skey);
         println!("sign: {}", signature);

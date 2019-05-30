@@ -15,10 +15,10 @@ fn get_local_default_server() -> minio::Client {
 
 fn main() {
     rt::run(rt::lazy(|| {
-        let c = get_local_default_server();
-        // let c = minio::Client::get_play_client();
+        // let c = get_local_default_server();
+        let c = minio::Client::get_play_client();
         c.get_bucket_location("txp")
-            .map(|res| println!("{}", res))
+            .map(|res| println!("{}", res.to_string()))
             .map_err(|err| println!("{:?}", err))
     }));
 }

@@ -1,5 +1,7 @@
 mod api;
 mod sign;
+mod types;
+mod xml;
 
 use bytes::Bytes;
 use futures::future::{self, Future};
@@ -10,10 +12,10 @@ use hyper::{body::Body, client, header, header::HeaderMap, Method, Request, Resp
 use hyper_tls::HttpsConnector;
 use std::collections::HashMap;
 use std::env;
-use std::sync::Arc;
 use std::{string, string::String};
 use time;
 use time::Tm;
+use types::{Err, Region};
 
 #[derive(Debug, Clone)]
 pub struct Credentials {
@@ -38,19 +40,6 @@ impl Credentials {
             )),
         }
     }
-}
-
-pub type Region = String;
-
-#[derive(Debug)]
-pub enum Err {
-    InvalidUrl(String),
-    InvalidEnv(String),
-    HttpErr(http::Error),
-    HyperErr(hyper::Error),
-    FailStatusCodeErr(hyper::StatusCode, Bytes),
-    Utf8DecodingErr(string::FromUtf8Error),
-    RawSvcErr(hyper::StatusCode, Response<Body>),
 }
 
 #[derive(Clone)]
@@ -87,7 +76,7 @@ impl Client {
                 } else {
                     Ok(Client {
                         server: s.clone(),
-                        region: String::from(""),
+                        region: Region::empty(),
                         conn_client: if s.scheme_str() == Some("http") {
                             ConnClient::HttpCC(client::Client::new())
                         } else {
@@ -128,7 +117,7 @@ impl Client {
     pub fn get_play_client() -> Client {
         Client {
             server: "https://play.min.io:9000".parse::<Uri>().unwrap(),
-            region: String::from(""),
+            region: Region::empty(),
             conn_client: {
                 let https = HttpsConnector::new(4).unwrap();
                 ConnClient::HttpsCC(client::Client::builder().build::<_, hyper::Body>(https))
@@ -140,7 +129,7 @@ impl Client {
         }
     }
 
-    pub fn get_bucket_location(&self, b: &str) -> impl Future<Item = String, Error = Err> {
+    pub fn get_bucket_location(&self, b: &str) -> impl Future<Item = Region, Error = Err> {
         let mut qp = HashMap::new();
         qp.insert("location".to_string(), None);
         let mut hmap = HeaderMap::new();
@@ -170,7 +159,7 @@ impl Client {
             resp.into_body()
                 .concat2()
                 .map_err(|err| Err::HyperErr(err))
-                .and_then(move |chunk| b2s(chunk.into_bytes()))
+                .and_then(move |chunk| xml::parse_bucket_location(chunk.into_bytes()))
         })
     }
 }

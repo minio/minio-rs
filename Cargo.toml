@@ -5,10 +5,11 @@ authors = ["Aditya Manthramurthy <aditya.mmy@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+bytes = "0.4.12"
+futures = "0.1.27"
+http = "0.1.17"
 hyper = "0.12.28"
+hyper-tls = "0.3.2"
 ring = "0.14.6"
 time = "0.1.42"
-http = "0.1.17"
-hyper-tls = "0.3.2"
-futures = "0.1.27"
-bytes = "0.4.12"
+xml-rs = "0.8.0"
