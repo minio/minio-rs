@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use hyper::{body::Body, Response};
+use roxmltree;
 use std::string;
-use xml;
 
 pub struct Region(String);
 
@@ -27,7 +27,7 @@ pub enum Err {
     HyperErr(hyper::Error),
     FailStatusCodeErr(hyper::StatusCode, Bytes),
     Utf8DecodingErr(string::FromUtf8Error),
-    XmlParseErr(xml::reader::Error),
+    XmlParseErr(roxmltree::Error),
     UnexpectedEOF(String),
     RawSvcErr(hyper::StatusCode, Response<Body>),
 }

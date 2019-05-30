@@ -159,7 +159,8 @@ impl Client {
             resp.into_body()
                 .concat2()
                 .map_err(|err| Err::HyperErr(err))
-                .and_then(move |chunk| xml::parse_bucket_location(chunk.into_bytes()))
+                .and_then(move |chunk| b2s(chunk.into_bytes()))
+                .and_then(|s| xml::parse_bucket_location(s))
         })
     }
 }
