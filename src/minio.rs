@@ -129,32 +129,40 @@ impl Client {
         }
     }
 
-    pub fn get_bucket_location(&self, b: &str) -> impl Future<Item = Region, Error = Err> {
-        let mut qp = HashMap::new();
-        qp.insert("location".to_string(), None);
-        let mut hmap = HeaderMap::new();
+    fn signed_req_future(
+        &self,
+        mut s3_req: S3Req,
+    ) -> impl Future<Item = Response<Body>, Error = Err> {
+        let hmap = &mut s3_req.headers;
+        self.add_host_header(hmap);
 
-        self.add_host_header(&mut hmap);
         let body_hash_hdr = (
             HeaderName::from_static("x-amz-content-sha256"),
             HeaderValue::from_static("UNSIGNED-PAYLOAD"),
         );
         hmap.insert(body_hash_hdr.0.clone(), body_hash_hdr.1.clone());
-        let s3_req = S3Req {
-            method: Method::GET,
-            bucket: Some(b.to_string()),
-            object: None,
-            headers: hmap,
-            query: qp,
-            body: Body::empty(),
-            ts: time::now_utc(),
-        };
 
         let sign_hdrs = sign::sign_v4(&s3_req, &self);
         println!("signout: {:?}", sign_hdrs);
         let req_result = api::mk_request(&s3_req, &self, &sign_hdrs);
         let conn_client = self.conn_client.clone();
-        run_req_future(req_result, conn_client).and_then(|resp| {
+        run_req_future(req_result, conn_client)
+    }
+
+    pub fn get_bucket_location(&self, b: &str) -> impl Future<Item = Region, Error = Err> {
+        let mut qp = HashMap::new();
+        qp.insert("location".to_string(), None);
+
+        let s3_req = S3Req {
+            method: Method::GET,
+            bucket: Some(b.to_string()),
+            object: None,
+            headers: HeaderMap::new(),
+            query: qp,
+            body: Body::empty(),
+            ts: time::now_utc(),
+        };
+        self.signed_req_future(s3_req).and_then(|resp| {
             // Read the whole body for bucket location response.
             resp.into_body()
                 .concat2()
@@ -165,30 +173,16 @@ impl Client {
     }
 
     pub fn delete_bucket(&self, b: &str) -> impl Future<Item = (), Error = Err> {
-        let qp = HashMap::new();
-        let mut hmap = HeaderMap::new();
-
-        self.add_host_header(&mut hmap);
-        let body_hash_hdr = (
-            HeaderName::from_static("x-amz-content-sha256"),
-            HeaderValue::from_static("UNSIGNED-PAYLOAD"),
-        );
-        hmap.insert(body_hash_hdr.0.clone(), body_hash_hdr.1.clone());
         let s3_req = S3Req {
             method: Method::DELETE,
             bucket: Some(b.to_string()),
             object: None,
-            headers: hmap,
-            query: qp,
+            headers: HeaderMap::new(),
+            query: HashMap::new(),
             body: Body::empty(),
             ts: time::now_utc(),
         };
-
-        let sign_hdrs = sign::sign_v4(&s3_req, &self);
-        println!("signout: {:?}", sign_hdrs);
-        let req_result = api::mk_request(&s3_req, &self, &sign_hdrs);
-        let conn_client = self.conn_client.clone();
-        run_req_future(req_result, conn_client).and_then(|_| Ok(()))
+        self.signed_req_future(s3_req).and_then(|_| Ok(()))
     }
 }
 

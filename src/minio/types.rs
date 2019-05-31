@@ -28,6 +28,5 @@ pub enum Err {
     FailStatusCodeErr(hyper::StatusCode, Bytes),
     Utf8DecodingErr(string::FromUtf8Error),
     XmlParseErr(roxmltree::Error),
-    UnexpectedEOF(String),
     RawSvcErr(hyper::StatusCode, Response<Body>),
 }
