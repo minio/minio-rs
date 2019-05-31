@@ -17,17 +17,23 @@ fn main() {
     rt::run(rt::lazy(|| {
         // let c = get_local_default_server();
         let c = minio::Client::get_play_client();
+        let bucket = "yyy";
 
         let region_req = c
-            .get_bucket_location("yyy")
+            .get_bucket_location(bucket)
             .map(|res| println!("{}", res.to_string()))
             .map_err(|err| println!("{:?}", err));
 
         let del_req = c
-            .delete_bucket("yyy")
+            .delete_bucket(bucket)
             .map(|_| println!("Deleted!"))
             .map_err(|err| println!("del err: {:?}", err));
 
-        del_req.join(region_req).map(|_| ())
+        let buc_exists_req = c
+            .bucket_exists(bucket)
+            .map(move |e| println!("Bucket {} exists: {}", bucket, e))
+            .map_err(|err| println!("exists err: {:?}", err));
+
+        del_req.join3(region_req, buc_exists_req).map(|_| ())
     }));
 }

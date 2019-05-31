@@ -146,7 +146,32 @@ impl Client {
         println!("signout: {:?}", sign_hdrs);
         let req_result = api::mk_request(&s3_req, &self, &sign_hdrs);
         let conn_client = self.conn_client.clone();
-        run_req_future(req_result, conn_client)
+        future::result(req_result)
+            .map_err(|e| Err::HttpErr(e))
+            .and_then(move |req| conn_client.make_req(req).map_err(|e| Err::HyperErr(e)))
+            .and_then(|resp| {
+                let st = resp.status();
+                if st.is_success() {
+                    Ok(resp)
+                } else {
+                    Err(Err::RawSvcErr(st, resp))
+                }
+            })
+            .or_else(|err| {
+                future::err(err)
+                    .or_else(|x| match x {
+                        Err::RawSvcErr(st, resp) => Ok((st, resp)),
+                        other_err => Err(other_err),
+                    })
+                    .and_then(|(st, resp)| {
+                        resp.into_body()
+                            .concat2()
+                            .map_err(|err| Err::HyperErr(err))
+                            .and_then(move |chunk| {
+                                Err(Err::FailStatusCodeErr(st, chunk.into_bytes()))
+                            })
+                    })
+            })
     }
 
     pub fn get_bucket_location(&self, b: &str) -> impl Future<Item = Region, Error = Err> {
@@ -184,36 +209,30 @@ impl Client {
         };
         self.signed_req_future(s3_req).and_then(|_| Ok(()))
     }
-}
 
-fn run_req_future(
-    req_result: http::Result<Request<Body>>,
-    c: ConnClient,
-) -> impl Future<Item = Response<Body>, Error = Err> {
-    future::result(req_result)
-        .map_err(|e| Err::HttpErr(e))
-        .and_then(move |req| c.make_req(req).map_err(|e| Err::HyperErr(e)))
-        .and_then(|resp| {
-            let st = resp.status();
-            if st.is_success() {
-                Ok(resp)
-            } else {
-                Err(Err::RawSvcErr(st, resp))
+    pub fn bucket_exists(&self, b: &str) -> impl Future<Item = bool, Error = Err> {
+        let s3_req = S3Req {
+            method: Method::HEAD,
+            bucket: Some(b.to_string()),
+            object: None,
+            headers: HeaderMap::new(),
+            query: HashMap::new(),
+            body: Body::empty(),
+            ts: time::now_utc(),
+        };
+        self.signed_req_future(s3_req).then(|res| match res {
+            Ok(_) => Ok(true),
+            Err(Err::FailStatusCodeErr(st, b)) => {
+                let code = st.as_u16();
+                if code == 404 {
+                    Ok(false)
+                } else {
+                    Err(Err::FailStatusCodeErr(st, b))
+                }
             }
+            Err(err) => Err(err),
         })
-        .or_else(|err| {
-            future::err(err)
-                .or_else(|x| match x {
-                    Err::RawSvcErr(st, resp) => Ok((st, resp)),
-                    other_err => Err(other_err),
-                })
-                .and_then(|(st, resp)| {
-                    resp.into_body()
-                        .concat2()
-                        .map_err(|err| Err::HyperErr(err))
-                        .and_then(move |chunk| Err(Err::FailStatusCodeErr(st, chunk.into_bytes())))
-                })
-        })
+    }
 }
 
 fn b2s(b: Bytes) -> Result<String, Err> {
