@@ -15,7 +15,7 @@ use std::env;
 use std::{string, string::String};
 use time;
 use time::Tm;
-use types::{Err, Region};
+use types::{Err, GetObjectResp, Region};
 
 #[derive(Debug, Clone)]
 pub struct Credentials {
@@ -232,6 +232,33 @@ impl Client {
             }
             Err(err) => Err(err),
         })
+    }
+
+    pub fn get_object_req(
+        &self,
+        b: &str,
+        key: &str,
+        get_obj_opts: Vec<(HeaderName, HeaderValue)>,
+    ) -> impl Future<Item = GetObjectResp, Error = Err> {
+        let mut h = HeaderMap::new();
+        get_obj_opts
+            .iter()
+            .map(|(x, y)| (x.clone(), y.clone()))
+            .for_each(|(k, v)| {
+                h.insert(k, v);
+            });
+
+        let s3_req = S3Req {
+            method: Method::GET,
+            bucket: Some(b.to_string()),
+            object: Some(key.to_string()),
+            headers: h,
+            query: HashMap::new(),
+            body: Body::empty(),
+            ts: time::now_utc(),
+        };
+
+        self.signed_req_future(s3_req).and_then(GetObjectResp::new)
     }
 }
 
