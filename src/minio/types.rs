@@ -8,6 +8,7 @@ use hyper::{body::Body, Response};
 use roxmltree;
 use std::string;
 
+#[derive(Clone)]
 pub struct Region(String);
 
 impl Region {
@@ -35,6 +36,7 @@ pub enum Err {
     XmlParseErr(roxmltree::Error),
     MissingRequiredParams,
     RawSvcErr(hyper::StatusCode, Response<Body>),
+    XmlWriteErr(String),
 }
 
 pub struct GetObjectResp {

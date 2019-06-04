@@ -34,6 +34,11 @@ fn main() {
             .map(move |e| println!("Bucket {} exists: {}", bucket, e))
             .map_err(|err| println!("exists err: {:?}", err));
 
+        let make_bucket_req = c
+            .make_bucket(bucket)
+            .map(move |_| println!("Bucket {} created", bucket))
+            .map_err(move |err| println!("Bucket create for {} failed with {:?}", bucket, err));
+
         let download_req = c
             .get_object_req(bucket, "issue", vec![])
             .and_then(|g| {
@@ -44,7 +49,7 @@ fn main() {
             .map_err(|c| println!("err res: {:?}", c));
 
         del_req
-            .join4(region_req, buc_exists_req, download_req)
+            .join5(make_bucket_req, region_req, buc_exists_req, download_req)
             .map(|_| ())
     }));
 }

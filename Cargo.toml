@@ -1,7 +1,7 @@
 [package]
 name = "minio-rs"
 version = "0.1.0"
-authors = ["Aditya Manthramurthy <aditya.mmy@gmail.com>"]
+authors = ["Aditya Manthramurthy <aditya.mmy@gmail.com>", "Krishnan Parthasarathi <krishnan.parthasarathi@gmail.com>"]
 edition = "2018"
 
 [dependencies]
@@ -13,3 +13,5 @@ hyper-tls = "0.3.2"
 ring = "0.14.6"
 roxmltree = "0.6.0"
 time = "0.1.42"
+xml-rs = "0.8.0"
+

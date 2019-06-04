@@ -1,14 +1,12 @@
 use crate::minio;
-use http;
 use hyper::{header::HeaderName, header::HeaderValue, Body, Request};
 
 pub fn mk_request(
     r: &minio::S3Req,
-    c: &minio::Client,
+    svr_str: &str,
     sign_hdrs: &Vec<(HeaderName, HeaderValue)>,
-) -> http::Result<Request<Body>> {
+) -> Result<Request<Body>, minio::Err> {
     let mut request = Request::builder();
-    let svr_str = &c.server.to_string();
     let uri_str = svr_str.trim_end_matches('/');
     println!("uri_str: {}", uri_str);
     let upd_uri = format!("{}{}?{}", uri_str, r.mk_path(), r.mk_query());
@@ -23,5 +21,7 @@ pub fn mk_request(
     {
         request.header(hdr.0, hdr.1);
     }
-    request.body(Body::empty())
+    request
+        .body(Body::empty())
+        .map_err(|err| minio::Err::HttpErr(err))
 }

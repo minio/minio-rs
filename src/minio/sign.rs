@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use time::Tm;
 
 use crate::minio;
+use crate::minio::types::Region;
 
 fn aws_format_time(t: &Tm) -> String {
     t.strftime("%Y%m%dT%H%M%SZ").unwrap().to_string()
@@ -142,9 +143,13 @@ fn compute_sign(str_to_sign: &str, key: &Vec<u8>) -> String {
     s1.as_ref().iter().map(|x| format!("{:02x}", x)).collect()
 }
 
-pub fn sign_v4(r: &minio::S3Req, c: &minio::Client) -> Vec<(HeaderName, HeaderValue)> {
-    c.credentials.clone().map_or(Vec::new(), |creds| {
-        let scope = mk_scope(&r.ts, &c.region);
+pub fn sign_v4(
+    r: &minio::S3Req,
+    creds: Option<minio::Credentials>,
+    region: Region,
+) -> Vec<(HeaderName, HeaderValue)> {
+    creds.map_or(Vec::new(), |creds| {
+        let scope = mk_scope(&r.ts, &region);
         let date_hdr = (
             HeaderName::from_static("x-amz-date"),
             HeaderValue::from_str(&aws_format_time(&r.ts)).unwrap(),
@@ -162,7 +167,7 @@ pub fn sign_v4(r: &minio::S3Req, c: &minio::Client) -> Vec<(HeaderName, HeaderVa
         println!("canonicalreq: {}", cr);
         let s2s = string_to_sign(&r.ts, &scope, &cr);
         println!("s2s: {}", s2s);
-        let skey = get_signing_key(&r.ts, &c.region.to_string(), &creds.secret_key);
+        let skey = get_signing_key(&r.ts, &region.to_string(), &creds.secret_key);
         println!("skey: {:?}", skey);
         let signature = compute_sign(&s2s, &skey);
         println!("sign: {}", signature);
