@@ -20,6 +20,8 @@ use time::Tm;
 
 use types::{Err, GetObjectResp, Region};
 
+pub use types::BucketInfo;
+
 #[derive(Debug, Clone)]
 pub struct Credentials {
     access_key: String,
@@ -288,6 +290,27 @@ impl Client {
         };
         self.signed_req_future(s3_req, xml_body_res)
             .and_then(|_| future::ok(()))
+    }
+
+    pub fn list_buckets(&self) -> impl Future<Item = Vec<BucketInfo>, Error = Err> {
+        let s3_req = S3Req {
+            method: Method::GET,
+            bucket: None,
+            object: None,
+            query: HashMap::new(),
+            headers: HeaderMap::new(),
+            body: Body::empty(),
+            ts: time::now_utc(),
+        };
+        self.signed_req_future(s3_req, Ok(Body::empty()))
+            .and_then(|resp| {
+                // Read the whole body for list buckets response.
+                resp.into_body()
+                    .concat2()
+                    .map_err(|err| Err::HyperErr(err))
+                    .and_then(move |chunk| b2s(chunk.into_bytes()))
+                    .and_then(|s| xml::parse_bucket_list(s))
+            })
     }
 }
 
