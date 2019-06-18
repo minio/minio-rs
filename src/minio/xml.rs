@@ -1,4 +1,4 @@
-use crate::minio::types::{Err, Region};
+use crate::minio::types::{BucketInfo, Err, Region};
 use crate::minio::woxml;
 use hyper::body::Body;
 use roxmltree;
@@ -15,6 +15,39 @@ pub fn parse_bucket_location(s: String) -> Result<Region, Err> {
             }
         }
         Err(e) => Err(Err::XmlParseErr(e)),
+    }
+}
+
+pub fn parse_bucket_list(s: String) -> Result<Vec<BucketInfo>, Err> {
+    let res = roxmltree::Document::parse(&s);
+    match res {
+        Ok(doc) => {
+            let mut bucket_infos: Vec<BucketInfo> = Vec::new();
+            let bucket_nodes = doc
+                .root_element()
+                .descendants()
+                .filter(|node| node.has_tag_name("Bucket"));
+            for bucket in bucket_nodes {
+                let bucket_names = bucket.children().filter(|node| node.has_tag_name("Name"));
+                let bucket_ctimes = bucket
+                    .children()
+                    .filter(|node| node.has_tag_name("CreationDate"));
+                for (name_node, ctime_node) in bucket_names.zip(bucket_ctimes) {
+                    let name = name_node.text().ok_or(Err::InvalidXmlResponseErr(
+                        "Missing name in list buckets XML response ".to_string(),
+                    ))?;
+                    let ctime = ctime_node.text().ok_or(Err::InvalidXmlResponseErr(
+                        "Missing creation date in list buckets XML response".to_string(),
+                    ))?;
+                    match BucketInfo::new(name, ctime) {
+                        Ok(bucket_info) => bucket_infos.push(bucket_info),
+                        Err(err) => return Err(Err::InvalidTmFmt(format!("{:?}", err))),
+                    }
+                }
+            }
+            Ok(bucket_infos)
+        }
+        Err(err) => Err(Err::XmlParseErr(err)),
     }
 }
 

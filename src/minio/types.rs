@@ -7,6 +7,7 @@ use hyper::header::{
 use hyper::{body::Body, Response};
 use roxmltree;
 use std::string;
+use time::{strptime, Tm};
 
 #[derive(Clone)]
 pub struct Region(String);
@@ -29,11 +30,13 @@ impl Region {
 pub enum Err {
     InvalidUrl(String),
     InvalidEnv(String),
+    InvalidTmFmt(String),
     HttpErr(http::Error),
     HyperErr(hyper::Error),
     FailStatusCodeErr(hyper::StatusCode, Bytes),
     Utf8DecodingErr(string::FromUtf8Error),
     XmlParseErr(roxmltree::Error),
+    InvalidXmlResponseErr(String),
     MissingRequiredParams,
     RawSvcErr(hyper::StatusCode, Response<Body>),
     XmlWriteErr(String),
@@ -96,4 +99,23 @@ fn extract_user_meta(h: &HeaderMap) -> Vec<(String, String)> {
         .filter(|(k, v)| k.to_lowercase().starts_with("x-amz-meta-") && v.is_ok())
         .map(|(k, v)| (k.to_string(), v.unwrap_or("").to_string()))
         .collect()
+}
+
+#[derive(Debug)]
+pub struct BucketInfo {
+    pub name: String,
+    pub created_time: Tm,
+}
+
+impl BucketInfo {
+    pub fn new(name: &str, time_str: &str) -> Result<BucketInfo, String> {
+        strptime(time_str, "%Y-%m-%dT%H:%M:%S.%Z")
+            .and_then(|ctime| {
+                Ok(BucketInfo {
+                    name: name.to_string(),
+                    created_time: ctime,
+                })
+            })
+            .or_else(|err| Err(format!("{:?}", err)))
+    }
 }

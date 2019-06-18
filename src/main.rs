@@ -2,6 +2,7 @@ mod minio;
 
 use futures::{future::Future, stream::Stream};
 use hyper::rt;
+use minio::BucketInfo;
 
 fn get_local_default_server() -> minio::Client {
     match minio::Client::new("http://localhost:9000") {
@@ -48,8 +49,22 @@ fn main() {
             .map(|c| println!("get obj res: {:?}", c))
             .map_err(|c| println!("err res: {:?}", c));
 
+        let list_buckets_req = c
+            .list_buckets()
+            .map(|buckets| {
+                println!(
+                    "{:?}",
+                    buckets
+                        .iter()
+                        .map(|bucket: &BucketInfo| bucket.name.clone())
+                        .collect::<Vec<String>>()
+                )
+            })
+            .map_err(|err| println!("{:?}", err));
+
         del_req
             .join5(make_bucket_req, region_req, buc_exists_req, download_req)
             .map(|_| ())
+            .then(|_| list_buckets_req)
     }));
 }
