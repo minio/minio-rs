@@ -1,0 +1,24 @@
+sudo: false
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+matrix:
+  allow_failures:
+    - rust: nightly
+os:
+  - linux
+
+install:
+  - (rustup component add rustfmt || true)
+  - PATH=$PATH:/home/travis/.cargo/bin
+
+env:
+  global:
+    - RUST_BACKTRACE=1
+
+script:
+  - cargo fmt --all -- --check
+  - cargo build --verbose --all
+  - cargo test --verbose --all
