@@ -6,6 +6,7 @@ use hyper::header::{
 };
 use hyper::{body::Body, Response};
 use roxmltree;
+use std::collections::HashMap;
 use std::string;
 use time::{strptime, Tm};
 
@@ -35,7 +36,9 @@ pub enum Err {
     HyperErr(hyper::Error),
     FailStatusCodeErr(hyper::StatusCode, Bytes),
     Utf8DecodingErr(string::FromUtf8Error),
-    XmlParseErr(roxmltree::Error),
+    XmlDocParseErr(roxmltree::Error),
+    XmlElemMissing(String),
+    XmlElemParseErr(String),
     InvalidXmlResponseErr(String),
     MissingRequiredParams,
     RawSvcErr(hyper::StatusCode, Response<Body>),
@@ -101,6 +104,11 @@ fn extract_user_meta(h: &HeaderMap) -> Vec<(String, String)> {
         .collect()
 }
 
+fn parse_aws_time(time_str: &str) -> Result<Tm, Err> {
+    strptime(time_str, "%Y-%m-%dT%H:%M:%S.%Z")
+        .map_err(|err| Err::InvalidTmFmt(format!("{:?}", err)))
+}
+
 #[derive(Debug)]
 pub struct BucketInfo {
     pub name: String,
@@ -108,14 +116,56 @@ pub struct BucketInfo {
 }
 
 impl BucketInfo {
-    pub fn new(name: &str, time_str: &str) -> Result<BucketInfo, String> {
-        strptime(time_str, "%Y-%m-%dT%H:%M:%S.%Z")
-            .and_then(|ctime| {
-                Ok(BucketInfo {
-                    name: name.to_string(),
-                    created_time: ctime,
-                })
+    pub fn new(name: &str, time_str: &str) -> Result<BucketInfo, Err> {
+        parse_aws_time(time_str).and_then(|ctime| {
+            Ok(BucketInfo {
+                name: name.to_string(),
+                created_time: ctime,
             })
-            .or_else(|err| Err(format!("{:?}", err)))
+        })
     }
+}
+
+#[derive(Debug)]
+pub struct ObjectInfo {
+    pub name: String,
+    pub modified_time: Tm,
+    pub etag: String,
+    pub size: i64,
+    pub storage_class: String,
+    pub metadata: HashMap<String, String>,
+}
+
+impl ObjectInfo {
+    pub fn new(
+        name: &str,
+        mtime_str: &str,
+        etag: &str,
+        size: i64,
+        storage_class: &str,
+        metadata: HashMap<String, String>,
+    ) -> Result<ObjectInfo, Err> {
+        parse_aws_time(mtime_str).and_then(|mtime| {
+            Ok(ObjectInfo {
+                name: name.to_string(),
+                modified_time: mtime,
+                etag: etag.to_string(),
+                size: size,
+                storage_class: storage_class.to_string(),
+                metadata: metadata,
+            })
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct ListObjectsResp {
+    pub bucket_name: String,
+    pub prefix: String,
+    pub max_keys: i32,
+    pub key_count: i32,
+    pub is_truncated: bool,
+    pub object_infos: Vec<ObjectInfo>,
+    pub common_prefixes: Vec<String>,
+    pub next_continuation_token: String,
 }
