@@ -1,26 +1,47 @@
+/*
+ * MinIO Rust Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2019 MinIO, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+use std::collections::HashMap;
+use std::env;
+use std::string::String;
+
+use futures::future::{self, Future};
+use futures::{stream, Stream};
+use http;
+use hyper::header::{HeaderName, HeaderValue};
+use hyper::{body::Body, client, header, header::HeaderMap, Method, Request, Response, Uri};
+use hyper_tls::HttpsConnector;
+use time;
+use time::Tm;
+
+pub use types::BucketInfo;
+use types::{Err, GetObjectResp, ListObjectsResp, Region};
+
+use crate::minio::notification::NotificationInfo;
+
 mod api;
+mod notification;
 mod sign;
 mod types;
 mod xml;
 
 mod woxml;
 
-use bytes::Bytes;
-use futures::future::{self, Future};
-use futures::stream::Stream;
-use http;
-use hyper::header::{HeaderName, HeaderValue};
-use hyper::{body::Body, client, header, header::HeaderMap, Method, Request, Response, Uri};
-use hyper_tls::HttpsConnector;
-use std::collections::HashMap;
-use std::env;
-use std::string::String;
-use time;
-use time::Tm;
-
-use types::{Err, GetObjectResp, ListObjectsResp, Region};
-
-pub use types::BucketInfo;
+pub const SPACE_BYTE: &[u8; 1] = b" ";
 
 #[derive(Debug, Clone)]
 pub struct Credentials {
@@ -71,18 +92,20 @@ pub struct Client {
 
 impl Client {
     pub fn new(server: &str) -> Result<Client, Err> {
-        let v = server.parse::<Uri>();
-        match v {
-            Ok(s) => {
-                if s.host().is_none() {
+        let valid = server.parse::<Uri>();
+        match valid {
+            Ok(server_uri) => {
+                if server_uri.host().is_none() {
                     Err(Err::InvalidUrl("no host specified!".to_string()))
-                } else if s.scheme_str() != Some("http") && s.scheme_str() != Some("https") {
+                } else if server_uri.scheme_str() != Some("http")
+                    && server_uri.scheme_str() != Some("https")
+                {
                     Err(Err::InvalidUrl("invalid scheme!".to_string()))
                 } else {
                     Ok(Client {
-                        server: s.clone(),
+                        server: server_uri.clone(),
                         region: Region::empty(),
-                        conn_client: if s.scheme_str() == Some("http") {
+                        conn_client: if server_uri.scheme_str() == Some("http") {
                             ConnClient::HttpCC(client::Client::new())
                         } else {
                             let https = HttpsConnector::new(4).unwrap();
@@ -106,14 +129,14 @@ impl Client {
         self.region = r;
     }
 
-    fn add_host_header(&self, h: &mut HeaderMap) {
+    fn add_host_header(&self, header_map: &mut HeaderMap) {
         let host_val = match self.server.port_part() {
             Some(port) => format!("{}:{}", self.server.host().unwrap_or(""), port),
             None => self.server.host().unwrap_or("").to_string(),
         };
         match header::HeaderValue::from_str(&host_val) {
             Ok(v) => {
-                h.insert(header::HOST, v);
+                header_map.insert(header::HOST, v);
             }
             _ => {}
         }
@@ -185,13 +208,17 @@ impl Client {
             })
     }
 
-    pub fn get_bucket_location(&self, b: &str) -> impl Future<Item = Region, Error = Err> {
+    /// get_bucket_location - Get location for the bucket_name.
+    pub fn get_bucket_location(
+        &self,
+        bucket_name: &str,
+    ) -> impl Future<Item = Region, Error = Err> {
         let mut qp = HashMap::new();
-        qp.insert("location".to_string(), None);
+        qp.insert("location".to_string(), Vec::new());
 
         let s3_req = S3Req {
             method: Method::GET,
-            bucket: Some(b.to_string()),
+            bucket: Some(bucket_name.to_string()),
             object: None,
             headers: HeaderMap::new(),
             query: qp,
@@ -204,15 +231,15 @@ impl Client {
                 resp.into_body()
                     .concat2()
                     .map_err(|err| Err::HyperErr(err))
-                    .and_then(move |chunk| b2s(chunk.into_bytes()))
+                    .and_then(move |chunk| chunk_to_string(&chunk))
                     .and_then(|s| xml::parse_bucket_location(s))
             })
     }
 
-    pub fn delete_bucket(&self, b: &str) -> impl Future<Item = (), Error = Err> {
+    pub fn delete_bucket(&self, bucket_name: &str) -> impl Future<Item = (), Error = Err> {
         let s3_req = S3Req {
             method: Method::DELETE,
-            bucket: Some(b.to_string()),
+            bucket: Some(bucket_name.to_string()),
             object: None,
             headers: HeaderMap::new(),
             query: HashMap::new(),
@@ -223,10 +250,10 @@ impl Client {
             .and_then(|_| Ok(()))
     }
 
-    pub fn bucket_exists(&self, b: &str) -> impl Future<Item = bool, Error = Err> {
+    pub fn bucket_exists(&self, bucket_name: &str) -> impl Future<Item = bool, Error = Err> {
         let s3_req = S3Req {
             method: Method::HEAD,
-            bucket: Some(b.to_string()),
+            bucket: Some(bucket_name.to_string()),
             object: None,
             headers: HeaderMap::new(),
             query: HashMap::new(),
@@ -250,7 +277,7 @@ impl Client {
 
     pub fn get_object_req(
         &self,
-        b: &str,
+        bucket_name: &str,
         key: &str,
         get_obj_opts: Vec<(HeaderName, HeaderValue)>,
     ) -> impl Future<Item = GetObjectResp, Error = Err> {
@@ -264,7 +291,7 @@ impl Client {
 
         let s3_req = S3Req {
             method: Method::GET,
-            bucket: Some(b.to_string()),
+            bucket: Some(bucket_name.to_string()),
             object: Some(key.to_string()),
             headers: h,
             query: HashMap::new(),
@@ -276,9 +303,9 @@ impl Client {
             .and_then(GetObjectResp::new)
     }
 
-    pub fn make_bucket(&self, b: &str) -> impl Future<Item = (), Error = Err> {
+    pub fn make_bucket(&self, bucket_name: &str) -> impl Future<Item = (), Error = Err> {
         let xml_body_res = xml::get_mk_bucket_body();
-        let bucket = b.clone().to_string();
+        let bucket = bucket_name.clone().to_string();
         let s3_req = S3Req {
             method: Method::PUT,
             bucket: Some(bucket),
@@ -308,7 +335,7 @@ impl Client {
                 resp.into_body()
                     .concat2()
                     .map_err(|err| Err::HyperErr(err))
-                    .and_then(move |chunk| b2s(chunk.into_bytes()))
+                    .and_then(move |chunk| chunk_to_string(&chunk))
                     .and_then(|s| xml::parse_bucket_list(s))
             })
     }
@@ -321,21 +348,21 @@ impl Client {
         delimiter: Option<&str>,
         max_keys: Option<i32>,
     ) -> impl Future<Item = ListObjectsResp, Error = Err> {
-        let mut qparams = HashMap::new();
-        qparams.insert("list-type".to_string(), Some("2".to_string()));
+        let mut qparams: HashMap<String, Vec<Option<String>>> = HashMap::new();
+        qparams.insert("list-type".to_string(), vec![Some("2".to_string())]);
         if let Some(d) = delimiter {
-            qparams.insert("delimiter".to_string(), Some(d.to_string()));
+            qparams.insert("delimiter".to_string(), vec![Some(d.to_string())]);
         }
         if let Some(m) = marker {
-            qparams.insert("marker".to_string(), Some(m.to_string()));
+            qparams.insert("marker".to_string(), vec![Some(m.to_string())]);
         }
 
         if let Some(p) = prefix {
-            qparams.insert("prefix".to_string(), Some(p.to_string()));
+            qparams.insert("prefix".to_string(), vec![Some(p.to_string())]);
         }
 
         if let Some(mkeys) = max_keys {
-            qparams.insert("max-keys".to_string(), Some(mkeys.to_string()));
+            qparams.insert("max-keys".to_string(), vec![Some(mkeys.to_string())]);
         }
 
         let s3_req = S3Req {
@@ -352,9 +379,66 @@ impl Client {
                 resp.into_body()
                     .concat2()
                     .map_err(|err| Err::HyperErr(err))
-                    .and_then(move |chunk| b2s(chunk.into_bytes()))
+                    .and_then(move |chunk| chunk_to_string(&chunk))
                     .and_then(|s| xml::parse_list_objects(s))
             })
+    }
+
+    /// listen_bucket_notificaion - Get bucket notifications for the bucket_name.
+    pub fn listen_bucket_notificaion(
+        &self,
+        bucket_name: &str,
+        prefix: Option<String>,
+        suffix: Option<String>,
+        events: Vec<String>,
+    ) -> impl Stream<Item = notification::NotificationInfo, Error = Err> {
+        // Prepare request query parameters
+        let mut query_params: HashMap<String, Vec<Option<String>>> = HashMap::new();
+        query_params.insert("prefix".to_string(), vec![prefix]);
+        query_params.insert("suffix".to_string(), vec![suffix]);
+        let opt_events: Vec<Option<String>> = events.into_iter().map(|evt| Some(evt)).collect();
+        query_params.insert("events".to_string(), opt_events);
+
+        // build signed request
+        let s3_req = S3Req {
+            method: Method::GET,
+            bucket: Some(bucket_name.to_string()),
+            object: None,
+            headers: HeaderMap::new(),
+            query: query_params,
+            body: Body::empty(),
+            ts: time::now_utc(),
+        };
+
+        self.signed_req_future(s3_req, Ok(Body::empty()))
+            .map(|resp| {
+                // Read the whole body for bucket location response.
+                resp.into_body()
+                    .map_err(|e| Err::HyperErr(e))
+                    .filter(|c| {
+                        // filter out white spaces sent by the server to indicate it's still alive
+                        c[0] != SPACE_BYTE[0]
+                    })
+                    .map(|chunk| {
+                        // Split the chunk by lines and process
+                        let chunk_lines = String::from_utf8(chunk.to_vec())
+                            .map(|p| {
+                                let lines =
+                                    p.lines().map(|s| s.to_string()).collect::<Vec<String>>();
+                                stream::iter_ok(lines.into_iter())
+                            })
+                            .map_err(|e| Err::Utf8DecodingErr(e));
+                        futures::done(chunk_lines).flatten_stream()
+                    })
+                    .flatten()
+                    .map(|line| {
+                        // Deserialize the notification
+                        let notification_info: NotificationInfo =
+                            serde_json::from_str(&line).unwrap();
+                        notification_info
+                    })
+            })
+            .flatten_stream()
     }
 }
 
@@ -375,10 +459,11 @@ fn run_req_future(
         })
 }
 
-fn b2s(b: Bytes) -> Result<String, Err> {
-    match String::from_utf8(b.iter().map(|x| x.clone()).collect::<Vec<u8>>()) {
+/// Converts a `hyper::Chunk` into a string.
+fn chunk_to_string(chunk: &hyper::Chunk) -> Result<String, Err> {
+    match String::from_utf8(chunk.to_vec()) {
         Err(e) => Err(Err::Utf8DecodingErr(e)),
-        Ok(s) => Ok(s),
+        Ok(s) => Ok(s.to_string()),
     }
 }
 
@@ -387,7 +472,7 @@ pub struct S3Req {
     bucket: Option<String>,
     object: Option<String>,
     headers: HeaderMap,
-    query: HashMap<String, Option<String>>,
+    query: HashMap<String, Vec<Option<String>>>,
     body: Body,
     ts: Tm,
 }
@@ -405,14 +490,54 @@ impl S3Req {
         res
     }
 
+    /// Takes the query_parameters and turn them into a valid query string for example:
+    /// {"key1":["val1","val2"],"key2":["val1","val2"]}
+    /// will be returned as:
+    /// "key1=val1&key1=val2&key2=val3&key2=val4"
     fn mk_query(&self) -> String {
         self.query
             .iter()
-            .map(|(x, y)| match y {
-                Some(v) => format!("{}={}", x, v),
-                None => x.to_string(),
+            .map(|(key, values)| {
+                values.iter().map(move |value| match value {
+                    Some(v) => format!("{}={}", &key, v),
+                    None => format!("{}=", &key,),
+                })
             })
+            .flatten()
             .collect::<Vec<String>>()
             .join("&")
+    }
+}
+
+#[cfg(test)]
+mod minio_tests {
+    use super::*;
+
+    #[test]
+    fn serialize_query_parameters() {
+        let mut query_params: HashMap<String, Vec<Option<String>>> = HashMap::new();
+        query_params.insert(
+            "key1".to_string(),
+            vec![Some("val1".to_string()), Some("val2".to_string())],
+        );
+        query_params.insert(
+            "key2".to_string(),
+            vec![Some("val3".to_string()), Some("val4".to_string())],
+        );
+
+        let s3_req = S3Req {
+            method: Method::GET,
+            bucket: None,
+            object: None,
+            headers: HeaderMap::new(),
+            query: query_params,
+            body: Body::empty(),
+            ts: time::now_utc(),
+        };
+        let result = s3_req.mk_query();
+        assert!(result.contains("key1=val1"));
+        assert!(result.contains("key1=val2"));
+        assert!(result.contains("key2=val3"));
+        assert!(result.contains("key2=val4"));
     }
 }
