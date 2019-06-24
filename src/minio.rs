@@ -430,7 +430,7 @@ impl Client {
                                 stream::iter_ok(lines.into_iter())
                             })
                             .map_err(|e| Err::Utf8DecodingErr(e));
-                        futures::done(chunk_lines).flatten_stream()
+                        futures::future::result(chunk_lines).flatten_stream()
                     })
                     .flatten()
                     .map(|line| {
