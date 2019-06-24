@@ -74,34 +74,36 @@ pub fn get_mk_bucket_body() -> Result<Body, Err> {
     Ok(Body::from(xml_bytes))
 }
 
-fn get_child_node(node: roxmltree::Node, tag_name: &str) -> Option<String> {
+fn get_child_node<'a>(node: &'a roxmltree::Node, tag_name: &str) -> Option<&'a str> {
     node.children()
         .find(|node| node.has_tag_name(tag_name))
         .and_then(|node| node.text())
-        .map(|x| x.to_string())
 }
 
 // gets text value inside given tag or return default
-fn get_child_node_or(node: roxmltree::Node, tag_name: &str, default: &str) -> String {
-    get_child_node(node, tag_name).unwrap_or(default.to_string())
+fn get_child_node_or<'a>(node: &'a roxmltree::Node, tag_name: &str, default: &'a str) -> &'a str {
+    get_child_node(&node, tag_name).unwrap_or(default)
 }
 
-fn parse_child_content<T>(node: roxmltree::Node, tag: &str) -> Result<T, Err>
+fn parse_child_content<T>(node: &roxmltree::Node, tag: &str) -> Result<T, Err>
 where
     T: FromStr,
 {
     let content = get_child_node(node, tag).ok_or(Err::XmlElemMissing(format!("{:?}", tag)))?;
-    str::parse::<T>(content.as_str()).map_err(|_| Err::XmlElemParseErr(format!("{}", tag)))
+    str::parse::<T>(content).map_err(|_| Err::XmlElemParseErr(format!("{}", tag)))
 }
 
-fn parse_tag_content<T>(node: roxmltree::Node) -> Result<T, Err>
+fn parse_tag_content<T>(node: &roxmltree::Node) -> Result<T, Err>
 where
     T: FromStr,
 {
-    let content = node
-        .text()
-        .ok_or(Err::XmlElemMissing(format!("{:?}", node.tag_name())))?;
+    let content = must_get_node_text(node)?;
     str::parse::<T>(content).map_err(|_| Err::XmlElemParseErr(format!("{:?}", node.tag_name())))
+}
+
+fn must_get_node_text<'a>(node: &'a roxmltree::Node) -> Result<&'a str, Err> {
+    node.text()
+        .ok_or(Err::XmlElemMissing(node.tag_name().name().to_string()))
 }
 
 fn parse_object_infos(node: roxmltree::Node) -> Result<Vec<ObjectInfo>, Err> {
@@ -122,13 +124,17 @@ fn parse_object_infos(node: roxmltree::Node) -> Result<Vec<ObjectInfo>, Err> {
         for (key, (mtime, (etag, (size, storage_class)))) in
             keys.zip(mtimes.zip(etags.zip(sizes.zip(storage_classes))))
         {
-            let sz: i64 = parse_tag_content(size)?;
+            let sz: i64 = parse_tag_content(&size)?;
+            let key_text = must_get_node_text(&key)?;
+            let mtime_text = must_get_node_text(&mtime)?;
+            let etag_text = must_get_node_text(&etag)?;
+            let storage_class_text = must_get_node_text(&storage_class)?;
             let object_info = ObjectInfo::new(
-                key.text().unwrap(),
-                mtime.text().unwrap(),
-                etag.text().unwrap(),
+                key_text,
+                mtime_text,
+                etag_text,
                 sz,
-                storage_class.text().unwrap(),
+                storage_class_text,
                 HashMap::new(),
             )?;
             object_infos.push(object_info);
@@ -140,16 +146,16 @@ fn parse_object_infos(node: roxmltree::Node) -> Result<Vec<ObjectInfo>, Err> {
 fn parse_list_objects_result(doc: roxmltree::Document) -> Result<ListObjectsResp, Err> {
     let root = doc.root_element();
     let bucket_name =
-        get_child_node(root, "Name").ok_or(Err::XmlElemMissing("Name".to_string()))?;
-    let prefix = get_child_node_or(root, "Prefix", "");
-    let key_count: i32 = parse_child_content(root, "KeyCount")?;
-    let max_keys: i32 = parse_child_content(root, "MaxKeys")?;
-    let is_truncated: bool = parse_child_content(root, "IsTruncated")?;
+        get_child_node(&root, "Name").ok_or(Err::XmlElemMissing("Name".to_string()))?;
+    let prefix = get_child_node_or(&root, "Prefix", "");
+    let key_count: i32 = parse_child_content(&root, "KeyCount")?;
+    let max_keys: i32 = parse_child_content(&root, "MaxKeys")?;
+    let is_truncated: bool = parse_child_content(&root, "IsTruncated")?;
     let object_infos = parse_object_infos(root)?;
 
     Ok(ListObjectsResp {
-        bucket_name: bucket_name,
-        prefix: prefix,
+        bucket_name: bucket_name.to_string(),
+        prefix: prefix.to_string(),
         max_keys: max_keys,
         key_count: key_count,
         is_truncated: is_truncated,
