@@ -62,9 +62,15 @@ fn main() {
             })
             .map_err(|err| println!("{:?}", err));
 
+        let list_objects_req = c
+            .list_objects(bucket, None, None, None, None)
+            .map(|l_obj_resp| println!("{:?} {:?}", l_obj_resp, l_obj_resp.object_infos.len()))
+            .map_err(|err| println!("{:?}", err));
+
         del_req
             .join5(make_bucket_req, region_req, buc_exists_req, download_req)
             .map(|_| ())
-            .then(|_| list_buckets_req)
+            .and_then(|_| list_buckets_req)
+            .then(|_| list_objects_req)
     }));
 }

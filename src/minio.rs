@@ -18,7 +18,7 @@ use std::string::String;
 use time;
 use time::Tm;
 
-use types::{Err, GetObjectResp, Region};
+use types::{Err, GetObjectResp, ListObjectsResp, Region};
 
 pub use types::BucketInfo;
 
@@ -310,6 +310,50 @@ impl Client {
                     .map_err(|err| Err::HyperErr(err))
                     .and_then(move |chunk| b2s(chunk.into_bytes()))
                     .and_then(|s| xml::parse_bucket_list(s))
+            })
+    }
+
+    pub fn list_objects(
+        &self,
+        b: &str,
+        prefix: Option<&str>,
+        marker: Option<&str>,
+        delimiter: Option<&str>,
+        max_keys: Option<i32>,
+    ) -> impl Future<Item = ListObjectsResp, Error = Err> {
+        let mut qparams = HashMap::new();
+        qparams.insert("list-type".to_string(), Some("2".to_string()));
+        if let Some(d) = delimiter {
+            qparams.insert("delimiter".to_string(), Some(d.to_string()));
+        }
+        if let Some(m) = marker {
+            qparams.insert("marker".to_string(), Some(m.to_string()));
+        }
+
+        if let Some(p) = prefix {
+            qparams.insert("prefix".to_string(), Some(p.to_string()));
+        }
+
+        if let Some(mkeys) = max_keys {
+            qparams.insert("max-keys".to_string(), Some(mkeys.to_string()));
+        }
+
+        let s3_req = S3Req {
+            method: Method::GET,
+            bucket: Some(b.to_string()),
+            object: None,
+            query: qparams,
+            headers: HeaderMap::new(),
+            body: Body::empty(),
+            ts: time::now_utc(),
+        };
+        self.signed_req_future(s3_req, Ok(Body::empty()))
+            .and_then(|resp| {
+                resp.into_body()
+                    .concat2()
+                    .map_err(|err| Err::HyperErr(err))
+                    .and_then(move |chunk| b2s(chunk.into_bytes()))
+                    .and_then(|s| xml::parse_list_objects(s))
             })
     }
 }
