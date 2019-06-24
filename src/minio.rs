@@ -422,7 +422,8 @@ impl Client {
                         c[0] != SPACE_BYTE[0]
                     })
                     .map(|chunk| {
-                        // Split the chunk by lines and process
+                        // Split the chunk by lines and process.
+                        // TODO: Handle case when partial lines are present in the chunk
                         let chunk_lines = String::from_utf8(chunk.to_vec())
                             .map(|p| {
                                 let lines =
