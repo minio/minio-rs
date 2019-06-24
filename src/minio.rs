@@ -216,7 +216,7 @@ impl Client {
         bucket_name: &str,
     ) -> impl Future<Item = Region, Error = Err> {
         let mut qp = Values::new();
-        qp.set("location", None);
+        qp.set_value("location", None);
 
         let s3_req = S3Req {
             method: Method::GET,
@@ -351,20 +351,20 @@ impl Client {
         max_keys: Option<i32>,
     ) -> impl Future<Item = ListObjectsResp, Error = Err> {
         let mut qparams: Values = Values::new();
-        qparams.set("list-type", Some("2".to_string()));
+        qparams.set_value("list-type", Some("2".to_string()));
         if let Some(d) = delimiter {
-            qparams.set("delimiter", Some(d.to_string()));
+            qparams.set_value("delimiter", Some(d.to_string()));
         }
         if let Some(m) = marker {
-            qparams.set("marker", Some(m.to_string()));
+            qparams.set_value("marker", Some(m.to_string()));
         }
 
         if let Some(p) = prefix {
-            qparams.set("prefix", Some(p.to_string()));
+            qparams.set_value("prefix", Some(p.to_string()));
         }
 
         if let Some(mkeys) = max_keys {
-            qparams.set("max-keys", Some(mkeys.to_string()));
+            qparams.set_value("max-keys", Some(mkeys.to_string()));
         }
 
         let s3_req = S3Req {
@@ -396,8 +396,8 @@ impl Client {
     ) -> impl Stream<Item = notification::NotificationInfo, Error = Err> {
         // Prepare request query parameters
         let mut query_params: Values = Values::new();
-        query_params.set("prefix", prefix);
-        query_params.set("suffix", suffix);
+        query_params.set_value("prefix", prefix);
+        query_params.set_value("suffix", suffix);
         let opt_events: Vec<Option<String>> = events.into_iter().map(|evt| Some(evt)).collect();
         query_params.insert("events".to_string(), opt_events);
 
