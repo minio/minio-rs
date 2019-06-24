@@ -31,9 +31,11 @@ use time::Tm;
 pub use types::BucketInfo;
 use types::{Err, GetObjectResp, ListObjectsResp, Region};
 
+use crate::minio::net::{Values, ValuesAccess};
 use crate::minio::notification::NotificationInfo;
 
 mod api;
+mod net;
 mod notification;
 mod sign;
 mod types;
@@ -213,8 +215,8 @@ impl Client {
         &self,
         bucket_name: &str,
     ) -> impl Future<Item = Region, Error = Err> {
-        let mut qp = HashMap::new();
-        qp.insert("location".to_string(), Vec::new());
+        let mut qp = Values::new();
+        qp.set("location", None);
 
         let s3_req = S3Req {
             method: Method::GET,
@@ -242,7 +244,7 @@ impl Client {
             bucket: Some(bucket_name.to_string()),
             object: None,
             headers: HeaderMap::new(),
-            query: HashMap::new(),
+            query: Values::new(),
             body: Body::empty(),
             ts: time::now_utc(),
         };
@@ -256,7 +258,7 @@ impl Client {
             bucket: Some(bucket_name.to_string()),
             object: None,
             headers: HeaderMap::new(),
-            query: HashMap::new(),
+            query: Values::new(),
             body: Body::empty(),
             ts: time::now_utc(),
         };
@@ -294,7 +296,7 @@ impl Client {
             bucket: Some(bucket_name.to_string()),
             object: Some(key.to_string()),
             headers: h,
-            query: HashMap::new(),
+            query: Values::new(),
             body: Body::empty(),
             ts: time::now_utc(),
         };
@@ -310,7 +312,7 @@ impl Client {
             method: Method::PUT,
             bucket: Some(bucket),
             object: None,
-            query: HashMap::new(),
+            query: Values::new(),
             headers: HeaderMap::new(),
             body: Body::empty(),
             ts: time::now_utc(),
@@ -324,7 +326,7 @@ impl Client {
             method: Method::GET,
             bucket: None,
             object: None,
-            query: HashMap::new(),
+            query: Values::new(),
             headers: HeaderMap::new(),
             body: Body::empty(),
             ts: time::now_utc(),
@@ -348,21 +350,21 @@ impl Client {
         delimiter: Option<&str>,
         max_keys: Option<i32>,
     ) -> impl Future<Item = ListObjectsResp, Error = Err> {
-        let mut qparams: HashMap<String, Vec<Option<String>>> = HashMap::new();
-        qparams.insert("list-type".to_string(), vec![Some("2".to_string())]);
+        let mut qparams: Values = Values::new();
+        qparams.set("list-type", Some("2".to_string()));
         if let Some(d) = delimiter {
-            qparams.insert("delimiter".to_string(), vec![Some(d.to_string())]);
+            qparams.set("delimiter", Some(d.to_string()));
         }
         if let Some(m) = marker {
-            qparams.insert("marker".to_string(), vec![Some(m.to_string())]);
+            qparams.set("marker", Some(m.to_string()));
         }
 
         if let Some(p) = prefix {
-            qparams.insert("prefix".to_string(), vec![Some(p.to_string())]);
+            qparams.set("prefix", Some(p.to_string()));
         }
 
         if let Some(mkeys) = max_keys {
-            qparams.insert("max-keys".to_string(), vec![Some(mkeys.to_string())]);
+            qparams.set("max-keys", Some(mkeys.to_string()));
         }
 
         let s3_req = S3Req {
@@ -393,9 +395,9 @@ impl Client {
         events: Vec<String>,
     ) -> impl Stream<Item = notification::NotificationInfo, Error = Err> {
         // Prepare request query parameters
-        let mut query_params: HashMap<String, Vec<Option<String>>> = HashMap::new();
-        query_params.insert("prefix".to_string(), vec![prefix]);
-        query_params.insert("suffix".to_string(), vec![suffix]);
+        let mut query_params: Values = Values::new();
+        query_params.set("prefix", prefix);
+        query_params.set("suffix", suffix);
         let opt_events: Vec<Option<String>> = events.into_iter().map(|evt| Some(evt)).collect();
         query_params.insert("events".to_string(), opt_events);
 
@@ -472,7 +474,7 @@ pub struct S3Req {
     bucket: Option<String>,
     object: Option<String>,
     headers: HeaderMap,
-    query: HashMap<String, Vec<Option<String>>>,
+    query: Values,
     body: Body,
     ts: Tm,
 }
