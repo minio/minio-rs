@@ -1,8 +1,26 @@
+/*
+ * MinIO Rust Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2019 MinIO, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+use std::collections::{HashMap, HashSet};
+
 use hyper::header::{
     HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, USER_AGENT,
 };
 use ring::{digest, hmac};
-use std::collections::{HashMap, HashSet};
 use time::Tm;
 
 use crate::minio;
@@ -66,20 +84,21 @@ fn uri_encode_str(s: &str, encode_slash: bool) -> String {
     s.chars().map(|x| uri_encode(x, encode_slash)).collect()
 }
 
-fn get_canonical_querystr(q: &HashMap<String, Option<String>>) -> String {
-    let mut hs: Vec<(String, Option<String>)> = q.clone().drain().collect();
+fn get_canonical_querystr(q: &HashMap<String, Vec<Option<String>>>) -> String {
+    let mut hs: Vec<(String, Vec<Option<String>>)> = q.clone().drain().collect();
+    // sort keys
     hs.sort();
-    let vs: Vec<String> = hs
-        .drain(..)
-        .map(|(x, y)| {
-            let val_str = match y {
-                Some(s) => uri_encode_str(&s, true),
-                None => "".to_string(),
-            };
-            uri_encode_str(&x, true) + "=" + &val_str
+    // Build canonical query string
+    hs.iter()
+        .map(|(key, values)| {
+            values.iter().map(move |value| match value {
+                Some(v) => format!("{}={}", &key, uri_encode_str(&v, true)),
+                None => format!("{}=", &key),
+            })
         })
-        .collect();
-    vs[..].join("&")
+        .flatten()
+        .collect::<Vec<String>>()
+        .join("&")
 }
 
 fn get_canonical_request(
@@ -179,4 +198,26 @@ pub fn sign_v4(
         let auth_hdr = (AUTHORIZATION, HeaderValue::from_str(&auth_hdr_val).unwrap());
         vec![auth_hdr, date_hdr]
     })
+}
+
+#[cfg(test)]
+mod sign_tests {
+    use super::*;
+
+    #[test]
+    fn canonical_ordered() {
+        let mut query_params: HashMap<String, Vec<Option<String>>> = HashMap::new();
+
+        query_params.insert("key2".to_string(), vec![Some("val3".to_string()), None]);
+
+        query_params.insert(
+            "key1".to_string(),
+            vec![Some("val1".to_string()), Some("val2".to_string())],
+        );
+
+        assert_eq!(
+            get_canonical_querystr(&query_params),
+            "key1=val1&key1=val2&key2=val3&key2="
+        );
+    }
 }

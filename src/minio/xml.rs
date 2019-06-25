@@ -1,9 +1,28 @@
-use crate::minio::types::{BucketInfo, Err, ListObjectsResp, ObjectInfo, Region};
-use crate::minio::woxml;
-use hyper::body::Body;
-use roxmltree;
+/*
+ * MinIO Rust Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2019 MinIO, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 use std::collections::HashMap;
 use std::str::FromStr;
+
+use hyper::body::Body;
+use roxmltree;
+
+use crate::minio::types::{BucketInfo, Err, ListObjectsResp, ObjectInfo, Region};
+use crate::minio::woxml;
 
 pub fn parse_bucket_location(s: String) -> Result<Region, Err> {
     let res = roxmltree::Document::parse(&s);
