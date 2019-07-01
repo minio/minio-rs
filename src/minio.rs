@@ -383,7 +383,6 @@ impl Client {
                     .and_then(|s| xml::parse_list_objects(s))
             })
     }
-
 }
 
 fn run_req_future(
