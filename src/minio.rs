@@ -456,6 +456,7 @@ impl S3Req {
 #[cfg(test)]
 mod minio_tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn serialize_query_parameters() {
