@@ -118,7 +118,7 @@ pub struct NotificationInfo {
 
 impl Client {
     /// listen_bucket_notificaion - Get bucket notifications for the bucket_name.
-    pub fn listen_bucket_notificaion(
+    pub fn listen_bucket_notification(
         &self,
         bucket_name: &str,
         prefix: Option<String>,
