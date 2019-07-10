@@ -40,7 +40,7 @@ mod notification;
 mod sign;
 mod types;
 mod xml;
-
+use log::debug;
 mod woxml;
 
 pub const SPACE_BYTE: &[u8; 1] = b" ";
@@ -181,7 +181,7 @@ impl Client {
             .and_then(move |body| {
                 s3_req.body = body;
                 let sign_hdrs = sign::sign_v4(&s3_req, creds, region);
-                println!("signout: {:?}", sign_hdrs);
+                debug!("signout: {:?}", sign_hdrs);
                 api::mk_request(&s3_req, &server_addr, &sign_hdrs)
             })
             .and_then(move |req| conn_client.make_req(req).map_err(|e| Err::HyperErr(e)))

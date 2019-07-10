@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-use hyper::{header::HeaderName, header::HeaderValue, Body, Request};
-
 use crate::minio;
+use hyper::{header::HeaderName, header::HeaderValue, Body, Request};
+use log::debug;
 
 pub fn mk_request(
     r: &minio::S3Req,
@@ -26,9 +26,9 @@ pub fn mk_request(
 ) -> Result<Request<Body>, minio::Err> {
     let mut request = Request::builder();
     let uri_str = svr_str.trim_end_matches('/');
-    println!("uri_str: {}", uri_str);
+    debug!("uri_str: {}", uri_str);
     let upd_uri = format!("{}{}?{}", uri_str, r.mk_path(), r.mk_query());
-    println!("upd_uri: {}", upd_uri);
+    debug!("upd_uri: {}", upd_uri);
 
     request.uri(&upd_uri).method(&r.method);
     for hdr in r

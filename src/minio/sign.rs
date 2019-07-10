@@ -20,6 +20,7 @@ use std::collections::{HashMap, HashSet};
 use hyper::header::{
     HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, USER_AGENT,
 };
+use log::debug;
 use ring::{digest, hmac};
 use time::Tm;
 
@@ -183,13 +184,13 @@ pub fn sign_v4(
             .collect::<Vec<String>>()
             .join(";");
         let cr = get_canonical_request(r, &hs, &signed_hdrs_str);
-        println!("canonicalreq: {}", cr);
+        debug!("canonicalreq: {}", cr);
         let s2s = string_to_sign(&r.ts, &scope, &cr);
-        println!("s2s: {}", s2s);
+        debug!("s2s: {}", s2s);
         let skey = get_signing_key(&r.ts, &region.to_string(), &creds.secret_key);
-        println!("skey: {:?}", skey);
+        debug!("skey: {:?}", skey);
         let signature = compute_sign(&s2s, &skey);
-        println!("sign: {}", signature);
+        debug!("sign: {}", signature);
 
         let auth_hdr_val = format!(
             "AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders={}, Signature={}",
