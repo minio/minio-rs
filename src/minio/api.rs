@@ -20,14 +20,14 @@ use hyper::{header::HeaderName, header::HeaderValue, Body, Request};
 use log::debug;
 
 pub fn mk_request(
-    r: &minio::S3Req,
+    r: minio::S3Req,
     svr_str: &str,
     sign_hdrs: &Vec<(HeaderName, HeaderValue)>,
 ) -> Result<Request<Body>, minio::Err> {
     let mut request = Request::builder();
     let uri_str = svr_str.trim_end_matches('/');
     debug!("uri_str: {}", uri_str);
-    let upd_uri = format!("{}{}?{}", uri_str, r.mk_path(), r.mk_query());
+    let upd_uri = format!("{}{}?{}", uri_str, &r.mk_path(), &r.mk_query());
     debug!("upd_uri: {}", upd_uri);
 
     request.uri(&upd_uri).method(&r.method);
@@ -40,6 +40,6 @@ pub fn mk_request(
         request.header(hdr.0, hdr.1);
     }
     request
-        .body(Body::empty())
+        .body(r.body)
         .map_err(|err| minio::Err::HttpErr(err))
 }
