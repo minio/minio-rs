@@ -331,8 +331,6 @@ impl Client {
             ts: time::now_utc(),
         };
 
-        println!("BBBBBBBBBODAAAAAAAAAYY: {:?}", Body::from(data.clone()));
-
         self.signed_req_future(s3_req, Ok(Body::from(data)))
             .and_then(GetObjectResp::new)
     }
