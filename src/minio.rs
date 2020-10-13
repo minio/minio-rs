@@ -183,7 +183,7 @@ impl Client {
                 api::mk_request(s3_req, &server_addr, &sign_hdrs)
             })
             .and_then(move |req| {
-                println!("{:?}", req);
+                debug!("{:?}", req);
                 conn_client.make_req(req).map_err(|e| Err::HyperErr(e))
             })
             .and_then(|resp| {
