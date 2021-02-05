@@ -18,7 +18,7 @@
 use std::collections::{HashMap, HashSet};
 
 use hyper::header::{
-    HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, USER_AGENT,
+    AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue, USER_AGENT,
 };
 use log::debug;
 use ring::{digest, hmac};
@@ -40,18 +40,18 @@ fn mk_scope(t: &Tm, r: &minio::Region) -> String {
     format!("{}/{}/s3/aws4_request", scope_time, r.to_string())
 }
 
-// Returns list of SORTED headers that will be signed. TODO: verify
-// that input headermap contains only ASCII valued headers
-fn get_headers_to_sign(h: &HeaderMap) -> Vec<(String, String)> {
-    let mut ignored_hdrs: HashSet<HeaderName> = HashSet::new();
-    ignored_hdrs.insert(AUTHORIZATION);
-    ignored_hdrs.insert(CONTENT_LENGTH);
-    ignored_hdrs.insert(CONTENT_TYPE);
-    ignored_hdrs.insert(USER_AGENT);
+// Returns list of SORTED headers that will be signed.
+// TODO: verify that input headermap contains only ASCII valued headers
+fn get_headers_to_sign(h: HeaderMap) -> Vec<(String, String)> {
+    let ignored_hdrs: HashSet<HeaderName> = vec![
+        AUTHORIZATION,
+        CONTENT_LENGTH,
+        CONTENT_TYPE,
+        USER_AGENT].into_iter().collect();
+
     let mut res: Vec<(String, String)> = h
         .iter()
-        .map(|(x, y)| (x.clone(), y.clone()))
-        .filter(|(x, _)| !ignored_hdrs.contains(x))
+        .filter(|(x, _)| !ignored_hdrs.contains(*x))
         .map(|(x, y)| {
             (
                 x.as_str().to_string(),
@@ -59,8 +59,7 @@ fn get_headers_to_sign(h: &HeaderMap) -> Vec<(String, String)> {
                     .expect("Unexpected non-ASCII header value!")
                     .to_string(),
             )
-        })
-        .collect();
+        }).collect();
     res.sort();
     res
 }
@@ -140,7 +139,7 @@ fn string_to_sign(ts: &Tm, scope: &str, canonical_request: &str) -> String {
         scope,
         &sha256_digest,
     ]
-    .join("\n")
+        .join("\n")
 }
 
 fn hmac_sha256(msg: &str, key: &[u8]) -> hmac::Signature {
@@ -164,30 +163,30 @@ fn compute_sign(str_to_sign: &str, key: &Vec<u8>) -> String {
 }
 
 pub fn sign_v4(
-    r: &minio::S3Req,
-    creds: Option<minio::Credentials>,
+    request: &minio::S3Req,
+    credentials: Option<minio::Credentials>,
     region: Region,
 ) -> Vec<(HeaderName, HeaderValue)> {
-    creds.map_or(Vec::new(), |creds| {
-        let scope = mk_scope(&r.ts, &region);
+    credentials.map_or(Vec::new(), |creds| {
+        let scope = mk_scope(&request.ts, &region);
         let date_hdr = (
             HeaderName::from_static("x-amz-date"),
-            HeaderValue::from_str(&aws_format_time(&r.ts)).unwrap(),
+            HeaderValue::from_str(&aws_format_time(&request.ts)).unwrap(),
         );
-        let mut hmap = r.headers.clone();
+        let mut hmap = request.headers.clone();
         hmap.insert(date_hdr.0.clone(), date_hdr.1.clone());
 
-        let hs = get_headers_to_sign(&hmap);
-        let signed_hdrs_str: String = hs
+        let headers = get_headers_to_sign(hmap);
+        let signed_hdrs_str: String = headers
             .iter()
             .map(|(x, _)| x.clone())
             .collect::<Vec<String>>()
             .join(";");
-        let cr = get_canonical_request(r, &hs, &signed_hdrs_str);
+        let cr = get_canonical_request(request, &headers, &signed_hdrs_str);
         debug!("canonicalreq: {}", cr);
-        let s2s = string_to_sign(&r.ts, &scope, &cr);
+        let s2s = string_to_sign(&request.ts, &scope, &cr);
         debug!("s2s: {}", s2s);
-        let skey = get_signing_key(&r.ts, &region.to_string(), &creds.secret_key);
+        let skey = get_signing_key(&request.ts, &region.to_string(), &creds.secret_key);
         debug!("skey: {:?}", skey);
         let signature = compute_sign(&s2s, &skey);
         debug!("sign: {}", signature);
@@ -219,6 +218,21 @@ mod sign_tests {
         assert_eq!(
             get_canonical_querystr(&query_params),
             "key1=val1&key1=val2&key2=val3&key2="
+        );
+    }
+
+    #[test]
+    fn headers_to_sign_remove_ignored_and_sort() {
+        let mut map = HeaderMap::new();
+        map.insert(AUTHORIZATION, "hello".parse().unwrap());
+        map.insert(CONTENT_LENGTH, "123".parse().unwrap());
+        map.insert("second", "123".parse().unwrap());
+        map.insert("first", "123".parse().unwrap());
+
+        assert_eq!(
+            get_headers_to_sign(map),
+            vec![("first".parse().unwrap(), "123".parse().unwrap()),
+                 ("second".parse().unwrap(), "123".parse().unwrap())]
         );
     }
 }
