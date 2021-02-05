@@ -180,9 +180,12 @@ impl Client {
                 s3_req.body = body;
                 let sign_hdrs = sign::sign_v4(&s3_req, creds, region);
                 debug!("signout: {:?}", sign_hdrs);
-                api::mk_request(&s3_req, &server_addr, &sign_hdrs)
+                api::mk_request(s3_req, &server_addr, &sign_hdrs)
             })
-            .and_then(move |req| conn_client.make_req(req).map_err(|e| Err::HyperErr(e)))
+            .and_then(move |req| {
+                debug!("{:?}", req);
+                conn_client.make_req(req).map_err(|e| Err::HyperErr(e))
+            })
             .and_then(|resp| {
                 let st = resp.status();
                 if st.is_success() {
@@ -300,6 +303,35 @@ impl Client {
         };
 
         self.signed_req_future(s3_req, Ok(Body::empty()))
+            .and_then(GetObjectResp::new)
+    }
+
+    pub fn put_object_req(
+        &self,
+        bucket_name: &str,
+        key: &str,
+        get_obj_opts: Vec<(HeaderName, HeaderValue)>,
+        data: Vec<u8>,
+    ) -> impl Future<Item = GetObjectResp, Error = Err> {
+        let mut h = HeaderMap::new();
+        get_obj_opts
+            .iter()
+            .map(|(x, y)| (x.clone(), y.clone()))
+            .for_each(|(k, v)| {
+                h.insert(k, v);
+            });
+
+        let s3_req = S3Req {
+            method: Method::PUT,
+            bucket: Some(bucket_name.to_string()),
+            object: Some(key.to_string()),
+            headers: h,
+            query: Values::new(),
+            body: Body::from(data.clone()),
+            ts: time::now_utc(),
+        };
+
+        self.signed_req_future(s3_req, Ok(Body::from(data)))
             .and_then(GetObjectResp::new)
     }
 
