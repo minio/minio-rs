@@ -15,11 +15,17 @@
  * limitations under the License.
  */
 
+extern crate quick_xml;
+extern crate serde;
+
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::str;
 
 use hyper::body::Body;
 use roxmltree;
+use serde_derive::Deserialize;
+use thiserror::Error;
 
 use crate::minio::types::{BucketInfo, Err, ListObjectsResp, ObjectInfo, Region};
 use crate::minio::woxml;
@@ -38,6 +44,80 @@ pub fn parse_bucket_location(s: String) -> Result<Region, Err> {
         Err(e) => Err(Err::XmlDocParseErr(e)),
     }
 }
+
+#[allow(non_snake_case)]
+#[derive(Debug, Deserialize, PartialEq)]
+pub struct Error {
+    Param: Option<String>,
+    Code: String,
+    Message: String,
+    BucketName: String,
+    Key: Option<String>,
+    RequestId: String,
+    HostId: String,
+    // Region where the bucket is located. This header is returned
+    // only in HEAD bucket and ListObjects response.
+    Region: Option<String>,
+}
+
+
+#[derive(Error, Debug, PartialEq)]
+pub enum S3GenericError {
+    #[error("no such bucket: {error:?}")]
+    NoSuchBucket {
+        error: Error,
+    },
+    #[error("unknown error: {error:?}")]
+    Unknown {
+        error: Error,
+    },
+}
+
+
+pub(crate) fn parse_s3_error(response_xml: &str) -> S3GenericError {
+    println!("{}",response_xml);
+    let doc: Error = quick_xml::de::from_str(response_xml).unwrap();
+    match doc.Code.as_str() {
+        "NoSuchBucket" => {
+            return S3GenericError::NoSuchBucket {
+                error: doc,
+            };
+        }
+        _ => {
+            return S3GenericError::Unknown {
+                error: doc,
+            };
+        }
+    }
+}
+
+#[cfg(test)]
+mod xml_tests {
+
+    use super::*;
+
+    #[test]
+    fn parse_xml_error() {
+        let response_xml = r#"
+        <?xml version="1.0" encoding="UTF-8"?>
+            <Error>
+                <Code>NoSuchBucket</Code>
+                <Message>The specified bucket does not exist</Message>
+                <Key>hhhhhhhhhh</Key>
+                <BucketName>aaaa</BucketName>
+                <Resource>/aaaa/hhhhhhhhhh</Resource>
+                <RequestId>166B5E4E3A406CC6</RequestId>
+                <HostId>129c19c9-4cf6-44ff-9f2d-4cb7611be894</HostId>
+            </Error>
+        "#;
+
+        let s3_error = parse_s3_error(response_xml);
+
+        print!("test! {:?}", s3_error);
+        assert!(matches!(s3_error, S3GenericError::NoSuchBucket {cerror} ));
+    }
+}
+
 
 pub fn parse_bucket_list(s: String) -> Result<Vec<BucketInfo>, Err> {
     let res = roxmltree::Document::parse(&s);
@@ -105,16 +185,16 @@ fn get_child_node_or<'a>(node: &'a roxmltree::Node, tag_name: &str, default: &'a
 }
 
 fn parse_child_content<T>(node: &roxmltree::Node, tag: &str) -> Result<T, Err>
-where
-    T: FromStr,
+    where
+        T: FromStr,
 {
     let content = get_child_node(node, tag).ok_or(Err::XmlElemMissing(format!("{:?}", tag)))?;
     str::parse::<T>(content).map_err(|_| Err::XmlElemParseErr(format!("{}", tag)))
 }
 
 fn parse_tag_content<T>(node: &roxmltree::Node) -> Result<T, Err>
-where
-    T: FromStr,
+    where
+        T: FromStr,
 {
     let content = must_get_node_text(node)?;
     str::parse::<T>(content).map_err(|_| Err::XmlElemParseErr(format!("{:?}", node.tag_name())))
@@ -141,7 +221,7 @@ fn parse_object_infos(node: roxmltree::Node) -> Result<Vec<ObjectInfo>, Err> {
             .children()
             .filter(|node| node.has_tag_name("StorageClass"));
         for (key, (mtime, (etag, (size, storage_class)))) in
-            keys.zip(mtimes.zip(etags.zip(sizes.zip(storage_classes))))
+        keys.zip(mtimes.zip(etags.zip(sizes.zip(storage_classes))))
         {
             let sz: i64 = parse_tag_content(&size)?;
             let key_text = must_get_node_text(&key)?;

@@ -15,9 +15,12 @@ pretty_env_logger = "0.3.0"
 ring = "0.14.6"
 roxmltree = "0.6.0"
 serde = "1.0.92"
-serde_derive = "1.0.91"
+serde_derive = "1.0.124"
 serde_json = "1.0.39"
 time = "0.1.42"
-tokio = "0.1.21"
-xml-rs = "0.8.0"
+tokio = { version = "1", features = ["full"] }
+xml-rs = "0.8.3"
+quick-xml = { version = "0.22", features = [ "serialize" ] }
+thiserror = "1.0.24"
+
 
