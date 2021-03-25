@@ -15,22 +15,28 @@
  * limitations under the License.
  */
 
+
 use std::env;
+use std::str;
 use std::string::String;
 
 use futures::future::{self, Future};
 use futures::Stream;
 use http;
-use hyper::header::{HeaderName, HeaderValue};
 use hyper::{body::Body, client, header, header::HeaderMap, Method, Request, Response, Uri};
+use hyper::header::{HeaderName, HeaderValue};
 use hyper_tls::HttpsConnector;
+use log::debug;
 use time;
 use time::Tm;
 
-pub use types::BucketInfo;
 use types::{Err, GetObjectResp, ListObjectsResp, Region};
+pub use types::BucketInfo;
+
 
 use crate::minio::net::{Values, ValuesAccess};
+use crate::minio::xml::{parse_s3_error, S3GenericError};
+use bytes::Buf;
 
 mod api;
 mod api_notification;
@@ -38,7 +44,6 @@ mod net;
 mod sign;
 mod types;
 mod xml;
-use log::debug;
 mod woxml;
 
 pub const SPACE_BYTE: &[u8; 1] = b" ";
@@ -161,7 +166,7 @@ impl Client {
         &self,
         mut s3_req: S3Req,
         body_res: Result<Body, Err>,
-    ) -> impl Future<Item = Response<Body>, Error = Err> {
+    ) -> impl Future<Item=Response<Body>, Error=Err> {
         let hmap = &mut s3_req.headers;
         self.add_host_header(hmap);
 
@@ -205,7 +210,16 @@ impl Client {
                             .concat2()
                             .map_err(|err| Err::HyperErr(err))
                             .and_then(move |chunk| {
-                                Err(Err::FailStatusCodeErr(st, chunk.into_bytes()))
+                                match st.as_str() {
+                                    "404" => {
+                                        let x = str::from_utf8(&chunk.bytes());
+                                        let s3_err = parse_s3_error(x.unwrap());
+                                        Err(Err::S3Error(s3_err))
+                                    }
+                                    _ => {
+                                        Err(Err::FailStatusCodeErr(st, chunk.into_bytes()))
+                                    }
+                                }
                             })
                     })
             })
@@ -215,7 +229,7 @@ impl Client {
     pub fn get_bucket_location(
         &self,
         bucket_name: &str,
-    ) -> impl Future<Item = Region, Error = Err> {
+    ) -> impl Future<Item=Region, Error=Err> {
         let mut qp = Values::new();
         qp.set_value("location", None);
 
@@ -239,7 +253,7 @@ impl Client {
             })
     }
 
-    pub fn delete_bucket(&self, bucket_name: &str) -> impl Future<Item = (), Error = Err> {
+    pub fn delete_bucket(&self, bucket_name: &str) -> impl Future<Item=(), Error=Err> {
         let s3_req = S3Req {
             method: Method::DELETE,
             bucket: Some(bucket_name.to_string()),
@@ -253,7 +267,7 @@ impl Client {
             .and_then(|_| Ok(()))
     }
 
-    pub fn bucket_exists(&self, bucket_name: &str) -> impl Future<Item = bool, Error = Err> {
+    pub fn bucket_exists(&self, bucket_name: &str) -> impl Future<Item=bool, Error=Err> {
         let s3_req = S3Req {
             method: Method::HEAD,
             bucket: Some(bucket_name.to_string()),
@@ -283,7 +297,7 @@ impl Client {
         bucket_name: &str,
         key: &str,
         get_obj_opts: Vec<(HeaderName, HeaderValue)>,
-    ) -> impl Future<Item = GetObjectResp, Error = Err> {
+    ) -> impl Future<Item=GetObjectResp, Error=Err> {
         let mut h = HeaderMap::new();
         get_obj_opts
             .iter()
@@ -312,7 +326,7 @@ impl Client {
         key: &str,
         get_obj_opts: Vec<(HeaderName, HeaderValue)>,
         data: Vec<u8>,
-    ) -> impl Future<Item = GetObjectResp, Error = Err> {
+    ) -> impl Future<Item=GetObjectResp, Error=Err> {
         let mut h = HeaderMap::new();
         get_obj_opts
             .iter()
@@ -351,7 +365,7 @@ impl Client {
             .and_then(|_| future::ok(()))
     }
 
-    pub fn list_buckets(&self) -> impl Future<Item = Vec<BucketInfo>, Error = Err> {
+    pub fn list_buckets(&self) -> impl Future<Item=Vec<BucketInfo>, Error=Err> {
         let s3_req = S3Req {
             method: Method::GET,
             bucket: None,
@@ -379,7 +393,7 @@ impl Client {
         marker: Option<&str>,
         delimiter: Option<&str>,
         max_keys: Option<i32>,
-    ) -> impl Future<Item = ListObjectsResp, Error = Err> {
+    ) -> impl Future<Item=ListObjectsResp, Error=Err> {
         let mut qparams: Values = Values::new();
         qparams.set_value("list-type", Some("2".to_string()));
         if let Some(d) = delimiter {
@@ -420,7 +434,7 @@ impl Client {
 fn run_req_future(
     req_result: Result<Request<Body>, Err>,
     c: ConnClient,
-) -> impl Future<Item = Response<Body>, Error = Err> {
+) -> impl Future<Item=Response<Body>, Error=Err> {
     future::result(req_result)
         //.map_err(|e| Err::HttpErr(e))
         .and_then(move |req| c.make_req(req).map_err(|e| Err::HyperErr(e)))
@@ -475,7 +489,7 @@ impl S3Req {
             .map(|(key, values)| {
                 values.iter().map(move |value| match value {
                     Some(v) => format!("{}={}", &key, v),
-                    None => format!("{}=", &key,),
+                    None => format!("{}=", &key, ),
                 })
             })
             .flatten()
@@ -486,8 +500,9 @@ impl S3Req {
 
 #[cfg(test)]
 mod minio_tests {
-    use super::*;
     use std::collections::HashMap;
+
+    use super::*;
 
     #[test]
     fn serialize_query_parameters() {

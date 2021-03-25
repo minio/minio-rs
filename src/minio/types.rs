@@ -26,6 +26,7 @@ use roxmltree;
 use std::collections::HashMap;
 use std::string;
 use time::{strptime, Tm};
+use crate::minio::xml::S3GenericError;
 
 #[derive(Clone)]
 pub struct Region(String);
@@ -60,6 +61,7 @@ pub enum Err {
     MissingRequiredParams,
     RawSvcErr(hyper::StatusCode, Response<Body>),
     XmlWriteErr(String),
+    S3Error(S3GenericError),
 }
 
 pub struct GetObjectResp {
