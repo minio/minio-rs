@@ -1,0 +1,39 @@
+name: MinIO Rust Library
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    # - uses: actions-rs/toolchain@v1
+    #   with:
+    #     toolchain: stable
+
+    - name: Check style
+      run: |
+        cargo fmt --all -- --check
+
+    - name: Start MinIO server
+      run: |
+        wget --quiet https://dl.min.io/server/minio/release/linux-amd64/minio
+        chmod +x minio
+        mkdir -p ~/.minio/certs
+        cp ./tests/public.crt ./tests/private.key ~/.minio/certs/
+        sudo cp ./tests/public.crt /usr/local/share/ca-certificates/
+        sudo update-ca-certificates
+        MINIO_CI_CD=true ./minio server /tmp/test-xl/{1...4}/ &
+        sleep 10
+
+    - name: Run tests
+      run: |
+        SERVER_ENDPOINT=https://localhost:9000/ ACCESS_KEY=minioadmin SECRET_KEY=minioadmin cargo test --verbose -- --nocapture

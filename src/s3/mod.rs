@@ -13,4 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod s3;
+pub mod args;
+pub mod client;
+pub mod creds;
+pub mod error;
+pub mod http;
+pub mod response;
+pub mod signer;
+pub mod sse;
+pub mod types;
+pub mod utils;
