@@ -20,7 +20,7 @@ use crate::s3::http::{BaseUrl, Url};
 use crate::s3::response::*;
 use crate::s3::signer::sign_v4_s3;
 use crate::s3::sse::SseCustomerKey;
-use crate::s3::types::{Bucket, DeleteObject, Item, Part};
+use crate::s3::types::{Bucket, DeleteObject, Item, NotificationRecords, Part};
 use crate::s3::utils::{
     from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash, merge, sha256_hash,
     to_amz_date, urldecode, utc_now, Multimap,
@@ -29,7 +29,7 @@ use bytes::{Buf, Bytes};
 use dashmap::DashMap;
 use hyper::http::Method;
 use reqwest::header::HeaderMap;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::Read;
 use xmltree::Element;
@@ -203,7 +203,7 @@ fn parse_list_objects_common_prefixes(
 #[derive(Clone, Debug, Default)]
 pub struct Client<'a> {
     base_url: BaseUrl,
-    provider: Option<&'a dyn Provider>,
+    provider: Option<&'a (dyn Provider + Send + Sync)>,
     pub ssl_cert_file: String,
     pub ignore_cert_check: bool,
     pub user_agent: String,
@@ -212,7 +212,7 @@ pub struct Client<'a> {
 }
 
 impl<'a> Client<'a> {
-    pub fn new(base_url: BaseUrl, provider: Option<&dyn Provider>) -> Client {
+    pub fn new(base_url: BaseUrl, provider: Option<&(dyn Provider + Send + Sync)>) -> Client {
         Client {
             base_url: base_url,
             provider: provider,
@@ -458,15 +458,18 @@ impl<'a> Client<'a> {
                 .build_url(&method, region, query_params, bucket_name, object_name)?;
         self.build_headers(headers, query_params, region, &url, &method, body);
 
-        let mut buf = Vec::new();
-        File::open(self.ssl_cert_file.to_string())?.read_to_end(&mut buf)?;
-        let cert = reqwest::Certificate::from_pem(&buf)?;
+        let mut builder = reqwest::Client::builder().no_gzip();
+        if self.ignore_cert_check {
+            builder = builder.danger_accept_invalid_certs(self.ignore_cert_check);
+        }
+        if !self.ssl_cert_file.is_empty() {
+            let mut buf = Vec::new();
+            File::open(self.ssl_cert_file.to_string())?.read_to_end(&mut buf)?;
+            let cert = reqwest::Certificate::from_pem(&buf)?;
+            builder = builder.add_root_certificate(cert);
+        }
 
-        let client = reqwest::Client::builder()
-            .no_gzip()
-            .add_root_certificate(cert)
-            .danger_accept_invalid_certs(self.ignore_cert_check)
-            .build()?;
+        let client = builder.build()?;
 
         let mut req = client.request(method.clone(), url.to_string());
 
@@ -925,8 +928,95 @@ impl<'a> Client<'a> {
         })
     }
 
-    // ListenBucketNotificationResponse ListenBucketNotification(
-    //     ListenBucketNotificationArgs args);
+    pub async fn listen_bucket_notification(
+        &self,
+        args: &ListenBucketNotificationArgs<'_>,
+    ) -> Result<ListenBucketNotificationResponse, Error> {
+        if self.base_url.aws_host {
+            return Err(Error::UnsupportedApi(String::from(
+                "ListenBucketNotification",
+            )));
+        }
+
+        let region = self.get_region(&args.bucket, args.region).await?;
+
+        let mut headers = Multimap::new();
+        if let Some(v) = &args.extra_headers {
+            merge(&mut headers, v);
+        }
+
+        let mut query_params = Multimap::new();
+        if let Some(v) = &args.extra_query_params {
+            merge(&mut query_params, v);
+        }
+        if let Some(v) = args.prefix {
+            query_params.insert(String::from("prefix"), v.to_string());
+        }
+        if let Some(v) = args.suffix {
+            query_params.insert(String::from("suffix"), v.to_string());
+        }
+        if let Some(v) = &args.events {
+            for e in v.iter() {
+                query_params.insert(String::from("events"), e.to_string());
+            }
+        } else {
+            query_params.insert(String::from("events"), String::from("s3:ObjectCreated:*"));
+            query_params.insert(String::from("events"), String::from("s3:ObjectRemoved:*"));
+            query_params.insert(String::from("events"), String::from("s3:ObjectAccessed:*"));
+        }
+
+        let mut resp = self
+            .execute(
+                Method::GET,
+                &region,
+                &mut headers,
+                &query_params,
+                Some(&args.bucket),
+                None,
+                None,
+            )
+            .await?;
+
+        let header_map = resp.headers().clone();
+
+        let mut done = false;
+        let mut buf = VecDeque::<u8>::new();
+        while !done {
+            let chunk = match resp.chunk().await? {
+                Some(v) => v,
+                None => {
+                    done = true;
+                    Bytes::new()
+                }
+            };
+            buf.extend(chunk.iter().copied());
+
+            while !done {
+                match buf.iter().position(|&v| v == '\n' as u8) {
+                    Some(i) => {
+                        let mut data = vec![0_u8; i + 1];
+                        for j in 0..=i {
+                            data[j] = buf.pop_front().ok_or(Error::InsufficientData(i, j))?;
+                        }
+                        let mut line = String::from_utf8(data)?;
+                        line = line.trim().to_string();
+                        if !line.is_empty() {
+                            let records: NotificationRecords = serde_json::from_str(&line)?;
+                            done = !(args.event_fn)(records);
+                        }
+                    }
+                    None => break,
+                };
+            }
+        }
+
+        Ok(ListenBucketNotificationResponse::new(
+            header_map,
+            &region,
+            &args.bucket,
+        ))
+    }
+
     pub async fn list_objects_v1(
         &self,
         args: &ListObjectsV1Args<'_>,

@@ -13,8 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_std::task;
+use minio::s3::types::NotificationRecords;
 use rand::distributions::{Alphanumeric, DistString};
 use std::io::BufReader;
+use tokio::sync::mpsc;
 
 use minio::s3::args::*;
 use minio::s3::client::Client;
@@ -64,16 +67,51 @@ fn rand_object_name() -> String {
 }
 
 struct ClientTest<'a> {
-    client: &'a Client<'a>,
+    base_url: BaseUrl,
+    access_key: String,
+    secret_key: String,
+    ignore_cert_check: bool,
+    ssl_cert_file: String,
+    client: Client<'a>,
     test_bucket: String,
 }
 
-impl<'a> ClientTest<'a> {
-    fn new(client: &'a Client<'_>, test_bucket: &'a str) -> ClientTest<'a> {
+impl<'a> ClientTest<'_> {
+    fn new(
+        base_url: BaseUrl,
+        access_key: String,
+        secret_key: String,
+        static_provider: &'a StaticProvider,
+        ignore_cert_check: bool,
+        ssl_cert_file: String,
+    ) -> ClientTest<'a> {
+        let mut client = Client::new(base_url.clone(), Some(static_provider));
+        client.ignore_cert_check = ignore_cert_check;
+        client.ssl_cert_file = ssl_cert_file.to_string();
+
         ClientTest {
+            base_url: base_url,
+            access_key: access_key,
+            secret_key: secret_key,
+            ignore_cert_check: ignore_cert_check,
+            ssl_cert_file: ssl_cert_file,
             client: client,
-            test_bucket: test_bucket.to_string(),
+            test_bucket: rand_bucket_name(),
         }
+    }
+
+    async fn init(&self) {
+        self.client
+            .make_bucket(&MakeBucketArgs::new(&self.test_bucket).unwrap())
+            .await
+            .unwrap();
+    }
+
+    async fn drop(&self) {
+        self.client
+            .remove_bucket(&RemoveBucketArgs::new(&self.test_bucket).unwrap())
+            .await
+            .unwrap();
     }
 
     async fn bucket_exists(&self) {
@@ -392,6 +430,74 @@ impl<'a> ClientTest<'a> {
             .await
             .unwrap();
     }
+
+    async fn listen_bucket_notification(&self) {
+        let object_name = rand_object_name();
+
+        let name = object_name.clone();
+        let (sender, mut receiver): (mpsc::UnboundedSender<bool>, mpsc::UnboundedReceiver<bool>) =
+            mpsc::unbounded_channel();
+
+        let access_key = self.access_key.clone();
+        let secret_key = self.secret_key.clone();
+        let base_url = self.base_url.clone();
+        let ignore_cert_check = self.ignore_cert_check;
+        let ssl_cert_file = self.ssl_cert_file.clone();
+        let test_bucket = self.test_bucket.clone();
+
+        let listen_task = move || async move {
+            let static_provider = StaticProvider::new(&access_key, &secret_key, None);
+            let mut client = Client::new(base_url, Some(&static_provider));
+            client.ignore_cert_check = ignore_cert_check;
+            client.ssl_cert_file = ssl_cert_file;
+
+            let event_fn = |event: NotificationRecords| {
+                for record in event.records.iter() {
+                    if let Some(s3) = &record.s3 {
+                        if let Some(object) = &s3.object {
+                            if let Some(key) = &object.key {
+                                if name == *key {
+                                    sender.send(true).unwrap();
+                                }
+                                return false;
+                            }
+                        }
+                    }
+                }
+                sender.send(false).unwrap();
+                return false;
+            };
+
+            let args = &ListenBucketNotificationArgs::new(&test_bucket, &event_fn).unwrap();
+            client.listen_bucket_notification(&args).await.unwrap();
+        };
+
+        let spawned_task = task::spawn(listen_task());
+        task::sleep(std::time::Duration::from_millis(100)).await;
+
+        let size = 16_usize;
+        self.client
+            .put_object(
+                &mut PutObjectArgs::new(
+                    &self.test_bucket,
+                    &object_name,
+                    &mut RandReader::new(size),
+                    Some(size),
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        self.client
+            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+
+        spawned_task.await;
+        assert_eq!(receiver.recv().await.unwrap(), true);
+    }
 }
 
 #[tokio::main]
@@ -405,24 +511,22 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let ignore_cert_check = std::env::var("IGNORE_CERT_CHECK").is_ok();
     let region = std::env::var("SERVER_REGION").ok();
 
-    let mut burl = BaseUrl::from_string(host).unwrap();
-    burl.https = secure;
+    let mut base_url = BaseUrl::from_string(host).unwrap();
+    base_url.https = secure;
     if let Some(v) = region {
-        burl.region = v;
+        base_url.region = v;
     }
 
-    let provider = StaticProvider::new(&access_key, &secret_key, None);
-    let mut client = Client::new(burl.clone(), Some(&provider));
-    client.ignore_cert_check = ignore_cert_check;
-    client.ssl_cert_file = ssl_cert_file;
-
-    let test_bucket = rand_bucket_name();
-    client
-        .make_bucket(&MakeBucketArgs::new(&test_bucket).unwrap())
-        .await
-        .unwrap();
-
-    let ctest = ClientTest::new(&client, &test_bucket);
+    let static_provider = StaticProvider::new(&access_key, &secret_key, None);
+    let ctest = ClientTest::new(
+        base_url,
+        access_key,
+        secret_key,
+        &static_provider,
+        ignore_cert_check,
+        ssl_cert_file,
+    );
+    ctest.init().await;
 
     println!("make_bucket() + bucket_exists() + remove_bucket()");
     ctest.bucket_exists().await;
@@ -448,10 +552,10 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("select_object_content()");
     ctest.select_object_content().await;
 
-    client
-        .remove_bucket(&RemoveBucketArgs::new(&test_bucket).unwrap())
-        .await
-        .unwrap();
+    println!("listen_bucket_notification()");
+    ctest.listen_bucket_notification().await;
+
+    ctest.drop().await;
 
     Ok(())
 }

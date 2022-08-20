@@ -594,3 +594,23 @@ impl SelectObjectContentResponse {
         }
     }
 }
+
+pub struct ListenBucketNotificationResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+}
+
+impl ListenBucketNotificationResponse {
+    pub fn new(
+        headers: HeaderMap,
+        region: &str,
+        bucket_name: &str,
+    ) -> ListenBucketNotificationResponse {
+        ListenBucketNotificationResponse {
+            headers: headers,
+            region: region.to_string(),
+            bucket_name: bucket_name.to_string(),
+        }
+    }
+}
