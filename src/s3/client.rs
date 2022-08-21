@@ -1206,70 +1206,28 @@ impl<'a> Client<'a> {
         let mut stop = false;
         while !stop {
             if args.include_versions {
-                let resp = self.list_object_versions(&lov_args).await;
-                match resp {
-                    Ok(v) => {
-                        if v.is_truncated {
-                            lov_args.key_marker = v.next_key_marker;
-                            lov_args.version_id_marker = v.next_version_id_marker;
-                        } else {
-                            stop = true;
-                        }
-                        for item in v.contents.iter() {
-                            if !(args.result_fn)(Ok(item)) {
-                                stop = true;
-                                break;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        (args.result_fn)(Err(e));
-                        return Ok(());
-                    }
-                };
+                let resp = self.list_object_versions(&lov_args).await?;
+                stop = !resp.is_truncated;
+                if resp.is_truncated {
+                    lov_args.key_marker = resp.next_key_marker;
+                    lov_args.version_id_marker = resp.next_version_id_marker;
+                }
+                stop = stop || !(args.result_fn)(resp.contents);
             } else if args.use_api_v1 {
-                let resp = self.list_objects_v1(&lov1_args).await;
-                match resp {
-                    Ok(v) => {
-                        if v.is_truncated {
-                            lov1_args.marker = v.next_marker;
-                        } else {
-                            stop = true;
-                        }
-                        for item in v.contents.iter() {
-                            if !(args.result_fn)(Ok(item)) {
-                                stop = true;
-                                break;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        (args.result_fn)(Err(e));
-                        return Ok(());
-                    }
-                };
+                let resp = self.list_objects_v1(&lov1_args).await?;
+                stop = !resp.is_truncated;
+                if resp.is_truncated {
+                    lov1_args.marker = resp.next_marker;
+                }
+                stop = stop || !(args.result_fn)(resp.contents);
             } else {
-                let resp = self.list_objects_v2(&lov2_args).await;
-                match resp {
-                    Ok(v) => {
-                        if v.is_truncated {
-                            lov2_args.start_after = v.start_after;
-                            lov2_args.continuation_token = v.next_continuation_token;
-                        } else {
-                            stop = true;
-                        }
-                        for item in v.contents.iter() {
-                            if !(args.result_fn)(Ok(item)) {
-                                stop = true;
-                                break;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        (args.result_fn)(Err(e));
-                        return Ok(());
-                    }
-                };
+                let resp = self.list_objects_v2(&lov2_args).await?;
+                stop = !resp.is_truncated;
+                if resp.is_truncated {
+                    lov2_args.start_after = resp.start_after;
+                    lov2_args.continuation_token = resp.next_continuation_token;
+                }
+                stop = stop || !(args.result_fn)(resp.contents);
             }
         }
 
