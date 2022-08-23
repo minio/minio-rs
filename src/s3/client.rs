@@ -30,6 +30,8 @@ use dashmap::DashMap;
 use hyper::http::Method;
 use reqwest::header::HeaderMap;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Read;
 use xmltree::Element;
 
 fn url_decode(
@@ -202,10 +204,10 @@ fn parse_list_objects_common_prefixes(
 pub struct Client<'a> {
     base_url: BaseUrl,
     provider: Option<&'a dyn Provider>,
-    ssl_cert_file: String,
-    ignore_cert_check: bool,
+    pub ssl_cert_file: String,
+    pub ignore_cert_check: bool,
+    pub user_agent: String,
     region_map: DashMap<String, String>,
-    user_agent: String,
     debug: bool,
 }
 
@@ -214,10 +216,10 @@ impl<'a> Client<'a> {
         Client {
             base_url: base_url,
             provider: provider,
-            ssl_cert_file: String::new(), // TODO: use specified ssl_cert_file
+            ssl_cert_file: String::new(),
             ignore_cert_check: false,
+            user_agent: String::new(),
             region_map: DashMap::new(),
-            user_agent: String::new(), // TODO: use specified user_agent
             debug: false,
         }
     }
@@ -456,17 +458,15 @@ impl<'a> Client<'a> {
                 .build_url(&method, region, query_params, bucket_name, object_name)?;
         self.build_headers(headers, query_params, region, &url, &method, body);
 
-        let client;
-        if object_name.unwrap_or_default().to_string().is_empty() && method == Method::GET {
-            client = reqwest::Client::builder()
-                .no_gzip() // needed to ensure no automatic decompression on GetObject
-                .danger_accept_invalid_certs(self.ignore_cert_check)
-                .build()?;
-        } else {
-            client = reqwest::Client::builder()
-                .danger_accept_invalid_certs(self.ignore_cert_check)
-                .build()?;
-        }
+        let mut buf = Vec::new();
+        File::open(self.ssl_cert_file.to_string())?.read_to_end(&mut buf)?;
+        let cert = reqwest::Certificate::from_pem(&buf)?;
+
+        let client = reqwest::Client::builder()
+            .no_gzip()
+            .add_root_certificate(cert)
+            .danger_accept_invalid_certs(self.ignore_cert_check)
+            .build()?;
 
         let mut req = client.request(method.clone(), url.to_string());
 

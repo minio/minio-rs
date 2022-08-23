@@ -401,6 +401,8 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let access_key = std::env::var("ACCESS_KEY")?;
     let secret_key = std::env::var("SECRET_KEY")?;
     let secure = std::env::var("ENABLE_HTTPS").is_ok();
+    let ssl_cert_file = std::env::var("SSL_CERT_FILE")?;
+    let ignore_cert_check = std::env::var("IGNORE_CERT_CHECK").is_ok();
     let region = std::env::var("SERVER_REGION").ok();
 
     let mut burl = BaseUrl::from_string(host).unwrap();
@@ -410,7 +412,9 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     let provider = StaticProvider::new(&access_key, &secret_key, None);
-    let client = Client::new(burl.clone(), Some(&provider));
+    let mut client = Client::new(burl.clone(), Some(&provider));
+    client.ignore_cert_check = ignore_cert_check;
+    client.ssl_cert_file = ssl_cert_file;
 
     let test_bucket = rand_bucket_name();
     client
