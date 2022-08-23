@@ -400,7 +400,6 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let access_key = std::env::var("ACCESS_KEY")?;
     let secret_key = std::env::var("SECRET_KEY")?;
     let secure = std::env::var("ENABLE_HTTPS").is_ok();
-    let ignore_cert_check = std::env::var("IGNORE_CERT_CHECK").is_ok();
     let region = std::env::var("SERVER_REGION").ok();
 
     let mut burl = BaseUrl::from_string(host).unwrap();

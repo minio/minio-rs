@@ -1,4 +1,4 @@
-name: Rust
+name: MinIO Rust Library
 
 on:
   push:
@@ -16,7 +16,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build --verbose
+    - name: Build and Check style
+      run: |
+        cargo build --verbose
+        cargo fmt --all -- --check
+
     - name: Run tests
-      run: cargo test --verbose
+      run: |
+        ./start-server.sh
+        export SERVER_ENDPOINT=localhost:9000
+        export ACCESS_KEY=minioadmin
+        export SECRET_KEY=minioadmin
+        cargo test --verbose -- --nocapture

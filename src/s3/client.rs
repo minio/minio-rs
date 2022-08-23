@@ -202,11 +202,11 @@ fn parse_list_objects_common_prefixes(
 pub struct Client<'a> {
     base_url: BaseUrl,
     provider: Option<&'a dyn Provider>,
+    ssl_cert_file: String,
+    ignore_cert_check: bool,
+    region_map: DashMap<String, String>,
     user_agent: String,
     debug: bool,
-    ignore_cert_check: bool,
-    ssl_cert_file: String,
-    region_map: DashMap<String, String>,
 }
 
 impl<'a> Client<'a> {
@@ -214,11 +214,11 @@ impl<'a> Client<'a> {
         Client {
             base_url: base_url,
             provider: provider,
-            user_agent: String::new(),
-            debug: false,
+            ssl_cert_file: String::new(), // TODO: use specified ssl_cert_file
             ignore_cert_check: false,
-            ssl_cert_file: String::new(),
             region_map: DashMap::new(),
+            user_agent: String::new(), // TODO: use specified user_agent
+            debug: false,
         }
     }
 
@@ -456,7 +456,18 @@ impl<'a> Client<'a> {
                 .build_url(&method, region, query_params, bucket_name, object_name)?;
         self.build_headers(headers, query_params, region, &url, &method, body);
 
-        let client = reqwest::Client::new();
+        let client;
+        if object_name.unwrap_or_default().to_string().is_empty() && method == Method::GET {
+            client = reqwest::Client::builder()
+                .no_gzip() // needed to ensure no automatic decompression on GetObject
+                .danger_accept_invalid_certs(self.ignore_cert_check)
+                .build()?;
+        } else {
+            client = reqwest::Client::builder()
+                .danger_accept_invalid_certs(self.ignore_cert_check)
+                .build()?;
+        }
+
         let mut req = client.request(method.clone(), url.to_string());
 
         for (key, values) in headers.iter_all() {
