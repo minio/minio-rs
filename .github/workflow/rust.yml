@@ -1,0 +1,30 @@
+name: MinIO Rust Library
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build and Check style
+      run: |
+        cargo build --verbose
+        cargo fmt --all -- --check
+
+    - name: Run tests
+      run: |
+        ./start-server.sh
+        export SERVER_ENDPOINT=https://localhost:9000/
+        export ACCESS_KEY=minioadmin
+        export SECRET_KEY=minioadmin
+        cargo test --verbose -- --nocapture
