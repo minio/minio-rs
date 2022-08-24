@@ -15,7 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::sse::{Sse, SseCustomerKey};
-use crate::s3::types::{DeleteObject, Item, Part, Retention, SelectProgress, SelectRequest};
+use crate::s3::types::{DeleteObject, Item, Part, Retention, SelectRequest};
 use crate::s3::utils::{
     check_bucket_name, merge, to_http_header_value, to_iso8601utc, urlencode, Multimap, UtcTime,
 };
@@ -908,13 +908,13 @@ pub struct ListObjectsArgs<'a> {
     pub recursive: bool,
     pub use_api_v1: bool,
     pub include_versions: bool,
-    pub result_fn: &'a dyn Fn(Result<&Item, Error>) -> bool,
+    pub result_fn: &'a dyn Fn(Vec<Item>) -> bool,
 }
 
 impl<'a> ListObjectsArgs<'a> {
     pub fn new(
         bucket_name: &'a str,
-        result_fn: &'a dyn Fn(Result<&Item, Error>) -> bool,
+        result_fn: &'a dyn Fn(Vec<Item>) -> bool,
     ) -> Result<ListObjectsArgs<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 

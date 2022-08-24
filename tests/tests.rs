@@ -293,9 +293,10 @@ impl<'a> ClientTest<'a> {
 
         self.client
             .list_objects(
-                &mut ListObjectsArgs::new(&self.test_bucket, &|res| {
-                    let item = res.unwrap();
-                    assert_eq!(names.contains(&item.name), true);
+                &mut ListObjectsArgs::new(&self.test_bucket, &|items| {
+                    for item in items.iter() {
+                        assert_eq!(names.contains(&item.name), true);
+                    }
                     true
                 })
                 .unwrap(),
