@@ -15,7 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::sse::{Sse, SseCustomerKey};
-use crate::s3::types::{DeleteObject, Item, Part, Retention, SelectRequest};
+use crate::s3::types::{DeleteObject, Item, NotificationRecords, Part, Retention, SelectRequest};
 use crate::s3::utils::{
     check_bucket_name, merge, to_http_header_value, to_iso8601utc, urlencode, Multimap, UtcTime,
 };
@@ -976,6 +976,37 @@ impl<'a> SelectObjectContentArgs<'a> {
             version_id: None,
             ssec: None,
             request: request,
+        })
+    }
+}
+
+pub struct ListenBucketNotificationArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub prefix: Option<&'a str>,
+    pub suffix: Option<&'a str>,
+    pub events: Option<Vec<&'a str>>,
+    pub event_fn: &'a (dyn Fn(NotificationRecords) -> bool + Send + Sync),
+}
+
+impl<'a> ListenBucketNotificationArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        event_fn: &'a (dyn Fn(NotificationRecords) -> bool + Send + Sync),
+    ) -> Result<ListenBucketNotificationArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        Ok(ListenBucketNotificationArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            prefix: None,
+            suffix: None,
+            events: None,
+            event_fn: event_fn,
         })
     }
 }

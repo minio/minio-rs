@@ -15,6 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::utils::UtcTime;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 
@@ -456,4 +457,112 @@ pub struct SelectProgress {
     pub bytes_scanned: usize,
     pub bytes_progressed: usize,
     pub bytes_returned: usize,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct UserIdentity {
+    #[serde(alias = "principalId")]
+    pub principal_id: Option<String>,
+}
+
+pub type OwnerIdentity = UserIdentity;
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct RequestParameters {
+    #[serde(alias = "principalId")]
+    pub principal_id: Option<String>,
+    #[serde(alias = "region")]
+    pub region: Option<String>,
+    #[serde(alias = "sourceIPAddress")]
+    pub source_ip_address: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ResponseElements {
+    #[serde(alias = "content-length")]
+    pub content_length: Option<String>,
+    #[serde(alias = "x-amz-request-id")]
+    pub x_amz_request_id: Option<String>,
+    #[serde(alias = "x-minio-deployment-id")]
+    pub x_minio_deployment_id: Option<String>,
+    #[serde(alias = "x-minio-origin-endpoint")]
+    pub x_minio_origin_endpoint: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct S3Bucket {
+    #[serde(alias = "name")]
+    pub name: Option<String>,
+    #[serde(alias = "arn")]
+    pub arn: Option<String>,
+    #[serde(alias = "ownerIdentity")]
+    pub owner_identity: Option<OwnerIdentity>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct S3Object {
+    #[serde(alias = "key")]
+    pub key: Option<String>,
+    #[serde(alias = "size")]
+    pub size: Option<usize>,
+    #[serde(alias = "eTag")]
+    pub etag: Option<String>,
+    #[serde(alias = "contentType")]
+    pub content_type: Option<String>,
+    #[serde(alias = "userMetadata")]
+    pub user_metadata: Option<HashMap<String, String>>,
+    #[serde(alias = "sequencer")]
+    pub sequencer: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct S3 {
+    #[serde(alias = "s3SchemaVersion")]
+    pub s3_schema_version: Option<String>,
+    #[serde(alias = "configurationId")]
+    pub configuration_id: Option<String>,
+    #[serde(alias = "bucket")]
+    pub bucket: Option<S3Bucket>,
+    #[serde(alias = "object")]
+    pub object: Option<S3Object>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Source {
+    #[serde(alias = "host")]
+    pub host: Option<String>,
+    #[serde(alias = "port")]
+    pub port: Option<String>,
+    #[serde(alias = "userAgent")]
+    pub user_agent: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct NotificationRecord {
+    #[serde(alias = "eventVersion")]
+    pub event_version: Option<String>,
+    #[serde(alias = "eventSource")]
+    pub event_source: Option<String>,
+    #[serde(alias = "awsRegion")]
+    pub aws_region: Option<String>,
+    #[serde(alias = "eventTime")]
+    pub event_time: Option<String>,
+    #[serde(alias = "eventName")]
+    pub event_name: Option<String>,
+    #[serde(alias = "userIdentity")]
+    pub user_identity: Option<UserIdentity>,
+    #[serde(alias = "requestParameters")]
+    pub request_parameters: Option<RequestParameters>,
+    #[serde(alias = "responseElements")]
+    pub response_elements: Option<ResponseElements>,
+    #[serde(alias = "s3")]
+    pub s3: Option<S3>,
+    #[serde(alias = "source")]
+    pub source: Option<Source>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct NotificationRecords {
+    #[serde(alias = "Records")]
+    pub records: Vec<NotificationRecord>,
 }

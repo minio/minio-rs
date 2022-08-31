@@ -60,6 +60,7 @@ pub enum Error {
     IntError(std::num::ParseIntError),
     BoolError(std::str::ParseBoolError),
     Utf8Error(alloc::string::FromUtf8Error),
+    JsonError(serde_json::Error),
     XmlError(String),
     InvalidBucketName(String),
     InvalidBaseUrl(String),
@@ -86,6 +87,7 @@ pub enum Error {
     CrcMismatch(String, u32, u32),
     UnknownEventType(String),
     SelectError(String, String),
+    UnsupportedApi(String),
 }
 
 impl std::error::Error for Error {}
@@ -102,6 +104,7 @@ impl fmt::Display for Error {
             Error::IntError(e) => write!(f, "{}", e),
             Error::BoolError(e) => write!(f, "{}", e),
 	    Error::Utf8Error(e) => write!(f, "{}", e),
+	    Error::JsonError(e) => write!(f, "{}", e),
 	    Error::XmlError(m) => write!(f, "{}", m),
 	    Error::InvalidBucketName(m) => write!(f, "{}", m),
 	    Error::InvalidObjectName(m) => write!(f, "{}", m),
@@ -128,6 +131,7 @@ impl fmt::Display for Error {
 	    Error::CrcMismatch(t, e, g) => write!(f, "{} CRC mismatch; expected: {}, got: {}", t, e, g),
 	    Error::UnknownEventType(et) => write!(f, "unknown event type {}", et),
 	    Error::SelectError(ec, em) => write!(f, "error code: {}, error message: {}", ec, em),
+	    Error::UnsupportedApi(a) => write!(f, "{} API is not supported in Amazon AWS S3", a),
         }
     }
 }
@@ -183,5 +187,11 @@ impl From<std::str::ParseBoolError> for Error {
 impl From<alloc::string::FromUtf8Error> for Error {
     fn from(err: alloc::string::FromUtf8Error) -> Self {
         Error::Utf8Error(err)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Error::JsonError(err)
     }
 }

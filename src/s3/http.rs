@@ -96,7 +96,7 @@ pub struct BaseUrl {
     host: String,
     port: u16,
     pub region: String,
-    aws_host: bool,
+    pub aws_host: bool,
     accelerate_host: bool,
     dualstack_host: bool,
     virtual_style: bool,
