@@ -566,3 +566,28 @@ pub struct NotificationRecords {
     #[serde(alias = "Records")]
     pub records: Vec<NotificationRecord>,
 }
+
+#[derive(Clone, Debug)]
+pub enum Directive {
+    Copy,
+    Replace,
+}
+
+impl Directive {
+    pub fn parse(s: &str) -> Result<Directive, Error> {
+        match s {
+            "COPY" => Ok(Directive::Copy),
+            "REPLACE" => Ok(Directive::Replace),
+            _ => Err(Error::InvalidDirective(s.to_string())),
+        }
+    }
+}
+
+impl fmt::Display for Directive {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Directive::Copy => write!(f, "COPY"),
+            Directive::Replace => write!(f, "REPLACE"),
+        }
+    }
+}

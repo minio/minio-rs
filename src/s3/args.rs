@@ -15,16 +15,18 @@
 
 use crate::s3::error::Error;
 use crate::s3::sse::{Sse, SseCustomerKey};
-use crate::s3::types::{DeleteObject, Item, NotificationRecords, Part, Retention, SelectRequest};
+use crate::s3::types::{
+    DeleteObject, Directive, Item, NotificationRecords, Part, Retention, SelectRequest,
+};
 use crate::s3::utils::{
     check_bucket_name, merge, to_http_header_value, to_iso8601utc, urlencode, Multimap, UtcTime,
 };
 use derivative::Derivative;
 
-const MIN_PART_SIZE: usize = 5_242_880; // 5 MiB
-const MAX_PART_SIZE: usize = 5_368_709_120; // 5 GiB
-const MAX_OBJECT_SIZE: usize = 5_497_558_138_880; // 5 TiB
-const MAX_MULTIPART_COUNT: u16 = 10_000;
+pub const MIN_PART_SIZE: usize = 5_242_880; // 5 MiB
+pub const MAX_PART_SIZE: usize = 5_368_709_120; // 5 GiB
+pub const MAX_OBJECT_SIZE: usize = 5_497_558_138_880; // 5 TiB
+pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 
 fn object_write_args_headers(
     extra_headers: Option<&Multimap>,
@@ -639,7 +641,7 @@ impl<'a> ObjectConditionalReadArgs<'a> {
         })
     }
 
-    pub fn get_headers(&self) -> Multimap {
+    fn get_range_value(&self) -> String {
         let (offset, length) = match self.length {
             Some(_) => (Some(self.offset.unwrap_or(0_usize)), self.length),
             None => (self.offset, None),
@@ -655,7 +657,13 @@ impl<'a> ObjectConditionalReadArgs<'a> {
             }
         }
 
+        return range;
+    }
+
+    pub fn get_headers(&self) -> Multimap {
         let mut headers = Multimap::new();
+
+        let range = self.get_range_value();
         if !range.is_empty() {
             headers.insert(String::from("Range"), range.clone());
         }
@@ -696,6 +704,11 @@ impl<'a> ObjectConditionalReadArgs<'a> {
         }
         headers.insert(String::from("x-amz-copy-source"), copy_source.to_string());
 
+        let range = self.get_range_value();
+        if !range.is_empty() {
+            headers.insert(String::from("x-amz-copy-source-range"), range.clone());
+        }
+
         if let Some(v) = self.match_etag {
             headers.insert(String::from("x-amz-copy-source-if-match"), v.to_string());
         }
@@ -732,6 +745,8 @@ impl<'a> ObjectConditionalReadArgs<'a> {
 pub type GetObjectArgs<'a> = ObjectConditionalReadArgs<'a>;
 
 pub type StatObjectArgs<'a> = ObjectConditionalReadArgs<'a>;
+
+pub type CopySource<'a> = ObjectConditionalReadArgs<'a>;
 
 #[derive(Derivative, Clone, Debug, Default)]
 pub struct RemoveObjectsApiArgs<'a> {
@@ -1008,5 +1023,324 @@ impl<'a> ListenBucketNotificationArgs<'a> {
             events: None,
             event_fn: event_fn,
         })
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct UploadPartCopyArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub object: &'a str,
+    pub upload_id: &'a str,
+    pub part_number: u16,
+    pub headers: Multimap,
+}
+
+impl<'a> UploadPartCopyArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        object_name: &'a str,
+        upload_id: &'a str,
+        part_number: u16,
+        headers: Multimap,
+    ) -> Result<UploadPartCopyArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        if object_name.is_empty() {
+            return Err(Error::InvalidObjectName(String::from(
+                "object name cannot be empty",
+            )));
+        }
+
+        if upload_id.is_empty() {
+            return Err(Error::InvalidUploadId(String::from(
+                "upload ID cannot be empty",
+            )));
+        }
+
+        if part_number < 1 || part_number > 10000 {
+            return Err(Error::InvalidPartNumber(String::from(
+                "part number must be between 1 and 1000",
+            )));
+        }
+
+        Ok(UploadPartCopyArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            object: object_name,
+            upload_id: upload_id,
+            part_number: part_number,
+            headers: headers,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct CopyObjectArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub object: &'a str,
+    pub headers: Option<&'a Multimap>,
+    pub user_metadata: Option<&'a Multimap>,
+    pub sse: Option<&'a dyn Sse>,
+    pub tags: Option<&'a std::collections::HashMap<String, String>>,
+    pub retention: Option<&'a Retention>,
+    pub legal_hold: bool,
+    pub source: CopySource<'a>,
+    pub metadata_directive: Option<Directive>,
+    pub tagging_directive: Option<Directive>,
+}
+
+impl<'a> CopyObjectArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        object_name: &'a str,
+        source: CopySource<'a>,
+    ) -> Result<CopyObjectArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        if object_name.is_empty() {
+            return Err(Error::InvalidObjectName(String::from(
+                "object name cannot be empty",
+            )));
+        }
+
+        Ok(CopyObjectArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            object: object_name,
+            headers: None,
+            user_metadata: None,
+            sse: None,
+            tags: None,
+            retention: None,
+            legal_hold: false,
+            source: source,
+            metadata_directive: None,
+            tagging_directive: None,
+        })
+    }
+
+    pub fn get_headers(&self) -> Multimap {
+        object_write_args_headers(
+            self.extra_headers,
+            self.headers,
+            self.user_metadata,
+            self.sse,
+            self.tags,
+            self.retention,
+            self.legal_hold,
+        )
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ComposeSource<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub object: &'a str,
+    pub version_id: Option<&'a str>,
+    pub ssec: Option<&'a SseCustomerKey>,
+    pub offset: Option<usize>,
+    pub length: Option<usize>,
+    pub match_etag: Option<&'a str>,
+    pub not_match_etag: Option<&'a str>,
+    pub modified_since: Option<UtcTime>,
+    pub unmodified_since: Option<UtcTime>,
+
+    object_size: Option<usize>, // populated by build_headers()
+    headers: Option<Multimap>,  // populated by build_headers()
+}
+
+impl<'a> ComposeSource<'a> {
+    pub fn new(bucket_name: &'a str, object_name: &'a str) -> Result<ComposeSource<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        if object_name.is_empty() {
+            return Err(Error::InvalidObjectName(String::from(
+                "object name cannot be empty",
+            )));
+        }
+
+        Ok(ComposeSource {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            object: object_name,
+            version_id: None,
+            ssec: None,
+            offset: None,
+            length: None,
+            match_etag: None,
+            not_match_etag: None,
+            modified_since: None,
+            unmodified_since: None,
+            object_size: None,
+            headers: None,
+        })
+    }
+
+    pub fn get_object_size(&self) -> usize {
+        return self.object_size.expect("ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This shoud not happen.");
+    }
+
+    pub fn get_headers(&self) -> Multimap {
+        return self.headers.as_ref().expect("ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This shoud not happen.").clone();
+    }
+
+    pub fn build_headers(&mut self, object_size: usize, etag: String) -> Result<(), Error> {
+        if let Some(v) = self.offset {
+            if v >= object_size {
+                return Err(Error::InvalidComposeSourceOffset(
+                    self.bucket.to_string(),
+                    self.object.to_string(),
+                    self.version_id.map(|v| v.to_string()),
+                    v,
+                    object_size,
+                ));
+            }
+        }
+
+        if let Some(v) = self.length {
+            if v > object_size {
+                return Err(Error::InvalidComposeSourceLength(
+                    self.bucket.to_string(),
+                    self.object.to_string(),
+                    self.version_id.map(|v| v.to_string()),
+                    v,
+                    object_size,
+                ));
+            }
+
+            if (self.offset.unwrap_or_default() + v) > object_size {
+                return Err(Error::InvalidComposeSourceSize(
+                    self.bucket.to_string(),
+                    self.object.to_string(),
+                    self.version_id.map(|v| v.to_string()),
+                    self.offset.unwrap_or_default() + v,
+                    object_size,
+                ));
+            }
+        }
+
+        self.object_size = Some(object_size);
+
+        let mut headers = Multimap::new();
+
+        let mut copy_source = String::from("/");
+        copy_source.push_str(self.bucket);
+        copy_source.push_str("/");
+        copy_source.push_str(self.object);
+        if let Some(v) = self.version_id {
+            copy_source.push_str("?versionId=");
+            copy_source.push_str(&urlencode(v));
+        }
+        headers.insert(String::from("x-amz-copy-source"), copy_source.to_string());
+
+        if let Some(v) = self.match_etag {
+            headers.insert(String::from("x-amz-copy-source-if-match"), v.to_string());
+        }
+
+        if let Some(v) = self.not_match_etag {
+            headers.insert(
+                String::from("x-amz-copy-source-if-none-match"),
+                v.to_string(),
+            );
+        }
+
+        if let Some(v) = self.modified_since {
+            headers.insert(
+                String::from("x-amz-copy-source-if-modified-since"),
+                to_http_header_value(v),
+            );
+        }
+
+        if let Some(v) = self.unmodified_since {
+            headers.insert(
+                String::from("x-amz-copy-source-if-unmodified-since"),
+                to_http_header_value(v),
+            );
+        }
+
+        if let Some(v) = self.ssec {
+            merge(&mut headers, &v.copy_headers());
+        }
+
+        if !headers.contains_key("x-amz-copy-source-if-match") {
+            headers.insert(String::from("x-amz-copy-source-if-match"), etag);
+        }
+
+        self.headers = Some(headers);
+
+        return Ok(());
+    }
+}
+
+pub struct ComposeObjectArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub object: &'a str,
+    pub headers: Option<&'a Multimap>,
+    pub user_metadata: Option<&'a Multimap>,
+    pub sse: Option<&'a dyn Sse>,
+    pub tags: Option<&'a std::collections::HashMap<String, String>>,
+    pub retention: Option<&'a Retention>,
+    pub legal_hold: bool,
+    pub sources: &'a mut Vec<ComposeSource<'a>>,
+}
+
+impl<'a> ComposeObjectArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        object_name: &'a str,
+        sources: &'a mut Vec<ComposeSource<'a>>,
+    ) -> Result<ComposeObjectArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        if object_name.is_empty() {
+            return Err(Error::InvalidObjectName(String::from(
+                "object name cannot be empty",
+            )));
+        }
+
+        Ok(ComposeObjectArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            object: object_name,
+            headers: None,
+            user_metadata: None,
+            sse: None,
+            tags: None,
+            retention: None,
+            legal_hold: false,
+            sources: sources,
+        })
+    }
+
+    pub fn get_headers(&self) -> Multimap {
+        object_write_args_headers(
+            self.extra_headers,
+            self.headers,
+            self.user_metadata,
+            self.sse,
+            self.tags,
+            self.retention,
+            self.legal_hold,
+        )
     }
 }

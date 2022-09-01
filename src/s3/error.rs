@@ -79,7 +79,7 @@ pub enum Error {
     InvalidObjectSize(usize),
     MissingPartSize,
     InvalidPartCount(usize, usize, u16),
-    SseTlsRequired,
+    SseTlsRequired(Option<String>),
     InsufficientData(usize, usize),
     InvalidLegalHold(String),
     InvalidSelectExpression(String),
@@ -88,6 +88,15 @@ pub enum Error {
     UnknownEventType(String),
     SelectError(String, String),
     UnsupportedApi(String),
+    InvalidComposeSource(String),
+    InvalidComposeSourceOffset(String, String, Option<String>, usize, usize),
+    InvalidComposeSourceLength(String, String, Option<String>, usize, usize),
+    InvalidComposeSourceSize(String, String, Option<String>, usize, usize),
+    InvalidComposeSourcePartSize(String, String, Option<String>, usize, usize),
+    InvalidComposeSourceMultipart(String, String, Option<String>, usize, usize),
+    InvalidDirective(String),
+    InvalidCopyDirective(String),
+    InvalidMultipartCount(u16),
 }
 
 impl std::error::Error for Error {}
@@ -117,7 +126,7 @@ impl fmt::Display for Error {
 	    Error::InvalidObjectSize(s) => write!(f, "object size {} is not supported; maximum allowed 5TiB", s),
 	    Error::MissingPartSize => write!(f, "valid part size must be provided when object size is unknown"),
 	    Error::InvalidPartCount(os, ps, pc) => write!(f, "object size {} and part size {} make more than {} parts for upload", os, ps, pc),
-	    Error::SseTlsRequired => write!(f, "SSE operation must be performed over a secure connection"),
+	    Error::SseTlsRequired(m) => write!(f, "{}SSE operation must be performed over a secure connection", m.as_ref().map_or(String::new(), |v| v.clone())),
 	    Error::InsufficientData(ps, br) => write!(f, "not enough data in the stream; expected: {}, got: {} bytes", ps, br),
 	    Error::InvalidBaseUrl(m) => write!(f, "{}", m),
 	    Error::UrlBuildError(m) => write!(f, "{}", m),
@@ -132,6 +141,15 @@ impl fmt::Display for Error {
 	    Error::UnknownEventType(et) => write!(f, "unknown event type {}", et),
 	    Error::SelectError(ec, em) => write!(f, "error code: {}, error message: {}", ec, em),
 	    Error::UnsupportedApi(a) => write!(f, "{} API is not supported in Amazon AWS S3", a),
+	    Error::InvalidComposeSource(m) => write!(f, "{}", m),
+	    Error::InvalidComposeSourceOffset(b, o, v, of, os) => write!(f, "source {}/{}{}: offset {} is beyond object size {}", b, o, v.as_ref().map_or(String::new(), |v| String::from("?versionId=") + v), of, os),
+	    Error::InvalidComposeSourceLength(b, o, v, l, os) => write!(f, "source {}/{}{}: length {} is beyond object size {}", b, o, v.as_ref().map_or(String::new(), |v| String::from("?versionId=") + v), l, os),
+	    Error::InvalidComposeSourceSize(b, o, v, cs, os) => write!(f, "source {}/{}{}: compose size {} is beyond object size {}", b, o, v.as_ref().map_or(String::new(), |v| String::from("?versionId=") + v), cs, os),
+	    Error::InvalidDirective(m) => write!(f, "{}", m),
+	    Error::InvalidCopyDirective(m) => write!(f, "{}", m),
+	    Error::InvalidComposeSourcePartSize(b, o, v, s, es) => write!(f, "source {}/{}{}: size {} must be greater than {}", b, o, v.as_ref().map_or(String::new(), |v| String::from("?versionId=") + v), s, es),
+	    Error::InvalidComposeSourceMultipart(b, o, v, s, es) => write!(f, "source {}/{}{}: size {} for multipart split upload of {}, last part size is less than {}", b, o, v.as_ref().map_or(String::new(), |v| String::from("?versionId=") + v), s, s, es),
+	    Error::InvalidMultipartCount(c) => write!(f, "Compose sources create more than allowed multipart count {}", c),
         }
     }
 }
