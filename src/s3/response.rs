@@ -83,6 +83,12 @@ pub type UploadPartResponse = PutObjectApiResponse;
 
 pub type PutObjectResponse = PutObjectApiResponse;
 
+pub type UploadPartCopyResponse = PutObjectApiResponse;
+
+pub type CopyObjectResponse = PutObjectApiResponse;
+
+pub type ComposeObjectResponse = PutObjectApiResponse;
+
 #[derive(Debug)]
 pub struct StatObjectResponse {
     pub headers: HeaderMap,

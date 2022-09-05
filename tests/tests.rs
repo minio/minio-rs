@@ -498,6 +498,106 @@ impl<'a> ClientTest<'_> {
         spawned_task.await;
         assert_eq!(receiver.recv().await.unwrap(), true);
     }
+
+    async fn copy_object(&self) {
+        let src_object_name = rand_object_name();
+
+        let size = 16_usize;
+        self.client
+            .put_object(
+                &mut PutObjectArgs::new(
+                    &self.test_bucket,
+                    &src_object_name,
+                    &mut RandReader::new(size),
+                    Some(size),
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let object_name = rand_object_name();
+        self.client
+            .copy_object(
+                &CopyObjectArgs::new(
+                    &self.test_bucket,
+                    &object_name,
+                    CopySource::new(&self.test_bucket, &src_object_name).unwrap(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .stat_object(&StatObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.size, size);
+
+        self.client
+            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+
+        self.client
+            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &src_object_name).unwrap())
+            .await
+            .unwrap();
+    }
+
+    async fn compose_object(&self) {
+        let src_object_name = rand_object_name();
+
+        let size = 16_usize;
+        self.client
+            .put_object(
+                &mut PutObjectArgs::new(
+                    &self.test_bucket,
+                    &src_object_name,
+                    &mut RandReader::new(size),
+                    Some(size),
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let mut s1 = ComposeSource::new(&self.test_bucket, &src_object_name).unwrap();
+        s1.offset = Some(3);
+        s1.length = Some(5);
+        let mut sources: Vec<ComposeSource> = Vec::new();
+        sources.push(s1);
+
+        let object_name = rand_object_name();
+
+        self.client
+            .compose_object(
+                &mut ComposeObjectArgs::new(&self.test_bucket, &object_name, &mut sources).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .stat_object(&StatObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.size, 5);
+
+        self.client
+            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+
+        self.client
+            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &src_object_name).unwrap())
+            .await
+            .unwrap();
+    }
 }
 
 #[tokio::main]
@@ -528,6 +628,9 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
     ctest.init().await;
 
+    println!("compose_object()");
+    ctest.compose_object().await;
+
     println!("make_bucket() + bucket_exists() + remove_bucket()");
     ctest.bucket_exists().await;
 
@@ -554,6 +657,9 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     println!("listen_bucket_notification()");
     ctest.listen_bucket_notification().await;
+
+    println!("copy_object()");
+    ctest.copy_object().await;
 
     ctest.drop().await;
 

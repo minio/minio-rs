@@ -24,6 +24,7 @@ use md5::compute as md5compute;
 use multimap::MultiMap;
 use regex::Regex;
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 pub use urlencoding::decode as urldecode;
 pub use urlencoding::encode as urlencode;
 use xmltree::Element;
@@ -155,41 +156,47 @@ pub fn get_canonical_headers(map: &Multimap) -> (String, String) {
     lazy_static! {
         static ref MULTI_SPACE_REGEX: Regex = Regex::new("( +)").unwrap();
     }
-    let mut signed_headers: Vec<String> = Vec::new();
-    let mut mmap: MultiMap<String, String> = MultiMap::new();
+    let mut btmap: BTreeMap<String, String> = BTreeMap::new();
 
     for (k, values) in map.iter_all() {
         let key = k.to_lowercase();
         if "authorization" == key || "user-agent" == key {
             continue;
         }
-        if !signed_headers.contains(&key) {
-            signed_headers.push(key.clone());
-        }
 
-        for v in values {
-            mmap.insert(key.clone(), v.to_string());
-        }
-    }
+        let mut vs = values.clone();
+        vs.sort();
 
-    let mut canonical_headers: Vec<String> = Vec::new();
-    for (key, values) in mmap.iter_all_mut() {
-        values.sort();
         let mut value = String::new();
-        for v in values {
+        for v in vs {
             if !value.is_empty() {
                 value.push_str(",");
             }
-            let s: String = MULTI_SPACE_REGEX.replace_all(v, " ").to_string();
+            let s: String = MULTI_SPACE_REGEX.replace_all(&v, " ").to_string();
             value.push_str(&s);
         }
-        canonical_headers.push(key.to_string() + ":" + value.as_str());
+        btmap.insert(key.clone(), value.clone());
     }
 
-    signed_headers.sort();
-    canonical_headers.sort();
+    let mut signed_headers = String::new();
+    let mut canonical_headers = String::new();
+    let mut add_delim = false;
+    for (key, value) in &btmap {
+        if add_delim {
+            signed_headers.push_str(";");
+            canonical_headers.push_str("\n");
+        }
 
-    return (signed_headers.join(";"), canonical_headers.join("\n"));
+        signed_headers.push_str(key);
+
+        canonical_headers.push_str(key);
+        canonical_headers.push_str(":");
+        canonical_headers.push_str(value);
+
+        add_delim = true;
+    }
+
+    return (signed_headers, canonical_headers);
 }
 
 pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
