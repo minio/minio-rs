@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["get_authorization",""],["get_canonical_request_hash",""],["get_scope",""],["get_signature",""],["get_signing_key",""],["get_string_to_sign",""],["hmac_hash",""],["hmac_hash_hex",""],["post_presign_v4",""],["presign_v4",""],["sign_v4",""],["sign_v4_s3",""],["sign_v4_sts",""]]};

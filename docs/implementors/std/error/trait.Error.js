@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["minio"] = [{"text":"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.63.0/std/error/trait.Error.html\" title=\"trait std::error::Error\">Error</a> for <a class=\"enum\" href=\"minio/s3/error/enum.Error.html\" title=\"enum minio::s3::error::Error\">Error</a>","synthetic":false,"types":["minio::s3::error::Error"]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
