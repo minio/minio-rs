@@ -14,7 +14,9 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
-use crate::s3::types::{parse_legal_hold, Bucket, Item, RetentionMode, SelectProgress};
+use crate::s3::types::{
+    parse_legal_hold, Bucket, Item, LifecycleConfig, RetentionMode, SelectProgress, SseConfig,
+};
 use crate::s3::utils::{
     copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32, UtcTime,
 };
@@ -620,3 +622,38 @@ impl ListenBucketNotificationResponse {
         }
     }
 }
+
+pub type DeleteBucketEncryptionResponse = BucketResponse;
+
+pub struct GetBucketEncryptionResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+    pub config: SseConfig,
+}
+
+pub type SetBucketEncryptionResponse = BucketResponse;
+
+pub type EnableObjectLegalHoldResponse = ObjectResponse;
+
+pub type DisableObjectLegalHoldResponse = ObjectResponse;
+
+pub struct IsObjectLegalHoldEnabledResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+    pub object_name: String,
+    pub version_id: Option<String>,
+    pub enabled: bool,
+}
+
+pub type DeleteBucketLifecycleResponse = BucketResponse;
+
+pub struct GetBucketLifecycleResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+    pub config: LifecycleConfig,
+}
+
+pub type SetBucketLifecycleResponse = BucketResponse;

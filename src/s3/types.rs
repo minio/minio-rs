@@ -14,10 +14,11 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
-use crate::s3::utils::UtcTime;
+use crate::s3::utils::{from_iso8601utc, get_default_text, get_text, to_iso8601utc, UtcTime};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
+use xmltree::Element;
 
 #[derive(Clone, Debug, Default)]
 pub struct Item {
@@ -589,5 +590,482 @@ impl fmt::Display for Directive {
             Directive::Copy => write!(f, "COPY"),
             Directive::Replace => write!(f, "REPLACE"),
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SseConfig {
+    pub sse_algorithm: String,
+    pub kms_master_key_id: Option<String>,
+}
+
+impl SseConfig {
+    pub fn s3() -> SseConfig {
+        SseConfig {
+            sse_algorithm: String::from("AES256"),
+            kms_master_key_id: None,
+        }
+    }
+
+    pub fn kms(kms_master_key_id: Option<String>) -> SseConfig {
+        SseConfig {
+            sse_algorithm: String::from("aws:kms"),
+            kms_master_key_id: kms_master_key_id,
+        }
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut data = String::from(
+            "<ServerSideEncryptionConfiguration><Rule><ApplyServerSideEncryptionByDefault>",
+        );
+        data.push_str("<SSEAlgorithm>");
+        data.push_str(&self.sse_algorithm);
+        data.push_str("</SSEAlgorithm>");
+        if self.kms_master_key_id.is_some() {
+            data.push_str("<KMSMasterKeyID>");
+            data.push_str(self.kms_master_key_id.as_ref().unwrap());
+            data.push_str("</KMSMasterKeyID>");
+        }
+        data.push_str(
+            "</ApplyServerSideEncryptionByDefault></Rule></ServerSideEncryptionConfiguration>",
+        );
+        return data;
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Tag {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct AndOperator {
+    pub prefix: Option<String>,
+    pub tags: Option<HashMap<String, String>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Filter {
+    pub and_operator: Option<AndOperator>,
+    pub prefix: Option<String>,
+    pub tag: Option<Tag>,
+}
+
+impl Filter {
+    pub fn parse_xml(element: &Element) -> Result<Filter, Error> {
+        let and_operator = match element.get_child("And") {
+            Some(v) => Some(AndOperator {
+                prefix: match v.get_child("Prefix") {
+                    Some(p) => Some(
+                        p.get_text()
+                            .ok_or(Error::XmlError(format!("text of <Prefix> tag not found")))?
+                            .to_string(),
+                    ),
+                    None => None,
+                },
+                tags: match v.get_child("Tag") {
+                    Some(tags) => {
+                        let mut map: HashMap<String, String> = HashMap::new();
+                        for xml_node in &tags.children {
+                            let tag = xml_node
+                                .as_element()
+                                .ok_or(Error::XmlError(format!("<Tag> element not found")))?;
+                            map.insert(get_text(tag, "Key")?, get_text(tag, "Value")?);
+                        }
+                        Some(map)
+                    }
+                    None => None,
+                },
+            }),
+            None => None,
+        };
+
+        let prefix = match element.get_child("Prefix") {
+            Some(v) => Some(
+                v.get_text()
+                    .ok_or(Error::XmlError(format!("text of <Prefix> tag not found")))?
+                    .to_string(),
+            ),
+            None => None,
+        };
+
+        let tag = match element.get_child("Tag") {
+            Some(v) => Some(Tag {
+                key: get_text(v, "Key")?,
+                value: get_text(v, "Value")?,
+            }),
+            None => None,
+        };
+
+        Ok(Filter {
+            and_operator: and_operator,
+            prefix: prefix,
+            tag: tag,
+        })
+    }
+
+    pub fn validate(&self) -> Result<(), Error> {
+        if self.and_operator.is_some() ^ self.prefix.is_some() ^ self.tag.is_some() {
+            return Ok(());
+        }
+        return Err(Error::InvalidFilter);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LifecycleRule {
+    pub abort_incomplete_multipart_upload_days_after_initiation: Option<usize>,
+    pub expiration_date: Option<UtcTime>,
+    pub expiration_days: Option<usize>,
+    pub expiration_expired_object_delete_marker: Option<bool>,
+    pub filter: Filter,
+    pub id: String,
+    pub noncurrent_version_expiration_noncurrent_days: Option<usize>,
+    pub noncurrent_version_transition_noncurrent_days: Option<usize>,
+    pub noncurrent_version_transition_storage_class: Option<String>,
+    pub status: bool,
+    pub transition_date: Option<UtcTime>,
+    pub transition_days: Option<usize>,
+    pub transition_storage_class: Option<String>,
+}
+
+impl LifecycleRule {
+    pub fn from_xml(element: &Element) -> Result<LifecycleRule, Error> {
+        let expiration = element.get_child("Expiration");
+        let noncurrent_version_transition = element.get_child("NoncurrentVersionTransition");
+        let transition = element.get_child("Transition");
+
+        Ok(LifecycleRule {
+            abort_incomplete_multipart_upload_days_after_initiation: match element
+                .get_child("AbortIncompleteMultipartUpload")
+            {
+                Some(v) => {
+                    let text = get_text(v, "DaysAfterInitiation")?;
+                    Some(text.parse::<usize>()?)
+                }
+                None => None,
+            },
+            expiration_date: match expiration {
+                Some(v) => {
+                    let text = get_text(v, "Date")?;
+                    Some(from_iso8601utc(&text)?)
+                }
+                None => None,
+            },
+            expiration_days: match expiration {
+                Some(v) => {
+                    let text = get_text(v, "Days")?;
+                    Some(text.parse::<usize>()?)
+                }
+                None => None,
+            },
+            expiration_expired_object_delete_marker: match expiration {
+                Some(v) => Some(get_text(v, "ExpiredObjectDeleteMarker")?.to_lowercase() == "true"),
+                None => None,
+            },
+            filter: Filter::parse_xml(
+                element
+                    .get_child("Filter")
+                    .ok_or(Error::XmlError(format!("<Filter> tag not found")))?,
+            )?,
+            id: get_default_text(element, "ID"),
+            noncurrent_version_expiration_noncurrent_days: match element
+                .get_child("NoncurrentVersionExpiration")
+            {
+                Some(v) => {
+                    let text = get_text(v, "NoncurrentDays")?;
+                    Some(text.parse::<usize>()?)
+                }
+                None => None,
+            },
+            noncurrent_version_transition_noncurrent_days: match noncurrent_version_transition {
+                Some(v) => {
+                    let text = get_text(v, "NoncurrentDays")?;
+                    Some(text.parse::<usize>()?)
+                }
+                None => None,
+            },
+            noncurrent_version_transition_storage_class: match noncurrent_version_transition {
+                Some(v) => Some(get_text(v, "StorageClass")?),
+                None => None,
+            },
+            status: get_text(element, "Status")?.to_lowercase() == "Enabled",
+            transition_date: match transition {
+                Some(v) => {
+                    let text = get_text(v, "Date")?;
+                    Some(from_iso8601utc(&text)?)
+                }
+                None => None,
+            },
+            transition_days: match transition {
+                Some(v) => {
+                    let text = get_text(v, "Days")?;
+                    Some(text.parse::<usize>()?)
+                }
+                None => None,
+            },
+            transition_storage_class: match transition {
+                Some(v) => Some(get_text(v, "StorageClass")?),
+                None => None,
+            },
+        })
+    }
+
+    pub fn validate(&self) -> Result<(), Error> {
+        if self
+            .abort_incomplete_multipart_upload_days_after_initiation
+            .is_none()
+            && self.expiration_date.is_none()
+            && self.expiration_days.is_none()
+            && self.expiration_expired_object_delete_marker.is_none()
+            && self.noncurrent_version_expiration_noncurrent_days.is_none()
+            && self.noncurrent_version_transition_storage_class.is_none()
+            && self.transition_date.is_none()
+            && self.transition_days.is_none()
+            && self.transition_storage_class.is_none()
+        {
+            return Err(Error::MissingLifecycleAction);
+        }
+
+        self.filter.validate()?;
+
+        if self.expiration_expired_object_delete_marker.is_some() {
+            if self.expiration_date.is_some() || self.expiration_days.is_some() {
+                return Err(Error::InvalidExpiredObjectDeleteMarker);
+            }
+        } else if self.expiration_date.is_some() && self.expiration_days.is_some() {
+            return Err(Error::InvalidDateAndDays(String::from("expiration")));
+        }
+
+        if self.transition_date.is_some() && self.transition_days.is_some() {
+            return Err(Error::InvalidDateAndDays(String::from("transition")));
+        }
+
+        if self.id.len() > 255 {
+            return Err(Error::InvalidLifecycleRuleId);
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LifecycleConfig {
+    pub rules: Vec<LifecycleRule>,
+}
+
+impl LifecycleConfig {
+    pub fn from_xml(root: &Element) -> Result<LifecycleConfig, Error> {
+        let mut config = LifecycleConfig { rules: Vec::new() };
+
+        match root.get_child("Rule") {
+            Some(v) => {
+                for rule in &v.children {
+                    config.rules.push(LifecycleRule::from_xml(
+                        rule.as_element()
+                            .ok_or(Error::XmlError(format!("<Rule> tag not found")))?,
+                    )?);
+                }
+            }
+            _ => todo!(),
+        };
+
+        return Ok(config);
+    }
+
+    pub fn validate(&self) -> Result<(), Error> {
+        for rule in &self.rules {
+            rule.validate()?;
+        }
+
+        Ok(())
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut data = String::from("<LifecycleConfiguration>");
+
+        for rule in &self.rules {
+            data.push_str("<Rule>");
+
+            if rule
+                .abort_incomplete_multipart_upload_days_after_initiation
+                .is_some()
+            {
+                data.push_str("<AbortIncompleteMultipartUpload><DaysAfterInitiation>");
+                data.push_str(
+                    &rule
+                        .abort_incomplete_multipart_upload_days_after_initiation
+                        .unwrap()
+                        .to_string(),
+                );
+                data.push_str("</DaysAfterInitiation></AbortIncompleteMultipartUpload>");
+            }
+
+            if rule.expiration_date.is_some()
+                || rule.expiration_days.is_some()
+                || rule.expiration_expired_object_delete_marker.is_some()
+            {
+                data.push_str("<Expiration>");
+                if rule.expiration_date.is_some() {
+                    data.push_str("<Date>");
+                    data.push_str(&to_iso8601utc(rule.expiration_date.unwrap()));
+                    data.push_str("</Date>");
+                }
+                if rule.expiration_days.is_some() {
+                    data.push_str("<Days>");
+                    data.push_str(&rule.expiration_days.unwrap().to_string());
+                    data.push_str("</Days>");
+                }
+                if rule.expiration_expired_object_delete_marker.is_some() {
+                    data.push_str("<ExpiredObjectDeleteMarker>");
+                    data.push_str(
+                        &rule
+                            .expiration_expired_object_delete_marker
+                            .unwrap()
+                            .to_string(),
+                    );
+                    data.push_str("</ExpiredObjectDeleteMarker>");
+                }
+                data.push_str("</Expiration>");
+            }
+
+            data.push_str("<Filter>");
+            if rule.filter.and_operator.is_some() {
+                data.push_str("<And>");
+                if rule.filter.and_operator.as_ref().unwrap().prefix.is_some() {
+                    data.push_str("<Prefix>");
+                    data.push_str(
+                        &rule
+                            .filter
+                            .and_operator
+                            .as_ref()
+                            .unwrap()
+                            .prefix
+                            .as_ref()
+                            .unwrap(),
+                    );
+                    data.push_str("</Prefix>");
+                }
+                if rule.filter.and_operator.as_ref().unwrap().tags.is_some() {
+                    for (key, value) in rule
+                        .filter
+                        .and_operator
+                        .as_ref()
+                        .unwrap()
+                        .tags
+                        .as_ref()
+                        .unwrap()
+                    {
+                        data.push_str("<Tag>");
+                        data.push_str("<Key>");
+                        data.push_str(&key);
+                        data.push_str("</Key>");
+                        data.push_str("<Value>");
+                        data.push_str(&value);
+                        data.push_str("</Value>");
+                        data.push_str("</Tag>");
+                    }
+                }
+                data.push_str("</And>");
+            }
+            if rule.filter.prefix.is_some() {
+                data.push_str("<Prefix>");
+                data.push_str(&rule.filter.prefix.as_ref().unwrap());
+                data.push_str("</Prefix>");
+            }
+            if rule.filter.tag.is_some() {
+                data.push_str("<Tag>");
+                data.push_str("<Key>");
+                data.push_str(&rule.filter.tag.as_ref().unwrap().key);
+                data.push_str("</Key>");
+                data.push_str("<Value>");
+                data.push_str(&rule.filter.tag.as_ref().unwrap().value);
+                data.push_str("</Value>");
+                data.push_str("</Tag>");
+            }
+            data.push_str("</Filter>");
+
+            if !rule.id.is_empty() {
+                data.push_str("<ID>");
+                data.push_str(&rule.id);
+                data.push_str("</ID>");
+            }
+
+            if rule.noncurrent_version_expiration_noncurrent_days.is_some() {
+                data.push_str("<NoncurrentVersionExpiration><NoncurrentDays>");
+                data.push_str(
+                    &rule
+                        .noncurrent_version_expiration_noncurrent_days
+                        .unwrap()
+                        .to_string(),
+                );
+                data.push_str("</NoncurrentDays></NoncurrentVersionExpiration>");
+            }
+
+            if rule.noncurrent_version_transition_noncurrent_days.is_some()
+                || rule.noncurrent_version_transition_storage_class.is_some()
+            {
+                data.push_str("<NoncurrentVersionTransition>");
+                if rule.noncurrent_version_transition_noncurrent_days.is_some() {
+                    data.push_str("<NoncurrentDays>");
+                    data.push_str(
+                        &rule
+                            .noncurrent_version_expiration_noncurrent_days
+                            .unwrap()
+                            .to_string(),
+                    );
+                    data.push_str("</NoncurrentDays>");
+                }
+                if rule.noncurrent_version_transition_storage_class.is_some() {
+                    data.push_str("<StorageClass>");
+                    data.push_str(
+                        &rule
+                            .noncurrent_version_transition_storage_class
+                            .as_ref()
+                            .unwrap(),
+                    );
+                    data.push_str("</StorageClass>");
+                }
+                data.push_str("</NoncurrentVersionTransition>");
+            }
+
+            data.push_str("<Status>");
+            if rule.status {
+                data.push_str("Enabled");
+            } else {
+                data.push_str("Disabled");
+            }
+            data.push_str("</Status>");
+
+            if rule.transition_date.is_some()
+                || rule.transition_days.is_some()
+                || rule.transition_storage_class.is_some()
+            {
+                data.push_str("<Transition>");
+                if rule.transition_date.is_some() {
+                    data.push_str("<Date>");
+                    data.push_str(&to_iso8601utc(rule.transition_date.unwrap()));
+                    data.push_str("</Date>");
+                }
+                if rule.transition_days.is_some() {
+                    data.push_str("<Days>");
+                    data.push_str(&rule.transition_days.unwrap().to_string());
+                    data.push_str("</Days>");
+                }
+                if rule.transition_storage_class.is_some() {
+                    data.push_str("<StorageClass>");
+                    data.push_str(&rule.transition_storage_class.as_ref().unwrap());
+                    data.push_str("</StorageClass>");
+                }
+                data.push_str("</Transition>");
+            }
+
+            data.push_str("</Rule>");
+        }
+
+        data.push_str("</LifecycleConfiguration>");
+
+        return data;
     }
 }
