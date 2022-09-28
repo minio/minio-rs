@@ -97,6 +97,11 @@ pub enum Error {
     InvalidDirective(String),
     InvalidCopyDirective(String),
     InvalidMultipartCount(u16),
+    MissingLifecycleAction,
+    InvalidExpiredObjectDeleteMarker,
+    InvalidDateAndDays(String),
+    InvalidLifecycleRuleId,
+    InvalidFilter,
 }
 
 impl std::error::Error for Error {}
@@ -150,7 +155,12 @@ impl fmt::Display for Error {
 	    Error::InvalidComposeSourcePartSize(b, o, v, s, es) => write!(f, "source {}/{}{}: size {} must be greater than {}", b, o, v.as_ref().map_or(String::new(), |v| String::from("?versionId=") + v), s, es),
 	    Error::InvalidComposeSourceMultipart(b, o, v, s, es) => write!(f, "source {}/{}{}: size {} for multipart split upload of {}, last part size is less than {}", b, o, v.as_ref().map_or(String::new(), |v| String::from("?versionId=") + v), s, s, es),
 	    Error::InvalidMultipartCount(c) => write!(f, "Compose sources create more than allowed multipart count {}", c),
-        }
+	    Error::MissingLifecycleAction => write!(f, "at least one of action (AbortIncompleteMultipartUpload, Expiration, NoncurrentVersionExpiration, NoncurrentVersionTransition or Transition) must be specified in a rule"),
+	    Error::InvalidExpiredObjectDeleteMarker => write!(f, "ExpiredObjectDeleteMarker must not be provided along with Date and Days"),
+	    Error::InvalidDateAndDays(m) => write!(f, "Only one of date or days of {} must be set", m),
+	    Error::InvalidLifecycleRuleId => write!(f, "id must be exceed 255 characters"),
+	    Error::InvalidFilter => write!(f, "only one of And, Prefix or Tag must be provided"),
+	}
     }
 }
 

@@ -16,7 +16,8 @@
 use crate::s3::error::Error;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{
-    DeleteObject, Directive, Item, NotificationRecords, Part, Retention, SelectRequest,
+    DeleteObject, Directive, Item, LifecycleConfig, NotificationRecords, Part, Retention,
+    SelectRequest, SseConfig,
 };
 use crate::s3::utils::{
     check_bucket_name, merge, to_http_header_value, to_iso8601utc, urlencode, Multimap, UtcTime,
@@ -1343,4 +1344,52 @@ impl<'a> ComposeObjectArgs<'a> {
             self.legal_hold,
         )
     }
+}
+
+pub type DeleteBucketEncryptionArgs<'a> = BucketArgs<'a>;
+
+pub type GetBucketEncryptionArgs<'a> = BucketArgs<'a>;
+
+#[derive(Clone, Debug)]
+pub struct SetBucketEncryptionArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub config: &'a SseConfig,
+}
+
+impl<'a> SetBucketEncryptionArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        config: &'a SseConfig,
+    ) -> Result<SetBucketEncryptionArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        Ok(SetBucketEncryptionArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            config: config,
+        })
+    }
+}
+
+pub type EnableObjectLegalHoldArgs<'a> = ObjectVersionArgs<'a>;
+
+pub type DisableObjectLegalHoldArgs<'a> = ObjectVersionArgs<'a>;
+
+pub type IsObjectLegalHoldEnabledArgs<'a> = ObjectVersionArgs<'a>;
+
+pub type DeleteBucketLifecycleArgs<'a> = BucketArgs<'a>;
+
+pub type GetBucketLifecycleArgs<'a> = BucketArgs<'a>;
+
+pub struct SetBucketLifecycleArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub config: &'a LifecycleConfig,
 }

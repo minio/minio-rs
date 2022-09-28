@@ -20,7 +20,9 @@ use crate::s3::http::{BaseUrl, Url};
 use crate::s3::response::*;
 use crate::s3::signer::sign_v4_s3;
 use crate::s3::sse::SseCustomerKey;
-use crate::s3::types::{Bucket, DeleteObject, Directive, Item, NotificationRecords, Part};
+use crate::s3::types::{
+    Bucket, DeleteObject, Directive, Item, LifecycleConfig, NotificationRecords, Part, SseConfig,
+};
 use crate::s3::utils::{
     from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash, merge, sha256_hash,
     to_amz_date, urldecode, utc_now, Multimap,
@@ -1176,12 +1178,132 @@ impl<'a> Client<'a> {
         })
     }
 
-    // DeleteBucketEncryptionResponse DeleteBucketEncryption(
-    //     DeleteBucketEncryptionArgs args);
-    // DisableObjectLegalHoldResponse DisableObjectLegalHold(
-    //     DisableObjectLegalHoldArgs args);
-    // DeleteBucketLifecycleResponse DeleteBucketLifecycle(
-    //     DeleteBucketLifecycleArgs args);
+    pub async fn delete_bucket_encryption(
+        &self,
+        args: &DeleteBucketEncryptionArgs<'_>,
+    ) -> Result<DeleteBucketEncryptionResponse, Error> {
+        let region = self.get_region(&args.bucket, args.region).await?;
+
+        let mut headers = Multimap::new();
+        if let Some(v) = &args.extra_headers {
+            merge(&mut headers, v);
+        }
+
+        let mut query_params = Multimap::new();
+        if let Some(v) = &args.extra_query_params {
+            merge(&mut query_params, v);
+        }
+        query_params.insert(String::from("encryption"), String::new());
+
+        match self
+            .execute(
+                Method::DELETE,
+                &region,
+                &mut headers,
+                &query_params,
+                Some(&args.bucket),
+                None,
+                None,
+            )
+            .await
+        {
+            Ok(resp) => Ok(DeleteBucketEncryptionResponse {
+                headers: resp.headers().clone(),
+                region: region.clone(),
+                bucket_name: args.bucket.to_string(),
+            }),
+            Err(e) => match e {
+                Error::S3Error(ref err) => {
+                    if err.code == "ServerSideEncryptionConfigurationNotFoundError" {
+                        return Ok(DeleteBucketEncryptionResponse {
+                            headers: HeaderMap::new(),
+                            region: region.clone(),
+                            bucket_name: args.bucket.to_string(),
+                        });
+                    }
+                    return Err(e);
+                }
+                _ => return Err(e),
+            },
+        }
+    }
+
+    pub async fn disable_object_legal_hold(
+        &self,
+        args: DisableObjectLegalHoldArgs<'_>,
+    ) -> Result<DisableObjectLegalHoldResponse, Error> {
+        let region = self.get_region(&args.bucket, args.region).await?;
+
+        let mut headers = Multimap::new();
+        if let Some(v) = &args.extra_headers {
+            merge(&mut headers, v);
+        }
+
+        let mut query_params = Multimap::new();
+        if let Some(v) = &args.extra_query_params {
+            merge(&mut query_params, v);
+        }
+        if let Some(v) = args.version_id {
+            query_params.insert(String::from("versionId"), v.to_string());
+        }
+        query_params.insert(String::from("legal-hold"), String::new());
+
+        let resp = self
+            .execute(
+                Method::PUT,
+                &region,
+                &mut headers,
+                &query_params,
+                Some(&args.bucket),
+                Some(&args.object),
+                Some(b"<LegalHold><Status>OFF</Status></LegalHold>"),
+            )
+            .await?;
+
+        Ok(DisableObjectLegalHoldResponse {
+            headers: resp.headers().clone(),
+            region: region.clone(),
+            bucket_name: args.bucket.to_string(),
+            object_name: args.object.to_string(),
+            version_id: args.version_id.as_ref().map(|v| v.to_string()),
+        })
+    }
+
+    pub async fn delete_bucket_lifecycle(
+        &self,
+        args: DeleteBucketLifecycleArgs<'_>,
+    ) -> Result<DeleteBucketLifecycleResponse, Error> {
+        let region = self.get_region(&args.bucket, args.region).await?;
+
+        let mut headers = Multimap::new();
+        if let Some(v) = &args.extra_headers {
+            merge(&mut headers, v);
+        }
+
+        let mut query_params = Multimap::new();
+        if let Some(v) = &args.extra_query_params {
+            merge(&mut query_params, v);
+        }
+        query_params.insert(String::from("lifecycle"), String::new());
+
+        let resp = self
+            .execute(
+                Method::DELETE,
+                &region,
+                &mut headers,
+                &query_params,
+                Some(&args.bucket),
+                None,
+                None,
+            )
+            .await?;
+
+        Ok(DeleteBucketLifecycleResponse {
+            headers: resp.headers().clone(),
+            region: region.clone(),
+            bucket_name: args.bucket.to_string(),
+        })
+    }
     // DeleteBucketNotificationResponse DeleteBucketNotification(
     //     DeleteBucketNotificationArgs args);
     // DeleteBucketPolicyResponse DeleteBucketPolicy(DeleteBucketPolicyArgs args);
@@ -1191,10 +1313,156 @@ impl<'a> Client<'a> {
     // DeleteObjectLockConfigResponse DeleteObjectLockConfig(
     //     DeleteObjectLockConfigArgs args);
     // DeleteObjectTagsResponse DeleteObjectTags(DeleteObjectTagsArgs args);
-    // EnableObjectLegalHoldResponse EnableObjectLegalHold(
-    //     EnableObjectLegalHoldArgs args);
-    // GetBucketEncryptionResponse GetBucketEncryption(GetBucketEncryptionArgs args);
-    // GetBucketLifecycleResponse GetBucketLifecycle(GetBucketLifecycleArgs args);
+    pub async fn enable_object_legal_hold(
+        &self,
+        args: EnableObjectLegalHoldArgs<'_>,
+    ) -> Result<EnableObjectLegalHoldResponse, Error> {
+        let region = self.get_region(&args.bucket, args.region).await?;
+
+        let mut headers = Multimap::new();
+        if let Some(v) = &args.extra_headers {
+            merge(&mut headers, v);
+        }
+
+        let mut query_params = Multimap::new();
+        if let Some(v) = &args.extra_query_params {
+            merge(&mut query_params, v);
+        }
+        if let Some(v) = args.version_id {
+            query_params.insert(String::from("versionId"), v.to_string());
+        }
+        query_params.insert(String::from("legal-hold"), String::new());
+
+        let resp = self
+            .execute(
+                Method::PUT,
+                &region,
+                &mut headers,
+                &query_params,
+                Some(&args.bucket),
+                Some(&args.object),
+                Some(b"<LegalHold><Status>ON</Status></LegalHold>"),
+            )
+            .await?;
+
+        Ok(EnableObjectLegalHoldResponse {
+            headers: resp.headers().clone(),
+            region: region.clone(),
+            bucket_name: args.bucket.to_string(),
+            object_name: args.object.to_string(),
+            version_id: args.version_id.as_ref().map(|v| v.to_string()),
+        })
+    }
+
+    pub async fn get_bucket_encryption(
+        &self,
+        args: &GetBucketEncryptionArgs<'_>,
+    ) -> Result<GetBucketEncryptionResponse, Error> {
+        let region = self.get_region(&args.bucket, args.region).await?;
+
+        let mut headers = Multimap::new();
+        if let Some(v) = &args.extra_headers {
+            merge(&mut headers, v);
+        }
+
+        let mut query_params = Multimap::new();
+        if let Some(v) = &args.extra_query_params {
+            merge(&mut query_params, v);
+        }
+        query_params.insert(String::from("encryption"), String::new());
+
+        let resp = self
+            .execute(
+                Method::GET,
+                &region,
+                &mut headers,
+                &query_params,
+                Some(&args.bucket),
+                None,
+                None,
+            )
+            .await?;
+
+        let header_map = resp.headers().clone();
+        let body = resp.bytes().await?;
+        let mut root = Element::parse(body.reader())?;
+        let rule = root
+            .get_mut_child("Rule")
+            .ok_or(Error::XmlError(String::from("<Rule> tag not found")))?;
+        let sse_by_default = rule
+            .get_mut_child("ApplyServerSideEncryptionByDefault")
+            .ok_or(Error::XmlError(String::from(
+                "<ApplyServerSideEncryptionByDefault> tag not found",
+            )))?;
+
+        Ok(GetBucketEncryptionResponse {
+            headers: header_map.clone(),
+            region: region.clone(),
+            bucket_name: args.bucket.to_string(),
+            config: SseConfig {
+                sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
+                kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID")?,
+            },
+        })
+    }
+
+    pub async fn get_bucket_lifecycle(
+        &self,
+        args: GetBucketLifecycleArgs<'_>,
+    ) -> Result<GetBucketLifecycleResponse, Error> {
+        let region = self.get_region(&args.bucket, args.region).await?;
+
+        let mut headers = Multimap::new();
+        if let Some(v) = &args.extra_headers {
+            merge(&mut headers, v);
+        }
+
+        let mut query_params = Multimap::new();
+        if let Some(v) = &args.extra_query_params {
+            merge(&mut query_params, v);
+        }
+        query_params.insert(String::from("lifecycle"), String::new());
+
+        match self
+            .execute(
+                Method::GET,
+                &region,
+                &mut headers,
+                &query_params,
+                Some(&args.bucket),
+                None,
+                None,
+            )
+            .await
+        {
+            Ok(resp) => {
+                let header_map = resp.headers().clone();
+                let body = resp.bytes().await?;
+                let root = Element::parse(body.reader())?;
+
+                return Ok(GetBucketLifecycleResponse {
+                    headers: header_map.clone(),
+                    region: region.clone(),
+                    bucket_name: args.bucket.to_string(),
+                    config: LifecycleConfig::from_xml(&root)?,
+                });
+            }
+            Err(e) => match e {
+                Error::S3Error(ref err) => {
+                    if err.code == "NoSuchLifecycleConfiguration" {
+                        return Ok(GetBucketLifecycleResponse {
+                            headers: HeaderMap::new(),
+                            region: region.clone(),
+                            bucket_name: args.bucket.to_string(),
+                            config: LifecycleConfig { rules: Vec::new() },
+                        });
+                    }
+                    return Err(e);
+                }
+                _ => return Err(e),
+            },
+        }
+    }
     // GetBucketNotificationResponse GetBucketNotification(
     //     GetBucketNotificationArgs args);
     // GetBucketPolicyResponse GetBucketPolicy(GetBucketPolicyArgs args);
@@ -1242,8 +1510,69 @@ impl<'a> Client<'a> {
     // GetPresignedObjectUrlResponse GetPresignedObjectUrl(
     //     GetPresignedObjectUrlArgs args);
     // GetPresignedPostFormDataResponse GetPresignedPostFormData(PostPolicy policy);
-    // IsObjectLegalHoldEnabledResponse IsObjectLegalHoldEnabled(
-    //     IsObjectLegalHoldEnabledArgs args);
+    pub async fn is_object_legal_hold_enabled(
+        &self,
+        args: IsObjectLegalHoldEnabledArgs<'_>,
+    ) -> Result<IsObjectLegalHoldEnabledResponse, Error> {
+        let region = self.get_region(&args.bucket, args.region).await?;
+
+        let mut headers = Multimap::new();
+        if let Some(v) = &args.extra_headers {
+            merge(&mut headers, v);
+        }
+
+        let mut query_params = Multimap::new();
+        if let Some(v) = &args.extra_query_params {
+            merge(&mut query_params, v);
+        }
+        if let Some(v) = args.version_id {
+            query_params.insert(String::from("versionId"), v.to_string());
+        }
+        query_params.insert(String::from("legal-hold"), String::new());
+
+        match self
+            .execute(
+                Method::GET,
+                &region,
+                &mut headers,
+                &query_params,
+                Some(&args.bucket),
+                Some(&args.object),
+                None,
+            )
+            .await
+        {
+            Ok(resp) => {
+                let header_map = resp.headers().clone();
+                let body = resp.bytes().await?;
+                let root = Element::parse(body.reader())?;
+                Ok(IsObjectLegalHoldEnabledResponse {
+                    headers: header_map.clone(),
+                    region: region.clone(),
+                    bucket_name: args.bucket.to_string(),
+                    object_name: args.object.to_string(),
+                    version_id: args.version_id.as_ref().map(|v| v.to_string()),
+                    enabled: get_default_text(&root, "Status") == "ON",
+                })
+            }
+            Err(e) => match e {
+                Error::S3Error(ref err) => {
+                    if err.code == "NoSuchObjectLockConfiguration" {
+                        return Ok(IsObjectLegalHoldEnabledResponse {
+                            headers: HeaderMap::new(),
+                            region: region.clone(),
+                            bucket_name: args.bucket.to_string(),
+                            object_name: args.object.to_string(),
+                            version_id: args.version_id.as_ref().map(|v| v.to_string()),
+                            enabled: false,
+                        });
+                    }
+                    return Err(e);
+                }
+                _ => return Err(e),
+            },
+        }
+    }
 
     pub async fn list_buckets(
         &self,
@@ -2191,8 +2520,77 @@ impl<'a> Client<'a> {
         })
     }
 
-    // SetBucketEncryptionResponse SetBucketEncryption(SetBucketEncryptionArgs args);
-    // SetBucketLifecycleResponse SetBucketLifecycle(SetBucketLifecycleArgs args);
+    pub async fn set_bucket_encryption(
+        &self,
+        args: &SetBucketEncryptionArgs<'_>,
+    ) -> Result<SetBucketEncryptionResponse, Error> {
+        let region = self.get_region(&args.bucket, args.region).await?;
+
+        let mut headers = Multimap::new();
+        if let Some(v) = &args.extra_headers {
+            merge(&mut headers, v);
+        }
+
+        let mut query_params = Multimap::new();
+        if let Some(v) = &args.extra_query_params {
+            merge(&mut query_params, v);
+        }
+        query_params.insert(String::from("encryption"), String::new());
+
+        let resp = self
+            .execute(
+                Method::PUT,
+                &region,
+                &mut headers,
+                &query_params,
+                Some(&args.bucket),
+                None,
+                Some(args.config.to_xml().as_bytes()),
+            )
+            .await?;
+
+        Ok(SetBucketEncryptionResponse {
+            headers: resp.headers().clone(),
+            region: region.clone(),
+            bucket_name: args.bucket.to_string(),
+        })
+    }
+
+    pub async fn set_bucket_lifecycle(
+        &self,
+        args: SetBucketLifecycleArgs<'_>,
+    ) -> Result<SetBucketLifecycleResponse, Error> {
+        let region = self.get_region(&args.bucket, args.region).await?;
+
+        let mut headers = Multimap::new();
+        if let Some(v) = &args.extra_headers {
+            merge(&mut headers, v);
+        }
+
+        let mut query_params = Multimap::new();
+        if let Some(v) = &args.extra_query_params {
+            merge(&mut query_params, v);
+        }
+        query_params.insert(String::from("lifecycle"), String::new());
+
+        let resp = self
+            .execute(
+                Method::PUT,
+                &region,
+                &mut headers,
+                &query_params,
+                Some(&args.bucket),
+                None,
+                Some(args.config.to_xml().as_bytes()),
+            )
+            .await?;
+
+        Ok(SetBucketLifecycleResponse {
+            headers: resp.headers().clone(),
+            region: region.clone(),
+            bucket_name: args.bucket.to_string(),
+        })
+    }
     // SetBucketNotificationResponse SetBucketNotification(
     //     SetBucketNotificationArgs args);
     // SetBucketPolicyResponse SetBucketPolicy(SetBucketPolicyArgs args);
