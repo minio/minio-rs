@@ -262,15 +262,12 @@ pub fn get_text(element: &Element, tag: &str) -> Result<String, Error> {
         .to_string())
 }
 
-pub fn get_option_text(element: &Element, tag: &str) -> Result<Option<String>, Error> {
-    Ok(match element.get_child(tag) {
-        Some(v) => Some(
-            v.get_text()
-                .ok_or(Error::XmlError(format!("text of <{}> tag not found", tag)))?
-                .to_string(),
-        ),
-        None => None,
-    })
+pub fn get_option_text(element: &Element, tag: &str) -> Option<String> {
+    if let Some(v) = element.get_child(tag) {
+        return Some(v.get_text().unwrap_or_default().to_string());
+    }
+
+    None
 }
 
 pub fn get_default_text(element: &Element, tag: &str) -> String {

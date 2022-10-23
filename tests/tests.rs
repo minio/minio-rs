@@ -14,9 +14,14 @@
 // limitations under the License.
 
 use async_std::task;
+use chrono::Duration;
+use hyper::http::Method;
 use minio::s3::types::NotificationRecords;
 use rand::distributions::{Alphanumeric, DistString};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::io::BufReader;
+use std::{fs, io};
 use tokio::sync::mpsc;
 
 use minio::s3::args::*;
@@ -24,9 +29,11 @@ use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::{
-    CsvInputSerialization, CsvOutputSerialization, DeleteObject, FileHeaderInfo, QuoteFields,
-    SelectRequest,
+    CsvInputSerialization, CsvOutputSerialization, DeleteObject, FileHeaderInfo,
+    NotificationConfig, ObjectLockConfig, PrefixFilterRule, QueueConfig, QuoteFields,
+    RetentionMode, SelectRequest, SuffixFilterRule,
 };
+use minio::s3::utils::{to_iso8601utc, utc_now};
 
 struct RandReader {
     size: usize,
@@ -77,6 +84,8 @@ struct ClientTest<'a> {
 }
 
 impl<'a> ClientTest<'_> {
+    const SQS_ARN: &str = "arn:minio:sqs::miniojavatest:webhook";
+
     fn new(
         base_url: BaseUrl,
         access_key: String,
@@ -249,6 +258,89 @@ impl<'a> ClientTest<'_> {
             .unwrap();
         let got = resp.text().await.unwrap();
         assert_eq!(got, data);
+        self.client
+            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+    }
+
+    fn get_hash(filename: &String) -> String {
+        let mut hasher = Sha256::new();
+        let mut file = fs::File::open(filename).unwrap();
+        io::copy(&mut file, &mut hasher).unwrap();
+        return format!("{:x}", hasher.finalize());
+    }
+
+    async fn upload_download_object(&self) {
+        let object_name = rand_object_name();
+        let size = 16_usize;
+        let mut file = fs::File::create(&object_name).unwrap();
+        io::copy(&mut RandReader::new(size), &mut file).unwrap();
+        file.sync_all().unwrap();
+        self.client
+            .upload_object(
+                &mut UploadObjectArgs::new(&self.test_bucket, &object_name, &object_name).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let filename = rand_object_name();
+        self.client
+            .download_object(
+                &DownloadObjectArgs::new(&self.test_bucket, &object_name, &filename).unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            ClientTest::get_hash(&object_name) == ClientTest::get_hash(&filename),
+            true
+        );
+
+        fs::remove_file(&object_name).unwrap();
+        fs::remove_file(&filename).unwrap();
+
+        self.client
+            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+
+        self.client
+            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+
+        let object_name = rand_object_name();
+        let size: usize = 16 + 5 * 1024 * 1024;
+        let mut file = fs::File::create(&object_name).unwrap();
+        io::copy(&mut RandReader::new(size), &mut file).unwrap();
+        file.sync_all().unwrap();
+        self.client
+            .upload_object(
+                &mut UploadObjectArgs::new(&self.test_bucket, &object_name, &object_name).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let filename = rand_object_name();
+        self.client
+            .download_object(
+                &DownloadObjectArgs::new(&self.test_bucket, &object_name, &filename).unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            ClientTest::get_hash(&object_name) == ClientTest::get_hash(&filename),
+            true
+        );
+
+        fs::remove_file(&object_name).unwrap();
+        fs::remove_file(&filename).unwrap();
+
+        self.client
+            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+
         self.client
             .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
             .await
@@ -598,6 +690,479 @@ impl<'a> ClientTest<'_> {
             .await
             .unwrap();
     }
+
+    async fn set_get_delete_bucket_notification(&self) {
+        let bucket_name = rand_bucket_name();
+        self.client
+            .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        self.client
+            .set_bucket_notification(
+                &SetBucketNotificationArgs::new(
+                    &bucket_name,
+                    &NotificationConfig {
+                        cloud_func_config_list: None,
+                        queue_config_list: Some(vec![QueueConfig {
+                            events: vec![
+                                String::from("s3:ObjectCreated:Put"),
+                                String::from("s3:ObjectCreated:Copy"),
+                            ],
+                            id: None,
+                            prefix_filter_rule: Some(PrefixFilterRule {
+                                value: String::from("images"),
+                            }),
+                            suffix_filter_rule: Some(SuffixFilterRule {
+                                value: String::from("pg"),
+                            }),
+                            queue: String::from(ClientTest::SQS_ARN),
+                        }]),
+                        topic_config_list: None,
+                    },
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .get_bucket_notification(&GetBucketNotificationArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.config.queue_config_list.as_ref().unwrap().len(), 1);
+        assert_eq!(
+            resp.config.queue_config_list.as_ref().unwrap()[0]
+                .events
+                .contains(&String::from("s3:ObjectCreated:Put")),
+            true
+        );
+        assert_eq!(
+            resp.config.queue_config_list.as_ref().unwrap()[0]
+                .events
+                .contains(&String::from("s3:ObjectCreated:Copy")),
+            true
+        );
+        assert_eq!(
+            resp.config.queue_config_list.as_ref().unwrap()[0]
+                .prefix_filter_rule
+                .as_ref()
+                .unwrap()
+                .value,
+            "images"
+        );
+        assert_eq!(
+            resp.config.queue_config_list.as_ref().unwrap()[0]
+                .suffix_filter_rule
+                .as_ref()
+                .unwrap()
+                .value,
+            "pg"
+        );
+        assert_eq!(
+            resp.config.queue_config_list.as_ref().unwrap()[0].queue,
+            ClientTest::SQS_ARN
+        );
+
+        self.client
+            .delete_bucket_notification(&DeleteBucketNotificationArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .get_bucket_notification(&GetBucketNotificationArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.config.queue_config_list.is_none(), true);
+
+        self.client
+            .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+    }
+
+    async fn set_get_delete_bucket_policy(&self) {
+        let bucket_name = rand_bucket_name();
+        self.client
+            .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        let config = r#"
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "s3:GetObject"
+            ],
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "*"
+                ]
+            },
+            "Resource": [
+                "arn:aws:s3:::<BUCKET>/myobject*"
+            ],
+            "Sid": ""
+        }
+    ]
+}
+"#
+        .replace("<BUCKET>", &bucket_name);
+
+        self.client
+            .set_bucket_policy(&SetBucketPolicyArgs::new(&bucket_name, &config).unwrap())
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .get_bucket_policy(&GetBucketPolicyArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.config.is_empty(), false);
+
+        self.client
+            .delete_bucket_policy(&DeleteBucketPolicyArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .get_bucket_policy(&GetBucketPolicyArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.config, "{}");
+
+        self.client
+            .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+    }
+
+    async fn set_get_delete_bucket_tags(&self) {
+        let bucket_name = rand_bucket_name();
+        self.client
+            .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        let tags = HashMap::from([
+            (String::from("Project"), String::from("Project One")),
+            (String::from("User"), String::from("jsmith")),
+        ]);
+
+        self.client
+            .set_bucket_tags(&SetBucketTagsArgs::new(&bucket_name, &tags).unwrap())
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .get_bucket_tags(&GetBucketTagsArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.tags.len() == tags.len() && resp.tags.keys().all(|k| tags.contains_key(k)),
+            true
+        );
+
+        self.client
+            .delete_bucket_tags(&DeleteBucketTagsArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .get_bucket_tags(&GetBucketTagsArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.tags.is_empty(), true);
+
+        self.client
+            .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+    }
+
+    async fn set_get_delete_object_lock_config(&self) {
+        let bucket_name = rand_bucket_name();
+
+        let mut args = MakeBucketArgs::new(&bucket_name).unwrap();
+        args.object_lock = true;
+        self.client.make_bucket(&args).await.unwrap();
+
+        self.client
+            .set_object_lock_config(
+                &SetObjectLockConfigArgs::new(
+                    &bucket_name,
+                    &ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(7), None).unwrap(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .get_object_lock_config(&GetObjectLockConfigArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            match resp.config.retention_mode {
+                Some(r) => match r {
+                    RetentionMode::GOVERNANCE => true,
+                    _ => false,
+                },
+                _ => false,
+            },
+            true
+        );
+
+        assert_eq!(resp.config.retention_duration_days == Some(7), true);
+        assert_eq!(resp.config.retention_duration_years.is_none(), true);
+
+        self.client
+            .delete_object_lock_config(&DeleteObjectLockConfigArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .get_object_lock_config(&GetObjectLockConfigArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.config.retention_mode.is_none(), true);
+
+        self.client
+            .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+    }
+
+    async fn set_get_delete_object_tags(&self) {
+        let object_name = rand_object_name();
+
+        let size = 16_usize;
+        self.client
+            .put_object(
+                &mut PutObjectArgs::new(
+                    &self.test_bucket,
+                    &object_name,
+                    &mut RandReader::new(size),
+                    Some(size),
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let tags = HashMap::from([
+            (String::from("Project"), String::from("Project One")),
+            (String::from("User"), String::from("jsmith")),
+        ]);
+
+        self.client
+            .set_object_tags(
+                &SetObjectTagsArgs::new(&self.test_bucket, &object_name, &tags).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .get_object_tags(&GetObjectTagsArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.tags.len() == tags.len() && resp.tags.keys().all(|k| tags.contains_key(k)),
+            true
+        );
+
+        self.client
+            .delete_object_tags(
+                &DeleteObjectTagsArgs::new(&self.test_bucket, &object_name).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .get_object_tags(&GetObjectTagsArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.tags.is_empty(), true);
+
+        self.client
+            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+    }
+
+    async fn set_get_bucket_versioning(&self) {
+        let bucket_name = rand_bucket_name();
+
+        self.client
+            .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        self.client
+            .set_bucket_versioning(&SetBucketVersioningArgs::new(&bucket_name, true).unwrap())
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .get_bucket_versioning(&GetBucketVersioningArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            match resp.status {
+                Some(v) => v,
+                _ => false,
+            },
+            true
+        );
+
+        self.client
+            .set_bucket_versioning(&SetBucketVersioningArgs::new(&bucket_name, false).unwrap())
+            .await
+            .unwrap();
+
+        let resp = self
+            .client
+            .get_bucket_versioning(&GetBucketVersioningArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            match resp.status {
+                Some(v) => v,
+                _ => false,
+            },
+            false
+        );
+
+        self.client
+            .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+    }
+
+    async fn set_get_object_retention(&self) {
+        let bucket_name = rand_bucket_name();
+
+        let mut args = MakeBucketArgs::new(&bucket_name).unwrap();
+        args.object_lock = true;
+        self.client.make_bucket(&args).await.unwrap();
+
+        let object_name = rand_object_name();
+
+        let size = 16_usize;
+        let obj_resp = self
+            .client
+            .put_object(
+                &mut PutObjectArgs::new(
+                    &bucket_name,
+                    &object_name,
+                    &mut RandReader::new(size),
+                    Some(size),
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let mut args = SetObjectRetentionArgs::new(&bucket_name, &object_name).unwrap();
+        args.retention_mode = Some(RetentionMode::GOVERNANCE);
+        let retain_until_date = utc_now() + Duration::days(1);
+        args.retain_until_date = Some(retain_until_date);
+
+        self.client.set_object_retention(&args).await.unwrap();
+
+        let resp = self
+            .client
+            .get_object_retention(&GetObjectRetentionArgs::new(&bucket_name, &object_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            match resp.retention_mode {
+                Some(v) => match v {
+                    RetentionMode::GOVERNANCE => true,
+                    _ => false,
+                },
+                _ => false,
+            },
+            true
+        );
+        assert_eq!(
+            match resp.retain_until_date {
+                Some(v) => to_iso8601utc(v) == to_iso8601utc(retain_until_date),
+                _ => false,
+            },
+            true,
+        );
+
+        let mut args = SetObjectRetentionArgs::new(&bucket_name, &object_name).unwrap();
+        args.bypass_governance_mode = true;
+        self.client.set_object_retention(&args).await.unwrap();
+
+        let resp = self
+            .client
+            .get_object_retention(&GetObjectRetentionArgs::new(&bucket_name, &object_name).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.retention_mode.is_none(), true);
+        assert_eq!(resp.retain_until_date.is_none(), true);
+
+        let mut args = RemoveObjectArgs::new(&bucket_name, &object_name).unwrap();
+        let version_id = obj_resp.version_id.unwrap().clone();
+        args.version_id = Some(version_id.as_str());
+        self.client.remove_object(&args).await.unwrap();
+
+        self.client
+            .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+    }
+
+    async fn get_presigned_object_url(&self) {
+        let object_name = rand_object_name();
+        let resp = self
+            .client
+            .get_presigned_object_url(
+                &GetPresignedObjectUrlArgs::new(&self.test_bucket, &object_name, Method::GET)
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.url.contains("X-Amz-Signature="), true);
+    }
+
+    async fn get_presigned_post_form_data(&self) {
+        let object_name = rand_object_name();
+        let expiration = utc_now() + Duration::days(5);
+
+        let mut policy = PostPolicy::new(&self.test_bucket, &expiration).unwrap();
+        policy.add_equals_condition("key", &object_name).unwrap();
+        policy
+            .add_content_length_range_condition(1 * 1024 * 1024, 4 * 1024 * 1024)
+            .unwrap();
+
+        let form_data = self
+            .client
+            .get_presigned_post_form_data(&policy)
+            .await
+            .unwrap();
+        assert_eq!(form_data.contains_key("x-amz-signature"), true);
+        assert_eq!(form_data.contains_key("policy"), true);
+    }
 }
 
 #[tokio::main]
@@ -628,9 +1193,6 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
     ctest.init().await;
 
-    println!("compose_object()");
-    ctest.compose_object().await;
-
     println!("make_bucket() + bucket_exists() + remove_bucket()");
     ctest.bucket_exists().await;
 
@@ -646,6 +1208,9 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("get_object()");
     ctest.get_object().await;
 
+    println!("{{upload,download}}_object()");
+    ctest.upload_download_object().await;
+
     println!("remove_objects()");
     ctest.remove_objects().await;
 
@@ -660,6 +1225,36 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     println!("copy_object()");
     ctest.copy_object().await;
+
+    println!("compose_object()");
+    ctest.compose_object().await;
+
+    println!("{{set,get,delete}}_bucket_notification()");
+    ctest.set_get_delete_bucket_notification().await;
+
+    println!("{{set,get,delete}}_bucket_policy()");
+    ctest.set_get_delete_bucket_policy().await;
+
+    println!("{{set,get,delete}}_bucket_tags()");
+    ctest.set_get_delete_bucket_tags().await;
+
+    println!("{{set,get,delete}}_object_lock_config()");
+    ctest.set_get_delete_object_lock_config().await;
+
+    println!("{{set,get,delete}}_object_tags()");
+    ctest.set_get_delete_object_tags().await;
+
+    println!("{{set,get}}_bucket_versioning()");
+    ctest.set_get_bucket_versioning().await;
+
+    println!("{{set,get}}_object_retention()");
+    ctest.set_get_object_retention().await;
+
+    println!("get_presigned_object_url()");
+    ctest.get_presigned_object_url().await;
+
+    println!("get_presigned_post_form_data()");
+    ctest.get_presigned_post_form_data().await;
 
     ctest.drop().await;
 

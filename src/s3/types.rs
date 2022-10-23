@@ -14,7 +14,9 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
-use crate::s3::utils::{from_iso8601utc, get_default_text, get_text, to_iso8601utc, UtcTime};
+use crate::s3::utils::{
+    from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc, UtcTime,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -51,15 +53,15 @@ pub struct Part {
 
 #[derive(Clone, Debug)]
 pub enum RetentionMode {
-    Governance,
-    Compliance,
+    GOVERNANCE,
+    COMPLIANCE,
 }
 
 impl RetentionMode {
     pub fn parse(s: &str) -> Result<RetentionMode, Error> {
         match s {
-            "GOVERNANCE" => Ok(RetentionMode::Governance),
-            "COMPLIANCE" => Ok(RetentionMode::Compliance),
+            "GOVERNANCE" => Ok(RetentionMode::GOVERNANCE),
+            "COMPLIANCE" => Ok(RetentionMode::COMPLIANCE),
             _ => Err(Error::InvalidRetentionMode(s.to_string())),
         }
     }
@@ -68,8 +70,8 @@ impl RetentionMode {
 impl fmt::Display for RetentionMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            RetentionMode::Governance => write!(f, "GOVERNANCE"),
-            RetentionMode::Compliance => write!(f, "COMPLIANCE"),
+            RetentionMode::GOVERNANCE => write!(f, "GOVERNANCE"),
+            RetentionMode::COMPLIANCE => write!(f, "COMPLIANCE"),
         }
     }
 }
@@ -653,7 +655,7 @@ pub struct Filter {
 }
 
 impl Filter {
-    pub fn parse_xml(element: &Element) -> Result<Filter, Error> {
+    pub fn from_xml(element: &Element) -> Result<Filter, Error> {
         let and_operator = match element.get_child("And") {
             Some(v) => Some(AndOperator {
                 prefix: match v.get_child("Prefix") {
@@ -711,6 +713,49 @@ impl Filter {
         }
         return Err(Error::InvalidFilter);
     }
+
+    pub fn to_xml(&self) -> String {
+        let mut data = String::from("<Filter>");
+        if self.and_operator.is_some() {
+            data.push_str("<And>");
+            if self.and_operator.as_ref().unwrap().prefix.is_some() {
+                data.push_str("<Prefix>");
+                data.push_str(&self.and_operator.as_ref().unwrap().prefix.as_ref().unwrap());
+                data.push_str("</Prefix>");
+            }
+            if self.and_operator.as_ref().unwrap().tags.is_some() {
+                for (key, value) in self.and_operator.as_ref().unwrap().tags.as_ref().unwrap() {
+                    data.push_str("<Tag>");
+                    data.push_str("<Key>");
+                    data.push_str(&key);
+                    data.push_str("</Key>");
+                    data.push_str("<Value>");
+                    data.push_str(&value);
+                    data.push_str("</Value>");
+                    data.push_str("</Tag>");
+                }
+            }
+            data.push_str("</And>");
+        }
+        if self.prefix.is_some() {
+            data.push_str("<Prefix>");
+            data.push_str(&self.prefix.as_ref().unwrap());
+            data.push_str("</Prefix>");
+        }
+        if self.tag.is_some() {
+            data.push_str("<Tag>");
+            data.push_str("<Key>");
+            data.push_str(&self.tag.as_ref().unwrap().key);
+            data.push_str("</Key>");
+            data.push_str("<Value>");
+            data.push_str(&self.tag.as_ref().unwrap().value);
+            data.push_str("</Value>");
+            data.push_str("</Tag>");
+        }
+        data.push_str("</Filter>");
+
+        return data;
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -764,7 +809,7 @@ impl LifecycleRule {
                 Some(v) => Some(get_text(v, "ExpiredObjectDeleteMarker")?.to_lowercase() == "true"),
                 None => None,
             },
-            filter: Filter::parse_xml(
+            filter: Filter::from_xml(
                 element
                     .get_child("Filter")
                     .ok_or(Error::XmlError(format!("<Filter> tag not found")))?,
@@ -859,17 +904,14 @@ impl LifecycleConfig {
     pub fn from_xml(root: &Element) -> Result<LifecycleConfig, Error> {
         let mut config = LifecycleConfig { rules: Vec::new() };
 
-        match root.get_child("Rule") {
-            Some(v) => {
-                for rule in &v.children {
-                    config.rules.push(LifecycleRule::from_xml(
-                        rule.as_element()
-                            .ok_or(Error::XmlError(format!("<Rule> tag not found")))?,
-                    )?);
-                }
+        if let Some(v) = root.get_child("Rule") {
+            for rule in &v.children {
+                config.rules.push(LifecycleRule::from_xml(
+                    rule.as_element()
+                        .ok_or(Error::XmlError(format!("<Rule> tag not found")))?,
+                )?);
             }
-            _ => todo!(),
-        };
+        }
 
         return Ok(config);
     }
@@ -930,61 +972,7 @@ impl LifecycleConfig {
                 data.push_str("</Expiration>");
             }
 
-            data.push_str("<Filter>");
-            if rule.filter.and_operator.is_some() {
-                data.push_str("<And>");
-                if rule.filter.and_operator.as_ref().unwrap().prefix.is_some() {
-                    data.push_str("<Prefix>");
-                    data.push_str(
-                        &rule
-                            .filter
-                            .and_operator
-                            .as_ref()
-                            .unwrap()
-                            .prefix
-                            .as_ref()
-                            .unwrap(),
-                    );
-                    data.push_str("</Prefix>");
-                }
-                if rule.filter.and_operator.as_ref().unwrap().tags.is_some() {
-                    for (key, value) in rule
-                        .filter
-                        .and_operator
-                        .as_ref()
-                        .unwrap()
-                        .tags
-                        .as_ref()
-                        .unwrap()
-                    {
-                        data.push_str("<Tag>");
-                        data.push_str("<Key>");
-                        data.push_str(&key);
-                        data.push_str("</Key>");
-                        data.push_str("<Value>");
-                        data.push_str(&value);
-                        data.push_str("</Value>");
-                        data.push_str("</Tag>");
-                    }
-                }
-                data.push_str("</And>");
-            }
-            if rule.filter.prefix.is_some() {
-                data.push_str("<Prefix>");
-                data.push_str(&rule.filter.prefix.as_ref().unwrap());
-                data.push_str("</Prefix>");
-            }
-            if rule.filter.tag.is_some() {
-                data.push_str("<Tag>");
-                data.push_str("<Key>");
-                data.push_str(&rule.filter.tag.as_ref().unwrap().key);
-                data.push_str("</Key>");
-                data.push_str("<Value>");
-                data.push_str(&rule.filter.tag.as_ref().unwrap().value);
-                data.push_str("</Value>");
-                data.push_str("</Tag>");
-            }
-            data.push_str("</Filter>");
+            data.push_str(&rule.filter.to_xml());
 
             if !rule.id.is_empty() {
                 data.push_str("<ID>");
@@ -1065,6 +1053,821 @@ impl LifecycleConfig {
         }
 
         data.push_str("</LifecycleConfiguration>");
+
+        return data;
+    }
+}
+
+fn parse_common_notification_config(
+    element: &mut Element,
+) -> Result<
+    (
+        Vec<String>,
+        Option<String>,
+        Option<PrefixFilterRule>,
+        Option<SuffixFilterRule>,
+    ),
+    Error,
+> {
+    let mut events = Vec::new();
+    loop {
+        match element.take_child("Event") {
+            Some(v) => events.push(
+                v.get_text()
+                    .ok_or(Error::XmlError(format!("text of <Event> tag not found")))?
+                    .to_string(),
+            ),
+            _ => break,
+        }
+    }
+
+    let id = get_option_text(element, "Id");
+
+    let (prefix_filter_rule, suffix_filter_rule) = match element.get_child("Filter") {
+        Some(filter) => {
+            let mut prefix = None;
+            let mut suffix = None;
+            let rules = filter
+                .get_child("S3Key")
+                .ok_or(Error::XmlError(format!("<S3Key> tag not found")))?;
+            for rule in &rules.children {
+                let v = rule
+                    .as_element()
+                    .ok_or(Error::XmlError(format!("<FilterRule> tag not found")))?;
+                let name = get_text(v, "Name")?;
+                let value = get_text(v, "Value")?;
+                if PrefixFilterRule::NAME == name {
+                    prefix = Some(PrefixFilterRule { value: value });
+                } else {
+                    suffix = Some(SuffixFilterRule { value: value });
+                }
+            }
+            (prefix, suffix)
+        }
+        _ => (None, None),
+    };
+
+    Ok((events, id, prefix_filter_rule, suffix_filter_rule))
+}
+
+fn to_xml_common_notification_config(
+    events: &Vec<String>,
+    id: &Option<String>,
+    prefix_filter_rule: &Option<PrefixFilterRule>,
+    suffix_filter_rule: &Option<SuffixFilterRule>,
+) -> String {
+    let mut data = String::new();
+
+    for event in events {
+        data.push_str("<Event>");
+        data.push_str(&event);
+        data.push_str("</Event>");
+    }
+
+    if let Some(v) = id {
+        data.push_str("<Id>");
+        data.push_str(&v);
+        data.push_str("</Id>");
+    }
+
+    if prefix_filter_rule.is_some() || suffix_filter_rule.is_some() {
+        data.push_str("<Filter><S3Key>");
+
+        if let Some(v) = prefix_filter_rule {
+            data.push_str("<FilterRule><Name>prefix</Name>");
+            data.push_str("<Value>");
+            data.push_str(&v.value);
+            data.push_str("</Value></FilterRule>");
+        }
+
+        if let Some(v) = suffix_filter_rule {
+            data.push_str("<FilterRule><Name>suffix</Name>");
+            data.push_str("<Value>");
+            data.push_str(&v.value);
+            data.push_str("</Value></FilterRule>");
+        }
+
+        data.push_str("</S3Key></Filter>");
+    }
+
+    return data;
+}
+
+#[derive(Clone, Debug)]
+pub struct PrefixFilterRule {
+    pub value: String,
+}
+
+impl PrefixFilterRule {
+    pub const NAME: &str = "prefix";
+}
+
+#[derive(Clone, Debug)]
+pub struct SuffixFilterRule {
+    pub value: String,
+}
+
+impl SuffixFilterRule {
+    pub const NAME: &str = "suffix";
+}
+
+#[derive(Clone, Debug)]
+pub struct CloudFuncConfig {
+    pub events: Vec<String>,
+    pub id: Option<String>,
+    pub prefix_filter_rule: Option<PrefixFilterRule>,
+    pub suffix_filter_rule: Option<SuffixFilterRule>,
+    pub cloud_func: String,
+}
+
+impl CloudFuncConfig {
+    pub fn from_xml(element: &mut Element) -> Result<CloudFuncConfig, Error> {
+        let (events, id, prefix_filter_rule, suffix_filter_rule) =
+            parse_common_notification_config(element)?;
+        Ok(CloudFuncConfig {
+            events: events,
+            id: id,
+            prefix_filter_rule: prefix_filter_rule,
+            suffix_filter_rule: suffix_filter_rule,
+            cloud_func: get_text(element, "CloudFunction")?,
+        })
+    }
+
+    pub fn validate(&self) -> Result<(), Error> {
+        if self.events.len() != 0 && self.cloud_func != "" {
+            return Ok(());
+        }
+
+        return Err(Error::InvalidFilter);
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut data = String::from("<CloudFunctionConfiguration>");
+
+        data.push_str("<CloudFunction>");
+        data.push_str(&self.cloud_func);
+        data.push_str("</CloudFunction>");
+
+        data.push_str(&to_xml_common_notification_config(
+            &self.events,
+            &self.id,
+            &self.prefix_filter_rule,
+            &self.suffix_filter_rule,
+        ));
+
+        data.push_str("</CloudFunctionConfiguration>");
+
+        return data;
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct QueueConfig {
+    pub events: Vec<String>,
+    pub id: Option<String>,
+    pub prefix_filter_rule: Option<PrefixFilterRule>,
+    pub suffix_filter_rule: Option<SuffixFilterRule>,
+    pub queue: String,
+}
+
+impl QueueConfig {
+    pub fn from_xml(element: &mut Element) -> Result<QueueConfig, Error> {
+        let (events, id, prefix_filter_rule, suffix_filter_rule) =
+            parse_common_notification_config(element)?;
+        Ok(QueueConfig {
+            events: events,
+            id: id,
+            prefix_filter_rule: prefix_filter_rule,
+            suffix_filter_rule: suffix_filter_rule,
+            queue: get_text(element, "Queue")?,
+        })
+    }
+
+    pub fn validate(&self) -> Result<(), Error> {
+        if self.events.len() != 0 && self.queue != "" {
+            return Ok(());
+        }
+
+        return Err(Error::InvalidFilter);
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut data = String::from("<QueueConfiguration>");
+
+        data.push_str("<Queue>");
+        data.push_str(&self.queue);
+        data.push_str("</Queue>");
+
+        data.push_str(&to_xml_common_notification_config(
+            &self.events,
+            &self.id,
+            &self.prefix_filter_rule,
+            &self.suffix_filter_rule,
+        ));
+
+        data.push_str("</QueueConfiguration>");
+
+        return data;
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TopicConfig {
+    pub events: Vec<String>,
+    pub id: Option<String>,
+    pub prefix_filter_rule: Option<PrefixFilterRule>,
+    pub suffix_filter_rule: Option<SuffixFilterRule>,
+    pub topic: String,
+}
+
+impl TopicConfig {
+    pub fn from_xml(element: &mut Element) -> Result<TopicConfig, Error> {
+        let (events, id, prefix_filter_rule, suffix_filter_rule) =
+            parse_common_notification_config(element)?;
+        Ok(TopicConfig {
+            events: events,
+            id: id,
+            prefix_filter_rule: prefix_filter_rule,
+            suffix_filter_rule: suffix_filter_rule,
+            topic: get_text(element, "Topic")?,
+        })
+    }
+
+    pub fn validate(&self) -> Result<(), Error> {
+        if self.events.len() != 0 && self.topic != "" {
+            return Ok(());
+        }
+
+        return Err(Error::InvalidFilter);
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut data = String::from("<TopicConfiguration>");
+
+        data.push_str("<Topic>");
+        data.push_str(&self.topic);
+        data.push_str("</Topic>");
+
+        data.push_str(&to_xml_common_notification_config(
+            &self.events,
+            &self.id,
+            &self.prefix_filter_rule,
+            &self.suffix_filter_rule,
+        ));
+
+        data.push_str("</TopicConfiguration>");
+
+        return data;
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NotificationConfig {
+    pub cloud_func_config_list: Option<Vec<CloudFuncConfig>>,
+    pub queue_config_list: Option<Vec<QueueConfig>>,
+    pub topic_config_list: Option<Vec<TopicConfig>>,
+}
+
+impl NotificationConfig {
+    pub fn from_xml(root: &mut Element) -> Result<NotificationConfig, Error> {
+        let mut config = NotificationConfig {
+            cloud_func_config_list: None,
+            queue_config_list: None,
+            topic_config_list: None,
+        };
+
+        let mut cloud_func_config_list = Vec::new();
+        loop {
+            match root.take_child("CloudFunctionConfiguration") {
+                Some(mut v) => cloud_func_config_list.push(CloudFuncConfig::from_xml(&mut v)?),
+                _ => break,
+            }
+        }
+        if cloud_func_config_list.len() != 0 {
+            config.cloud_func_config_list = Some(cloud_func_config_list);
+        }
+
+        let mut queue_config_list = Vec::new();
+        loop {
+            match root.take_child("QueueConfiguration") {
+                Some(mut v) => queue_config_list.push(QueueConfig::from_xml(&mut v)?),
+                _ => break,
+            }
+        }
+        if queue_config_list.len() != 0 {
+            config.queue_config_list = Some(queue_config_list);
+        }
+
+        let mut topic_config_list = Vec::new();
+        loop {
+            match root.take_child("TopicConfiguration") {
+                Some(mut v) => topic_config_list.push(TopicConfig::from_xml(&mut v)?),
+                _ => break,
+            }
+        }
+        if topic_config_list.len() != 0 {
+            config.topic_config_list = Some(topic_config_list);
+        }
+
+        return Ok(config);
+    }
+
+    pub fn validate(&self) -> Result<(), Error> {
+        if let Some(v) = &self.cloud_func_config_list {
+            for rule in v {
+                rule.validate()?;
+            }
+        }
+
+        if let Some(v) = &self.queue_config_list {
+            for rule in v {
+                rule.validate()?;
+            }
+        }
+
+        if let Some(v) = &self.topic_config_list {
+            for rule in v {
+                rule.validate()?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut data = String::from("<NotificationConfiguration>");
+
+        if let Some(v) = &self.cloud_func_config_list {
+            for rule in v {
+                data.push_str(&rule.to_xml())
+            }
+        }
+
+        if let Some(v) = &self.queue_config_list {
+            for rule in v {
+                data.push_str(&rule.to_xml())
+            }
+        }
+
+        if let Some(v) = &self.topic_config_list {
+            for rule in v {
+                data.push_str(&rule.to_xml())
+            }
+        }
+
+        data.push_str("</NotificationConfiguration>");
+        return data;
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AccessControlTranslation {
+    pub owner: String,
+}
+
+impl AccessControlTranslation {
+    pub fn new() -> AccessControlTranslation {
+        AccessControlTranslation {
+            owner: String::from("Destination"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EncryptionConfig {
+    pub replica_kms_key_id: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Metrics {
+    pub event_threshold_minutes: Option<i32>,
+    pub status: bool,
+}
+
+impl Metrics {
+    pub fn new(status: bool) -> Metrics {
+        Metrics {
+            event_threshold_minutes: Some(15),
+            status: status,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ReplicationTime {
+    pub time_minutes: Option<i32>,
+    pub status: bool,
+}
+
+impl ReplicationTime {
+    pub fn new(status: bool) -> ReplicationTime {
+        ReplicationTime {
+            time_minutes: Some(15),
+            status: status,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Destination {
+    pub bucket_arn: String,
+    pub access_control_translation: Option<AccessControlTranslation>,
+    pub account: Option<String>,
+    pub encryption_config: Option<EncryptionConfig>,
+    pub metrics: Option<Metrics>,
+    pub replication_time: Option<ReplicationTime>,
+    pub storage_class: Option<String>,
+}
+
+impl Destination {
+    pub fn from_xml(element: &Element) -> Result<Destination, Error> {
+        Ok(Destination {
+            bucket_arn: get_text(element, "Bucket")?,
+            access_control_translation: match element.get_child("AccessControlTranslation") {
+                Some(v) => Some(AccessControlTranslation {
+                    owner: get_text(v, "Owner")?,
+                }),
+                _ => None,
+            },
+            account: get_option_text(element, "Account"),
+            encryption_config: match element.get_child("EncryptionConfiguration") {
+                Some(v) => Some(EncryptionConfig {
+                    replica_kms_key_id: get_option_text(v, "ReplicaKmsKeyID"),
+                }),
+                _ => None,
+            },
+            metrics: match element.get_child("Metrics") {
+                Some(v) => Some(Metrics {
+                    event_threshold_minutes: match get_option_text(
+                        v.get_child("EventThreshold")
+                            .ok_or(Error::XmlError(format!("<Metrics> tag not found")))?,
+                        "Minutes",
+                    ) {
+                        Some(v) => Some(v.parse::<i32>()?),
+                        _ => None,
+                    },
+                    status: get_text(v, "Status")? == "Enabled",
+                }),
+                _ => None,
+            },
+            replication_time: match element.get_child("ReplicationTime") {
+                Some(v) => Some(ReplicationTime {
+                    time_minutes: match get_option_text(v, "Time") {
+                        Some(v) => Some(v.parse::<i32>()?),
+                        _ => None,
+                    },
+                    status: get_text(v, "Status")? == "Enabled",
+                }),
+                _ => None,
+            },
+            storage_class: get_option_text(element, "StorageClass"),
+        })
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut data = String::from("<Destination>");
+
+        data.push_str("<Bucket>");
+        data.push_str(&self.bucket_arn);
+        data.push_str("</Bucket>");
+
+        if let Some(v) = &self.access_control_translation {
+            data.push_str("<AccessControlTranslation><Owner>");
+            data.push_str(&v.owner);
+            data.push_str("</Owner></AccessControlTranslation>");
+        }
+
+        if let Some(v) = &self.account {
+            data.push_str("<Account>");
+            data.push_str(&v);
+            data.push_str("</Account>");
+        }
+
+        if let Some(c) = &self.encryption_config {
+            data.push_str("<EncryptionConfiguration>");
+            if let Some(v) = &c.replica_kms_key_id {
+                data.push_str("<ReplicaKmsKeyID>");
+                data.push_str(&v);
+                data.push_str("</ReplicaKmsKeyID>");
+            }
+            data.push_str("</EncryptionConfiguration>");
+        }
+
+        if let Some(m) = &self.metrics {
+            data.push_str("<Metrics><EventThreshold>");
+
+            if let Some(v) = m.event_threshold_minutes {
+                data.push_str("<Minutes>");
+                data.push_str(&v.to_string());
+                data.push_str("</Minutes>");
+            }
+
+            data.push_str("<Status>");
+            data.push_str(match m.status {
+                true => "Enabled",
+                false => "Disabled",
+            });
+            data.push_str("</Status>");
+
+            data.push_str("</EventThreshold></Metrics>");
+        }
+
+        if let Some(t) = &self.replication_time {
+            data.push_str("<ReplicationTime>");
+
+            data.push_str("<Time>");
+            if let Some(v) = t.time_minutes {
+                data.push_str(&v.to_string());
+            }
+            data.push_str("</Time>");
+
+            data.push_str("<Status>");
+            data.push_str(match t.status {
+                true => "Enabled",
+                false => "Disabled",
+            });
+            data.push_str("</Status>");
+
+            data.push_str("</ReplicationTime>");
+        }
+
+        if let Some(v) = &self.storage_class {
+            data.push_str("<StorageClass>");
+            data.push_str(&v);
+            data.push_str("</StorageClass>");
+        }
+
+        data.push_str("</Destination>");
+
+        return data;
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SourceSelectionCriteria {
+    pub sse_kms_encrypted_objects_status: Option<bool>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ReplicationRule {
+    pub destination: Destination,
+    pub delete_marker_replication_status: Option<bool>,
+    pub existing_object_replication_status: Option<bool>,
+    pub filter: Option<Filter>,
+    pub id: Option<String>,
+    pub prefix: Option<String>,
+    pub priority: Option<i32>,
+    pub source_selection_criteria: Option<SourceSelectionCriteria>,
+    pub delete_replication_status: Option<bool>,
+    pub status: bool,
+}
+
+impl ReplicationRule {
+    pub fn from_xml(element: &Element) -> Result<ReplicationRule, Error> {
+        Ok(ReplicationRule {
+            destination: Destination::from_xml(
+                element
+                    .get_child("Destination")
+                    .ok_or(Error::XmlError(format!("<Destination> tag not found")))?,
+            )?,
+            delete_marker_replication_status: match element.get_child("DeleteMarkerReplication") {
+                Some(v) => Some(get_text(v, "Status")? == "Enabled"),
+                _ => None,
+            },
+            existing_object_replication_status: match element.get_child("ExistingObjectReplication")
+            {
+                Some(v) => Some(get_text(v, "Status")? == "Enabled"),
+                _ => None,
+            },
+            filter: match element.get_child("Filter") {
+                Some(v) => Some(Filter::from_xml(v)?),
+                _ => None,
+            },
+            id: get_option_text(element, "ID"),
+            prefix: get_option_text(element, "Prefix"),
+            priority: match get_option_text(element, "Priority") {
+                Some(v) => Some(v.parse::<i32>()?),
+                _ => None,
+            },
+            source_selection_criteria: match element.get_child("SourceSelectionCriteria") {
+                Some(v) => match v.get_child("SseKmsEncryptedObjects") {
+                    Some(v) => Some(SourceSelectionCriteria {
+                        sse_kms_encrypted_objects_status: Some(get_text(v, "Status")? == "Enabled"),
+                    }),
+                    _ => Some(SourceSelectionCriteria {
+                        sse_kms_encrypted_objects_status: None,
+                    }),
+                },
+                _ => None,
+            },
+            delete_replication_status: match element.get_child("DeleteReplication") {
+                Some(v) => Some(get_text(v, "Status")? == "Enabled"),
+                _ => None,
+            },
+            status: get_text(element, "Status")? == "Enabled",
+        })
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut data = self.destination.to_xml();
+
+        if let Some(v) = self.delete_marker_replication_status {
+            data.push_str("<DeleteMarkerReplication>");
+            data.push_str("<Status>");
+            data.push_str(match v {
+                true => "Enabled",
+                false => "Disabled",
+            });
+            data.push_str("</Status>");
+            data.push_str("</DeleteMarkerReplication>");
+        }
+
+        if let Some(v) = self.existing_object_replication_status {
+            data.push_str("<ExistingObjectReplication>");
+            data.push_str("<Status>");
+            data.push_str(match v {
+                true => "Enabled",
+                false => "Disabled",
+            });
+            data.push_str("</Status>");
+            data.push_str("</ExistingObjectReplication>");
+        }
+
+        if let Some(v) = &self.filter {
+            data.push_str(&v.to_xml())
+        }
+
+        if let Some(v) = &self.id {
+            data.push_str("<ID>");
+            data.push_str(&v);
+            data.push_str("</ID>");
+        }
+
+        if let Some(v) = &self.prefix {
+            data.push_str("<Prefix>");
+            data.push_str(&v);
+            data.push_str("</Prefix>");
+        }
+
+        if let Some(v) = self.priority {
+            data.push_str("<Priority>");
+            data.push_str(&v.to_string());
+            data.push_str("</Priority>");
+        }
+
+        if let Some(s) = &self.source_selection_criteria {
+            data.push_str("<SourceSelectionCriteria>");
+            if let Some(v) = s.sse_kms_encrypted_objects_status {
+                data.push_str("<SseKmsEncryptedObjects>");
+                data.push_str("<Status>");
+                data.push_str(match v {
+                    true => "Enabled",
+                    false => "Disabled",
+                });
+                data.push_str("</Status>");
+                data.push_str("</SseKmsEncryptedObjects>");
+            }
+            data.push_str("</SourceSelectionCriteria>");
+        }
+
+        if let Some(v) = self.delete_replication_status {
+            data.push_str("<DeleteReplication>");
+            data.push_str("<Status>");
+            data.push_str(match v {
+                true => "Enabled",
+                false => "Disabled",
+            });
+            data.push_str("</Status>");
+            data.push_str("</DeleteReplication>");
+        }
+
+        data.push_str("<Status>");
+        data.push_str(match self.status {
+            true => "Enabled",
+            false => "Disabled",
+        });
+        data.push_str("</Status>");
+
+        return data;
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ReplicationConfig {
+    pub role: Option<String>,
+    pub rules: Vec<ReplicationRule>,
+}
+
+impl ReplicationConfig {
+    pub fn from_xml(root: &Element) -> Result<ReplicationConfig, Error> {
+        let mut config = ReplicationConfig {
+            role: get_option_text(root, "Role"),
+            rules: Vec::new(),
+        };
+
+        if let Some(v) = root.get_child("Rule") {
+            for rule in &v.children {
+                config.rules.push(ReplicationRule::from_xml(
+                    rule.as_element()
+                        .ok_or(Error::XmlError(format!("<Rule> tag not found")))?,
+                )?);
+            }
+        }
+
+        return Ok(config);
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut data = String::from("<ReplicationConfiguration>");
+
+        if let Some(v) = &self.role {
+            data.push_str("<Status>");
+            data.push_str(&v);
+            data.push_str("</Status>");
+        }
+
+        for rule in &self.rules {
+            data.push_str(&rule.to_xml());
+        }
+
+        data.push_str("</ReplicationConfiguration>");
+        return data;
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ObjectLockConfig {
+    pub retention_mode: Option<RetentionMode>,
+    pub retention_duration_days: Option<i32>,
+    pub retention_duration_years: Option<i32>,
+}
+
+impl ObjectLockConfig {
+    pub fn new(
+        mode: RetentionMode,
+        days: Option<i32>,
+        years: Option<i32>,
+    ) -> Result<ObjectLockConfig, Error> {
+        if days.is_some() ^ years.is_some() {
+            return Ok(ObjectLockConfig {
+                retention_mode: Some(mode),
+                retention_duration_days: days,
+                retention_duration_years: years,
+            });
+        }
+
+        Err(Error::InvalidObjectLockConfig(format!(
+            "only one days or years must be set"
+        )))
+    }
+
+    pub fn from_xml(root: &Element) -> Result<ObjectLockConfig, Error> {
+        let mut config = ObjectLockConfig {
+            retention_mode: None,
+            retention_duration_days: None,
+            retention_duration_years: None,
+        };
+
+        if let Some(r) = root.get_child("Rule") {
+            let default_retention = r
+                .get_child("DefaultRetention")
+                .ok_or(Error::XmlError(format!("<DefaultRetention> tag not found")))?;
+            config.retention_mode =
+                Some(RetentionMode::parse(&get_text(default_retention, "Mode")?)?);
+
+            if let Some(v) = get_option_text(default_retention, "Days") {
+                config.retention_duration_days = Some(v.parse::<i32>()?);
+            }
+
+            if let Some(v) = get_option_text(default_retention, "Years") {
+                config.retention_duration_years = Some(v.parse::<i32>()?);
+            }
+        }
+
+        return Ok(config);
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut data = String::from("<ObjectLockConfiguration>");
+        data.push_str("<ObjectLockEnabled>Enabled</ObjectLockEnabled>");
+        if let Some(v) = &self.retention_mode {
+            data.push_str("<Rule><DefaultRetention>");
+            data.push_str("<Mode>");
+            data.push_str(&v.to_string());
+            data.push_str("</Mode>");
+            if let Some(d) = self.retention_duration_days {
+                data.push_str("<Days>");
+                data.push_str(&d.to_string());
+                data.push_str("</Days>");
+            }
+            if let Some(d) = self.retention_duration_years {
+                data.push_str("<Years>");
+                data.push_str(&d.to_string());
+                data.push_str("</Years>");
+            }
+            data.push_str("</DefaultRetention></Rule>");
+        }
+        data.push_str("</ObjectLockConfiguration>");
 
         return data;
     }
