@@ -102,6 +102,8 @@ pub enum Error {
     InvalidDateAndDays(String),
     InvalidLifecycleRuleId,
     InvalidFilter,
+    PostPolicyError(String),
+    InvalidObjectLockConfig(String),
 }
 
 impl std::error::Error for Error {}
@@ -160,6 +162,8 @@ impl fmt::Display for Error {
 	    Error::InvalidDateAndDays(m) => write!(f, "Only one of date or days of {} must be set", m),
 	    Error::InvalidLifecycleRuleId => write!(f, "id must be exceed 255 characters"),
 	    Error::InvalidFilter => write!(f, "only one of And, Prefix or Tag must be provided"),
+	    Error::PostPolicyError(m) => write!(f, "{}", m),
+	    Error::InvalidObjectLockConfig(m) => write!(f, "{}", m),
 	}
     }
 }

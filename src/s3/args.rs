@@ -14,27 +14,34 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
+use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{
-    DeleteObject, Directive, Item, LifecycleConfig, NotificationRecords, Part, Retention,
-    SelectRequest, SseConfig,
+    DeleteObject, Directive, Item, LifecycleConfig, NotificationConfig, NotificationRecords,
+    ObjectLockConfig, Part, ReplicationConfig, Retention, RetentionMode, SelectRequest, SseConfig,
 };
 use crate::s3::utils::{
-    check_bucket_name, merge, to_http_header_value, to_iso8601utc, urlencode, Multimap, UtcTime,
+    b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value, to_iso8601utc,
+    to_signer_date, urlencode, utc_now, Multimap, UtcTime,
 };
 use derivative::Derivative;
+use hyper::http::Method;
+use serde_json::json;
+use serde_json::Value;
+use std::collections::HashMap;
 
 pub const MIN_PART_SIZE: usize = 5_242_880; // 5 MiB
 pub const MAX_PART_SIZE: usize = 5_368_709_120; // 5 GiB
 pub const MAX_OBJECT_SIZE: usize = 5_497_558_138_880; // 5 TiB
 pub const MAX_MULTIPART_COUNT: u16 = 10_000;
+pub const DEFAULT_EXPIRY_SECONDS: u32 = 604_800; // 7 days
 
 fn object_write_args_headers(
     extra_headers: Option<&Multimap>,
     headers: Option<&Multimap>,
     user_metadata: Option<&Multimap>,
     sse: Option<&dyn Sse>,
-    tags: Option<&std::collections::HashMap<String, String>>,
+    tags: Option<&HashMap<String, String>>,
     retention: Option<&Retention>,
     legal_hold: bool,
 ) -> Multimap {
@@ -397,7 +404,7 @@ pub struct PutObjectApiArgs<'a> {
     pub headers: Option<&'a Multimap>,
     pub user_metadata: Option<&'a Multimap>,
     pub sse: Option<&'a dyn Sse>,
-    pub tags: Option<&'a std::collections::HashMap<String, String>>,
+    pub tags: Option<&'a HashMap<String, String>>,
     pub retention: Option<&'a Retention>,
     pub legal_hold: bool,
     pub data: &'a [u8],
@@ -458,7 +465,7 @@ pub struct UploadPartArgs<'a> {
     pub headers: Option<&'a Multimap>,
     pub user_metadata: Option<&'a Multimap>,
     pub sse: Option<&'a dyn Sse>,
-    pub tags: Option<&'a std::collections::HashMap<String, String>>,
+    pub tags: Option<&'a HashMap<String, String>>,
     pub retention: Option<&'a Retention>,
     pub legal_hold: bool,
     pub upload_id: &'a str,
@@ -534,7 +541,7 @@ pub struct PutObjectArgs<'a> {
     pub headers: Option<&'a Multimap>,
     pub user_metadata: Option<&'a Multimap>,
     pub sse: Option<&'a dyn Sse>,
-    pub tags: Option<&'a std::collections::HashMap<String, String>>,
+    pub tags: Option<&'a HashMap<String, String>>,
     pub retention: Option<&'a Retention>,
     pub legal_hold: bool,
     pub object_size: Option<usize>,
@@ -1090,7 +1097,7 @@ pub struct CopyObjectArgs<'a> {
     pub headers: Option<&'a Multimap>,
     pub user_metadata: Option<&'a Multimap>,
     pub sse: Option<&'a dyn Sse>,
-    pub tags: Option<&'a std::collections::HashMap<String, String>>,
+    pub tags: Option<&'a HashMap<String, String>>,
     pub retention: Option<&'a Retention>,
     pub legal_hold: bool,
     pub source: CopySource<'a>,
@@ -1297,7 +1304,7 @@ pub struct ComposeObjectArgs<'a> {
     pub headers: Option<&'a Multimap>,
     pub user_metadata: Option<&'a Multimap>,
     pub sse: Option<&'a dyn Sse>,
-    pub tags: Option<&'a std::collections::HashMap<String, String>>,
+    pub tags: Option<&'a HashMap<String, String>>,
     pub retention: Option<&'a Retention>,
     pub legal_hold: bool,
     pub sources: &'a mut Vec<ComposeSource<'a>>,
@@ -1392,4 +1399,590 @@ pub struct SetBucketLifecycleArgs<'a> {
     pub region: Option<&'a str>,
     pub bucket: &'a str,
     pub config: &'a LifecycleConfig,
+}
+
+pub type DeleteBucketNotificationArgs<'a> = BucketArgs<'a>;
+
+pub type GetBucketNotificationArgs<'a> = BucketArgs<'a>;
+
+pub struct SetBucketNotificationArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub config: &'a NotificationConfig,
+}
+
+impl<'a> SetBucketNotificationArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        config: &'a NotificationConfig,
+    ) -> Result<SetBucketNotificationArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        Ok(SetBucketNotificationArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            config: config,
+        })
+    }
+}
+
+pub type DeleteBucketPolicyArgs<'a> = BucketArgs<'a>;
+
+pub type GetBucketPolicyArgs<'a> = BucketArgs<'a>;
+
+pub struct SetBucketPolicyArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub config: &'a str,
+}
+
+impl<'a> SetBucketPolicyArgs<'a> {
+    pub fn new(bucket_name: &'a str, config: &'a str) -> Result<SetBucketPolicyArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        Ok(SetBucketPolicyArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            config: config,
+        })
+    }
+}
+
+pub type DeleteBucketReplicationArgs<'a> = BucketArgs<'a>;
+
+pub type GetBucketReplicationArgs<'a> = BucketArgs<'a>;
+
+pub struct SetBucketReplicationArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub config: &'a ReplicationConfig,
+}
+
+pub type DeleteBucketTagsArgs<'a> = BucketArgs<'a>;
+
+pub type GetBucketTagsArgs<'a> = BucketArgs<'a>;
+
+pub struct SetBucketTagsArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub tags: &'a HashMap<String, String>,
+}
+
+impl<'a> SetBucketTagsArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        tags: &'a HashMap<String, String>,
+    ) -> Result<SetBucketTagsArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        Ok(SetBucketTagsArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            tags: tags,
+        })
+    }
+}
+
+pub type GetBucketVersioningArgs<'a> = BucketArgs<'a>;
+
+pub struct SetBucketVersioningArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub status: bool,
+    pub mfa_delete: Option<bool>,
+}
+
+impl<'a> SetBucketVersioningArgs<'a> {
+    pub fn new(bucket_name: &'a str, status: bool) -> Result<SetBucketVersioningArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        Ok(SetBucketVersioningArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            status: status,
+            mfa_delete: None,
+        })
+    }
+}
+
+pub type DeleteObjectLockConfigArgs<'a> = BucketArgs<'a>;
+
+pub type GetObjectLockConfigArgs<'a> = BucketArgs<'a>;
+
+pub struct SetObjectLockConfigArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub config: &'a ObjectLockConfig,
+}
+
+impl<'a> SetObjectLockConfigArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        config: &'a ObjectLockConfig,
+    ) -> Result<SetObjectLockConfigArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        Ok(SetObjectLockConfigArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            config: config,
+        })
+    }
+}
+
+pub type GetObjectRetentionArgs<'a> = ObjectVersionArgs<'a>;
+
+pub struct SetObjectRetentionArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub object: &'a str,
+    pub version_id: Option<&'a str>,
+    pub bypass_governance_mode: bool,
+    pub retention_mode: Option<RetentionMode>,
+    pub retain_until_date: Option<UtcTime>,
+}
+
+impl<'a> SetObjectRetentionArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        object_name: &'a str,
+    ) -> Result<SetObjectRetentionArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        if object_name.is_empty() {
+            return Err(Error::InvalidObjectName(String::from(
+                "object name cannot be empty",
+            )));
+        }
+
+        Ok(SetObjectRetentionArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            object: object_name,
+            version_id: None,
+            bypass_governance_mode: false,
+            retention_mode: None,
+            retain_until_date: None,
+        })
+    }
+}
+
+pub type DeleteObjectTagsArgs<'a> = ObjectVersionArgs<'a>;
+
+pub type GetObjectTagsArgs<'a> = ObjectVersionArgs<'a>;
+
+pub struct SetObjectTagsArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub object: &'a str,
+    pub version_id: Option<&'a str>,
+    pub tags: &'a HashMap<String, String>,
+}
+
+impl<'a> SetObjectTagsArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        object_name: &'a str,
+        tags: &'a HashMap<String, String>,
+    ) -> Result<SetObjectTagsArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        if object_name.is_empty() {
+            return Err(Error::InvalidObjectName(String::from(
+                "object name cannot be empty",
+            )));
+        }
+
+        Ok(SetObjectTagsArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            object: object_name,
+            version_id: None,
+            tags: tags,
+        })
+    }
+}
+
+pub struct GetPresignedObjectUrlArgs<'a> {
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub object: &'a str,
+    pub version_id: Option<&'a str>,
+    pub method: Method,
+    pub expiry_seconds: Option<u32>,
+    pub request_time: Option<UtcTime>,
+}
+
+impl<'a> GetPresignedObjectUrlArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        object_name: &'a str,
+        method: Method,
+    ) -> Result<GetPresignedObjectUrlArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        if object_name.is_empty() {
+            return Err(Error::InvalidObjectName(String::from(
+                "object name cannot be empty",
+            )));
+        }
+
+        Ok(GetPresignedObjectUrlArgs {
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            object: object_name,
+            version_id: None,
+            method: method,
+            expiry_seconds: Some(DEFAULT_EXPIRY_SECONDS),
+            request_time: None,
+        })
+    }
+}
+
+pub struct PostPolicy<'a> {
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+
+    expiration: &'a UtcTime,
+    eq_conditions: HashMap<String, String>,
+    starts_with_conditions: HashMap<String, String>,
+    lower_limit: Option<usize>,
+    upper_limit: Option<usize>,
+}
+
+impl<'a> PostPolicy<'a> {
+    const EQ: &str = "eq";
+    const STARTS_WITH: &str = "starts-with";
+    const ALGORITHM: &str = "AWS4-HMAC-SHA256";
+
+    pub fn new(bucket_name: &'a str, expiration: &'a UtcTime) -> Result<PostPolicy<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        Ok(PostPolicy {
+            region: None,
+            bucket: bucket_name,
+            expiration: expiration,
+            eq_conditions: HashMap::new(),
+            starts_with_conditions: HashMap::new(),
+            lower_limit: None,
+            upper_limit: None,
+        })
+    }
+
+    fn trim_dollar(value: &str) -> String {
+        let mut s = value.to_string();
+        if s.starts_with("$") {
+            s.remove(0);
+        }
+        return s;
+    }
+
+    fn is_reserved_element(element: &str) -> bool {
+        return element == "bucket"
+            || element == "x-amz-algorithm"
+            || element == "x-amz-credential"
+            || element == "x-amz-date"
+            || element == "policy"
+            || element == "x-amz-signature";
+    }
+
+    fn get_credential_string(access_key: &String, date: &UtcTime, region: &String) -> String {
+        return format!(
+            "{}/{}/{}/s3/aws4_request",
+            access_key,
+            to_signer_date(*date),
+            region
+        );
+    }
+
+    pub fn add_equals_condition(&mut self, element: &str, value: &str) -> Result<(), Error> {
+        if element.is_empty() {
+            return Err(Error::PostPolicyError(format!(
+                "condition element cannot be empty"
+            )));
+        }
+
+        let v = PostPolicy::trim_dollar(element);
+        if v == "success_action_redirect" || v == "redirect" || v == "content-length-range" {
+            return Err(Error::PostPolicyError(format!(
+                "{} is unsupported for equals condition",
+                element
+            )));
+        }
+
+        if PostPolicy::is_reserved_element(&v.as_str()) {
+            return Err(Error::PostPolicyError(format!("{} cannot set", element)));
+        }
+
+        self.eq_conditions.insert(v, value.to_string());
+        Ok(())
+    }
+
+    pub fn remove_equals_condition(&mut self, element: &str) {
+        self.eq_conditions.remove(element);
+    }
+
+    pub fn add_starts_with_condition(&mut self, element: &str, value: &str) -> Result<(), Error> {
+        if element.is_empty() {
+            return Err(Error::PostPolicyError(format!(
+                "condition element cannot be empty"
+            )));
+        }
+
+        let v = PostPolicy::trim_dollar(element);
+        if v == "success_action_status"
+            || v == "content-length-range"
+            || (v.starts_with("x-amz-") && v.starts_with("x-amz-meta-"))
+        {
+            return Err(Error::PostPolicyError(format!(
+                "{} is unsupported for starts-with condition",
+                element
+            )));
+        }
+
+        if PostPolicy::is_reserved_element(&v.as_str()) {
+            return Err(Error::PostPolicyError(format!("{} cannot set", element)));
+        }
+
+        self.starts_with_conditions
+            .insert(v.clone(), value.to_string());
+        Ok(())
+    }
+
+    pub fn remove_starts_with_condition(&mut self, element: &str) {
+        self.starts_with_conditions.remove(element);
+    }
+
+    pub fn add_content_length_range_condition(
+        &mut self,
+        lower_limit: usize,
+        upper_limit: usize,
+    ) -> Result<(), Error> {
+        if lower_limit > upper_limit {
+            return Err(Error::PostPolicyError(format!(
+                "lower limit cannot be greater than upper limit"
+            )));
+        }
+
+        self.lower_limit = Some(lower_limit);
+        self.upper_limit = Some(upper_limit);
+        Ok(())
+    }
+
+    pub fn remove_content_length_range_condition(&mut self) {
+        self.lower_limit = None;
+        self.upper_limit = None;
+    }
+
+    pub fn form_data(
+        &self,
+        access_key: String,
+        secret_key: String,
+        session_token: Option<String>,
+        region: String,
+    ) -> Result<HashMap<String, String>, Error> {
+        if region.is_empty() {
+            return Err(Error::PostPolicyError(format!("region cannot be empty")));
+        }
+
+        if !self.eq_conditions.contains_key("key")
+            && !self.starts_with_conditions.contains_key("key")
+        {
+            return Err(Error::PostPolicyError(format!("key condition must be set")));
+        }
+
+        let mut conditions: Vec<Value> = Vec::new();
+        conditions.push(json!([PostPolicy::EQ, "$bucket", self.bucket]));
+        for (key, value) in &self.eq_conditions {
+            conditions.push(json!([PostPolicy::EQ, String::from("$") + &key, value]));
+        }
+        for (key, value) in &self.starts_with_conditions {
+            conditions.push(json!([
+                PostPolicy::STARTS_WITH,
+                String::from("$") + &key,
+                value
+            ]));
+        }
+        if self.lower_limit.is_some() && self.upper_limit.is_some() {
+            conditions.push(json!([
+                "content-length-range",
+                self.lower_limit.unwrap(),
+                self.upper_limit.unwrap()
+            ]));
+        }
+
+        let date = utc_now();
+        let credential = PostPolicy::get_credential_string(&access_key, &date, &region);
+        let amz_date = to_amz_date(date);
+        conditions.push(json!([
+            PostPolicy::EQ,
+            "$x-amz-algorithm",
+            PostPolicy::ALGORITHM
+        ]));
+        conditions.push(json!([PostPolicy::EQ, "$x-amz-credential", credential]));
+        if let Some(v) = &session_token {
+            conditions.push(json!([PostPolicy::EQ, "$x-amz-security-token", v]));
+        }
+        conditions.push(json!([PostPolicy::EQ, "$x-amz-date", amz_date]));
+
+        let policy = json!({
+            "expiration": to_iso8601utc(*self.expiration),
+            "conditions": conditions,
+        });
+
+        let encoded_policy = b64encode(policy.to_string());
+        let signature = post_presign_v4(&encoded_policy, &secret_key, date, &region);
+
+        let mut data: HashMap<String, String> = HashMap::new();
+        data.insert(
+            String::from("x-amz-algorithm"),
+            String::from(PostPolicy::ALGORITHM),
+        );
+        data.insert(String::from("x-amz-credential"), credential);
+        data.insert(String::from("x-amz-date"), amz_date);
+        data.insert(String::from("policy"), encoded_policy);
+        data.insert(String::from("x-amz-signature"), signature);
+        if let Some(v) = session_token {
+            data.insert(String::from("x-amz-security-token"), v);
+        }
+
+        Ok(data)
+    }
+}
+
+pub struct DownloadObjectArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub object: &'a str,
+    pub version_id: Option<&'a str>,
+    pub ssec: Option<&'a SseCustomerKey>,
+    pub filename: &'a str,
+    pub overwrite: bool,
+}
+
+impl<'a> DownloadObjectArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        object_name: &'a str,
+        filename: &'a str,
+    ) -> Result<DownloadObjectArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        if object_name.is_empty() {
+            return Err(Error::InvalidObjectName(String::from(
+                "object name cannot be empty",
+            )));
+        }
+
+        Ok(DownloadObjectArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            object: object_name,
+            version_id: None,
+            ssec: None,
+            filename: filename,
+            overwrite: false,
+        })
+    }
+}
+
+pub struct UploadObjectArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub extra_query_params: Option<&'a Multimap>,
+    pub region: Option<&'a str>,
+    pub bucket: &'a str,
+    pub object: &'a str,
+    pub headers: Option<&'a Multimap>,
+    pub user_metadata: Option<&'a Multimap>,
+    pub sse: Option<&'a dyn Sse>,
+    pub tags: Option<&'a HashMap<String, String>>,
+    pub retention: Option<&'a Retention>,
+    pub legal_hold: bool,
+    pub object_size: Option<usize>,
+    pub part_size: usize,
+    pub part_count: i16,
+    pub content_type: &'a str,
+    pub filename: &'a str,
+}
+
+impl<'a> UploadObjectArgs<'a> {
+    pub fn new(
+        bucket_name: &'a str,
+        object_name: &'a str,
+        filename: &'a str,
+    ) -> Result<UploadObjectArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        if object_name.is_empty() {
+            return Err(Error::InvalidObjectName(String::from(
+                "object name cannot be empty",
+            )));
+        }
+
+        let meta = std::fs::metadata(filename)?;
+        if !meta.is_file() {
+            return Err(Error::IOError(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "not a file",
+            )));
+        }
+
+        let object_size = Some(meta.len() as usize);
+        let (psize, part_count) = calc_part_info(object_size, None)?;
+
+        Ok(UploadObjectArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            object: object_name,
+            headers: None,
+            user_metadata: None,
+            sse: None,
+            tags: None,
+            retention: None,
+            legal_hold: false,
+            object_size: object_size,
+            part_size: psize,
+            part_count: part_count,
+            content_type: "application/octet-stream",
+            filename: filename,
+        })
+    }
 }

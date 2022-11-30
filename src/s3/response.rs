@@ -15,7 +15,8 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{
-    parse_legal_hold, Bucket, Item, LifecycleConfig, RetentionMode, SelectProgress, SseConfig,
+    parse_legal_hold, Bucket, Item, LifecycleConfig, NotificationConfig, ObjectLockConfig,
+    ReplicationConfig, RetentionMode, SelectProgress, SseConfig,
 };
 use crate::s3::utils::{
     copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32, UtcTime,
@@ -90,6 +91,8 @@ pub type UploadPartCopyResponse = PutObjectApiResponse;
 pub type CopyObjectResponse = PutObjectApiResponse;
 
 pub type ComposeObjectResponse = PutObjectApiResponse;
+
+pub type UploadObjectResponse = PutObjectApiResponse;
 
 #[derive(Debug)]
 pub struct StatObjectResponse {
@@ -603,6 +606,7 @@ impl SelectObjectContentResponse {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct ListenBucketNotificationResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -625,6 +629,7 @@ impl ListenBucketNotificationResponse {
 
 pub type DeleteBucketEncryptionResponse = BucketResponse;
 
+#[derive(Clone, Debug)]
 pub struct GetBucketEncryptionResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -638,6 +643,7 @@ pub type EnableObjectLegalHoldResponse = ObjectResponse;
 
 pub type DisableObjectLegalHoldResponse = ObjectResponse;
 
+#[derive(Clone, Debug)]
 pub struct IsObjectLegalHoldEnabledResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -649,6 +655,7 @@ pub struct IsObjectLegalHoldEnabledResponse {
 
 pub type DeleteBucketLifecycleResponse = BucketResponse;
 
+#[derive(Clone, Debug)]
 pub struct GetBucketLifecycleResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -657,3 +664,119 @@ pub struct GetBucketLifecycleResponse {
 }
 
 pub type SetBucketLifecycleResponse = BucketResponse;
+
+pub type DeleteBucketNotificationResponse = BucketResponse;
+
+#[derive(Clone, Debug)]
+pub struct GetBucketNotificationResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+    pub config: NotificationConfig,
+}
+
+pub type SetBucketNotificationResponse = BucketResponse;
+
+pub type DeleteBucketPolicyResponse = BucketResponse;
+
+#[derive(Clone, Debug)]
+pub struct GetBucketPolicyResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+    pub config: String,
+}
+
+pub type SetBucketPolicyResponse = BucketResponse;
+
+pub type DeleteBucketReplicationResponse = BucketResponse;
+
+#[derive(Clone, Debug)]
+pub struct GetBucketReplicationResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+    pub config: ReplicationConfig,
+}
+
+pub type SetBucketReplicationResponse = BucketResponse;
+
+pub type DeleteBucketTagsResponse = BucketResponse;
+
+#[derive(Clone, Debug)]
+pub struct GetBucketTagsResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+    pub tags: std::collections::HashMap<String, String>,
+}
+
+pub type SetBucketTagsResponse = BucketResponse;
+
+#[derive(Clone, Debug)]
+pub struct GetBucketVersioningResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+    pub status: Option<bool>,
+    pub mfa_delete: Option<bool>,
+}
+
+pub type SetBucketVersioningResponse = BucketResponse;
+
+pub type DeleteObjectLockConfigResponse = BucketResponse;
+
+#[derive(Clone, Debug)]
+pub struct GetObjectLockConfigResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+    pub config: ObjectLockConfig,
+}
+
+pub type SetObjectLockConfigResponse = BucketResponse;
+
+#[derive(Clone, Debug)]
+pub struct GetObjectRetentionResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+    pub object_name: String,
+    pub version_id: Option<String>,
+    pub retention_mode: Option<RetentionMode>,
+    pub retain_until_date: Option<UtcTime>,
+}
+
+pub type SetObjectRetentionResponse = ObjectResponse;
+
+pub type DeleteObjectTagsResponse = ObjectResponse;
+
+#[derive(Clone, Debug)]
+pub struct GetObjectTagsResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+    pub object_name: String,
+    pub version_id: Option<String>,
+    pub tags: std::collections::HashMap<String, String>,
+}
+
+pub type SetObjectTagsResponse = ObjectResponse;
+
+#[derive(Clone, Debug)]
+pub struct GetPresignedObjectUrlResponse {
+    pub region: String,
+    pub bucket_name: String,
+    pub object_name: String,
+    pub version_id: Option<String>,
+    pub url: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct DownloadObjectResponse {
+    pub headers: HeaderMap,
+    pub region: String,
+    pub bucket_name: String,
+    pub object_name: String,
+    pub version_id: Option<String>,
+}
