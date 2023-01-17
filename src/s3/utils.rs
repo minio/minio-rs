@@ -17,7 +17,6 @@ use crate::s3::error::Error;
 pub use base64::encode as b64encode;
 use byteorder::{BigEndian, ReadBytesExt};
 use chrono::{DateTime, NaiveDateTime, ParseError, Utc};
-use chrono_locale::LocaleDate;
 use crc::{Crc, CRC_32_ISO_HDLC};
 use lazy_static::lazy_static;
 use md5::compute as md5compute;
@@ -72,7 +71,7 @@ pub fn to_amz_date(time: UtcTime) -> String {
 }
 
 pub fn to_http_header_value(time: UtcTime) -> String {
-    time.formatl("%a, %d %b %Y %H:%M:%S GMT", "C").to_string()
+    time.format("%a, %d %b %Y %H:%M:%S GMT").to_string()
 }
 
 pub fn to_iso8601utc(time: UtcTime) -> String {
