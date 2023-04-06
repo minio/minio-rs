@@ -118,7 +118,7 @@ fn parse_list_objects_contents(
     is_delete_marker: bool,
 ) -> Result<(), Error> {
     loop {
-        let mut content = match root.take_child(tag) {
+        let content = match root.take_child(tag) {
             Some(v) => v,
             None => break,
         };
@@ -142,15 +142,17 @@ fn parse_list_objects_contents(
             ),
             None => (None, None),
         };
-        let user_metadata = match content.get_mut_child("UserMetadata") {
+        let user_metadata = match content.get_child("UserMetadata") {
             Some(v) => {
                 let mut map: HashMap<String, String> = HashMap::new();
-                loop {
-                    let item = match v.take_child("Items") {
-                        Some(v) => v,
-                        None => break,
-                    };
-                    map.insert(get_text(&item, "Key")?, get_text(&item, "Value")?);
+                for xml_node in &v.children {
+                    let u = xml_node
+                        .as_element()
+                        .ok_or(Error::XmlError(format!("unable to convert to element")))?;
+                    map.insert(
+                        u.name.to_string(),
+                        u.get_text().unwrap_or_default().to_string(),
+                    );
                 }
                 Some(map)
             }
