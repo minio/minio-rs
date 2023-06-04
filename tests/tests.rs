@@ -376,7 +376,7 @@ impl<'a> ClientTest<'_> {
         let mut objects: Vec<DeleteObject> = Vec::new();
         for name in names.iter() {
             objects.push(DeleteObject {
-                name: name,
+                name,
                 version_id: None,
             });
         }
@@ -437,7 +437,7 @@ impl<'a> ClientTest<'_> {
         let mut objects: Vec<DeleteObject> = Vec::new();
         for name in names.iter() {
             objects.push(DeleteObject {
-                name: name,
+                name,
                 version_id: None,
             });
         }

@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
-pub use base64::encode as b64encode;
 use byteorder::{BigEndian, ReadBytesExt};
 use chrono::{DateTime, Datelike, NaiveDateTime, ParseError, Utc};
 use crc::{Crc, CRC_32_ISO_HDLC};
@@ -27,6 +26,17 @@ use std::collections::BTreeMap;
 pub use urlencoding::decode as urldecode;
 pub use urlencoding::encode as urlencode;
 use xmltree::Element;
+
+use base64::engine::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
+
+/// Fallback to deprecated function (base64::encode)
+/// https://github.com/marshallpierce/rust-base64/issues/213
+/// https://github.com/marshallpierce/rust-base64/issues/233
+/// https://github.com/marshallpierce/rust-base64/blob/v0.21.0/src/encode.rs#L15-L20https://github.com/marshallpierce/rust-base64/blob/v0.21.0/src/encode.rs#L15-L20
+pub fn b64encode<T: AsRef<[u8]>>(input: T) -> String {
+    BASE64.encode(input)
+}
 
 pub type UtcTime = DateTime<Utc>;
 
