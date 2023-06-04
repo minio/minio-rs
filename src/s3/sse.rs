@@ -55,16 +55,16 @@ impl SseCustomerKey {
         );
         copy_headers.insert(
             String::from("X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key"),
-            b64key.clone(),
+            b64key,
         );
         copy_headers.insert(
             String::from("X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5"),
-            md5key.clone(),
+            md5key,
         );
 
         SseCustomerKey {
-            headers: headers,
-            copy_headers: copy_headers,
+            headers,
+            copy_headers,
         }
     }
 }
@@ -110,7 +110,7 @@ impl SseKms {
             );
         }
 
-        SseKms { headers: headers }
+        SseKms { headers }
     }
 }
 
@@ -145,7 +145,7 @@ impl SseS3 {
             String::from("AES256"),
         );
 
-        SseS3 { headers: headers }
+        SseS3 { headers }
     }
 }
 
