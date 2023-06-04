@@ -41,7 +41,7 @@ struct RandReader {
 
 impl RandReader {
     fn new(size: usize) -> RandReader {
-        RandReader { size: size }
+        RandReader { size }
     }
 }
 
@@ -99,12 +99,12 @@ impl<'a> ClientTest<'_> {
         client.ssl_cert_file = ssl_cert_file.to_string();
 
         ClientTest {
-            base_url: base_url,
-            access_key: access_key,
-            secret_key: secret_key,
-            ignore_cert_check: ignore_cert_check,
-            ssl_cert_file: ssl_cert_file,
-            client: client,
+            base_url,
+            access_key,
+            secret_key,
+            ignore_cert_check,
+            ssl_cert_file,
+            client,
             test_bucket: rand_bucket_name(),
         }
     }
@@ -149,7 +149,7 @@ impl<'a> ClientTest<'_> {
 
         for b in names.iter() {
             self.client
-                .make_bucket(&MakeBucketArgs::new(&b).unwrap())
+                .make_bucket(&MakeBucketArgs::new(b).unwrap())
                 .await
                 .unwrap();
         }
@@ -169,7 +169,7 @@ impl<'a> ClientTest<'_> {
 
         for b in names.iter() {
             self.client
-                .remove_bucket(&RemoveBucketArgs::new(&b).unwrap())
+                .remove_bucket(&RemoveBucketArgs::new(b).unwrap())
                 .await
                 .unwrap();
         }
@@ -268,7 +268,7 @@ impl<'a> ClientTest<'_> {
         let mut hasher = Sha256::new();
         let mut file = fs::File::open(filename).unwrap();
         io::copy(&mut file, &mut hasher).unwrap();
-        return format!("{:x}", hasher.finalize());
+        format!("{:x}", hasher.finalize())
     }
 
     async fn upload_download_object(&self) {
@@ -376,7 +376,7 @@ impl<'a> ClientTest<'_> {
         let mut objects: Vec<DeleteObject> = Vec::new();
         for name in names.iter() {
             objects.push(DeleteObject {
-                name: &name,
+                name: name,
                 version_id: None,
             });
         }
@@ -437,7 +437,7 @@ impl<'a> ClientTest<'_> {
         let mut objects: Vec<DeleteObject> = Vec::new();
         for name in names.iter() {
             objects.push(DeleteObject {
-                name: &name,
+                name: name,
                 version_id: None,
             });
         }
@@ -557,11 +557,11 @@ impl<'a> ClientTest<'_> {
                     }
                 }
                 sender.send(false).unwrap();
-                return false;
+                false
             };
 
             let args = &ListenBucketNotificationArgs::new(&test_bucket, &event_fn).unwrap();
-            client.listen_bucket_notification(&args).await.unwrap();
+            client.listen_bucket_notification(args).await.unwrap();
         };
 
         let spawned_task = task::spawn(listen_task());
@@ -1153,7 +1153,7 @@ impl<'a> ClientTest<'_> {
         let mut policy = PostPolicy::new(&self.test_bucket, &expiration).unwrap();
         policy.add_equals_condition("key", &object_name).unwrap();
         policy
-            .add_content_length_range_condition(1 * 1024 * 1024, 4 * 1024 * 1024)
+            .add_content_length_range_condition(1024 * 1024, 4 * 1024 * 1024)
             .unwrap();
 
         let form_data = self
