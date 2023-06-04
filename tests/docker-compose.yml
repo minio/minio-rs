@@ -10,7 +10,11 @@ services:
     environment:
       MINIO_ROOT_PASSWORD: Strong#Pass#2022
       MINIO_ROOT_USER: masoud
+      MINIO_CI_CD: true
+      MINIO_NOTIFY_WEBHOOK_ENABLE_miniorustest: on
+      MINIO_NOTIFY_WEBHOOK_ENDPOINT_miniorustest: http://example.org/
+
     volumes:
       - ./private.key:/certs/private.key
       - ./public.crt:/certs/public.crt
-    command: server --console-address ":9001" /data/test-xl/{1...4} --certs-dir /certs
+    command: server /data/test-xl/{1...4} --certs-dir /certs

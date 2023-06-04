@@ -22,8 +22,8 @@ mkdir -p /tmp/certs
 cp $CURR_DIR/tests/public.crt $CURR_DIR/tests/private.key /tmp/certs/
 
 (MINIO_CI_CD=true \
-    MINIO_NOTIFY_WEBHOOK_ENABLE_miniojavatest=on \
-    MINIO_NOTIFY_WEBHOOK_ENDPOINT_miniojavatest=http://example.org/ \
+    MINIO_NOTIFY_WEBHOOK_ENABLE_miniorustest=on \
+    MINIO_NOTIFY_WEBHOOK_ENDPOINT_miniorustest=http://example.org/ \
     $CURR_DIR/minio server /tmp/test-xl/{1...4}/ --certs-dir /tmp/certs/ &)
 
 sleep 10
