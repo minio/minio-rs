@@ -58,5 +58,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 }
 ```
 
+## Testing
+
+You can either use docker-based methods or testing as shown in the [github workflow file](./.github/workflows/rust.yml). To trigger any of the given, use provided makefile (or replicate commands shown there).
+
+```bash
+make test-docker-compose-nextest
+make test-docker-compose
+make test-manual
+```
+
 ## License
 This SDK is distributed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0), see [LICENSE](https://github.com/minio/minio-rs/blob/master/LICENSE) for more information.
