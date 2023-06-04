@@ -84,7 +84,7 @@ struct ClientTest<'a> {
 }
 
 impl<'a> ClientTest<'_> {
-    const SQS_ARN: &str = "arn:minio:sqs::miniojavatest:webhook";
+    const SQS_ARN: &str = "arn:minio:sqs::miniorustest:webhook";
 
     fn new(
         base_url: BaseUrl,
@@ -698,7 +698,6 @@ impl<'a> ClientTest<'_> {
             .await
             .unwrap();
 
-        println!("BN: {}", bucket_name);
         self.client
             .set_bucket_notification(
                 &SetBucketNotificationArgs::new(
@@ -1230,6 +1229,7 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("compose_object()");
     ctest.compose_object().await;
 
+    // bucket notification fail
     println!("{{set,get,delete}}_bucket_notification()");
     ctest.set_get_delete_bucket_notification().await;
 
