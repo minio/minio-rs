@@ -698,6 +698,7 @@ impl<'a> ClientTest<'_> {
             .await
             .unwrap();
 
+        println!("BN: {}", bucket_name);
         self.client
             .set_bucket_notification(
                 &SetBucketNotificationArgs::new(

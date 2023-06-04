@@ -218,6 +218,8 @@ pub struct Client<'a> {
     pub ignore_cert_check: bool,
     pub user_agent: String,
     region_map: DashMap<String, String>,
+
+    #[allow(dead_code)]
     debug: bool,
 }
 
