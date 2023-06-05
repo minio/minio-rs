@@ -41,7 +41,7 @@ struct RandReader {
 
 impl RandReader {
     fn new(size: usize) -> RandReader {
-        RandReader { size: size }
+        RandReader { size }
     }
 }
 
@@ -99,12 +99,12 @@ impl<'a> ClientTest<'_> {
         client.ssl_cert_file = ssl_cert_file.to_string();
 
         ClientTest {
-            base_url: base_url,
-            access_key: access_key,
-            secret_key: secret_key,
-            ignore_cert_check: ignore_cert_check,
-            ssl_cert_file: ssl_cert_file,
-            client: client,
+            base_url,
+            access_key,
+            secret_key,
+            ignore_cert_check,
+            ssl_cert_file,
+            client,
             test_bucket: rand_bucket_name(),
         }
     }
@@ -134,7 +134,7 @@ impl<'a> ClientTest<'_> {
             .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(exists, true);
+        assert!(exists);
         self.client
             .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
             .await
@@ -149,7 +149,7 @@ impl<'a> ClientTest<'_> {
 
         for b in names.iter() {
             self.client
-                .make_bucket(&MakeBucketArgs::new(&b).unwrap())
+                .make_bucket(&MakeBucketArgs::new(b).unwrap())
                 .await
                 .unwrap();
         }
@@ -169,7 +169,7 @@ impl<'a> ClientTest<'_> {
 
         for b in names.iter() {
             self.client
-                .remove_bucket(&RemoveBucketArgs::new(&b).unwrap())
+                .remove_bucket(&RemoveBucketArgs::new(b).unwrap())
                 .await
                 .unwrap();
         }
@@ -268,7 +268,7 @@ impl<'a> ClientTest<'_> {
         let mut hasher = Sha256::new();
         let mut file = fs::File::open(filename).unwrap();
         io::copy(&mut file, &mut hasher).unwrap();
-        return format!("{:x}", hasher.finalize());
+        format!("{:x}", hasher.finalize())
     }
 
     async fn upload_download_object(&self) {
@@ -279,7 +279,7 @@ impl<'a> ClientTest<'_> {
         file.sync_all().unwrap();
         self.client
             .upload_object(
-                &mut UploadObjectArgs::new(&self.test_bucket, &object_name, &object_name).unwrap(),
+                &UploadObjectArgs::new(&self.test_bucket, &object_name, &object_name).unwrap(),
             )
             .await
             .unwrap();
@@ -291,10 +291,7 @@ impl<'a> ClientTest<'_> {
             )
             .await
             .unwrap();
-        assert_eq!(
-            ClientTest::get_hash(&object_name) == ClientTest::get_hash(&filename),
-            true
-        );
+        assert!(ClientTest::get_hash(&object_name) == ClientTest::get_hash(&filename));
 
         fs::remove_file(&object_name).unwrap();
         fs::remove_file(&filename).unwrap();
@@ -316,7 +313,7 @@ impl<'a> ClientTest<'_> {
         file.sync_all().unwrap();
         self.client
             .upload_object(
-                &mut UploadObjectArgs::new(&self.test_bucket, &object_name, &object_name).unwrap(),
+                &UploadObjectArgs::new(&self.test_bucket, &object_name, &object_name).unwrap(),
             )
             .await
             .unwrap();
@@ -328,10 +325,7 @@ impl<'a> ClientTest<'_> {
             )
             .await
             .unwrap();
-        assert_eq!(
-            ClientTest::get_hash(&object_name) == ClientTest::get_hash(&filename),
-            true
-        );
+        assert!(ClientTest::get_hash(&object_name) == ClientTest::get_hash(&filename));
 
         fs::remove_file(&object_name).unwrap();
         fs::remove_file(&filename).unwrap();
@@ -376,7 +370,7 @@ impl<'a> ClientTest<'_> {
         let mut objects: Vec<DeleteObject> = Vec::new();
         for name in names.iter() {
             objects.push(DeleteObject {
-                name: &name,
+                name,
                 version_id: None,
             });
         }
@@ -423,9 +417,9 @@ impl<'a> ClientTest<'_> {
 
         self.client
             .list_objects(
-                &mut ListObjectsArgs::new(&self.test_bucket, &|items| {
+                &ListObjectsArgs::new(&self.test_bucket, &|items| {
                     for item in items.iter() {
-                        assert_eq!(names.contains(&item.name), true);
+                        assert!(names.contains(&item.name));
                     }
                     true
                 })
@@ -437,7 +431,7 @@ impl<'a> ClientTest<'_> {
         let mut objects: Vec<DeleteObject> = Vec::new();
         for name in names.iter() {
             objects.push(DeleteObject {
-                name: &name,
+                name,
                 version_id: None,
             });
         }
@@ -557,11 +551,11 @@ impl<'a> ClientTest<'_> {
                     }
                 }
                 sender.send(false).unwrap();
-                return false;
+                false
             };
 
             let args = &ListenBucketNotificationArgs::new(&test_bucket, &event_fn).unwrap();
-            client.listen_bucket_notification(&args).await.unwrap();
+            client.listen_bucket_notification(args).await.unwrap();
         };
 
         let spawned_task = task::spawn(listen_task());
@@ -588,7 +582,7 @@ impl<'a> ClientTest<'_> {
             .unwrap();
 
         spawned_task.await;
-        assert_eq!(receiver.recv().await.unwrap(), true);
+        assert!(receiver.recv().await.unwrap());
     }
 
     async fn copy_object(&self) {
@@ -732,18 +726,12 @@ impl<'a> ClientTest<'_> {
             .await
             .unwrap();
         assert_eq!(resp.config.queue_config_list.as_ref().unwrap().len(), 1);
-        assert_eq!(
-            resp.config.queue_config_list.as_ref().unwrap()[0]
-                .events
-                .contains(&String::from("s3:ObjectCreated:Put")),
-            true
-        );
-        assert_eq!(
-            resp.config.queue_config_list.as_ref().unwrap()[0]
-                .events
-                .contains(&String::from("s3:ObjectCreated:Copy")),
-            true
-        );
+        assert!(resp.config.queue_config_list.as_ref().unwrap()[0]
+            .events
+            .contains(&String::from("s3:ObjectCreated:Put")));
+        assert!(resp.config.queue_config_list.as_ref().unwrap()[0]
+            .events
+            .contains(&String::from("s3:ObjectCreated:Copy")));
         assert_eq!(
             resp.config.queue_config_list.as_ref().unwrap()[0]
                 .prefix_filter_rule
@@ -775,7 +763,7 @@ impl<'a> ClientTest<'_> {
             .get_bucket_notification(&GetBucketNotificationArgs::new(&bucket_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(resp.config.queue_config_list.is_none(), true);
+        assert!(resp.config.queue_config_list.is_none());
 
         self.client
             .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
@@ -824,7 +812,7 @@ impl<'a> ClientTest<'_> {
             .get_bucket_policy(&GetBucketPolicyArgs::new(&bucket_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(resp.config.is_empty(), false);
+        assert!(!resp.config.is_empty());
 
         self.client
             .delete_bucket_policy(&DeleteBucketPolicyArgs::new(&bucket_name).unwrap())
@@ -866,10 +854,7 @@ impl<'a> ClientTest<'_> {
             .get_bucket_tags(&GetBucketTagsArgs::new(&bucket_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(
-            resp.tags.len() == tags.len() && resp.tags.keys().all(|k| tags.contains_key(k)),
-            true
-        );
+        assert!(resp.tags.len() == tags.len() && resp.tags.keys().all(|k| tags.contains_key(k)));
 
         self.client
             .delete_bucket_tags(&DeleteBucketTagsArgs::new(&bucket_name).unwrap())
@@ -881,7 +866,7 @@ impl<'a> ClientTest<'_> {
             .get_bucket_tags(&GetBucketTagsArgs::new(&bucket_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(resp.tags.is_empty(), true);
+        assert!(resp.tags.is_empty());
 
         self.client
             .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
@@ -912,19 +897,13 @@ impl<'a> ClientTest<'_> {
             .get_object_lock_config(&GetObjectLockConfigArgs::new(&bucket_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(
-            match resp.config.retention_mode {
-                Some(r) => match r {
-                    RetentionMode::GOVERNANCE => true,
-                    _ => false,
-                },
-                _ => false,
-            },
-            true
-        );
+        assert!(match resp.config.retention_mode {
+            Some(r) => matches!(r, RetentionMode::GOVERNANCE),
+            _ => false,
+        });
 
-        assert_eq!(resp.config.retention_duration_days == Some(7), true);
-        assert_eq!(resp.config.retention_duration_years.is_none(), true);
+        assert!(resp.config.retention_duration_days == Some(7));
+        assert!(resp.config.retention_duration_years.is_none());
 
         self.client
             .delete_object_lock_config(&DeleteObjectLockConfigArgs::new(&bucket_name).unwrap())
@@ -936,7 +915,7 @@ impl<'a> ClientTest<'_> {
             .get_object_lock_config(&GetObjectLockConfigArgs::new(&bucket_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(resp.config.retention_mode.is_none(), true);
+        assert!(resp.config.retention_mode.is_none());
 
         self.client
             .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
@@ -979,10 +958,7 @@ impl<'a> ClientTest<'_> {
             .get_object_tags(&GetObjectTagsArgs::new(&self.test_bucket, &object_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(
-            resp.tags.len() == tags.len() && resp.tags.keys().all(|k| tags.contains_key(k)),
-            true
-        );
+        assert!(resp.tags.len() == tags.len() && resp.tags.keys().all(|k| tags.contains_key(k)));
 
         self.client
             .delete_object_tags(
@@ -996,7 +972,7 @@ impl<'a> ClientTest<'_> {
             .get_object_tags(&GetObjectTagsArgs::new(&self.test_bucket, &object_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(resp.tags.is_empty(), true);
+        assert!(resp.tags.is_empty());
 
         self.client
             .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
@@ -1022,13 +998,10 @@ impl<'a> ClientTest<'_> {
             .get_bucket_versioning(&GetBucketVersioningArgs::new(&bucket_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(
-            match resp.status {
-                Some(v) => v,
-                _ => false,
-            },
-            true
-        );
+        assert!(match resp.status {
+            Some(v) => v,
+            _ => false,
+        });
 
         self.client
             .set_bucket_versioning(&SetBucketVersioningArgs::new(&bucket_name, false).unwrap())
@@ -1040,12 +1013,11 @@ impl<'a> ClientTest<'_> {
             .get_bucket_versioning(&GetBucketVersioningArgs::new(&bucket_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(
-            match resp.status {
+        assert!(
+            !(match resp.status {
                 Some(v) => v,
                 _ => false,
-            },
-            false
+            })
         );
 
         self.client
@@ -1091,23 +1063,14 @@ impl<'a> ClientTest<'_> {
             .get_object_retention(&GetObjectRetentionArgs::new(&bucket_name, &object_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(
-            match resp.retention_mode {
-                Some(v) => match v {
-                    RetentionMode::GOVERNANCE => true,
-                    _ => false,
-                },
-                _ => false,
-            },
-            true
-        );
-        assert_eq!(
-            match resp.retain_until_date {
-                Some(v) => to_iso8601utc(v) == to_iso8601utc(retain_until_date),
-                _ => false,
-            },
-            true,
-        );
+        assert!(match resp.retention_mode {
+            Some(v) => matches!(v, RetentionMode::GOVERNANCE),
+            _ => false,
+        });
+        assert!(match resp.retain_until_date {
+            Some(v) => to_iso8601utc(v) == to_iso8601utc(retain_until_date),
+            _ => false,
+        },);
 
         let mut args = SetObjectRetentionArgs::new(&bucket_name, &object_name).unwrap();
         args.bypass_governance_mode = true;
@@ -1118,8 +1081,8 @@ impl<'a> ClientTest<'_> {
             .get_object_retention(&GetObjectRetentionArgs::new(&bucket_name, &object_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(resp.retention_mode.is_none(), true);
-        assert_eq!(resp.retain_until_date.is_none(), true);
+        assert!(resp.retention_mode.is_none());
+        assert!(resp.retain_until_date.is_none());
 
         let mut args = RemoveObjectArgs::new(&bucket_name, &object_name).unwrap();
         let version_id = obj_resp.version_id.unwrap().clone();
@@ -1142,7 +1105,7 @@ impl<'a> ClientTest<'_> {
             )
             .await
             .unwrap();
-        assert_eq!(resp.url.contains("X-Amz-Signature="), true);
+        assert!(resp.url.contains("X-Amz-Signature="));
     }
 
     async fn get_presigned_post_form_data(&self) {
@@ -1152,7 +1115,7 @@ impl<'a> ClientTest<'_> {
         let mut policy = PostPolicy::new(&self.test_bucket, &expiration).unwrap();
         policy.add_equals_condition("key", &object_name).unwrap();
         policy
-            .add_content_length_range_condition(1 * 1024 * 1024, 4 * 1024 * 1024)
+            .add_content_length_range_condition(1024 * 1024, 4 * 1024 * 1024)
             .unwrap();
 
         let form_data = self
@@ -1160,8 +1123,8 @@ impl<'a> ClientTest<'_> {
             .get_presigned_post_form_data(&policy)
             .await
             .unwrap();
-        assert_eq!(form_data.contains_key("x-amz-signature"), true);
-        assert_eq!(form_data.contains_key("policy"), true);
+        assert!(form_data.contains_key("x-amz-signature"));
+        assert!(form_data.contains_key("policy"));
     }
 }
 
