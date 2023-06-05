@@ -145,7 +145,7 @@ fn parse_list_objects_contents(
                 for xml_node in &v.children {
                     let u = xml_node
                         .as_element()
-                        .ok_or(Error::XmlError(format!("unable to convert to element")))?;
+                        .ok_or(Error::XmlError("unable to convert to element".to_string()))?;
                     map.insert(
                         u.name.to_string(),
                         u.get_text().unwrap_or_default().to_string(),

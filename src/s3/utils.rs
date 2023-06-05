@@ -27,8 +27,8 @@ pub use urlencoding::decode as urldecode;
 pub use urlencoding::encode as urlencode;
 use xmltree::Element;
 
-use base64::engine::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::engine::Engine as _;
 
 /// Fallback to deprecated function (base64::encode)
 /// https://github.com/marshallpierce/rust-base64/issues/213
@@ -100,7 +100,7 @@ pub fn to_http_header_value(time: UtcTime) -> String {
             12 => "Dec",
             _ => "",
         },
-        time.format("%Y %H:%M:%S").to_string()
+        time.format("%Y %H:%M:%S")
     )
 }
 
