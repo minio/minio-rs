@@ -19,6 +19,7 @@ use crate::s3::error::Error;
 use crate::s3::utils::{
     from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc, UtcTime,
 };
+pub use byte_unit::Byte;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -1872,17 +1873,15 @@ impl ObjectLockConfig {
     }
 }
 
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all="lowercase")]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
 pub enum QuotaType {
     Soft,
-    Hard
+    Hard,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
 pub struct Quota {
-    pub quota: u32,
-
-    pub quotatype: Option<QuotaType>
+    pub quota: byte_unit::Byte,
+    pub quotatype: Option<QuotaType>,
 }

@@ -18,6 +18,7 @@
 extern crate alloc;
 use crate::s3::utils::get_default_text;
 use bytes::{Buf, Bytes};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use xmltree::Element;
 
@@ -49,6 +50,23 @@ impl ErrorResponse {
             object_name: get_default_text(&root, "Key"),
         })
     }
+
+    pub fn parse_json(body: &mut Bytes) -> Result<ErrorResponse, Error> {
+        let json_error: JsonError = match serde_json::from_slice(body) {
+            Ok(v) => v,
+            Err(e) => return Err(Error::JsonParseError(e)),
+        };
+
+        Ok(ErrorResponse {
+            code: json_error.code,
+            message: json_error.message,
+            resource: json_error.resource,
+            request_id: json_error.request_id,
+            host_id: json_error.host_id,
+            bucket_name: json_error.bucket_name,
+            object_name: json_error.object_name,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -57,6 +75,7 @@ pub enum Error {
     InvalidUrl(http::uri::InvalidUri),
     IOError(std::io::Error),
     XmlParseError(xmltree::ParseError),
+    JsonParseError(serde_json::Error),
     HttpError(reqwest::Error),
     StrError(reqwest::header::ToStrError),
     IntError(std::num::ParseIntError),
@@ -166,6 +185,8 @@ impl fmt::Display for Error {
 	    Error::InvalidFilter => write!(f, "only one of And, Prefix or Tag must be provided"),
 	    Error::PostPolicyError(m) => write!(f, "{}", m),
 	    Error::InvalidObjectLockConfig(m) => write!(f, "{}", m),
+       Error::JsonParseError(m) => write!(f, "{}", m),
+
 	}
     }
 }
@@ -228,4 +249,21 @@ impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
         Error::JsonError(err)
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct JsonError {
+    pub code: String,
+    pub message: String,
+
+    #[serde(default = "String::new")]
+    pub bucket_name: String,
+
+    #[serde(default = "String::new")]
+    pub object_name: String,
+
+    pub resource: String,
+    pub request_id: String,
+    pub host_id: String,
 }

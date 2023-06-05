@@ -17,8 +17,8 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{
-    parse_legal_hold, Bucket, Item, LifecycleConfig, NotificationConfig, ObjectLockConfig,
-    ReplicationConfig, RetentionMode, SelectProgress, SseConfig, Quota
+    parse_legal_hold, Bucket, Item, LifecycleConfig, NotificationConfig, ObjectLockConfig, Quota,
+    ReplicationConfig, RetentionMode, SelectProgress, SseConfig,
 };
 use crate::s3::utils::{
     copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32, UtcTime,
@@ -783,8 +783,15 @@ pub struct DownloadObjectResponse {
     pub version_id: Option<String>,
 }
 
+#[derive(Clone, Debug)]
 pub struct GetBucketQuotaResponse {
     pub headers: HeaderMap,
     pub bucket_name: String,
-    pub quota: Quota
+    pub quota: Quota,
+}
+
+#[derive(Clone, Debug)]
+pub struct SetBucketQuotaResponse {
+    pub headers: HeaderMap,
+    pub bucket_name: String,
 }

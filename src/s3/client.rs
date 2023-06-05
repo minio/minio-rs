@@ -24,7 +24,8 @@ use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
 use crate::s3::types::{
     Bucket, DeleteObject, Directive, Item, LifecycleConfig, NotificationConfig,
-    NotificationRecords, ObjectLockConfig, Part, ReplicationConfig, RetentionMode, SseConfig, Quota
+    NotificationRecords, ObjectLockConfig, Part, Quota, ReplicationConfig, RetentionMode,
+    SseConfig,
 };
 use crate::s3::utils::{
     from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash, merge, sha256_hash,
@@ -351,12 +352,18 @@ impl<'a> Client<'a> {
         if !body.is_empty() {
             return match header_map.get("Content-Type") {
                 Some(v) => match v.to_str() {
-                    Ok(s) => match s.to_lowercase().contains("application/xml") {
-                        true => match ErrorResponse::parse(body) {
+                    Ok(s) => match s.to_lowercase() {
+                        _ if s.contains("application/xml") => match ErrorResponse::parse(body) {
                             Ok(v) => Error::S3Error(v),
                             Err(e) => e,
                         },
-                        false => Error::InvalidResponse(status_code, s.to_string()),
+                        _ if s.contains("application/json") => {
+                            match ErrorResponse::parse_json(body) {
+                                Ok(v) => Error::S3Error(v),
+                                Err(e) => e,
+                            }
+                        }
+                        _ => Error::InvalidResponse(status_code, s.to_string()),
                     },
                     Err(e) => return Error::StrError(e),
                 },
@@ -2342,11 +2349,10 @@ impl<'a> Client<'a> {
         })
     }
 
-    pub async fn get_bucket_quota(
+    pub async fn set_bucket_quota(
         &self,
-        args: &GetBucketQuotaArgs<'_>,
-    ) -> Result<GetBucketQuotaResponse, Error> {
-
+        args: &SetBucketQuotaArgs<'_>,
+    ) -> Result<SetBucketQuotaResponse, Error> {
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
             merge(&mut headers, v);
@@ -2354,19 +2360,57 @@ impl<'a> Client<'a> {
         let mut query_params = Multimap::new();
         query_params.insert("bucket".into(), args.bucket_name.clone());
 
-        let resp = self.execute(
-            Method::GET,
-            &"us-east-1".into(),
-            &mut headers,
-            &query_params,
-            "minio/admin/v3/get-bucket-quota".into(),
-            None,
-            None,
-        ).await?;
+        let mut query_params = Multimap::new();
+        query_params.insert("bucket".into(), args.bucket_name.clone());
+
+        let data = serde_json::to_string(&args.quota)?;
+
+        let resp = self
+            .execute(
+                Method::PUT,
+                &"us-east-1".into(),
+                &mut headers,
+                &query_params,
+                "minio/admin/v3/set-bucket-quota".into(),
+                None,
+                Some(data.as_bytes()),
+            )
+            .await?;
+
+        let headers = resp.headers().clone();
+
+        Ok(SetBucketQuotaResponse {
+            headers,
+            bucket_name: args.bucket_name.clone(),
+        })
+    }
+
+    pub async fn get_bucket_quota(
+        &self,
+        args: &GetBucketQuotaArgs<'_>,
+    ) -> Result<GetBucketQuotaResponse, Error> {
+        let mut headers = Multimap::new();
+        if let Some(v) = &args.extra_headers {
+            merge(&mut headers, v);
+        }
+        let mut query_params = Multimap::new();
+        query_params.insert("bucket".into(), args.bucket_name.clone());
+
+        let resp = self
+            .execute(
+                Method::GET,
+                &"us-east-1".into(),
+                &mut headers,
+                &query_params,
+                "minio/admin/v3/get-bucket-quota".into(),
+                None,
+                None,
+            )
+            .await?;
 
         let headers = resp.headers().clone();
         let body = resp.bytes().await.unwrap().to_vec();
-        let quota : Quota = serde_json::from_str(&String::from_utf8(body).unwrap())?;
+        let quota: Quota = serde_json::from_str(&String::from_utf8(body).unwrap())?;
 
         Ok(GetBucketQuotaResponse {
             headers,
