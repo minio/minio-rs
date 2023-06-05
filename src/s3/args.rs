@@ -275,7 +275,7 @@ impl<'a> ListBucketsArgs<'a> {
 #[derive(Clone, Debug, Default)]
 pub struct GetBucketQuotaArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
-    pub bucket_name: String,
+    pub bucket_name: &'a str,
 }
 
 impl<'a> GetBucketQuotaArgs<'a> {
@@ -284,11 +284,11 @@ impl<'a> GetBucketQuotaArgs<'a> {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct SetBucketQuotaArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
-    pub bucket_name: String,
-    pub quota: Quota,
+    pub bucket_name: &'a str,
+    pub quota: &'a Quota,
 }
 
 #[derive(Clone, Debug, Default)]
