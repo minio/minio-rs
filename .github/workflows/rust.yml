@@ -22,10 +22,10 @@ jobs:
           cargo fmt --all -- --check
 
       - run: rustup component add clippy
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-targets --all-features
+
+      # Do not use gh-actions/clippy cause of the
+      # https://github.com/dna2fork/tensorboard/commit/5d560de192ce2b73a05535fbc8ee8f2f0c4a2221
+      - run: cargo clippy --all-targets --all-features
 
       - name: Run tests
         run: |
