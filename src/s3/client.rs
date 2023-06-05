@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::result_large_err)]
+
 use crate::s3::args::*;
 use crate::s3::creds::Provider;
 use crate::s3::error::{Error, ErrorResponse};
@@ -79,19 +81,18 @@ fn add_common_list_objects_query_params(
     }
 }
 
+pub type ParseCommonListObjectsResult = (
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    bool,
+    Option<u16>,
+);
+
 fn parse_common_list_objects_response(
     root: &Element,
-) -> Result<
-    (
-        String,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        bool,
-        Option<u16>,
-    ),
-    Error,
-> {
+) -> Result<ParseCommonListObjectsResult, Error> {
     let encoding_type = get_option_text(root, "EncodingType");
     let prefix = url_decode(&encoding_type, Some(get_default_text(root, "Prefix")))?;
     Ok((
@@ -117,12 +118,7 @@ fn parse_list_objects_contents(
     encoding_type: &Option<String>,
     is_delete_marker: bool,
 ) -> Result<(), Error> {
-    loop {
-        let content = match root.take_child(tag) {
-            Some(v) => v,
-            None => break,
-        };
-
+    if let Some(content) = root.take_child(tag) {
         let etype = encoding_type.as_ref().cloned();
         let key = url_decode(&etype, Some(get_text(&content, "Key")?))?.unwrap();
         let last_modified = Some(from_iso8601utc(&get_text(&content, "LastModified")?)?);
@@ -181,12 +177,7 @@ fn parse_list_objects_common_prefixes(
     root: &mut Element,
     encoding_type: &Option<String>,
 ) -> Result<(), Error> {
-    loop {
-        let common_prefix = match root.take_child("CommonPrefixes") {
-            Some(v) => v,
-            None => break,
-        };
-
+    if let Some(common_prefix) = root.take_child("CommonPrefixes") {
         contents.push(Item {
             name: url_decode(encoding_type, Some(get_text(&common_prefix, "Prefix")?))?.unwrap(),
             last_modified: None,
@@ -237,7 +228,7 @@ impl<'a> Client<'a> {
         &self,
         headers: &mut Multimap,
         query_params: &Multimap,
-        region: &String,
+        region: &str,
         url: &Url,
         method: &Method,
         data: &[u8],
@@ -344,6 +335,8 @@ impl<'a> Client<'a> {
         Ok((code, message))
     }
 
+    // @XXX Needs a redesing
+    #[allow(clippy::too_many_arguments)]
     fn get_error_response(
         &self,
         body: &mut Bytes,
@@ -447,6 +440,8 @@ impl<'a> Client<'a> {
         })
     }
 
+    // @XXX Needs a redesing
+    #[allow(clippy::too_many_arguments)]
     pub async fn do_execute(
         &self,
         method: Method,
@@ -522,6 +517,8 @@ impl<'a> Client<'a> {
         Err(e)
     }
 
+    // @XXX Needs a redesing
+    #[allow(clippy::too_many_arguments)]
     pub async fn execute(
         &self,
         method: Method,
@@ -1887,11 +1884,9 @@ impl<'a> Client<'a> {
                     .get_mut_child("TagSet")
                     .ok_or(Error::XmlError("<TagSet> tag not found".to_string()))?;
                 let mut tags = std::collections::HashMap::new();
-                loop {
-                    match element.take_child("Tag") {
-                        Some(v) => tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?),
-                        _ => break,
-                    };
+
+                while let Some(v) = element.take_child("Tag") {
+                    tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
                 }
 
                 Ok(GetBucketTagsResponse {
@@ -2147,11 +2142,9 @@ impl<'a> Client<'a> {
             .get_mut_child("TagSet")
             .ok_or(Error::XmlError("<TagSet> tag not found".to_string()))?;
         let mut tags = std::collections::HashMap::new();
-        loop {
-            match element.take_child("Tag") {
-                Some(v) => tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?),
-                _ => break,
-            };
+
+        while let Some(v) = element.take_child("Tag") {
+            tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
         }
 
         return Ok(GetObjectTagsResponse {
@@ -2336,12 +2329,7 @@ impl<'a> Client<'a> {
             .ok_or(Error::XmlError(String::from("<Buckets> tag not found")))?;
 
         let mut bucket_list: Vec<Bucket> = Vec::new();
-        loop {
-            let bucket = match buckets.take_child("Bucket") {
-                Some(b) => b,
-                None => break,
-            };
-
+        while let Some(bucket) = buckets.take_child("Bucket") {
             bucket_list.push(Bucket {
                 name: get_text(&bucket, "Name")?,
                 creation_date: from_iso8601utc(&get_text(&bucket, "CreationDate")?)?,
@@ -2421,8 +2409,9 @@ impl<'a> Client<'a> {
                 match buf.iter().position(|&v| v == b'\n') {
                     Some(i) => {
                         let mut data = vec![0_u8; i + 1];
-                        for j in 0..=i {
-                            data[j] = buf.pop_front().ok_or(Error::InsufficientData(i, j))?;
+                        // Iterate over data, get it's values and indexes
+                        for (j, item) in data.iter_mut().enumerate().take(i + 1) {
+                            *item = buf.pop_front().ok_or(Error::InsufficientData(i, j))?;
                         }
                         let mut line = String::from_utf8(data)?;
                         line = line.trim().to_string();
@@ -3171,12 +3160,8 @@ impl<'a> Client<'a> {
         let mut root = Element::parse(body.reader())?;
 
         let mut objects: Vec<DeletedObject> = Vec::new();
-        loop {
-            let deleted = match root.take_child("Deleted") {
-                Some(v) => v,
-                None => break,
-            };
 
+        while let Some(deleted) = root.take_child("Deleted") {
             objects.push(DeletedObject {
                 name: get_text(&deleted, "Key")?,
                 version_id: get_option_text(&deleted, "VersionId"),
@@ -3186,12 +3171,7 @@ impl<'a> Client<'a> {
         }
 
         let mut errors: Vec<DeleteError> = Vec::new();
-        loop {
-            let error = match root.take_child("Error") {
-                Some(v) => v,
-                None => break,
-            };
-
+        while let Some(error) = root.take_child("Error") {
             errors.push(DeleteError {
                 code: get_text(&error, "Code")?,
                 message: get_text(&error, "Message")?,

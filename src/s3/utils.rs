@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::result_large_err)]
+
 use crate::s3::error::Error;
 use byteorder::{BigEndian, ReadBytesExt};
 use chrono::{DateTime, Datelike, NaiveDateTime, ParseError, Utc};

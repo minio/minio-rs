@@ -149,6 +149,12 @@ impl SseS3 {
     }
 }
 
+impl Default for SseS3 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Sse for SseS3 {
     fn headers(&self) -> utils::Multimap {
         self.headers.clone()

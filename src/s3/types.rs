@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::result_large_err)]
+
 use crate::s3::error::Error;
 use crate::s3::utils::{
     from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc, UtcTime,
@@ -1062,27 +1064,23 @@ impl LifecycleConfig {
     }
 }
 
+pub type ParseCommonNotificationResult = (
+    Vec<String>,
+    Option<String>,
+    Option<PrefixFilterRule>,
+    Option<SuffixFilterRule>,
+);
+
 fn parse_common_notification_config(
     element: &mut Element,
-) -> Result<
-    (
-        Vec<String>,
-        Option<String>,
-        Option<PrefixFilterRule>,
-        Option<SuffixFilterRule>,
-    ),
-    Error,
-> {
+) -> Result<ParseCommonNotificationResult, Error> {
     let mut events = Vec::new();
-    loop {
-        match element.take_child("Event") {
-            Some(v) => events.push(
-                v.get_text()
-                    .ok_or(Error::XmlError("text of <Event> tag not found".to_string()))?
-                    .to_string(),
-            ),
-            _ => break,
-        }
+    while let Some(v) = element.take_child("Event") {
+        events.push(
+            v.get_text()
+                .ok_or(Error::XmlError("text of <Event> tag not found".to_string()))?
+                .to_string(),
+        )
     }
 
     let id = get_option_text(element, "Id");
@@ -1341,33 +1339,24 @@ impl NotificationConfig {
         };
 
         let mut cloud_func_config_list = Vec::new();
-        loop {
-            match root.take_child("CloudFunctionConfiguration") {
-                Some(mut v) => cloud_func_config_list.push(CloudFuncConfig::from_xml(&mut v)?),
-                _ => break,
-            }
+        while let Some(mut v) = root.take_child("CloudFunctionConfiguration") {
+            cloud_func_config_list.push(CloudFuncConfig::from_xml(&mut v)?)
         }
         if !cloud_func_config_list.is_empty() {
             config.cloud_func_config_list = Some(cloud_func_config_list);
         }
 
         let mut queue_config_list = Vec::new();
-        loop {
-            match root.take_child("QueueConfiguration") {
-                Some(mut v) => queue_config_list.push(QueueConfig::from_xml(&mut v)?),
-                _ => break,
-            }
+        while let Some(mut v) = root.take_child("QueueConfiguration") {
+            queue_config_list.push(QueueConfig::from_xml(&mut v)?)
         }
         if !queue_config_list.is_empty() {
             config.queue_config_list = Some(queue_config_list);
         }
 
         let mut topic_config_list = Vec::new();
-        loop {
-            match root.take_child("TopicConfiguration") {
-                Some(mut v) => topic_config_list.push(TopicConfig::from_xml(&mut v)?),
-                _ => break,
-            }
+        while let Some(mut v) = root.take_child("TopicConfiguration") {
+            topic_config_list.push(TopicConfig::from_xml(&mut v)?)
         }
         if !topic_config_list.is_empty() {
             config.topic_config_list = Some(topic_config_list);
@@ -1434,6 +1423,12 @@ impl AccessControlTranslation {
         AccessControlTranslation {
             owner: String::from("Destination"),
         }
+    }
+}
+
+impl Default for AccessControlTranslation {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

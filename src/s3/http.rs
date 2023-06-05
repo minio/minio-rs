@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::result_large_err)]
+
 use crate::s3::error::Error;
 use crate::s3::utils::{to_query_string, Multimap};
 use derivative::Derivative;
@@ -118,11 +120,13 @@ impl BaseUrl {
             )));
         }
 
-        let mut url = Url::default();
-        url.https = self.https;
-        url.host = self.host.clone();
-        url.port = self.port;
-        url.query = query.clone();
+        let mut url = Url {
+            https: self.https,
+            host: self.host.clone(),
+            port: self.port,
+            query: query.clone(),
+            ..Default::default()
+        };
 
         if bucket_name.is_none() {
             url.path.push('/');
@@ -134,7 +138,7 @@ impl BaseUrl {
 
         let bucket = bucket_name.unwrap();
 
-        let enforce_path_style = true &&
+        let enforce_path_style =
 	// CreateBucket API requires path style in Amazon AWS S3.
 	    (method == Method::PUT && object_name.is_none() && query.is_empty()) ||
 	// GetBucketLocation API requires path style in Amazon AWS S3.
@@ -174,12 +178,12 @@ impl BaseUrl {
             url.host = format!("{}.{}", bucket, url.host);
         }
 
-        if object_name.is_some() {
-            if !object_name.unwrap().starts_with('/') {
+        if let Some(unwrapped_object_name) = object_name {
+            if !unwrapped_object_name.starts_with('/') {
                 url.path.push('/');
             }
             // FIXME: urlencode path
-            url.path.push_str(object_name.unwrap());
+            url.path.push_str(unwrapped_object_name);
         }
 
         Ok(url)

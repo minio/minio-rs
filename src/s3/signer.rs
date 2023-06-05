@@ -103,6 +103,8 @@ pub fn get_authorization(
     )
 }
 
+// @XXX Needs a redesing
+#[allow(clippy::too_many_arguments)]
 pub fn sign_v4(
     service_name: &str,
     method: &Method,
@@ -134,6 +136,8 @@ pub fn sign_v4(
     headers.insert("Authorization".to_string(), authorization);
 }
 
+// @XXX Needs a redesing
+#[allow(clippy::too_many_arguments)]
 pub fn sign_v4_s3(
     method: &Method,
     uri: &str,
@@ -159,6 +163,8 @@ pub fn sign_v4_s3(
     )
 }
 
+// @XXX Needs a redesing
+#[allow(clippy::too_many_arguments)]
 pub fn sign_v4_sts(
     method: &Method,
     uri: &str,
@@ -184,6 +190,8 @@ pub fn sign_v4_sts(
     )
 }
 
+// @XXX Needs a redesing
+#[allow(clippy::too_many_arguments)]
 pub fn presign_v4(
     method: &Method,
     host: &str,
