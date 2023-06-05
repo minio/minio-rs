@@ -30,8 +30,8 @@ use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::{
     CsvInputSerialization, CsvOutputSerialization, DeleteObject, FileHeaderInfo,
-    NotificationConfig, ObjectLockConfig, PrefixFilterRule, QueueConfig, QuoteFields,
-    RetentionMode, SelectRequest, SuffixFilterRule,
+    NotificationConfig, ObjectLockConfig, PrefixFilterRule, QueueConfig, Quota, QuotaType,
+    QuoteFields, RetentionMode, SelectRequest, SuffixFilterRule,
 };
 use minio::s3::utils::{to_iso8601utc, utc_now};
 
@@ -1164,13 +1164,66 @@ impl<'a> ClientTest<'_> {
         assert_eq!(form_data.contains_key("policy"), true);
     }
 
-    async fn get_bucket_quota(&self) {
+    async fn set_get_bucket_quota(&self) {
+        let non_existent_bucket = "this_bucket_does_not_exist_asdfasd";
 
-        self.client.get_bucket_quota(&GetBucketQuotaArgs {
-            extra_headers: None,
-            bucket_name: "test".into(),
-        }).await.unwrap();
-        
+        match self
+            .client
+            .set_bucket_quota(&SetBucketQuotaArgs {
+                extra_headers: None,
+                bucket_name: non_existent_bucket.into(),
+                quota: Quota {
+                    quota: minio::s3::types::Byte::from_bytes(5000000),
+                    quotatype: Some(QuotaType::Hard),
+                },
+            })
+            .await
+            .unwrap_err()
+        {
+            minio::s3::error::Error::S3Error(e) => {
+                assert_eq!(e.code, "NoSuchBucket");
+                assert_eq!(e.resource, "/minio/admin/v3/set-bucket-quota");
+                assert_eq!(e.bucket_name, non_existent_bucket);
+            }
+            _ => {
+                assert!(false)
+            }
+        }
+
+        assert_eq!(
+            self.client
+                .set_bucket_quota(&SetBucketQuotaArgs {
+                    extra_headers: None,
+                    bucket_name: self.test_bucket.clone(),
+                    quota: Quota {
+                        quota: minio::s3::types::Byte::from_str("5G").unwrap(),
+                        quotatype: Some(QuotaType::Hard)
+                    }
+                })
+                .await
+                .unwrap()
+                .bucket_name,
+            self.test_bucket
+        );
+
+        match self
+            .client
+            .get_bucket_quota(&GetBucketQuotaArgs {
+                extra_headers: None,
+                bucket_name: self.test_bucket.clone(),
+            })
+            .await
+        {
+            Ok(x) => {
+                assert_eq!(x.bucket_name, self.test_bucket);
+                assert_eq!(
+                    x.quota.quota,
+                    minio::s3::types::Byte::from_str("5G").unwrap()
+                );
+                assert_eq!(x.quota.quotatype, Some(QuotaType::Hard));
+            }
+            Err(_) => assert!(false),
+        }
     }
 }
 
@@ -1180,13 +1233,13 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let host = std::env::var("SERVER_ENDPOINT")?;
     let access_key = std::env::var("ACCESS_KEY")?;
     let secret_key = std::env::var("SECRET_KEY")?;
-    let secure = !["no", "false", "0"].into_iter().any(|x| {
-        std::env::var("ENABLE_HTTPS").unwrap_or("no".into()) == x
-    });
+    let secure = !["no", "false", "0"]
+        .into_iter()
+        .any(|x| std::env::var("ENABLE_HTTPS").unwrap_or("no".into()) == x);
     let ssl_cert_file = std::env::var("SSL_CERT_FILE")?;
-    let ignore_cert_check = !["no", "false", "0"].into_iter().any(|x| {
-        std::env::var("IGNORE_CERT_CHECK").unwrap_or("no".into()) == x
-    });
+    let ignore_cert_check = !["no", "false", "0"]
+        .into_iter()
+        .any(|x| std::env::var("IGNORE_CERT_CHECK").unwrap_or("no".into()) == x);
     let region = std::env::var("SERVER_REGION").ok();
 
     let mut base_url = BaseUrl::from_string(host).unwrap();
@@ -1270,7 +1323,7 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     ctest.get_presigned_post_form_data().await;
 
     println!("get_bucket_quota()");
-    ctest.get_bucket_quota().await;
+    ctest.set_get_bucket_quota().await;
 
     ctest.drop().await;
 
