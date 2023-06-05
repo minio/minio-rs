@@ -17,7 +17,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{
-    parse_legal_hold, Bucket, Item, LifecycleConfig, NotificationConfig, ObjectLockConfig, Quota,
+    parse_legal_hold, Bucket, Item, LifecycleConfig, NotificationConfig, ObjectLockConfig,
     ReplicationConfig, RetentionMode, SelectProgress, SseConfig,
 };
 use crate::s3::utils::{
@@ -781,17 +781,4 @@ pub struct DownloadObjectResponse {
     pub bucket_name: String,
     pub object_name: String,
     pub version_id: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub struct GetBucketQuotaResponse {
-    pub headers: HeaderMap,
-    pub bucket_name: String,
-    pub quota: Quota,
-}
-
-#[derive(Clone, Debug)]
-pub struct SetBucketQuotaResponse {
-    pub headers: HeaderMap,
-    pub bucket_name: String,
 }

@@ -24,14 +24,16 @@ use std::io::BufReader;
 use std::{fs, io};
 use tokio::sync::mpsc;
 
+use minio::admin::args::*;
+use minio::admin::types::{Quota, QuotaType};
 use minio::s3::args::*;
 use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::{
     CsvInputSerialization, CsvOutputSerialization, DeleteObject, FileHeaderInfo,
-    NotificationConfig, ObjectLockConfig, PrefixFilterRule, QueueConfig, Quota, QuotaType,
-    QuoteFields, RetentionMode, SelectRequest, SuffixFilterRule,
+    NotificationConfig, ObjectLockConfig, PrefixFilterRule, QueueConfig, QuoteFields,
+    RetentionMode, SelectRequest, SuffixFilterRule,
 };
 use minio::s3::utils::{to_iso8601utc, utc_now};
 
@@ -1123,13 +1125,16 @@ impl<'a> ClientTest<'_> {
     async fn set_get_bucket_quota(&self) {
         let non_existent_bucket = "this_bucket_does_not_exist_asdfasd";
 
-        match self
-            .client
+        let client = minio::admin::AdminClient {
+            client: &self.client,
+        };
+
+        match client
             .set_bucket_quota(&SetBucketQuotaArgs {
                 extra_headers: None,
                 bucket_name: non_existent_bucket,
                 quota: &Quota {
-                    quota: minio::s3::types::Byte::from_bytes(5000000),
+                    quota: minio::admin::types::Byte::from_bytes(5000000),
                     quotatype: Some(QuotaType::Hard),
                 },
             })
@@ -1147,7 +1152,7 @@ impl<'a> ClientTest<'_> {
         }
 
         assert_eq!(
-            self.client
+            client
                 .set_bucket_quota(&SetBucketQuotaArgs {
                     extra_headers: None,
                     bucket_name: &self.test_bucket,
@@ -1162,8 +1167,7 @@ impl<'a> ClientTest<'_> {
             self.test_bucket
         );
 
-        let result = self
-            .client
+        let result = client
             .get_bucket_quota(&GetBucketQuotaArgs {
                 extra_headers: None,
                 bucket_name: &self.test_bucket,

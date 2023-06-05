@@ -24,8 +24,7 @@ use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
 use crate::s3::types::{
     Bucket, DeleteObject, Directive, Item, LifecycleConfig, NotificationConfig,
-    NotificationRecords, ObjectLockConfig, Part, Quota, ReplicationConfig, RetentionMode,
-    SseConfig,
+    NotificationRecords, ObjectLockConfig, Part, ReplicationConfig, RetentionMode, SseConfig,
 };
 use crate::s3::utils::{
     from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash, merge, sha256_hash,
@@ -2346,76 +2345,6 @@ impl<'a> Client<'a> {
         Ok(ListBucketsResponse {
             headers: header_map.clone(),
             buckets: bucket_list,
-        })
-    }
-
-    pub async fn set_bucket_quota(
-        &self,
-        args: &SetBucketQuotaArgs<'_>,
-    ) -> Result<SetBucketQuotaResponse, Error> {
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        let mut query_params = Multimap::new();
-        query_params.insert("bucket".into(), args.bucket_name.into());
-
-        let mut query_params = Multimap::new();
-        query_params.insert("bucket".into(), args.bucket_name.into());
-
-        let data = serde_json::to_string(&args.quota)?;
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &"us-east-1".into(),
-                &mut headers,
-                &query_params,
-                "minio/admin/v3/set-bucket-quota".into(),
-                None,
-                Some(data.as_bytes()),
-            )
-            .await?;
-
-        let headers = resp.headers().clone();
-
-        Ok(SetBucketQuotaResponse {
-            headers,
-            bucket_name: args.bucket_name.into(),
-        })
-    }
-
-    pub async fn get_bucket_quota(
-        &self,
-        args: &GetBucketQuotaArgs<'_>,
-    ) -> Result<GetBucketQuotaResponse, Error> {
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        let mut query_params = Multimap::new();
-        query_params.insert("bucket".into(), args.bucket_name.into());
-
-        let resp = self
-            .execute(
-                Method::GET,
-                &"us-east-1".into(),
-                &mut headers,
-                &query_params,
-                "minio/admin/v3/get-bucket-quota".into(),
-                None,
-                None,
-            )
-            .await?;
-
-        let headers = resp.headers().clone();
-        let body = resp.bytes().await.unwrap().to_vec();
-        let quota: Quota = serde_json::from_str(&String::from_utf8(body).unwrap())?;
-
-        Ok(GetBucketQuotaResponse {
-            headers,
-            bucket_name: args.bucket_name.into(),
-            quota,
         })
     }
 

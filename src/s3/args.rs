@@ -20,8 +20,7 @@ use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{
     DeleteObject, Directive, Item, LifecycleConfig, NotificationConfig, NotificationRecords,
-    ObjectLockConfig, Part, Quota, ReplicationConfig, Retention, RetentionMode, SelectRequest,
-    SseConfig,
+    ObjectLockConfig, Part, ReplicationConfig, Retention, RetentionMode, SelectRequest, SseConfig,
 };
 use crate::s3::utils::{
     b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value, to_iso8601utc,
@@ -272,25 +271,6 @@ impl<'a> ListBucketsArgs<'a> {
     pub fn new() -> ListBucketsArgs<'a> {
         ListBucketsArgs::default()
     }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct GetBucketQuotaArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub bucket_name: &'a str,
-}
-
-impl<'a> GetBucketQuotaArgs<'a> {
-    pub fn new() -> GetBucketQuotaArgs<'a> {
-        GetBucketQuotaArgs::default()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct SetBucketQuotaArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub bucket_name: &'a str,
-    pub quota: &'a Quota,
 }
 
 #[derive(Clone, Debug, Default)]
