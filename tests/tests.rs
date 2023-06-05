@@ -1119,6 +1119,15 @@ impl<'a> ClientTest<'_> {
         assert!(form_data.contains_key("x-amz-signature"));
         assert!(form_data.contains_key("policy"));
     }
+
+    async fn get_bucket_quota(&self) {
+
+        self.client.get_bucket_quota(&GetBucketQuotaArgs {
+            extra_headers: None,
+            bucket_name: "test".into(),
+        }).await.unwrap();
+        
+    }
 }
 
 #[tokio::main]
@@ -1127,13 +1136,13 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let host = std::env::var("SERVER_ENDPOINT")?;
     let access_key = std::env::var("ACCESS_KEY")?;
     let secret_key = std::env::var("SECRET_KEY")?;
-    let secure = !["no", "false", "0"]
-        .into_iter()
-        .any(|x| std::env::var("ENABLE_HTTPS").unwrap_or("no".into()) == x);
+    let secure = !["no", "false", "0"].into_iter().any(|x| {
+        std::env::var("ENABLE_HTTPS").unwrap_or("no".into()) == x
+    });
     let ssl_cert_file = std::env::var("SSL_CERT_FILE")?;
-    let ignore_cert_check = !["no", "false", "0"]
-        .into_iter()
-        .any(|x| std::env::var("IGNORE_CERT_CHECK").unwrap_or("no".into()) == x);
+    let ignore_cert_check = !["no", "false", "0"].into_iter().any(|x| {
+        std::env::var("IGNORE_CERT_CHECK").unwrap_or("no".into()) == x
+    });
     let region = std::env::var("SERVER_REGION").ok();
 
     let mut base_url = BaseUrl::from_string(host).unwrap();
@@ -1215,6 +1224,9 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     println!("get_presigned_post_form_data()");
     ctest.get_presigned_post_form_data().await;
+
+    println!("get_bucket_quota()");
+    ctest.get_bucket_quota().await;
 
     ctest.drop().await;
 

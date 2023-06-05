@@ -1871,3 +1871,18 @@ impl ObjectLockConfig {
         data
     }
 }
+
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all="lowercase")]
+pub enum QuotaType {
+    Soft,
+    Hard
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Quota {
+    pub quota: u32,
+
+    pub quotatype: Option<QuotaType>
+}

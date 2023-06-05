@@ -6,6 +6,18 @@ test-docker-compose-nextest:
 	cd ./tests && docker-compose down && docker-compose up -d
 	source ./.test.env && cargo nextest run --release
 
+# Useful for wireshark and similar
+test-dc-no-certs:
+	cd ./tests && docker-compose down && docker-compose \
+		-f docker-compose.yml \
+		-f docker-compose.http.yml \
+		up -d
+
+# Useful for wireshark and similar
+# DOES NOT START DOCKER CONTAINER (keeping same network interface)
+test-with-network-diagnostic:
+	source ./.test.env && export ENABLE_HTTPS=false && cargo test --release
+
 test-manual:
 	./tests/start-server.sh \
 		export SERVER_ENDPOINT=localhost:9000 \

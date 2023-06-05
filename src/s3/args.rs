@@ -274,6 +274,18 @@ impl<'a> ListBucketsArgs<'a> {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct GetBucketQuotaArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub bucket_name: String
+}
+
+impl<'a> GetBucketQuotaArgs <'a> {
+    pub fn new() -> GetBucketQuotaArgs<'a> {
+        GetBucketQuotaArgs::default()
+    }
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct AbortMultipartUploadArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
