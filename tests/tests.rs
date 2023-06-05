@@ -1127,9 +1127,13 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let host = std::env::var("SERVER_ENDPOINT")?;
     let access_key = std::env::var("ACCESS_KEY")?;
     let secret_key = std::env::var("SECRET_KEY")?;
-    let secure = std::env::var("ENABLE_HTTPS").is_ok();
+    let secure = !["no", "false", "0"]
+        .into_iter()
+        .any(|x| std::env::var("ENABLE_HTTPS").unwrap_or("no".into()) == x);
     let ssl_cert_file = std::env::var("SSL_CERT_FILE")?;
-    let ignore_cert_check = std::env::var("IGNORE_CERT_CHECK").is_ok();
+    let ignore_cert_check = !["no", "false", "0"]
+        .into_iter()
+        .any(|x| std::env::var("IGNORE_CERT_CHECK").unwrap_or("no".into()) == x);
     let region = std::env::var("SERVER_REGION").ok();
 
     let mut base_url = BaseUrl::from_string(host).unwrap();
