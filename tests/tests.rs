@@ -1142,7 +1142,7 @@ impl<'a> ClientTest<'_> {
                 assert_eq!(e.bucket_name, non_existent_bucket);
             }
             _ => {
-                assert!(false)
+                panic!("Should be a S3Error");
             }
         }
 
@@ -1162,24 +1162,20 @@ impl<'a> ClientTest<'_> {
             self.test_bucket
         );
 
-        match self
+        let result = self
             .client
             .get_bucket_quota(&GetBucketQuotaArgs {
                 extra_headers: None,
                 bucket_name: &self.test_bucket,
             })
             .await
-        {
-            Ok(x) => {
-                assert_eq!(x.bucket_name, self.test_bucket);
-                assert_eq!(
-                    x.quota.quota,
-                    minio::s3::types::Byte::from_str("5G").unwrap()
-                );
-                assert_eq!(x.quota.quotatype, Some(QuotaType::Hard));
-            }
-            Err(_) => assert!(false),
-        }
+            .unwrap();
+        assert_eq!(result.bucket_name, self.test_bucket);
+        assert_eq!(
+            result.quota.quota,
+            minio::s3::types::Byte::from_str("5G").unwrap()
+        );
+        assert_eq!(result.quota.quotatype, Some(QuotaType::Hard));
     }
 }
 
