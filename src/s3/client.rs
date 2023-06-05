@@ -2358,10 +2358,10 @@ impl<'a> Client<'a> {
             merge(&mut headers, v);
         }
         let mut query_params = Multimap::new();
-        query_params.insert("bucket".into(), args.bucket_name.clone());
+        query_params.insert("bucket".into(), args.bucket_name.into());
 
         let mut query_params = Multimap::new();
-        query_params.insert("bucket".into(), args.bucket_name.clone());
+        query_params.insert("bucket".into(), args.bucket_name.into());
 
         let data = serde_json::to_string(&args.quota)?;
 
@@ -2381,7 +2381,7 @@ impl<'a> Client<'a> {
 
         Ok(SetBucketQuotaResponse {
             headers,
-            bucket_name: args.bucket_name.clone(),
+            bucket_name: args.bucket_name.into(),
         })
     }
 
@@ -2394,7 +2394,7 @@ impl<'a> Client<'a> {
             merge(&mut headers, v);
         }
         let mut query_params = Multimap::new();
-        query_params.insert("bucket".into(), args.bucket_name.clone());
+        query_params.insert("bucket".into(), args.bucket_name.into());
 
         let resp = self
             .execute(
@@ -2414,7 +2414,7 @@ impl<'a> Client<'a> {
 
         Ok(GetBucketQuotaResponse {
             headers,
-            bucket_name: args.bucket_name.clone(),
+            bucket_name: args.bucket_name.into(),
             quota,
         })
     }

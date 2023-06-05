@@ -1127,8 +1127,8 @@ impl<'a> ClientTest<'_> {
             .client
             .set_bucket_quota(&SetBucketQuotaArgs {
                 extra_headers: None,
-                bucket_name: non_existent_bucket.into(),
-                quota: Quota {
+                bucket_name: non_existent_bucket,
+                quota: &Quota {
                     quota: minio::s3::types::Byte::from_bytes(5000000),
                     quotatype: Some(QuotaType::Hard),
                 },
@@ -1150,8 +1150,8 @@ impl<'a> ClientTest<'_> {
             self.client
                 .set_bucket_quota(&SetBucketQuotaArgs {
                     extra_headers: None,
-                    bucket_name: self.test_bucket.clone(),
-                    quota: Quota {
+                    bucket_name: &self.test_bucket,
+                    quota: &Quota {
                         quota: minio::s3::types::Byte::from_str("5G").unwrap(),
                         quotatype: Some(QuotaType::Hard)
                     }
@@ -1166,7 +1166,7 @@ impl<'a> ClientTest<'_> {
             .client
             .get_bucket_quota(&GetBucketQuotaArgs {
                 extra_headers: None,
-                bucket_name: self.test_bucket.clone(),
+                bucket_name: &self.test_bucket,
             })
             .await
         {
