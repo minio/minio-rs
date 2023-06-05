@@ -21,6 +21,11 @@ jobs:
         cargo build --verbose
         cargo fmt --all -- --check
 
+    - uses: actions-rs/clippy-check@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        args: --all-targets --all-features -D
+
     - name: Run tests
       run: |
         ./tests/start-server.sh
