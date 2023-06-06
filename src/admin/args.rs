@@ -19,3 +19,10 @@ pub struct SetBucketQuotaArgs<'a> {
     pub bucket_name: &'a str,
     pub quota: &'a Quota,
 }
+
+#[derive(Clone, Debug, Default)]
+pub struct AddUserArgs<'a> {
+    pub extra_headers: Option<&'a Multimap>,
+    pub access_key: &'a str,
+    pub secret_key: &'a str,
+}

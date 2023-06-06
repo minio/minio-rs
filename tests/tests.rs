@@ -26,6 +26,7 @@ use tokio::sync::mpsc;
 
 use minio::admin::args::*;
 use minio::admin::types::{Quota, QuotaType};
+use minio::admin::AdminClient;
 use minio::s3::args::*;
 use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
@@ -1125,7 +1126,7 @@ impl<'a> ClientTest<'_> {
     async fn set_get_bucket_quota(&self) {
         let non_existent_bucket = "this_bucket_does_not_exist_asdfasd";
 
-        let client = minio::admin::AdminClient {
+        let client = AdminClient {
             client: &self.client,
         };
 
@@ -1180,6 +1181,24 @@ impl<'a> ClientTest<'_> {
             minio::s3::types::Byte::from_str("5G").unwrap()
         );
         assert_eq!(result.quota.quotatype, Some(QuotaType::Hard));
+    }
+
+    async fn add_delete_user(&self) {
+        let client = AdminClient {
+            client: &self.client,
+        };
+
+        let access_key = "beniamin";
+        let secret_key = "beniamin_franklin123";
+
+        assert!(client
+            .add_user(&AddUserArgs {
+                extra_headers: None,
+                access_key,
+                secret_key,
+            })
+            .await
+            .is_ok());
     }
 }
 
@@ -1278,8 +1297,12 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("get_presigned_post_form_data()");
     ctest.get_presigned_post_form_data().await;
 
+    println!("-------------- Admin Client --------------");
     println!("get_bucket_quota()");
     ctest.set_get_bucket_quota().await;
+
+    println!("add_delete_user()");
+    ctest.add_delete_user().await;
 
     ctest.drop().await;
 

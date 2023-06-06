@@ -8,6 +8,7 @@ use crate::s3::client::Client;
 use args::*;
 use error::Error;
 use hyper::http::Method;
+use rand::distributions::{Alphanumeric, DistString};
 use response::*;
 use types::Quota;
 use utils::{merge, Multimap};
@@ -87,5 +88,46 @@ impl<'a> AdminClient<'a> {
             headers,
             bucket_name: args.bucket_name.into(),
         })
+    }
+
+    // We are using argon2  insted of pbkdf2 or ChaCha20Poly130
+    pub async fn add_user(&self, args: &AddUserArgs<'_>) -> Result<AddUserResponse, Error> {
+        let mut headers = Multimap::new();
+        if let Some(v) = &args.extra_headers {
+            merge(&mut headers, v);
+        }
+
+        let mut query_params = Multimap::new();
+        query_params.insert("access_key".into(), args.access_key.into());
+
+        let argon_config = argon2::Config::default();
+        let salt = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+        let encrypted =
+            argon2::hash_encoded(args.secret_key.as_bytes(), salt.as_bytes(), &argon_config)
+                .unwrap();
+
+        let crypt_id = 0;
+
+        let resp = self
+            .client
+            .execute(
+                Method::PUT,
+                &"us-east-1".into(),
+                &mut headers,
+                &query_params,
+                "minio/admin/v3/add-user".into(),
+                None,
+                Some(encrypted.as_bytes()),
+            )
+            .await?;
+
+
+        let headers = resp.headers().clone();
+
+        Ok(AddUserResponse {
+            headers,
+            access_key: args.access_key.into(),
+        })
+
     }
 }

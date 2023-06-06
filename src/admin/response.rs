@@ -13,3 +13,9 @@ pub struct SetBucketQuotaResponse {
     pub headers: HeaderMap,
     pub bucket_name: String,
 }
+
+#[derive(Clone, Debug)]
+pub struct AddUserResponse {
+    pub headers: HeaderMap,
+    pub access_key: String,
+}
