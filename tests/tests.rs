@@ -1189,7 +1189,6 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("compose_object()");
     ctest.compose_object().await;
 
-    // bucket notification fail
     println!("{{set,get,delete}}_bucket_notification()");
     ctest.set_get_delete_bucket_notification().await;
 
