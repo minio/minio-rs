@@ -13,5 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod admin;
+/// Operations on s3 via http requests
 pub mod s3;
+
+/// Operations on minio admin via http requests
+#[cfg(feature = "admin")]
+pub mod admin;
+
+/// Operations on minio admin via command line (mc)
+#[cfg(feature = "admin-cli")]
+pub mod admin_cli;

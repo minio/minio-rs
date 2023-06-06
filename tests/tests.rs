@@ -24,9 +24,6 @@ use std::io::BufReader;
 use std::{fs, io};
 use tokio::sync::mpsc;
 
-use minio::admin::args::*;
-use minio::admin::types::{Quota, QuotaType};
-use minio::admin::AdminClient;
 use minio::s3::args::*;
 use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
@@ -37,6 +34,18 @@ use minio::s3::types::{
     RetentionMode, SelectRequest, SuffixFilterRule,
 };
 use minio::s3::utils::{to_iso8601utc, utc_now};
+
+#[cfg(feature = "admin")]
+use minio::admin::args as admin_args;
+
+#[cfg(feature = "admin")]
+use minio::admin::types::{Quota, QuotaType};
+
+#[cfg(feature = "admin")]
+use minio::admin::AdminClient;
+
+#[cfg(feature = "admin-cli")]
+use minio::admin_cli::{AdminCliClient, args as admin_cli_args};
 
 struct RandReader {
     size: usize,
@@ -1123,6 +1132,7 @@ impl<'a> ClientTest<'_> {
         assert!(form_data.contains_key("policy"));
     }
 
+    #[cfg(feature = "admin")]
     async fn set_get_bucket_quota(&self) {
         let non_existent_bucket = "this_bucket_does_not_exist_asdfasd";
 
@@ -1131,7 +1141,7 @@ impl<'a> ClientTest<'_> {
         };
 
         match client
-            .set_bucket_quota(&SetBucketQuotaArgs {
+            .set_bucket_quota(&admin_args::SetBucketQuotaArgs {
                 extra_headers: None,
                 bucket_name: non_existent_bucket,
                 quota: &Quota {
@@ -1154,7 +1164,7 @@ impl<'a> ClientTest<'_> {
 
         assert_eq!(
             client
-                .set_bucket_quota(&SetBucketQuotaArgs {
+                .set_bucket_quota(&admin_args::SetBucketQuotaArgs {
                     extra_headers: None,
                     bucket_name: &self.test_bucket,
                     quota: &Quota {
@@ -1169,7 +1179,7 @@ impl<'a> ClientTest<'_> {
         );
 
         let result = client
-            .get_bucket_quota(&GetBucketQuotaArgs {
+            .get_bucket_quota(&admin_args::GetBucketQuotaArgs {
                 extra_headers: None,
                 bucket_name: &self.test_bucket,
             })
@@ -1183,22 +1193,21 @@ impl<'a> ClientTest<'_> {
         assert_eq!(result.quota.quotatype, Some(QuotaType::Hard));
     }
 
-    async fn add_delete_user(&self) {
-        let client = AdminClient {
-            client: &self.client,
-        };
+    #[cfg(feature = "admin-cli")]
+    async fn add_delete_user_cli(&self, minio_cmd: &str) {
+        let mut client = AdminCliClient::try_from(&self.client).unwrap();
+        client.set_command(minio_cmd);
 
         let access_key = "beniamin";
         let secret_key = "beniamin_franklin123";
 
-        assert!(client
-            .add_user(&AddUserArgs {
-                extra_headers: None,
+        client
+            .add_user(&mut admin_cli_args::AddUserArgs {
                 access_key,
                 secret_key,
             })
-            .await
-            .is_ok());
+        .await
+        .unwrap();
     }
 }
 
@@ -1216,6 +1225,7 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .into_iter()
         .any(|x| std::env::var("IGNORE_CERT_CHECK").unwrap_or("no".into()) == x);
     let region = std::env::var("SERVER_REGION").ok();
+    let minio_cmd = std::env::var("MINIO_CMD").unwrap_or("mc".into());
 
     let mut base_url = BaseUrl::from_string(host).unwrap();
     base_url.https = secure;
@@ -1297,12 +1307,19 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("get_presigned_post_form_data()");
     ctest.get_presigned_post_form_data().await;
 
-    println!("-------------- Admin Client --------------");
-    println!("get_bucket_quota()");
-    ctest.set_get_bucket_quota().await;
+    #[cfg(feature = "admin")]
+    {
+        println!("-------------- Admin Client --------------");
+        println!("get_bucket_quota()");
+        ctest.set_get_bucket_quota().await;
+    }
 
-    println!("add_delete_user()");
-    ctest.add_delete_user().await;
+    #[cfg(feature = "admin-cli")]
+    {
+        println!("-------------- Admin CLI Client --------------");
+        println!("add_delete_user()");
+        ctest.add_delete_user_cli(&minio_cmd).await;
+    }
 
     ctest.drop().await;
 

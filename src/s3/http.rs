@@ -105,6 +105,11 @@ pub struct BaseUrl {
 }
 
 impl BaseUrl {
+    #[cfg(feature = "admin-cli")]
+    pub(crate) fn host_with_port(&self) -> String {
+        format!("{}:{}", self.host, self.port)
+    }
+
     pub fn build_url(
         &self,
         method: &Method,

@@ -224,6 +224,13 @@ impl<'a> Client<'a> {
         }
     }
 
+    #[cfg(feature = "admin-cli")]
+    pub(crate) fn base_url_with_provider(
+        &'a self,
+    ) -> (&'a BaseUrl, Option<&'a (dyn Provider + Send + Sync)>) {
+        (&self.base_url, self.provider.clone())
+    }
+
     fn build_headers(
         &self,
         headers: &mut Multimap,
