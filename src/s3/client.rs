@@ -228,7 +228,7 @@ impl<'a> Client<'a> {
     pub(crate) fn base_url_with_provider(
         &'a self,
     ) -> (&'a BaseUrl, Option<&'a (dyn Provider + Send + Sync)>) {
-        (&self.base_url, self.provider.clone())
+        (&self.base_url, self.provider)
     }
 
     fn build_headers(

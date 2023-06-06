@@ -43,7 +43,7 @@ impl AdminCliClient {
             creds.secret_key,
             base_url.host_with_port()
         );
-        
+
         println!("{}", mc_host);
 
         (client_id, mc_host)
@@ -122,7 +122,7 @@ impl std::convert::TryFrom<&Client<'_>> for AdminCliClient {
     fn try_from(value: &Client<'_>) -> Result<Self, Self::Error> {
         let values = value.base_url_with_provider();
         if let Some(provider) = values.1 {
-            Ok(AdminCliClient::new(&values.0, provider))
+            Ok(AdminCliClient::new(values.0, provider))
         } else {
             Err(Error::InitializationError)
         }

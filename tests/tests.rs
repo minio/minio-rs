@@ -45,7 +45,7 @@ use minio::admin::types::{Quota, QuotaType};
 use minio::admin::AdminClient;
 
 #[cfg(feature = "admin-cli")]
-use minio::admin_cli::{AdminCliClient, args as admin_cli_args};
+use minio::admin_cli::{args as admin_cli_args, AdminCliClient};
 
 struct RandReader {
     size: usize,
@@ -1206,8 +1206,8 @@ impl<'a> ClientTest<'_> {
                 access_key,
                 secret_key,
             })
-        .await
-        .unwrap();
+            .await
+            .unwrap();
     }
 }
 
