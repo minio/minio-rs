@@ -33,6 +33,7 @@ pub enum Error {
     Utf8ParsingError(String),
     CmdFailed(ErrorResponse),
     AdminParsingError(String),
+    JsonError(serde_json::Error),
 }
 
 impl Display for Error {
@@ -43,6 +44,8 @@ impl Display for Error {
             Error::Utf8ParsingError(e) => write!(f, "Message could not be parsed: {}", e),
             Error::CmdFailed(c) => write!(f, "Command returned non zero code: {:?}", c),
             Error::AdminParsingError(p) => write!(f, "Could not parse cli command output: {}", p),
+            Error::JsonError(v) => write!(f, "Could not deserialize json {:?}", v),
+
         }
     }
 }
@@ -58,5 +61,11 @@ impl From<ErrorResponse> for Error {
 impl From<Utf8Error> for Error {
     fn from(value: Utf8Error) -> Self {
         Error::Utf8ParsingError(value.to_string())
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(value: serde_json::Error) -> Self {
+        Error::JsonError(value)
     }
 }

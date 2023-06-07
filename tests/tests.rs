@@ -1241,18 +1241,18 @@ impl<'a> ClientTest<'_> {
         matches!(
             listed
                 .iter()
-                .find(|x| x.username == access_key)
+                .find(|x| x.access_key == access_key)
                 .unwrap()
-                .status,
+                .user_status,
             admin_cli::types::UserStatus::Disabled
         );
 
         matches!(
             listed
                 .into_iter()
-                .find(|x| x.username != access_key)
+                .find(|x| x.access_key != access_key)
                 .unwrap()
-                .status,
+                .user_status,
             admin_cli::types::UserStatus::Enabled
         );
 
@@ -1268,9 +1268,9 @@ impl<'a> ClientTest<'_> {
                 .unwrap()
                 .users
                 .into_iter()
-                .find(|x| x.username == access_key)
+                .find(|x| x.access_key== access_key)
                 .unwrap()
-                .status,
+                .user_status,
             admin_cli::types::UserStatus::Enabled
         );
 

@@ -1,17 +1,23 @@
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone)]
 pub struct ProcessResponse {
     pub cmd: String,
     pub output: std::process::Output,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all="lowercase")]
 pub enum UserStatus {
     Enabled,
     Disabled,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all="camelCase")]
 pub struct User {
-    pub username: String,
-    pub status: UserStatus,
+    pub access_key: String,
+    pub user_status: UserStatus,
+    pub policy_name: Option<String>,
 }
+

@@ -7,7 +7,7 @@ use crate::admin_cli::{
     args::*,
     error::{Error, ErrorResponse},
     response::*,
-    types::{User, UserStatus},
+    types::User,
 };
 use crate::s3::client::Client;
 use crate::s3::creds::Provider;
@@ -169,43 +169,21 @@ impl AdminCliClient {
     }
 
     pub async fn list_users(&self, _args: &mut ListUsersArgs) -> Result<ListUsersResponse, Error> {
-        let process_response = self.command(["user", "list"], ["-q"]).await?;
+        let process_response = self.command(["user", "list"], ["--json", "-q"]).await?;
 
         if process_response.output.status.success() {
-            let mut users = Vec::new();
 
-            for (line_num, line) in std::str::from_utf8(process_response.output.stdout.as_slice())?
-                .split('\n')
-                .filter(|x| !x.is_empty())
-                .enumerate()
-            {
-                let mut iter = line.split_whitespace();
-                let status = iter.next().ok_or_else(|| {
-                    Error::AdminParsingError(format!("No status in line {}", line_num))
-                })?;
+            let mut result_content = std::str::from_utf8(process_response.output.stdout.as_slice())?.replace('\n', ",").trim_end().to_string();
+            result_content.pop();
+            result_content = format!("[{}]", result_content);
 
-                let username = iter.next().ok_or_else(|| {
-                    Error::AdminParsingError(format!("No username in line {}", line_num))
-                })?;
-
-                users.push(User {
-                    username: username.into(),
-                    status: match status {
-                        "enabled" => Ok(UserStatus::Enabled),
-                        "disabled" => Ok(UserStatus::Disabled),
-                        _ => Err(Error::AdminParsingError(format!(
-                            "unknown user ({}) status: {}",
-                            username, status
-                        ))),
-                    }?,
-                })
-            }
-
+            let users : Vec<User> = serde_json::from_str(&result_content)?;
             Ok(ListUsersResponse { users })
         } else {
             Err(ErrorResponse::parse_output(&process_response, None)?.into())
         }
     }
+
 }
 
 impl std::convert::TryFrom<&Client<'_>> for AdminCliClient {
