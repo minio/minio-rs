@@ -36,16 +36,14 @@ use minio::s3::types::{
 use minio::s3::utils::{to_iso8601utc, utc_now};
 
 #[cfg(feature = "admin")]
-use minio::admin::args as admin_args;
-
-#[cfg(feature = "admin")]
-use minio::admin::types::{Quota, QuotaType};
-
-#[cfg(feature = "admin")]
-use minio::admin::AdminClient;
+use minio::admin::{
+    args as admin_args,
+    types::{Quota, QuotaType},
+    AdminClient,
+};
 
 #[cfg(feature = "admin-cli")]
-use minio::admin_cli::{args as admin_cli_args, AdminCliClient};
+use minio::admin_cli::{self, AdminCliClient};
 
 struct RandReader {
     size: usize,
@@ -1194,20 +1192,110 @@ impl<'a> ClientTest<'_> {
     }
 
     #[cfg(feature = "admin-cli")]
-    async fn add_delete_user_cli(&self, minio_cmd: &str) {
+    async fn user_actions_cli(&self, minio_cmd: &str) {
         let mut client = AdminCliClient::try_from(&self.client).unwrap();
         client.set_command(minio_cmd);
 
         let access_key = "beniamin";
         let secret_key = "beniamin_franklin123";
 
+        let access_key_2 = "beniamin2";
+
         client
-            .add_user(&mut admin_cli_args::AddUserArgs {
+            .add_user(&mut admin_cli::args::AddUserArgs {
                 access_key,
                 secret_key,
             })
             .await
             .unwrap();
+
+        client
+            .add_user(&mut admin_cli::args::AddUserArgs {
+                access_key: access_key_2,
+                secret_key,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            client
+                .list_users(&mut admin_cli::args::ListUsersArgs {})
+                .await
+                .unwrap()
+                .users
+                .len(),
+            2
+        );
+
+        client
+            .disable_user(&mut admin_cli::args::RemoveUserArgs { access_key })
+            .await
+            .unwrap();
+
+        let listed = client
+            .list_users(&mut admin_cli::args::ListUsersArgs {})
+            .await
+            .unwrap()
+            .users;
+
+        matches!(
+            listed
+                .iter()
+                .find(|x| x.username == access_key)
+                .unwrap()
+                .status,
+            admin_cli::types::UserStatus::Disabled
+        );
+
+        matches!(
+            listed
+                .into_iter()
+                .find(|x| x.username != access_key)
+                .unwrap()
+                .status,
+            admin_cli::types::UserStatus::Enabled
+        );
+
+        client
+            .enable_user(&mut admin_cli::args::RemoveUserArgs { access_key })
+            .await
+            .unwrap();
+
+        matches!(
+            client
+                .list_users(&mut admin_cli::args::ListUsersArgs {})
+                .await
+                .unwrap()
+                .users
+                .into_iter()
+                .find(|x| x.username == access_key)
+                .unwrap()
+                .status,
+            admin_cli::types::UserStatus::Enabled
+        );
+
+        client
+            .remove_user(&mut admin_cli::args::RemoveUserArgs { access_key })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            client
+                .list_users(&mut admin_cli::args::ListUsersArgs {})
+                .await
+                .unwrap()
+                .users
+                .len(),
+            1
+        );
+
+        matches!(
+            client
+                .remove_user(&mut admin_cli::args::RemoveUserArgs { access_key })
+                .await
+                .unwrap_err(),
+            admin_cli::error::Error::CmdFailed(_)
+        );
     }
 }
 
@@ -1317,8 +1405,8 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     #[cfg(feature = "admin-cli")]
     {
         println!("-------------- Admin CLI Client --------------");
-        println!("add_delete_user()");
-        ctest.add_delete_user_cli(&minio_cmd).await;
+        println!("user_actions_cli()");
+        ctest.user_actions_cli(&minio_cmd).await;
     }
 
     ctest.drop().await;
