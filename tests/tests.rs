@@ -1228,7 +1228,7 @@ impl<'a> ClientTest<'_> {
         );
 
         client
-            .disable_user(&mut admin_cli::args::RemoveUserArgs { access_key })
+            .disable_user(&mut admin_cli::args::DisableUserArgs { access_key })
             .await
             .unwrap();
 
@@ -1257,7 +1257,7 @@ impl<'a> ClientTest<'_> {
         );
 
         client
-            .enable_user(&mut admin_cli::args::RemoveUserArgs { access_key })
+            .enable_user(&mut admin_cli::args::EnableUserArgs { access_key })
             .await
             .unwrap();
 
@@ -1275,7 +1275,9 @@ impl<'a> ClientTest<'_> {
         );
 
         client
-            .remove_user(&mut admin_cli::args::RemoveUserArgs { access_key })
+            .remove_user(&mut admin_cli::args::RemoveUserArgs {
+                access_key: access_key_2,
+            })
             .await
             .unwrap();
 
@@ -1291,7 +1293,9 @@ impl<'a> ClientTest<'_> {
 
         matches!(
             client
-                .remove_user(&mut admin_cli::args::RemoveUserArgs { access_key })
+                .remove_user(&mut admin_cli::args::RemoveUserArgs {
+                    access_key: access_key_2
+                })
                 .await
                 .unwrap_err(),
             admin_cli::error::Error::CmdFailed(_)
@@ -1309,14 +1313,27 @@ impl<'a> ClientTest<'_> {
                 action: [admin_cli::pbac::Action::CreateBucket].into(),
                 resource: [admin_cli::pbac::Statement::new_resource("*")].into(),
                 ..Default::default()
-            }].into(),
+            }]
+            .into(),
             ..Default::default()
         };
 
-        client.create_policy(&mut admin_cli::args::CreatePolicyArgs {
-            policy_name: "my-test-policy",
-            policy: &example_policy,
-        }).await.unwrap();
+        client
+            .create_policy(&mut admin_cli::args::CreatePolicyArgs {
+                policy_name: "my-test-policy",
+                policy: &example_policy,
+            })
+            .await
+            .unwrap();
+
+        assert!(client
+            .list_policies(&mut admin_cli::args::ListUsersArgs {})
+            .await
+            .unwrap()
+            .policies
+            .into_iter()
+            .find(|x| x.policy == "my-test-policy")
+            .is_some());
     }
 }
 

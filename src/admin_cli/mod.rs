@@ -50,6 +50,12 @@ impl AdminCliClient {
         (client_id, mc_host)
     }
 
+    fn list_of_jsons_to_json(list_of_jsons: &str) -> String {
+        let mut single_json = list_of_jsons.replace('\n', ",").trim_end().to_string();
+        single_json.pop();
+        format!("[{}]", single_json)
+    }
+
     pub fn new(base_url: &BaseUrl, provider: &(dyn Provider + Send + Sync)) -> AdminCliClient {
         let (client_id, mc_host) = AdminCliClient::set_mc_host(base_url, provider);
 
@@ -174,13 +180,9 @@ impl AdminCliClient {
         let process_response = self.command(["user", "list"], ["--json", "-q"]).await?;
 
         if process_response.output.status.success() {
-            let mut result_content =
-                std::str::from_utf8(process_response.output.stdout.as_slice())?
-                    .replace('\n', ",")
-                    .trim_end()
-                    .to_string();
-            result_content.pop();
-            result_content = format!("[{}]", result_content);
+            let result_content = Self::list_of_jsons_to_json(std::str::from_utf8(
+                process_response.output.stdout.as_slice(),
+            )?);
 
             let users: Vec<User> = serde_json::from_str(&result_content)?;
             Ok(ListUsersResponse { users })
@@ -219,6 +221,24 @@ impl AdminCliClient {
                 ErrorResponse::parse_output(&process_response, Some(args.policy_name.into()))?
                     .into(),
             )
+        }
+    }
+
+    pub async fn list_policies(
+        &self,
+        _args: &mut ListPoliciesArgs,
+    ) -> Result<ListPoliciesResponse, Error> {
+        let process_response = self.command(["policy", "ls"], ["--json", "-q"]).await?;
+
+        if process_response.output.status.success() {
+            let result_content = Self::list_of_jsons_to_json(std::str::from_utf8(
+                process_response.output.stdout.as_slice(),
+            )?);
+
+            let policies: Vec<types::Policy> = serde_json::from_str(&result_content)?;
+            Ok(ListPoliciesResponse { policies })
+        } else {
+            Err(ErrorResponse::parse_output(&process_response, None)?.into())
         }
     }
 }

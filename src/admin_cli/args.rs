@@ -16,6 +16,7 @@ pub type DisableUserArgs<'a> = RemoveUserArgs<'a>;
 
 #[derive(Debug, Clone)]
 pub struct ListUsersArgs {}
+pub type ListPoliciesArgs = ListUsersArgs;
 
 #[derive(Debug, Clone)]
 pub struct CreatePolicyArgs<'a> {

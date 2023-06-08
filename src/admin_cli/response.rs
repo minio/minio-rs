@@ -1,4 +1,4 @@
-use crate::admin_cli::User;
+use crate::admin_cli::types::{Policy, User};
 
 #[derive(Debug, Clone)]
 pub struct AddUserResponse {
@@ -17,4 +17,9 @@ pub struct ListUsersResponse {
 #[derive(Debug, Clone)]
 pub struct CreatePolicyResponse {
     pub policy_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ListPoliciesResponse {
+    pub policies: Vec<Policy>,
 }
