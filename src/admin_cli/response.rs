@@ -13,3 +13,8 @@ pub type EnableUserResponse = AddUserResponse;
 pub struct ListUsersResponse {
     pub users: Vec<User>,
 }
+
+#[derive(Debug, Clone)]
+pub struct CreatePolicyResponse {
+    pub policy_name: String,
+}

@@ -1268,7 +1268,7 @@ impl<'a> ClientTest<'_> {
                 .unwrap()
                 .users
                 .into_iter()
-                .find(|x| x.access_key== access_key)
+                .find(|x| x.access_key == access_key)
                 .unwrap()
                 .user_status,
             admin_cli::types::UserStatus::Enabled
@@ -1296,6 +1296,27 @@ impl<'a> ClientTest<'_> {
                 .unwrap_err(),
             admin_cli::error::Error::CmdFailed(_)
         );
+    }
+
+    #[cfg(feature = "admin-cli")]
+    async fn policies_cli(&self, minio_cmd: &str) {
+        let mut client = AdminCliClient::try_from(&self.client).unwrap();
+        client.set_command(minio_cmd);
+
+        let example_policy = admin_cli::pbac::Policy {
+            statement: [admin_cli::pbac::Statement {
+                effect: admin_cli::pbac::Effect::Allow,
+                action: [admin_cli::pbac::Action::CreateBucket].into(),
+                resource: [admin_cli::pbac::Statement::new_resource("*")].into(),
+                ..Default::default()
+            }].into(),
+            ..Default::default()
+        };
+
+        client.create_policy(&mut admin_cli::args::CreatePolicyArgs {
+            policy_name: "my-test-policy",
+            policy: &example_policy,
+        }).await.unwrap();
     }
 }
 
@@ -1407,6 +1428,9 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!("-------------- Admin CLI Client --------------");
         println!("user_actions_cli()");
         ctest.user_actions_cli(&minio_cmd).await;
+
+        println!("policies_cli()");
+        ctest.policies_cli(&minio_cmd).await;
     }
 
     ctest.drop().await;

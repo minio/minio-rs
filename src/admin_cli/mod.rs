@@ -1,5 +1,6 @@
 pub mod args;
 pub mod error;
+pub mod pbac;
 pub mod response;
 pub mod types;
 
@@ -15,6 +16,7 @@ use crate::s3::http::BaseUrl;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use std::ffi::OsStr;
+use std::io::Write;
 use tokio::process::Command;
 use types::ProcessResponse;
 
@@ -172,18 +174,53 @@ impl AdminCliClient {
         let process_response = self.command(["user", "list"], ["--json", "-q"]).await?;
 
         if process_response.output.status.success() {
-
-            let mut result_content = std::str::from_utf8(process_response.output.stdout.as_slice())?.replace('\n', ",").trim_end().to_string();
+            let mut result_content =
+                std::str::from_utf8(process_response.output.stdout.as_slice())?
+                    .replace('\n', ",")
+                    .trim_end()
+                    .to_string();
             result_content.pop();
             result_content = format!("[{}]", result_content);
 
-            let users : Vec<User> = serde_json::from_str(&result_content)?;
+            let users: Vec<User> = serde_json::from_str(&result_content)?;
             Ok(ListUsersResponse { users })
         } else {
             Err(ErrorResponse::parse_output(&process_response, None)?.into())
         }
     }
 
+    pub async fn create_policy(
+        &self,
+        args: &mut CreatePolicyArgs<'_>,
+    ) -> Result<CreatePolicyResponse, Error> {
+        let mut tempfile = tempfile::NamedTempFile::new()?;
+        write!(tempfile, "{}", serde_json::to_string(args.policy)?)?;
+        let tempfile_path = tempfile.into_temp_path();
+
+        let process_response = self
+            .command(
+                ["policy", "create"],
+                [
+                    args.policy_name,
+                    tempfile_path
+                        .to_str()
+                        .ok_or(Error::SystemIOError("Could not get tempfile path".into()))?,
+                    "-q",
+                ],
+            )
+            .await?;
+
+        if process_response.output.status.success() {
+            Ok(CreatePolicyResponse {
+                policy_name: args.policy_name.into(),
+            })
+        } else {
+            Err(
+                ErrorResponse::parse_output(&process_response, Some(args.policy_name.into()))?
+                    .into(),
+            )
+        }
+    }
 }
 
 impl std::convert::TryFrom<&Client<'_>> for AdminCliClient {

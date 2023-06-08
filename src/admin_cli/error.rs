@@ -33,6 +33,7 @@ pub enum Error {
     Utf8ParsingError(String),
     CmdFailed(ErrorResponse),
     AdminParsingError(String),
+    SystemIOError(String),
     JsonError(serde_json::Error),
 }
 
@@ -45,7 +46,7 @@ impl Display for Error {
             Error::CmdFailed(c) => write!(f, "Command returned non zero code: {:?}", c),
             Error::AdminParsingError(p) => write!(f, "Could not parse cli command output: {}", p),
             Error::JsonError(v) => write!(f, "Could not deserialize json {:?}", v),
-
+            Error::SystemIOError(s) => write!(f, "Could not perform system IO operation {}", s),
         }
     }
 }
@@ -67,5 +68,11 @@ impl From<Utf8Error> for Error {
 impl From<serde_json::Error> for Error {
     fn from(value: serde_json::Error) -> Self {
         Error::JsonError(value)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(value: std::io::Error) -> Self {
+        Error::SystemIOError(value.to_string())
     }
 }
