@@ -241,6 +241,23 @@ impl AdminCliClient {
             Err(ErrorResponse::parse_output(&process_response, None)?.into())
         }
     }
+
+    pub async fn remove_policy(
+        &self,
+        args: &mut RemovePolicyArgs<'_>,
+    ) -> Result<RemovePolicyResponse, Error> {
+        let process_response = self
+            .command(["policy", "rm"], [args.policy_name, "-q"])
+            .await?;
+
+        if process_response.output.status.success() {
+            Ok(RemovePolicyResponse {
+                policy_name: args.policy_name.into(),
+            })
+        } else {
+            Err(ErrorResponse::parse_output(&process_response, None)?.into())
+        }
+    }
 }
 
 impl std::convert::TryFrom<&Client<'_>> for AdminCliClient {

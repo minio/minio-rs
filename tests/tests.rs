@@ -1332,8 +1332,22 @@ impl<'a> ClientTest<'_> {
             .unwrap()
             .policies
             .into_iter()
-            .find(|x| x.policy == "my-test-policy")
-            .is_some());
+            .any(|x| x.policy == "my-test-policy"));
+
+        client
+            .remove_policy(&mut admin_cli::args::RemovePolicyArgs {
+                policy_name: "my-test-policy",
+            })
+            .await
+            .unwrap();
+
+        assert!(!client
+            .list_policies(&mut admin_cli::args::ListUsersArgs {})
+            .await
+            .unwrap()
+            .policies
+            .into_iter()
+            .any(|x| x.policy == "my-test-policy"));
     }
 }
 

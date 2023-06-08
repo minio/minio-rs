@@ -19,6 +19,8 @@ pub struct CreatePolicyResponse {
     pub policy_name: String,
 }
 
+pub type RemovePolicyResponse = CreatePolicyResponse;
+
 #[derive(Debug, Clone)]
 pub struct ListPoliciesResponse {
     pub policies: Vec<Policy>,

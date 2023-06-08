@@ -23,3 +23,8 @@ pub struct CreatePolicyArgs<'a> {
     pub policy_name: &'a str,
     pub policy: &'a Policy,
 }
+
+#[derive(Debug, Clone)]
+pub struct RemovePolicyArgs<'a> {
+    pub policy_name: &'a str,
+}
