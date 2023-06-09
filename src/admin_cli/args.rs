@@ -28,3 +28,23 @@ pub struct CreatePolicyArgs<'a> {
 pub struct RemovePolicyArgs<'a> {
     pub policy_name: &'a str,
 }
+
+pub type GetPolicyArgs<'a> = RemovePolicyArgs<'a>;
+
+#[derive(Debug, Clone)]
+pub enum UserGroup<'a> {
+    User(&'a str),
+    Group(&'a str),
+}
+
+#[derive(Debug, Clone)]
+pub struct AttachPolicyArgs<'a> {
+    pub policy_names: &'a [&'a str],
+    pub attaching_to: UserGroup<'a>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DetachPolicyArgs<'a> {
+    pub policy_names: &'a [&'a str],
+    pub detaching_from: UserGroup<'a>,
+}

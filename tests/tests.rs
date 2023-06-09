@@ -1334,6 +1334,20 @@ impl<'a> ClientTest<'_> {
             .into_iter()
             .any(|x| x.policy == "my-test-policy"));
 
+        let my_test = client
+            .get_policy(&mut admin_cli::args::GetPolicyArgs {
+                policy_name: "my-test-policy",
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(my_test.policy_name, "my-test-policy");
+
+        let my_test_policy = my_test.policy.unwrap();
+        matches!(my_test_policy.statement[0].effect, admin_cli::pbac::Effect::Allow);
+        assert_eq!(my_test_policy.statement[0].resource[0], admin_cli::pbac::Statement::new_resource("*"));
+
+
         client
             .remove_policy(&mut admin_cli::args::RemovePolicyArgs {
                 policy_name: "my-test-policy",

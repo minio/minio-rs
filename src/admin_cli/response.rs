@@ -22,6 +22,18 @@ pub struct CreatePolicyResponse {
 pub type RemovePolicyResponse = CreatePolicyResponse;
 
 #[derive(Debug, Clone)]
+pub struct AttachPolicyResponse {
+    pub attaching_to: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct ListPoliciesResponse {
     pub policies: Vec<Policy>,
 }
+
+#[derive(Debug, Clone)]
+pub struct DetachPolicyResponse {
+    pub detaching_from: String,
+}
+
+pub type GetPolicyResponse = super::types::PolicyInfo;

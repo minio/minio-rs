@@ -17,7 +17,7 @@ pub enum UserStatus {
 #[serde(rename_all = "lowercase")]
 pub enum PolicyStatus {
     Success,
-    Failure,
+    Error,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -34,7 +34,7 @@ pub struct PolicyInfo {
     pub policy_name: String,
 
     // Don't know type as of now
-    pub policy: Option<serde_json::Value>,
+    pub policy: Option<super::pbac::Policy>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

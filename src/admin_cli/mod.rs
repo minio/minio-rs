@@ -258,6 +258,85 @@ impl AdminCliClient {
             Err(ErrorResponse::parse_output(&process_response, None)?.into())
         }
     }
+
+    pub async fn attach_policy(
+        &self,
+        args: &mut AttachPolicyArgs<'_>,
+    ) -> Result<AttachPolicyResponse, Error> {
+        let mut commnds_args = args.policy_names.to_vec();
+        commnds_args.push("-q");
+
+        let attach_to = match args.attaching_to {
+            UserGroup::User(u) => {
+                commnds_args.push("--user");
+                commnds_args.push(u);
+                u
+            }
+            UserGroup::Group(g) => {
+                commnds_args.push("--group");
+                commnds_args.push(g);
+                g
+            }
+        };
+
+        let process_response = self.command(["policy", "attach"], commnds_args).await?;
+
+        if process_response.output.status.success() {
+            Ok(AttachPolicyResponse {
+                attaching_to: attach_to.into(),
+            })
+        } else {
+            Err(ErrorResponse::parse_output(&process_response, None)?.into())
+        }
+    }
+
+    pub async fn detach_policy(
+        &self,
+        args: &mut DetachPolicyArgs<'_>,
+    ) -> Result<DetachPolicyResponse, Error> {
+        let mut commnds_args = args.policy_names.to_vec();
+        commnds_args.push("-q");
+
+        let detach_from = match args.detaching_from {
+            UserGroup::User(u) => {
+                commnds_args.push("--user");
+                commnds_args.push(u);
+                u
+            }
+            UserGroup::Group(g) => {
+                commnds_args.push("--group");
+                commnds_args.push(g);
+                g
+            }
+        };
+
+        let process_response = self.command(["policy", "detach"], commnds_args).await?;
+
+        if process_response.output.status.success() {
+            Ok(DetachPolicyResponse {
+                detaching_from: detach_from.into(),
+            })
+        } else {
+            Err(ErrorResponse::parse_output(&process_response, None)?.into())
+        }
+    }
+
+    pub async fn get_policy(
+        &self,
+        args: &mut GetPolicyArgs<'_>,
+    ) -> Result<GetPolicyResponse, Error> {
+        let process_response = self
+            .command(["policy", "info"], [args.policy_name, "--json", "-q"])
+            .await?;
+
+        if process_response.output.status.success() {
+            let policy_reponse: types::Policy =
+                serde_json::from_slice(&process_response.output.stdout)?;
+            Ok(policy_reponse.policy_info)
+        } else {
+            Err(ErrorResponse::parse_output(&process_response, None)?.into())
+        }
+    }
 }
 
 impl std::convert::TryFrom<&Client<'_>> for AdminCliClient {
