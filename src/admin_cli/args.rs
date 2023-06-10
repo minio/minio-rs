@@ -60,3 +60,8 @@ pub struct AddSvcacctArgs<'a> {
     pub description: Option<&'a str>,
     pub expiry: Option<&'a DateTime<chrono::Utc>>,
 }
+
+#[derive(Debug, Clone)]
+pub struct RemoveSvcacctArgs<'a> {
+    pub service_account: &'a str,
+}

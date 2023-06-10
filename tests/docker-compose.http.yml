@@ -1,4 +1,4 @@
 ---
 services:
   minio:
-    command: server /data/test-xl/{1...4}
+    command: server --console-address ":9001" /data/test-xl/{1...4}

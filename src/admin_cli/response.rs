@@ -50,3 +50,9 @@ pub struct AddSvcacctResponse {
     #[serde(with = "mc_date_format")]
     pub expiration: chrono::DateTime<chrono::Utc>,
 }
+
+#[derive(Debug, Clone)]
+pub struct RemoveSvcacctResponse {
+    pub service_account: String,
+}
+

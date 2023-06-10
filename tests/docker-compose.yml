@@ -17,4 +17,4 @@ services:
     volumes:
       - ./private.key:/certs/private.key
       - ./public.crt:/certs/public.crt
-    command: server /data/test-xl/{1...4} --certs-dir /certs
+    command: server --console-address ":9001" /data/test-xl/{1...4} --certs-dir /certs

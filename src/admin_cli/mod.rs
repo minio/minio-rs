@@ -399,6 +399,31 @@ impl AdminCliClient {
             )
         }
     }
+
+    pub async fn remove_svcacct(
+        &self,
+        args: &mut RemoveSvcacctArgs<'_>,
+    ) -> Result<RemoveSvcacctResponse, Error> {
+        let process_response = self
+            .command(["user", "svcacct", "remove"], [args.service_account])
+            .await?;
+
+        if process_response.output.status.success() {
+            Ok(RemoveSvcacctResponse {
+                service_account: args.service_account.into(),
+            })
+        } else {
+            Err(
+                ErrorResponse::parse_output(&process_response, Some(args.service_account.into()))?
+                    .into(),
+            )
+        }
+    }
+
+    // Here should go implementation for list_svcacct but its current implementation
+    // is absolutely not stable
+
+
 }
 
 impl std::convert::TryFrom<&Client<'_>> for AdminCliClient {
