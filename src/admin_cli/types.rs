@@ -13,11 +13,22 @@ pub enum UserStatus {
     Disabled,
 }
 
+impl Default for UserStatus {
+    fn default() -> Self {
+        Self::Disabled
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum PolicyStatus {
     Success,
     Error,
+}
+impl Default for PolicyStatus {
+    fn default() -> Self {
+        Self::Error
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
