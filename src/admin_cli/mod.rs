@@ -3,6 +3,7 @@ pub mod error;
 pub mod pbac;
 pub mod response;
 pub mod types;
+pub mod utils;
 
 use crate::admin_cli::{
     args::*,
@@ -335,6 +336,67 @@ impl AdminCliClient {
             Ok(policy_reponse.policy_info)
         } else {
             Err(ErrorResponse::parse_output(&process_response, None)?.into())
+        }
+    }
+
+    pub async fn add_svcacct(
+        &self,
+        args: &mut AddSvcacctArgs<'_>,
+    ) -> Result<AddSvcacctResponse, Error> {
+        let mut commands_args: Vec<&str> = [
+            args.account,
+            "-q",
+            "--json",
+            "--access-key",
+            args.access_key,
+            "--secret-key",
+            args.secret_key,
+        ]
+        .into();
+
+        let tempfile_path;
+        if let Some(policy) = args.policy {
+            let mut tempfile = tempfile::NamedTempFile::new()?;
+            write!(tempfile, "{}", serde_json::to_string(policy)?)?;
+            tempfile_path = tempfile.into_temp_path();
+            commands_args.push("--policy");
+            commands_args.push(
+                tempfile_path
+                    .to_str()
+                    .ok_or(Error::SystemIOError("Could not get tempfile path".into()))?,
+            );
+        }
+
+        let expiry_str;
+        if let Some(expiry) = args.expiry {
+            expiry_str = utils::mc_date_format::format_serialize(expiry);
+            commands_args.push("--expiry");
+            commands_args.push(&expiry_str);
+        }
+
+        if let Some(name) = args.name {
+            commands_args.push("--name");
+            commands_args.push(name);
+        }
+
+        if let Some(description) = args.description {
+            commands_args.push("--description");
+            commands_args.push(description);
+        }
+
+        let process_response = self
+            .command(["user", "svcacct", "add"], commands_args)
+            .await?;
+
+        if process_response.output.status.success() {
+            Ok(serde_json::from_slice(
+                process_response.output.stdout.as_slice(),
+            )?)
+        } else {
+            Err(
+                ErrorResponse::parse_output(&process_response, Some(args.access_key.into()))?
+                    .into(),
+            )
         }
     }
 }

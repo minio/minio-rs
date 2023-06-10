@@ -45,3 +45,5 @@ pub struct Policy {
     pub policy_info: PolicyInfo,
     pub is_group: bool,
 }
+
+pub type SvcacctStatus = PolicyStatus;

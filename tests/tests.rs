@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use async_std::task;
+use chrono::prelude::*;
 use chrono::Duration;
 use hyper::http::Method;
 use minio::s3::types::NotificationRecords;
@@ -1344,9 +1345,14 @@ impl<'a> ClientTest<'_> {
         assert_eq!(my_test.policy_name, "my-test-policy");
 
         let my_test_policy = my_test.policy.unwrap();
-        matches!(my_test_policy.statement[0].effect, admin_cli::pbac::Effect::Allow);
-        assert_eq!(my_test_policy.statement[0].resource[0], admin_cli::pbac::Statement::new_resource("*"));
-
+        matches!(
+            my_test_policy.statement[0].effect,
+            admin_cli::pbac::Effect::Allow
+        );
+        assert_eq!(
+            my_test_policy.statement[0].resource[0],
+            admin_cli::pbac::Statement::new_resource("*")
+        );
 
         client
             .remove_policy(&mut admin_cli::args::RemovePolicyArgs {
@@ -1362,6 +1368,44 @@ impl<'a> ClientTest<'_> {
             .policies
             .into_iter()
             .any(|x| x.policy == "my-test-policy"));
+    }
+
+    #[cfg(feature = "admin-cli")]
+    async fn svcacct_cli(&self, minio_cmd: &str) {
+        let mut client = AdminCliClient::try_from(&self.client).unwrap();
+        client.set_command(minio_cmd);
+
+        let account_name = "beniamin";
+        let access_key = "beniamin_key";
+        let secret_key = "beniamin_key_secret";
+
+        let example_policy = admin_cli::pbac::Policy {
+            statement: [admin_cli::pbac::Statement {
+                effect: admin_cli::pbac::Effect::Allow,
+                action: [admin_cli::pbac::Action::ListBucket].into(),
+                resource: [admin_cli::pbac::Statement::new_resource("*")].into(),
+                ..Default::default()
+            }]
+            .into(),
+            ..Default::default()
+        };
+
+        let expiry_date = (chrono::offset::Utc::now() + Duration::days(125)).round_subsecs(0);
+
+        let add_response = client
+            .add_svcacct(&mut admin_cli::args::AddSvcacctArgs {
+                account: account_name,
+                access_key,
+                secret_key,
+                policy: Some(&example_policy),
+                name: None,
+                description: Some("my-desc"),
+                expiry: Some(&expiry_date),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(add_response.expiration, expiry_date);
     }
 }
 
@@ -1476,6 +1520,9 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
         println!("policies_cli()");
         ctest.policies_cli(&minio_cmd).await;
+
+        println!("svcacct_cli()");
+        ctest.svcacct_cli(&minio_cmd).await;
     }
 
     ctest.drop().await;

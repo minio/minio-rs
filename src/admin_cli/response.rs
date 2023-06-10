@@ -1,4 +1,6 @@
+use super::utils::mc_date_format;
 use crate::admin_cli::types::{Policy, User};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct AddUserResponse {
@@ -37,3 +39,14 @@ pub struct DetachPolicyResponse {
 }
 
 pub type GetPolicyResponse = super::types::PolicyInfo;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddSvcacctResponse {
+    pub status: super::types::SvcacctStatus,
+    pub access_key: String,
+    pub secret_key: String,
+    pub account_status: super::types::UserStatus,
+    #[serde(with = "mc_date_format")]
+    pub expiration: chrono::DateTime<chrono::Utc>,
+}

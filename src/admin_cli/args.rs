@@ -1,4 +1,5 @@
 use crate::admin_cli::pbac::Policy;
+use chrono::DateTime;
 
 #[derive(Debug, Clone)]
 pub struct AddUserArgs<'a> {
@@ -47,4 +48,15 @@ pub struct AttachPolicyArgs<'a> {
 pub struct DetachPolicyArgs<'a> {
     pub policy_names: &'a [&'a str],
     pub detaching_from: UserGroup<'a>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AddSvcacctArgs<'a> {
+    pub account: &'a str,
+    pub access_key: &'a str,
+    pub secret_key: &'a str,
+    pub policy: Option<&'a Policy>,
+    pub name: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub expiry: Option<&'a DateTime<chrono::Utc>>,
 }
