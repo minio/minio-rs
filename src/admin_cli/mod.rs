@@ -340,6 +340,21 @@ impl AdminCliClient {
         }
     }
 
+    pub async fn get_policies_entities(
+        &self,
+        _args: &mut GetPoliciesEntitesArgs,
+    ) -> Result<GetPoliciesEntitesResponse, Error> {
+        let process_response = self
+            .command(["policy", "entities"], ["--json", "-q"])
+            .await?;
+
+        if process_response.output.status.success() {
+            Ok(serde_json::from_slice(&process_response.output.stdout)?)
+        } else {
+            Err(ErrorResponse::parse_output(&process_response, None)?.into())
+        }
+    }
+
     pub async fn add_svcacct(
         &self,
         args: &mut AddSvcacctArgs<'_>,

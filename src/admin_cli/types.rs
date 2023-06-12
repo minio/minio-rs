@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use super::utils::mc_timestamp_format;
 
 #[derive(Debug, Clone)]
 pub struct ProcessResponse {
@@ -68,3 +69,23 @@ pub struct Policy {
 
 pub type SvcacctStatus = PolicyStatus;
 pub type GroupStatus = PolicyStatus;
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct PolicyMappings {
+    policy: String,
+
+    #[serde(default="Vec::new")]
+    users: Vec<String>,
+
+    #[serde(default="Vec::new")]
+    groups: Vec<String>,
+}
+
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetPoliciesEntitesResult {
+    #[serde(with="mc_timestamp_format")]
+    timestamp: chrono::DateTime<chrono::Utc>,
+    policy_mappings: PolicyMappings,
+}

@@ -1,3 +1,4 @@
+use crate::admin_cli::types::GetPoliciesEntitesResult;
 use super::utils::mc_date_format;
 use crate::admin_cli::types::{Policy, User};
 use serde::{Deserialize, Serialize};
@@ -77,4 +78,11 @@ impl GetGroupResponse {
             None => Vec::new(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetPoliciesEntitesResponse {
+    status: super::types::GroupStatus,
+    result: GetPoliciesEntitesResult
 }

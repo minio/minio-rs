@@ -32,6 +32,7 @@ pub struct RemovePolicyArgs<'a> {
 }
 
 pub type GetPolicyArgs<'a> = RemovePolicyArgs<'a>;
+pub type GetPoliciesEntitesArgs = ListUsersArgs;
 
 #[derive(Debug, Clone)]
 pub enum UserGroup<'a> {
