@@ -274,7 +274,7 @@ impl Default for Effect {
 pub struct Statement {
     pub effect: Effect,
     pub action: Vec<Action>,
-    pub resource: Vec<String>,
+    pub resource: Option<Vec<String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub condition: Option<HashMap<ConditionOperator, HashMap<String, String>>>,
