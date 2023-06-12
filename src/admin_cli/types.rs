@@ -72,13 +72,13 @@ pub type GroupStatus = PolicyStatus;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct PolicyMappings {
-    policy: String,
+    pub policy: String,
 
     #[serde(default="Vec::new")]
-    users: Vec<String>,
+    pub users: Vec<String>,
 
     #[serde(default="Vec::new")]
-    groups: Vec<String>,
+    pub groups: Vec<String>,
 }
 
 
@@ -86,6 +86,6 @@ pub struct PolicyMappings {
 #[serde(rename_all = "camelCase")]
 pub struct GetPoliciesEntitesResult {
     #[serde(with="mc_timestamp_format")]
-    timestamp: chrono::DateTime<chrono::Utc>,
-    policy_mappings: PolicyMappings,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub policy_mappings: PolicyMappings,
 }
