@@ -67,3 +67,4 @@ pub struct Policy {
 }
 
 pub type SvcacctStatus = PolicyStatus;
+pub type GroupStatus = PolicyStatus;

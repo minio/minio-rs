@@ -429,8 +429,21 @@ impl AdminCliClient {
                 process_response.output.stdout.as_slice(),
             )?);
 
-            let users: Vec<String> = serde_json::from_str(&result_content)?;
-            Ok(ListUsersResponse { users })
+            Ok(serde_json::from_str(&result_content)?)
+        } else {
+            Err(ErrorResponse::parse_output(&process_response, None)?.into())
+        }
+    }
+
+    pub async fn get_group(&self, args: &mut GetGroupArgs<'_>) -> Result<GetGroupResponse, Error> {
+        let process_response = self.command(["group", "info"], [args.group_name, "--json", "-q"]).await?;
+
+        if process_response.output.status.success() {
+            let result_content = Self::list_of_jsons_to_json(std::str::from_utf8(
+                process_response.output.stdout.as_slice(),
+            )?);
+
+            Ok(serde_json::from_str(&result_content)?)
         } else {
             Err(ErrorResponse::parse_output(&process_response, None)?.into())
         }

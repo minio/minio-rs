@@ -66,3 +66,8 @@ pub struct AddSvcacctArgs<'a> {
 pub struct RemoveSvcacctArgs<'a> {
     pub service_account: &'a str,
 }
+
+#[derive(Debug, Clone)]
+pub struct GetGroupArgs<'a> {
+    pub group_name: &'a str,
+}

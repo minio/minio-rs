@@ -57,7 +57,24 @@ pub struct RemoveSvcacctResponse {
 }
 
 
-#[derive(Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ListGroupsResponse {
     pub groups: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetGroupResponse {
+    status: super::types::GroupStatus,
+    group_name: String,
+    group_policy: Option<String>
+}
+
+impl GetGroupResponse {
+    pub fn policies_as_vec(&self) -> Vec<&str> {
+        match &self.group_policy {
+            Some(x) => x.split(',').collect(),
+            None => Vec::new(),
+        }
+    }
 }
