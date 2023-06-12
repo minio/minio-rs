@@ -21,6 +21,7 @@ use std::io::Write;
 use tokio::process::Command;
 use types::ProcessResponse;
 
+#[derive(Clone, Debug, Default)]
 pub struct AdminCliClient {
     command: String,
     client_id: String,

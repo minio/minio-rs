@@ -12,6 +12,7 @@ use response::*;
 use types::Quota;
 use utils::{merge, Multimap};
 
+#[derive(Clone, Debug)]
 pub struct AdminClient<'a> {
     pub client: &'a Client<'a>,
 }
