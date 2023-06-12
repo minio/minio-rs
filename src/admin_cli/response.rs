@@ -59,5 +59,5 @@ pub struct RemoveSvcacctResponse {
 
 #[derive(Debug, Clone, Default)]
 pub struct ListGroupsResponse {
-    pub users: Vec<String>,
+    pub groups: Vec<String>,
 }
