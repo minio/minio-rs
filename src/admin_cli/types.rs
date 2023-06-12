@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use super::utils::mc_timestamp_format;
+use super::utils::{mc_timestamp_format, deserialize_null_default};
 
 #[derive(Debug, Clone)]
 pub struct ProcessResponse {
@@ -74,10 +74,9 @@ pub type GroupStatus = PolicyStatus;
 pub struct PolicyMapping {
     pub policy: String,
 
-    #[serde(default="Vec::new")]
+    #[serde(deserialize_with="deserialize_null_default")]
     pub users: Vec<String>,
-
-    #[serde(default="Vec::new")]
+    #[serde(deserialize_with="deserialize_null_default")]
     pub groups: Vec<String>,
 }
 

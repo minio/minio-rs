@@ -1,3 +1,6 @@
+use serde::Deserialize;
+use serde::Deserializer;
+
 pub mod mc_date_format {
     use chrono::{DateTime, TimeZone, Utc};
     use serde::{self, Deserialize, Deserializer, Serializer};
@@ -49,4 +52,13 @@ pub mod mc_timestamp_format {
         Utc.datetime_from_str(&s, FORMAT)
             .map_err(serde::de::Error::custom)
     }
+}
+
+pub fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    T: Default + Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    let opt = Option::deserialize(deserializer)?;
+    Ok(opt.unwrap_or_default())
 }
