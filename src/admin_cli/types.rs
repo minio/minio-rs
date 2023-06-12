@@ -71,7 +71,7 @@ pub type SvcacctStatus = PolicyStatus;
 pub type GroupStatus = PolicyStatus;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct PolicyMappings {
+pub struct PolicyMapping {
     pub policy: String,
 
     #[serde(default="Vec::new")]
@@ -87,5 +87,7 @@ pub struct PolicyMappings {
 pub struct GetPoliciesEntitesResult {
     #[serde(with="mc_timestamp_format")]
     pub timestamp: chrono::DateTime<chrono::Utc>,
-    pub policy_mappings: PolicyMappings,
+
+    #[serde(default="Vec::new")]
+    pub policy_mappings: Vec<PolicyMapping>,
 }
