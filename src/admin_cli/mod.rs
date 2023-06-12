@@ -421,6 +421,21 @@ impl AdminCliClient {
         }
     }
 
+    pub async fn list_groups(&self, _args: &mut ListGroupsArgs) -> Result<ListGroupsResponse, Error> {
+        let process_response = self.command(["group", "list"], ["--json", "-q"]).await?;
+
+        if process_response.output.status.success() {
+            let result_content = Self::list_of_jsons_to_json(std::str::from_utf8(
+                process_response.output.stdout.as_slice(),
+            )?);
+
+            let users: Vec<String> = serde_json::from_str(&result_content)?;
+            Ok(ListUsersResponse { users })
+        } else {
+            Err(ErrorResponse::parse_output(&process_response, None)?.into())
+        }
+    }
+
     // Here should go implementation for list_svcacct but its current implementation
     // is absolutely not stable
 

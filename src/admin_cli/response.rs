@@ -56,3 +56,8 @@ pub struct RemoveSvcacctResponse {
     pub service_account: String,
 }
 
+
+#[derive(Debug, Clone, Default)]
+pub struct ListGroupsResponse {
+    pub users: Vec<String>,
+}
