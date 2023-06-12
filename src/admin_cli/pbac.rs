@@ -198,6 +198,9 @@ pub enum Action {
     AdminStartBatchJob,
     #[serde(rename = "admin:Rebalance")]
     AdminRebalance,
+
+    #[serde(rename = "kms:*")]
+    KmsAll,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
