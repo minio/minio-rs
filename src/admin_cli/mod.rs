@@ -425,11 +425,8 @@ impl AdminCliClient {
         let process_response = self.command(["group", "list"], ["--json", "-q"]).await?;
 
         if process_response.output.status.success() {
-            let result_content = Self::list_of_jsons_to_json(std::str::from_utf8(
-                process_response.output.stdout.as_slice(),
-            )?);
 
-            Ok(serde_json::from_str(&result_content)?)
+            Ok(serde_json::from_slice(&process_response.output.stdout)?)
         } else {
             Err(ErrorResponse::parse_output(&process_response, None)?.into())
         }
@@ -439,11 +436,7 @@ impl AdminCliClient {
         let process_response = self.command(["group", "info"], [args.group_name, "--json", "-q"]).await?;
 
         if process_response.output.status.success() {
-            let result_content = Self::list_of_jsons_to_json(std::str::from_utf8(
-                process_response.output.stdout.as_slice(),
-            )?);
-
-            Ok(serde_json::from_str(&result_content)?)
+            Ok(serde_json::from_slice(&process_response.output.stdout)?)
         } else {
             Err(ErrorResponse::parse_output(&process_response, None)?.into())
         }
