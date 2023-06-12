@@ -39,6 +39,15 @@ pub struct User {
     pub policy_name: Option<String>,
 }
 
+impl User {
+    pub fn policies_as_vec(&self) -> Vec<&str> {
+        match &self.policy_name {
+            Some(x) => x.split(',').collect(),
+            None => Vec::new(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct PolicyInfo {
