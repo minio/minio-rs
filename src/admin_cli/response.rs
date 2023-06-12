@@ -83,6 +83,6 @@ impl GetGroupResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GetPoliciesEntitesResponse {
-    status: super::types::GroupStatus,
-    result: GetPoliciesEntitesResult
+    pub status: super::types::GroupStatus,
+    pub result: GetPoliciesEntitesResult
 }
