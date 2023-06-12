@@ -43,6 +43,8 @@ pub enum Action {
     GetBucketTagging,
     #[serde(rename = "s3:PutBucketTagging")]
     PutBucketTagging,
+    #[serde(rename = "s3:DeleteBucketTagging")]
+    DeleteBucketTagging,
     #[serde(rename = "s3:AbortMultipartUpload")]
     AbortMultipartUpload,
     #[serde(rename = "s3:ListMultipartUploadParts")]
