@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 fn default_policy_version() -> String {
     "2012-10-17".into()
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Action {
     #[serde(rename = "s3:*")]
     All,
@@ -205,7 +205,7 @@ pub enum Action {
     KmsAll,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConditionOperator {
     StringEquals,
     StringNotEquals,
@@ -262,7 +262,7 @@ pub enum ConditionOperator {
     Null,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Effect {
     Allow,
     Deny,
@@ -274,7 +274,7 @@ impl Default for Effect {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "PascalCase")]
 pub struct Statement {
     pub effect: Effect,
@@ -282,16 +282,16 @@ pub struct Statement {
     pub resource: Option<Vec<String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub condition: Option<HashMap<ConditionOperator, HashMap<String, String>>>,
+    pub condition: Option<BTreeMap<ConditionOperator, BTreeMap<String, String>>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub principal: Option<HashMap<String, Vec<String>>>,
+    pub principal: Option<BTreeMap<String, Vec<String>>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sid: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "PascalCase")]
 pub struct Policy {
     #[serde(default = "default_policy_version")]
