@@ -66,7 +66,7 @@ pub enum Error {
     InvalidBaseUrl(String),
     UrlBuildError(String),
     RegionMismatch(String, String),
-    S3Error(ErrorResponse),
+    S3Error(Box<ErrorResponse>),
     InvalidResponse(u16, String),
     ServerError(u16),
     InvalidObjectName(String),

@@ -55,16 +55,16 @@ impl SseCustomerKey {
         );
         copy_headers.insert(
             String::from("X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key"),
-            b64key.clone(),
+            b64key,
         );
         copy_headers.insert(
             String::from("X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5"),
-            md5key.clone(),
+            md5key,
         );
 
         SseCustomerKey {
-            headers: headers,
-            copy_headers: copy_headers,
+            headers,
+            copy_headers,
         }
     }
 }
@@ -110,7 +110,7 @@ impl SseKms {
             );
         }
 
-        SseKms { headers: headers }
+        SseKms { headers }
     }
 }
 
@@ -138,14 +138,20 @@ pub struct SseS3 {
 }
 
 impl SseS3 {
-    pub fn new() -> SseS3 {
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+
+impl Default for SseS3 {
+    fn default() -> Self {
         let mut headers = utils::Multimap::new();
         headers.insert(
             String::from("X-Amz-Server-Side-Encryption"),
             String::from("AES256"),
         );
 
-        SseS3 { headers: headers }
+        Self { headers }
     }
 }
 

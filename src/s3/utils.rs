@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
-pub use base64::encode as b64encode;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use byteorder::{BigEndian, ReadBytesExt};
 use chrono::{DateTime, Datelike, NaiveDateTime, ParseError, Utc};
 use crc::{Crc, CRC_32_ISO_HDLC};
@@ -40,6 +40,10 @@ pub fn merge(m1: &mut Multimap, m2: &Multimap) {
     }
 }
 
+pub fn b64encode<T: AsRef<[u8]>>(input: T) -> String {
+    STANDARD.encode(input)
+}
+
 pub fn crc32(data: &[u8]) -> u32 {
     Crc::<u32>::new(&CRC_32_ISO_HDLC).checksum(data)
 }
@@ -51,7 +55,7 @@ pub fn uint32(mut data: &[u8]) -> Result<u32, std::io::Error> {
 pub fn sha256_hash(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
-    return format!("{:x}", hasher.finalize());
+    format!("{:x}", hasher.finalize())
 }
 
 pub fn md5sum_hash(data: &[u8]) -> String {
@@ -90,7 +94,7 @@ pub fn to_http_header_value(time: UtcTime) -> String {
             12 => "Dec",
             _ => "",
         },
-        time.format("%Y %H:%M:%S").to_string()
+        time.format("%Y %H:%M:%S")
     )
 }
 
@@ -126,7 +130,7 @@ pub fn to_http_headers(map: &Multimap) -> Vec<String> {
             headers.push(s);
         }
     }
-    return headers;
+    headers
 }
 
 pub fn to_query_string(map: &Multimap) -> String {
@@ -134,14 +138,14 @@ pub fn to_query_string(map: &Multimap) -> String {
     for (key, values) in map.iter_all() {
         for value in values {
             if !query.is_empty() {
-                query.push_str("&");
+                query.push('&');
             }
             query.push_str(&urlencode(key));
-            query.push_str("=");
+            query.push('=');
             query.push_str(&urlencode(value));
         }
     }
-    return query;
+    query
 }
 
 pub fn get_canonical_query_string(map: &Multimap) -> String {
@@ -157,10 +161,10 @@ pub fn get_canonical_query_string(map: &Multimap) -> String {
             Some(values) => {
                 for value in values {
                     if !query.is_empty() {
-                        query.push_str("&");
+                        query.push('&');
                     }
                     query.push_str(&urlencode(key.as_str()));
-                    query.push_str("=");
+                    query.push('=');
                     query.push_str(&urlencode(value));
                 }
             }
@@ -168,7 +172,7 @@ pub fn get_canonical_query_string(map: &Multimap) -> String {
         };
     }
 
-    return query;
+    query
 }
 
 pub fn get_canonical_headers(map: &Multimap) -> (String, String) {
@@ -189,7 +193,7 @@ pub fn get_canonical_headers(map: &Multimap) -> (String, String) {
         let mut value = String::new();
         for v in vs {
             if !value.is_empty() {
-                value.push_str(",");
+                value.push(',');
             }
             let s: String = MULTI_SPACE_REGEX.replace_all(&v, " ").to_string();
             value.push_str(&s);
@@ -202,20 +206,20 @@ pub fn get_canonical_headers(map: &Multimap) -> (String, String) {
     let mut add_delim = false;
     for (key, value) in &btmap {
         if add_delim {
-            signed_headers.push_str(";");
-            canonical_headers.push_str("\n");
+            signed_headers.push(';');
+            canonical_headers.push('\n');
         }
 
         signed_headers.push_str(key);
 
         canonical_headers.push_str(key);
-        canonical_headers.push_str(":");
+        canonical_headers.push(':');
         canonical_headers.push_str(value);
 
         add_delim = true;
     }
 
-    return (signed_headers, canonical_headers);
+    (signed_headers, canonical_headers)
 }
 
 pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
@@ -269,7 +273,7 @@ pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
         )));
     }
 
-    return Ok(());
+    Ok(())
 }
 
 pub fn get_text(element: &Element, tag: &str) -> Result<String, Error> {

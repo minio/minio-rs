@@ -170,15 +170,15 @@ impl StatObjectResponse {
             region: region.to_string(),
             bucket_name: bucket_name.to_string(),
             object_name: object_name.to_string(),
-            size: size,
+            size,
             etag: etag.to_string(),
-            version_id: version_id,
-            last_modified: last_modified,
-            retention_mode: retention_mode,
-            retention_retain_until_date: retention_retain_until_date,
-            legal_hold: legal_hold,
-            delete_marker: delete_marker,
-            user_metadata: user_metadata,
+            version_id,
+            last_modified,
+            retention_mode,
+            retention_retain_until_date,
+            legal_hold,
+            delete_marker,
+            user_metadata,
         })
     }
 }
@@ -324,7 +324,7 @@ impl SelectObjectContentResponse {
         let headers = resp.headers().clone();
 
         SelectObjectContentResponse {
-            headers: headers,
+            headers,
             region: region.to_string(),
             bucket_name: bucket_name.to_string(),
             object_name: object_name.to_string(),
@@ -333,7 +333,7 @@ impl SelectObjectContentResponse {
                 bytes_progressed: 0,
                 bytes_returned: 0,
             },
-            resp: resp,
+            resp,
             done: false,
             buf: VecDeque::<u8>::new(),
             prelude: [0_u8; 8],
@@ -371,7 +371,7 @@ impl SelectObjectContentResponse {
             self.prelude[i] = self.buf.pop_front().ok_or(Error::InsufficientData(8, i))?;
         }
 
-        return Ok(true);
+        Ok(true)
     }
 
     fn read_prelude_crc(&mut self) -> Result<bool, Error> {
@@ -384,7 +384,7 @@ impl SelectObjectContentResponse {
             self.prelude_crc[i] = self.buf.pop_front().ok_or(Error::InsufficientData(4, i))?;
         }
 
-        return Ok(true);
+        Ok(true)
     }
 
     fn read_data(&mut self) -> Result<bool, Error> {
@@ -404,7 +404,7 @@ impl SelectObjectContentResponse {
             );
         }
 
-        return Ok(true);
+        Ok(true)
     }
 
     fn read_message_crc(&mut self) -> Result<bool, Error> {
@@ -417,7 +417,7 @@ impl SelectObjectContentResponse {
             self.message_crc[i] = self.buf.pop_front().ok_or(Error::InsufficientData(4, i))?;
         }
 
-        return Ok(true);
+        Ok(true)
     }
 
     fn decode_header(&mut self, header_length: usize) -> Result<HashMap<String, String>, Error> {
@@ -450,7 +450,7 @@ impl SelectObjectContentResponse {
             headers.insert(name, value);
         }
 
-        return Ok(headers);
+        Ok(headers)
     }
 
     async fn do_read(&mut self) -> Result<(), Error> {
@@ -596,7 +596,7 @@ impl SelectObjectContentResponse {
                     ));
                 }
                 Ok(_) => {
-                    if self.payload.len() == 0 {
+                    if self.payload.is_empty() {
                         self.done = true;
                         return Ok(0);
                     }
@@ -620,7 +620,7 @@ impl ListenBucketNotificationResponse {
         bucket_name: &str,
     ) -> ListenBucketNotificationResponse {
         ListenBucketNotificationResponse {
-            headers: headers,
+            headers,
             region: region.to_string(),
             bucket_name: bucket_name.to_string(),
         }

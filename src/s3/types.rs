@@ -221,7 +221,7 @@ impl<'a> SelectRequest<'a> {
         }
 
         Ok(SelectRequest {
-            expr: expr,
+            expr,
             csv_input: Some(csv_input),
             json_input: None,
             parquet_input: None,
@@ -245,7 +245,7 @@ impl<'a> SelectRequest<'a> {
         }
 
         Ok(SelectRequest {
-            expr: expr,
+            expr,
             csv_input: Some(csv_input),
             json_input: None,
             parquet_input: None,
@@ -269,7 +269,7 @@ impl<'a> SelectRequest<'a> {
         }
 
         Ok(SelectRequest {
-            expr: expr,
+            expr,
             csv_input: None,
             json_input: Some(json_input),
             parquet_input: None,
@@ -293,7 +293,7 @@ impl<'a> SelectRequest<'a> {
         }
 
         Ok(SelectRequest {
-            expr: expr,
+            expr,
             csv_input: None,
             json_input: None,
             parquet_input: Some(parquet_input),
@@ -317,7 +317,7 @@ impl<'a> SelectRequest<'a> {
         }
 
         Ok(SelectRequest {
-            expr: expr,
+            expr,
             csv_input: None,
             json_input: None,
             parquet_input: Some(parquet_input),
@@ -388,7 +388,7 @@ impl<'a> SelectRequest<'a> {
                 data.push_str("</Type>");
             }
             data.push_str("</JSON>");
-        } else if let Some(_) = &self.parquet_input {
+        } else if self.parquet_input.is_some() {
             data.push_str("<Parquet></Parquet>");
         }
         data.push_str("</InputSerialization>");
@@ -451,7 +451,7 @@ impl<'a> SelectRequest<'a> {
         }
 
         data.push_str("</SelectObjectContentRequest>");
-        return data;
+        data
     }
 }
 
@@ -612,7 +612,7 @@ impl SseConfig {
     pub fn kms(kms_master_key_id: Option<String>) -> SseConfig {
         SseConfig {
             sse_algorithm: String::from("aws:kms"),
-            kms_master_key_id: kms_master_key_id,
+            kms_master_key_id,
         }
     }
 
@@ -631,7 +631,7 @@ impl SseConfig {
         data.push_str(
             "</ApplyServerSideEncryptionByDefault></Rule></ServerSideEncryptionConfiguration>",
         );
-        return data;
+        data
     }
 }
 
@@ -661,7 +661,9 @@ impl Filter {
                 prefix: match v.get_child("Prefix") {
                     Some(p) => Some(
                         p.get_text()
-                            .ok_or(Error::XmlError(format!("text of <Prefix> tag not found")))?
+                            .ok_or(Error::XmlError(
+                                "text of <Prefix> tag not found".to_string(),
+                            ))?
                             .to_string(),
                     ),
                     None => None,
@@ -672,7 +674,7 @@ impl Filter {
                         for xml_node in &tags.children {
                             let tag = xml_node
                                 .as_element()
-                                .ok_or(Error::XmlError(format!("<Tag> element not found")))?;
+                                .ok_or(Error::XmlError("<Tag> element not found".to_string()))?;
                             map.insert(get_text(tag, "Key")?, get_text(tag, "Value")?);
                         }
                         Some(map)
@@ -686,7 +688,9 @@ impl Filter {
         let prefix = match element.get_child("Prefix") {
             Some(v) => Some(
                 v.get_text()
-                    .ok_or(Error::XmlError(format!("text of <Prefix> tag not found")))?
+                    .ok_or(Error::XmlError(
+                        "text of <Prefix> tag not found".to_string(),
+                    ))?
                     .to_string(),
             ),
             None => None,
@@ -701,9 +705,9 @@ impl Filter {
         };
 
         Ok(Filter {
-            and_operator: and_operator,
-            prefix: prefix,
-            tag: tag,
+            and_operator,
+            prefix,
+            tag,
         })
     }
 
@@ -711,7 +715,7 @@ impl Filter {
         if self.and_operator.is_some() ^ self.prefix.is_some() ^ self.tag.is_some() {
             return Ok(());
         }
-        return Err(Error::InvalidFilter);
+        Err(Error::InvalidFilter)
     }
 
     pub fn to_xml(&self) -> String {
@@ -720,17 +724,17 @@ impl Filter {
             data.push_str("<And>");
             if self.and_operator.as_ref().unwrap().prefix.is_some() {
                 data.push_str("<Prefix>");
-                data.push_str(&self.and_operator.as_ref().unwrap().prefix.as_ref().unwrap());
+                data.push_str(self.and_operator.as_ref().unwrap().prefix.as_ref().unwrap());
                 data.push_str("</Prefix>");
             }
             if self.and_operator.as_ref().unwrap().tags.is_some() {
                 for (key, value) in self.and_operator.as_ref().unwrap().tags.as_ref().unwrap() {
                     data.push_str("<Tag>");
                     data.push_str("<Key>");
-                    data.push_str(&key);
+                    data.push_str(key);
                     data.push_str("</Key>");
                     data.push_str("<Value>");
-                    data.push_str(&value);
+                    data.push_str(value);
                     data.push_str("</Value>");
                     data.push_str("</Tag>");
                 }
@@ -739,7 +743,7 @@ impl Filter {
         }
         if self.prefix.is_some() {
             data.push_str("<Prefix>");
-            data.push_str(&self.prefix.as_ref().unwrap());
+            data.push_str(self.prefix.as_ref().unwrap());
             data.push_str("</Prefix>");
         }
         if self.tag.is_some() {
@@ -754,7 +758,7 @@ impl Filter {
         }
         data.push_str("</Filter>");
 
-        return data;
+        data
     }
 }
 
@@ -812,7 +816,7 @@ impl LifecycleRule {
             filter: Filter::from_xml(
                 element
                     .get_child("Filter")
-                    .ok_or(Error::XmlError(format!("<Filter> tag not found")))?,
+                    .ok_or(Error::XmlError("<Filter> tag not found".to_string()))?,
             )?,
             id: get_default_text(element, "ID"),
             noncurrent_version_expiration_noncurrent_days: match element
@@ -906,14 +910,15 @@ impl LifecycleConfig {
 
         if let Some(v) = root.get_child("Rule") {
             for rule in &v.children {
-                config.rules.push(LifecycleRule::from_xml(
-                    rule.as_element()
-                        .ok_or(Error::XmlError(format!("<Rule> tag not found")))?,
-                )?);
+                config
+                    .rules
+                    .push(LifecycleRule::from_xml(rule.as_element().ok_or(
+                        Error::XmlError("<Rule> tag not found".to_string()),
+                    )?)?);
             }
         }
 
-        return Ok(config);
+        Ok(config)
     }
 
     pub fn validate(&self) -> Result<(), Error> {
@@ -1008,8 +1013,7 @@ impl LifecycleConfig {
                 if rule.noncurrent_version_transition_storage_class.is_some() {
                     data.push_str("<StorageClass>");
                     data.push_str(
-                        &rule
-                            .noncurrent_version_transition_storage_class
+                        rule.noncurrent_version_transition_storage_class
                             .as_ref()
                             .unwrap(),
                     );
@@ -1043,7 +1047,7 @@ impl LifecycleConfig {
                 }
                 if rule.transition_storage_class.is_some() {
                     data.push_str("<StorageClass>");
-                    data.push_str(&rule.transition_storage_class.as_ref().unwrap());
+                    data.push_str(rule.transition_storage_class.as_ref().unwrap());
                     data.push_str("</StorageClass>");
                 }
                 data.push_str("</Transition>");
@@ -1054,10 +1058,11 @@ impl LifecycleConfig {
 
         data.push_str("</LifecycleConfiguration>");
 
-        return data;
+        data
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn parse_common_notification_config(
     element: &mut Element,
 ) -> Result<
@@ -1070,15 +1075,12 @@ fn parse_common_notification_config(
     Error,
 > {
     let mut events = Vec::new();
-    loop {
-        match element.take_child("Event") {
-            Some(v) => events.push(
-                v.get_text()
-                    .ok_or(Error::XmlError(format!("text of <Event> tag not found")))?
-                    .to_string(),
-            ),
-            _ => break,
-        }
+    while let Some(v) = element.take_child("Event") {
+        events.push(
+            v.get_text()
+                .ok_or(Error::XmlError("text of <Event> tag not found".to_string()))?
+                .to_string(),
+        )
     }
 
     let id = get_option_text(element, "Id");
@@ -1089,17 +1091,17 @@ fn parse_common_notification_config(
             let mut suffix = None;
             let rules = filter
                 .get_child("S3Key")
-                .ok_or(Error::XmlError(format!("<S3Key> tag not found")))?;
+                .ok_or(Error::XmlError("<S3Key> tag not found".to_string()))?;
             for rule in &rules.children {
                 let v = rule
                     .as_element()
-                    .ok_or(Error::XmlError(format!("<FilterRule> tag not found")))?;
+                    .ok_or(Error::XmlError("<FilterRule> tag not found".to_string()))?;
                 let name = get_text(v, "Name")?;
                 let value = get_text(v, "Value")?;
                 if PrefixFilterRule::NAME == name {
-                    prefix = Some(PrefixFilterRule { value: value });
+                    prefix = Some(PrefixFilterRule { value });
                 } else {
-                    suffix = Some(SuffixFilterRule { value: value });
+                    suffix = Some(SuffixFilterRule { value });
                 }
             }
             (prefix, suffix)
@@ -1120,13 +1122,13 @@ fn to_xml_common_notification_config(
 
     for event in events {
         data.push_str("<Event>");
-        data.push_str(&event);
+        data.push_str(event);
         data.push_str("</Event>");
     }
 
     if let Some(v) = id {
         data.push_str("<Id>");
-        data.push_str(&v);
+        data.push_str(v);
         data.push_str("</Id>");
     }
 
@@ -1150,7 +1152,7 @@ fn to_xml_common_notification_config(
         data.push_str("</S3Key></Filter>");
     }
 
-    return data;
+    data
 }
 
 #[derive(Clone, Debug)]
@@ -1185,20 +1187,20 @@ impl CloudFuncConfig {
         let (events, id, prefix_filter_rule, suffix_filter_rule) =
             parse_common_notification_config(element)?;
         Ok(CloudFuncConfig {
-            events: events,
-            id: id,
-            prefix_filter_rule: prefix_filter_rule,
-            suffix_filter_rule: suffix_filter_rule,
+            events,
+            id,
+            prefix_filter_rule,
+            suffix_filter_rule,
             cloud_func: get_text(element, "CloudFunction")?,
         })
     }
 
     pub fn validate(&self) -> Result<(), Error> {
-        if self.events.len() != 0 && self.cloud_func != "" {
+        if !self.events.is_empty() && !self.cloud_func.is_empty() {
             return Ok(());
         }
 
-        return Err(Error::InvalidFilter);
+        Err(Error::InvalidFilter)
     }
 
     pub fn to_xml(&self) -> String {
@@ -1217,7 +1219,7 @@ impl CloudFuncConfig {
 
         data.push_str("</CloudFunctionConfiguration>");
 
-        return data;
+        data
     }
 }
 
@@ -1235,20 +1237,20 @@ impl QueueConfig {
         let (events, id, prefix_filter_rule, suffix_filter_rule) =
             parse_common_notification_config(element)?;
         Ok(QueueConfig {
-            events: events,
-            id: id,
-            prefix_filter_rule: prefix_filter_rule,
-            suffix_filter_rule: suffix_filter_rule,
+            events,
+            id,
+            prefix_filter_rule,
+            suffix_filter_rule,
             queue: get_text(element, "Queue")?,
         })
     }
 
     pub fn validate(&self) -> Result<(), Error> {
-        if self.events.len() != 0 && self.queue != "" {
+        if !self.events.is_empty() && !self.queue.is_empty() {
             return Ok(());
         }
 
-        return Err(Error::InvalidFilter);
+        Err(Error::InvalidFilter)
     }
 
     pub fn to_xml(&self) -> String {
@@ -1267,7 +1269,7 @@ impl QueueConfig {
 
         data.push_str("</QueueConfiguration>");
 
-        return data;
+        data
     }
 }
 
@@ -1285,20 +1287,20 @@ impl TopicConfig {
         let (events, id, prefix_filter_rule, suffix_filter_rule) =
             parse_common_notification_config(element)?;
         Ok(TopicConfig {
-            events: events,
-            id: id,
-            prefix_filter_rule: prefix_filter_rule,
-            suffix_filter_rule: suffix_filter_rule,
+            events,
+            id,
+            prefix_filter_rule,
+            suffix_filter_rule,
             topic: get_text(element, "Topic")?,
         })
     }
 
     pub fn validate(&self) -> Result<(), Error> {
-        if self.events.len() != 0 && self.topic != "" {
+        if !self.events.is_empty() && !self.topic.is_empty() {
             return Ok(());
         }
 
-        return Err(Error::InvalidFilter);
+        Err(Error::InvalidFilter)
     }
 
     pub fn to_xml(&self) -> String {
@@ -1317,7 +1319,7 @@ impl TopicConfig {
 
         data.push_str("</TopicConfiguration>");
 
-        return data;
+        data
     }
 }
 
@@ -1337,39 +1339,30 @@ impl NotificationConfig {
         };
 
         let mut cloud_func_config_list = Vec::new();
-        loop {
-            match root.take_child("CloudFunctionConfiguration") {
-                Some(mut v) => cloud_func_config_list.push(CloudFuncConfig::from_xml(&mut v)?),
-                _ => break,
-            }
+        while let Some(mut v) = root.take_child("CloudFunctionConfiguration") {
+            cloud_func_config_list.push(CloudFuncConfig::from_xml(&mut v)?)
         }
-        if cloud_func_config_list.len() != 0 {
+        if !cloud_func_config_list.is_empty() {
             config.cloud_func_config_list = Some(cloud_func_config_list);
         }
 
         let mut queue_config_list = Vec::new();
-        loop {
-            match root.take_child("QueueConfiguration") {
-                Some(mut v) => queue_config_list.push(QueueConfig::from_xml(&mut v)?),
-                _ => break,
-            }
+        while let Some(mut v) = root.take_child("QueueConfiguration") {
+            queue_config_list.push(QueueConfig::from_xml(&mut v)?)
         }
-        if queue_config_list.len() != 0 {
+        if !queue_config_list.is_empty() {
             config.queue_config_list = Some(queue_config_list);
         }
 
         let mut topic_config_list = Vec::new();
-        loop {
-            match root.take_child("TopicConfiguration") {
-                Some(mut v) => topic_config_list.push(TopicConfig::from_xml(&mut v)?),
-                _ => break,
-            }
+        while let Some(mut v) = root.take_child("TopicConfiguration") {
+            topic_config_list.push(TopicConfig::from_xml(&mut v)?)
         }
-        if topic_config_list.len() != 0 {
+        if !topic_config_list.is_empty() {
             config.topic_config_list = Some(topic_config_list);
         }
 
-        return Ok(config);
+        Ok(config)
     }
 
     pub fn validate(&self) -> Result<(), Error> {
@@ -1416,7 +1409,7 @@ impl NotificationConfig {
         }
 
         data.push_str("</NotificationConfiguration>");
-        return data;
+        data
     }
 }
 
@@ -1426,8 +1419,14 @@ pub struct AccessControlTranslation {
 }
 
 impl AccessControlTranslation {
-    pub fn new() -> AccessControlTranslation {
-        AccessControlTranslation {
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+
+impl Default for AccessControlTranslation {
+    fn default() -> Self {
+        Self {
             owner: String::from("Destination"),
         }
     }
@@ -1448,7 +1447,7 @@ impl Metrics {
     pub fn new(status: bool) -> Metrics {
         Metrics {
             event_threshold_minutes: Some(15),
-            status: status,
+            status,
         }
     }
 }
@@ -1463,7 +1462,7 @@ impl ReplicationTime {
     pub fn new(status: bool) -> ReplicationTime {
         ReplicationTime {
             time_minutes: Some(15),
-            status: status,
+            status,
         }
     }
 }
@@ -1490,17 +1489,16 @@ impl Destination {
                 _ => None,
             },
             account: get_option_text(element, "Account"),
-            encryption_config: match element.get_child("EncryptionConfiguration") {
-                Some(v) => Some(EncryptionConfig {
+            encryption_config: element.get_child("EncryptionConfiguration").map(|v| {
+                EncryptionConfig {
                     replica_kms_key_id: get_option_text(v, "ReplicaKmsKeyID"),
-                }),
-                _ => None,
-            },
+                }
+            }),
             metrics: match element.get_child("Metrics") {
                 Some(v) => Some(Metrics {
                     event_threshold_minutes: match get_option_text(
                         v.get_child("EventThreshold")
-                            .ok_or(Error::XmlError(format!("<Metrics> tag not found")))?,
+                            .ok_or(Error::XmlError("<Metrics> tag not found".to_string()))?,
                         "Minutes",
                     ) {
                         Some(v) => Some(v.parse::<i32>()?),
@@ -1539,7 +1537,7 @@ impl Destination {
 
         if let Some(v) = &self.account {
             data.push_str("<Account>");
-            data.push_str(&v);
+            data.push_str(v);
             data.push_str("</Account>");
         }
 
@@ -1547,7 +1545,7 @@ impl Destination {
             data.push_str("<EncryptionConfiguration>");
             if let Some(v) = &c.replica_kms_key_id {
                 data.push_str("<ReplicaKmsKeyID>");
-                data.push_str(&v);
+                data.push_str(v);
                 data.push_str("</ReplicaKmsKeyID>");
             }
             data.push_str("</EncryptionConfiguration>");
@@ -1593,13 +1591,13 @@ impl Destination {
 
         if let Some(v) = &self.storage_class {
             data.push_str("<StorageClass>");
-            data.push_str(&v);
+            data.push_str(v);
             data.push_str("</StorageClass>");
         }
 
         data.push_str("</Destination>");
 
-        return data;
+        data
     }
 }
 
@@ -1628,7 +1626,7 @@ impl ReplicationRule {
             destination: Destination::from_xml(
                 element
                     .get_child("Destination")
-                    .ok_or(Error::XmlError(format!("<Destination> tag not found")))?,
+                    .ok_or(Error::XmlError("<Destination> tag not found".to_string()))?,
             )?,
             delete_marker_replication_status: match element.get_child("DeleteMarkerReplication") {
                 Some(v) => Some(get_text(v, "Status")? == "Enabled"),
@@ -1699,13 +1697,13 @@ impl ReplicationRule {
 
         if let Some(v) = &self.id {
             data.push_str("<ID>");
-            data.push_str(&v);
+            data.push_str(v);
             data.push_str("</ID>");
         }
 
         if let Some(v) = &self.prefix {
             data.push_str("<Prefix>");
-            data.push_str(&v);
+            data.push_str(v);
             data.push_str("</Prefix>");
         }
 
@@ -1748,7 +1746,7 @@ impl ReplicationRule {
         });
         data.push_str("</Status>");
 
-        return data;
+        data
     }
 }
 
@@ -1767,14 +1765,15 @@ impl ReplicationConfig {
 
         if let Some(v) = root.get_child("Rule") {
             for rule in &v.children {
-                config.rules.push(ReplicationRule::from_xml(
-                    rule.as_element()
-                        .ok_or(Error::XmlError(format!("<Rule> tag not found")))?,
-                )?);
+                config
+                    .rules
+                    .push(ReplicationRule::from_xml(rule.as_element().ok_or(
+                        Error::XmlError("<Rule> tag not found".to_string()),
+                    )?)?);
             }
         }
 
-        return Ok(config);
+        Ok(config)
     }
 
     pub fn to_xml(&self) -> String {
@@ -1782,7 +1781,7 @@ impl ReplicationConfig {
 
         if let Some(v) = &self.role {
             data.push_str("<Status>");
-            data.push_str(&v);
+            data.push_str(v);
             data.push_str("</Status>");
         }
 
@@ -1791,7 +1790,7 @@ impl ReplicationConfig {
         }
 
         data.push_str("</ReplicationConfiguration>");
-        return data;
+        data
     }
 }
 
@@ -1816,9 +1815,9 @@ impl ObjectLockConfig {
             });
         }
 
-        Err(Error::InvalidObjectLockConfig(format!(
-            "only one days or years must be set"
-        )))
+        Err(Error::InvalidObjectLockConfig(
+            "only one days or years must be set".to_string(),
+        ))
     }
 
     pub fn from_xml(root: &Element) -> Result<ObjectLockConfig, Error> {
@@ -1829,9 +1828,9 @@ impl ObjectLockConfig {
         };
 
         if let Some(r) = root.get_child("Rule") {
-            let default_retention = r
-                .get_child("DefaultRetention")
-                .ok_or(Error::XmlError(format!("<DefaultRetention> tag not found")))?;
+            let default_retention = r.get_child("DefaultRetention").ok_or(Error::XmlError(
+                "<DefaultRetention> tag not found".to_string(),
+            ))?;
             config.retention_mode =
                 Some(RetentionMode::parse(&get_text(default_retention, "Mode")?)?);
 
@@ -1844,7 +1843,7 @@ impl ObjectLockConfig {
             }
         }
 
-        return Ok(config);
+        Ok(config)
     }
 
     pub fn to_xml(&self) -> String {
@@ -1869,6 +1868,6 @@ impl ObjectLockConfig {
         }
         data.push_str("</ObjectLockConfiguration>");
 
-        return data;
+        data
     }
 }

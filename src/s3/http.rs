@@ -16,8 +16,7 @@
 use crate::s3::error::Error;
 use crate::s3::utils::{to_query_string, Multimap};
 use derivative::Derivative;
-use hyper::http::Method;
-use hyper::Uri;
+use http::{Method, Uri};
 use std::fmt;
 
 #[derive(Derivative)]
@@ -36,7 +35,7 @@ impl Url {
         if self.port > 0 {
             return format!("{}:{}", self.host, self.port);
         }
-        return self.host.clone();
+        self.host.clone()
     }
 }
 
@@ -58,7 +57,7 @@ impl fmt::Display for Url {
             f.write_str(&self.host)?;
         }
 
-        if !self.path.starts_with("/") {
+        if !self.path.starts_with('/') {
             f.write_str("/")?;
         }
         f.write_str(&self.path)?;
@@ -85,7 +84,7 @@ fn extract_region(host: &str) -> String {
         },
         _ => "",
     };
-    return region.to_string();
+    region.to_string()
 }
 
 #[derive(Derivative)]
@@ -111,22 +110,23 @@ impl BaseUrl {
         bucket_name: Option<&str>,
         object_name: Option<&str>,
     ) -> Result<Url, Error> {
-        if !object_name.map_or(true, |v| v.is_empty()) {
-            if bucket_name.map_or(true, |v| v.is_empty()) {
-                return Err(Error::UrlBuildError(String::from(
-                    "empty bucket name provided for object name",
-                )));
-            }
+        if !object_name.map_or(true, |v| v.is_empty()) && bucket_name.map_or(true, |v| v.is_empty())
+        {
+            return Err(Error::UrlBuildError(String::from(
+                "empty bucket name provided for object name",
+            )));
         }
 
-        let mut url = Url::default();
-        url.https = self.https;
-        url.host = self.host.clone();
-        url.port = self.port;
-        url.query = query.clone();
+        let mut url = Url {
+            https: self.https,
+            host: self.host.clone(),
+            port: self.port,
+            query: query.clone(),
+            ..Default::default()
+        };
 
         if bucket_name.is_none() {
-            url.path.push_str("/");
+            url.path.push('/');
             if self.aws_host {
                 url.host = format!("s3.{}.{}", region, self.host);
             }
@@ -135,14 +135,14 @@ impl BaseUrl {
 
         let bucket = bucket_name.unwrap();
 
-        let enforce_path_style = true &&
-	// CreateBucket API requires path style in Amazon AWS S3.
-	    (method == Method::PUT && object_name.is_none() && query.is_empty()) ||
-	// GetBucketLocation API requires path style in Amazon AWS S3.
-	    query.contains_key("location") ||
-	// Use path style for bucket name containing '.' which causes
-	// SSL certificate validation error.
-	    (bucket.contains('.') && self.https);
+        let enforce_path_style =
+            // CreateBucket API requires path style in Amazon AWS S3.
+            (method == Method::PUT && object_name.is_none() && query.is_empty()) ||
+            // GetBucketLocation API requires path style in Amazon AWS S3.
+            query.contains_key("location") ||
+            // Use path style for bucket name containing '.' which causes
+            // SSL certificate validation error.
+            (bucket.contains('.') && self.https);
 
         if self.aws_host {
             let mut s3_domain = "s3.".to_string();
@@ -163,27 +163,27 @@ impl BaseUrl {
             }
             if enforce_path_style || !self.accelerate_host {
                 s3_domain.push_str(region);
-                s3_domain.push_str(".");
+                s3_domain.push('.');
             }
             url.host = s3_domain + &url.host;
         }
 
         if enforce_path_style || !self.virtual_style {
-            url.path.push_str("/");
+            url.path.push('/');
             url.path.push_str(bucket);
         } else {
             url.host = format!("{}.{}", bucket, url.host);
         }
 
-        if object_name.is_some() {
-            if object_name.unwrap().chars().nth(0) != Some('/') {
-                url.path.push_str("/");
+        if let Some(object_name) = object_name {
+            if !object_name.starts_with('/') {
+                url.path.push('/');
             }
             // FIXME: urlencode path
-            url.path.push_str(object_name.unwrap());
+            url.path.push_str(object_name);
         }
 
-        return Ok(url);
+        Ok(url)
     }
 
     pub fn from_string(s: String) -> Result<BaseUrl, Error> {
@@ -231,7 +231,7 @@ impl BaseUrl {
             )));
         }
 
-        if !url.query().is_none() {
+        if url.query().is_some() {
             return Err(Error::InvalidBaseUrl(String::from(
                 "query must be none for base URL",
             )));
@@ -265,15 +265,15 @@ impl BaseUrl {
             accelerate_host = false;
         }
 
-        return Ok(BaseUrl {
-            https: https,
+        Ok(BaseUrl {
+            https,
             host: host.to_string(),
-            port: port,
-            region: region,
-            aws_host: aws_host,
-            accelerate_host: accelerate_host,
-            dualstack_host: dualstack_host,
-            virtual_style: virtual_style,
-        });
+            port,
+            region,
+            aws_host,
+            accelerate_host,
+            dualstack_host,
+            virtual_style,
+        })
     }
 }

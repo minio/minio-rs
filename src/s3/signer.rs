@@ -19,26 +19,26 @@ use crate::s3::utils::{
 };
 use hex::encode as hexencode;
 use hmac::{Hmac, Mac};
-use hyper::http::Method;
+use http::Method;
 use sha2::Sha256;
 
 pub fn hmac_hash(key: &[u8], data: &[u8]) -> Vec<u8> {
     let mut hasher = Hmac::<Sha256>::new_from_slice(key).expect("HMAC can take key of any size");
     hasher.update(data);
-    return hasher.finalize().into_bytes().to_vec();
+    hasher.finalize().into_bytes().to_vec()
 }
 
 pub fn hmac_hash_hex(key: &[u8], data: &[u8]) -> String {
-    return hexencode(hmac_hash(key, data));
+    hexencode(hmac_hash(key, data))
 }
 
 pub fn get_scope(date: UtcTime, region: &str, service_name: &str) -> String {
-    return format!(
+    format!(
         "{}/{}/{}/aws4_request",
         to_signer_date(date),
         region,
         service_name
-    );
+    )
 }
 
 pub fn get_canonical_request_hash(
@@ -64,12 +64,12 @@ pub fn get_canonical_request_hash(
 }
 
 pub fn get_string_to_sign(date: UtcTime, scope: &str, canonical_request_hash: &str) -> String {
-    return format!(
+    format!(
         "AWS4-HMAC-SHA256\n{}\n{}\n{}",
         to_amz_date(date),
         scope,
         canonical_request_hash
-    );
+    )
 }
 
 pub fn get_signing_key(
@@ -97,12 +97,13 @@ pub fn get_authorization(
     signed_headers: &str,
     signature: &str,
 ) -> String {
-    return format!(
+    format!(
         "AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders={}, Signature={}",
         access_key, scope, signed_headers, signature
-    );
+    )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn sign_v4(
     service_name: &str,
     method: &Method,
@@ -134,6 +135,7 @@ pub fn sign_v4(
     headers.insert("Authorization".to_string(), authorization);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn sign_v4_s3(
     method: &Method,
     uri: &str,
@@ -159,6 +161,7 @@ pub fn sign_v4_s3(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn sign_v4_sts(
     method: &Method,
     uri: &str,
@@ -184,6 +187,7 @@ pub fn sign_v4_sts(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn presign_v4(
     method: &Method,
     host: &str,
@@ -220,7 +224,7 @@ pub fn presign_v4(
         uri,
         &canonical_query_string,
         &canonical_headers,
-        &signed_headers,
+        signed_headers,
         "UNSIGNED-PAYLOAD",
     );
     let string_to_sign = get_string_to_sign(date, &scope, &canonical_request_hash);
