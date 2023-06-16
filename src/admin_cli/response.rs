@@ -1,5 +1,5 @@
-use crate::admin_cli::types::GetPoliciesEntitesResult;
 use super::utils::mc_date_format;
+use crate::admin_cli::types::GetPoliciesEntitesResult;
 use crate::admin_cli::types::{Policy, User};
 use serde::{Deserialize, Serialize};
 
@@ -57,7 +57,6 @@ pub struct RemoveSvcacctResponse {
     pub service_account: String,
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ListGroupsResponse {
     pub groups: Vec<String>,
@@ -68,7 +67,7 @@ pub struct ListGroupsResponse {
 pub struct GetGroupResponse {
     status: super::types::GroupStatus,
     group_name: String,
-    group_policy: Option<String>
+    group_policy: Option<String>,
 }
 
 impl GetGroupResponse {
@@ -84,5 +83,5 @@ impl GetGroupResponse {
 #[serde(rename_all = "camelCase")]
 pub struct GetPoliciesEntitesResponse {
     pub status: super::types::GroupStatus,
-    pub result: GetPoliciesEntitesResult
+    pub result: GetPoliciesEntitesResult,
 }

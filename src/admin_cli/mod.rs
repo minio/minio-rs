@@ -84,19 +84,16 @@ impl AdminCliClient {
         I2: IntoIterator<Item = S2>,
         S2: AsRef<OsStr>,
     {
-
         let cmd_string = if cmd_path.clone().into_iter().count() == 0 {
             "--version".into()
-        }
-        else {
+        } else {
             cmd_path
                 .clone()
                 .into_iter()
                 .fold(format!("{} admin", self.command.clone()), |acc, x| {
                     format!("{} {}", acc, x.as_ref().to_string_lossy())
                 })
-            };
-
+        };
 
         let output = Command::new(&self.command)
             .env(&format!("MC_HOST_{}", self.client_id), &self.mc_host)
@@ -443,11 +440,13 @@ impl AdminCliClient {
         }
     }
 
-    pub async fn list_groups(&self, _args: &mut ListGroupsArgs) -> Result<ListGroupsResponse, Error> {
+    pub async fn list_groups(
+        &self,
+        _args: &mut ListGroupsArgs,
+    ) -> Result<ListGroupsResponse, Error> {
         let process_response = self.command(["group", "list"], ["--json", "-q"]).await?;
 
         if process_response.output.status.success() {
-
             Ok(serde_json::from_slice(&process_response.output.stdout)?)
         } else {
             Err(ErrorResponse::parse_output(&process_response, None)?.into())
@@ -455,7 +454,9 @@ impl AdminCliClient {
     }
 
     pub async fn get_group(&self, args: &mut GetGroupArgs<'_>) -> Result<GetGroupResponse, Error> {
-        let process_response = self.command(["group", "info"], [args.group_name, "--json", "-q"]).await?;
+        let process_response = self
+            .command(["group", "info"], [args.group_name, "--json", "-q"])
+            .await?;
 
         if process_response.output.status.success() {
             Ok(serde_json::from_slice(&process_response.output.stdout)?)
@@ -465,11 +466,17 @@ impl AdminCliClient {
     }
 
     pub async fn get_cli_version(&self) -> Result<String, Error> {
-        let process_response = self.command::<[&str; 0], &str, [&str; 0], &str>([], []).await?;
+        let process_response = self
+            .command::<[&str; 0], &str, [&str; 0], &str>([], [])
+            .await?;
 
         if process_response.output.status.success() {
             let result = std::str::from_utf8(&process_response.output.stdout)?;
-            Ok(result.split('\n').next().unwrap_or("Could not retrive version").to_string())
+            Ok(result
+                .split('\n')
+                .next()
+                .unwrap_or("Could not retrive version")
+                .to_string())
         } else {
             Err(ErrorResponse::parse_output(&process_response, None)?.into())
         }
@@ -477,8 +484,6 @@ impl AdminCliClient {
 
     // Here should go implementation for list_svcacct but its current implementation
     // is absolutely not stable
-
-
 }
 
 impl std::convert::TryFrom<&Client<'_>> for AdminCliClient {
