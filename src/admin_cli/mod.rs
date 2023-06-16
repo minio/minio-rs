@@ -84,8 +84,9 @@ impl AdminCliClient {
         I2: IntoIterator<Item = S2>,
         S2: AsRef<OsStr>,
     {
-        let cmd_string = if cmd_path.clone().into_iter().count() == 0 {
-            format!("{} --version", self.command)
+        let is_version = cmd_path.clone().into_iter().count() == 0;
+        let cmd_string = if is_version {
+            format!("{} --version", &self.command)
         } else {
             cmd_path
                 .clone()
@@ -95,9 +96,14 @@ impl AdminCliClient {
                 })
         };
 
-        let output = Command::new(&self.command)
-            .env(&format!("MC_HOST_{}", self.client_id), &self.mc_host)
-            .arg("admin")
+        let mut cmd_base = Command::new(&self.command);
+        cmd_base.env(&format!("MC_HOST_{}", self.client_id), &self.mc_host);
+
+        if !is_version {
+            cmd_base.arg("admin");
+        }
+
+        let output = cmd_base
             .args(cmd_path)
             .arg(&self.client_id)
             .args(args)
