@@ -84,12 +84,19 @@ impl AdminCliClient {
         I2: IntoIterator<Item = S2>,
         S2: AsRef<OsStr>,
     {
-        let cmd_string = cmd_path
-            .clone()
-            .into_iter()
-            .fold(format!("{} admin", self.command.clone()), |acc, x| {
-                format!("{} {}", acc, x.as_ref().to_string_lossy())
-            });
+
+        let cmd_string = if cmd_path.clone().into_iter().count() == 0 {
+            "--version".into()
+        }
+        else {
+            cmd_path
+                .clone()
+                .into_iter()
+                .fold(format!("{} admin", self.command.clone()), |acc, x| {
+                    format!("{} {}", acc, x.as_ref().to_string_lossy())
+                })
+            };
+
 
         let output = Command::new(&self.command)
             .env(&format!("MC_HOST_{}", self.client_id), &self.mc_host)
@@ -452,6 +459,17 @@ impl AdminCliClient {
 
         if process_response.output.status.success() {
             Ok(serde_json::from_slice(&process_response.output.stdout)?)
+        } else {
+            Err(ErrorResponse::parse_output(&process_response, None)?.into())
+        }
+    }
+
+    pub async fn get_cli_version(&self) -> Result<String, Error> {
+        let process_response = self.command::<[&str; 0], &str, [&str; 0], &str>([], []).await?;
+
+        if process_response.output.status.success() {
+            let result = std::str::from_utf8(&process_response.output.stdout)?;
+            Ok(result.split('\n').next().unwrap_or("Could not retrive version").to_string())
         } else {
             Err(ErrorResponse::parse_output(&process_response, None)?.into())
         }
