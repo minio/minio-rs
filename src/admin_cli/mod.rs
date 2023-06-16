@@ -85,7 +85,7 @@ impl AdminCliClient {
         S2: AsRef<OsStr>,
     {
         let cmd_string = if cmd_path.clone().into_iter().count() == 0 {
-            "--version".into()
+            format!("{} --version", self.command)
         } else {
             cmd_path
                 .clone()
