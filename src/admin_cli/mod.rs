@@ -100,13 +100,16 @@ impl AdminCliClient {
         cmd_base.env(&format!("MC_HOST_{}", self.client_id), &self.mc_host);
 
         if !is_version {
-            cmd_base.arg("admin");
+            cmd_base
+                .arg("admin")
+                .args(cmd_path)
+                .arg(&self.client_id)
+                .args(args);
+        } else {
+            cmd_base.arg("--version");
         }
 
         let output = cmd_base
-            .args(cmd_path)
-            .arg(&self.client_id)
-            .args(args)
             .output()
             .await
             .map_err(|x| Error::ExecutionError(format!("{}: {}", cmd_string, x)))?;
