@@ -26,7 +26,7 @@ impl ErrorResponse {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Error {
     InitializationError,
     ExecutionError(String),
@@ -34,7 +34,7 @@ pub enum Error {
     CmdFailed(ErrorResponse),
     AdminParsingError(String),
     SystemIOError(String),
-    JsonError(serde_json::Error),
+    JsonError(String),
 }
 
 impl Display for Error {
@@ -67,7 +67,7 @@ impl From<Utf8Error> for Error {
 
 impl From<serde_json::Error> for Error {
     fn from(value: serde_json::Error) -> Self {
-        Error::JsonError(value)
+        Error::JsonError(value.to_string())
     }
 }
 
