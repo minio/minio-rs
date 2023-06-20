@@ -41,6 +41,31 @@ pub enum UserGroup<'a> {
 }
 
 #[derive(Debug, Clone)]
+pub enum UserGroupOwned {
+    User(String),
+    Group(String),
+}
+
+impl From<&UserGroup<'_>> for UserGroupOwned {
+    fn from(value: &UserGroup) -> Self {
+        match value {
+            UserGroup::User(u) => Self::User(u.to_string()),
+            UserGroup::Group(g) => Self::Group(g.to_string()),
+        }
+    }
+}
+
+impl<'a> From<&'a UserGroupOwned> for UserGroup<'a> {
+    fn from(value: &'a UserGroupOwned) -> Self {
+        match value {
+            UserGroupOwned::User(u) => Self::User(&u),
+            UserGroupOwned::Group(g) => Self::Group(&g),
+        }
+    }
+}
+
+
+#[derive(Debug, Clone)]
 pub struct AttachPolicyArgs<'a> {
     pub policy_names: &'a [&'a str],
     pub attaching_to: UserGroup<'a>,
