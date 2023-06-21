@@ -13,3 +13,5 @@ pub struct SetBucketQuotaResponse {
     pub headers: HeaderMap,
     pub bucket_name: String,
 }
+
+pub type ClearBucketQuotaResponse<'a> = GetBucketQuotaArgs;

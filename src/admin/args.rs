@@ -19,3 +19,5 @@ pub struct SetBucketQuotaArgs<'a> {
     pub bucket_name: &'a str,
     pub quota: &'a Quota,
 }
+
+pub type ClearBucketQuotaArgs<'a> = GetBucketQuotaArgs;
