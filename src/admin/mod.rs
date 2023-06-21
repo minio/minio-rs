@@ -82,13 +82,10 @@ impl<'a> AdminClient<'a> {
             .await?;
 
         let headers = resp.headers().clone();
-        let body = resp.bytes().await.unwrap().to_vec();
-        let quota: Quota = serde_json::from_str(&String::from_utf8(body).unwrap())?;
 
         Ok(ClearBucketQuotaResponse{
             headers,
             bucket_name: args.bucket_name.into(),
-            quota,
         })
     }
 
