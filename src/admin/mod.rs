@@ -54,43 +54,6 @@ impl<'a> AdminClient<'a> {
             quota,
         })
     }
-
-    pub async fn set_bucket_quota(
-        &self,
-        args: &SetBucketQuotaArgs<'_>,
-    ) -> Result<SetBucketQuotaResponse, Error> {
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        let mut query_params = Multimap::new();
-        query_params.insert("bucket".into(), args.bucket_name.into());
-
-        let mut query_params = Multimap::new();
-        query_params.insert("bucket".into(), args.bucket_name.into());
-
-        let data = serde_json::to_string(&args.quota)?;
-
-        let resp = self
-            .client
-            .execute(
-                Method::PUT,
-                &"us-east-1".into(),
-                &mut headers,
-                &query_params,
-                "minio/admin/v3/set-bucket-quota".into(),
-                None,
-                Some(data.as_bytes()),
-            )
-            .await?;
-
-        let headers = resp.headers().clone();
-
-        Ok(SetBucketQuotaResponse {
-            headers,
-            bucket_name: args.bucket_name.into(),
-        })
-    }
 }
 
 impl<'a> AdminClient<'a> {
