@@ -14,4 +14,4 @@ pub struct SetBucketQuotaResponse {
     pub bucket_name: String,
 }
 
-pub type ClearBucketQuotaResponse<'a> = GetBucketQuotaArgs;
+pub type ClearBucketQuotaResponse<'a> = SetBucketQuotaResponse;
