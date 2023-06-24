@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::hash::Hash;
 
 fn default_policy_version() -> String {
     "2012-10-17".into()
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Action {
     #[serde(rename = "s3:*")]
     All,
@@ -262,7 +263,7 @@ pub enum ConditionOperator {
     Null,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Effect {
     Allow,
     Deny,
@@ -274,7 +275,7 @@ impl Default for Effect {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "PascalCase")]
 pub struct Statement {
     pub effect: Effect,
@@ -291,7 +292,7 @@ pub struct Statement {
     pub sid: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "PascalCase")]
 pub struct Policy {
     #[serde(default = "default_policy_version")]
