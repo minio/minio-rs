@@ -361,7 +361,7 @@ impl SortedPolicy{
 
 impl From<Policy> for SortedPolicy {
     fn from(value: Policy) -> Self {
-        Self(value)
+        Self::new(value)
     }
 }
 
@@ -373,7 +373,7 @@ impl From<SortedPolicy> for Policy {
 
 impl From<Statement> for SortedStatement {
     fn from(value: Statement) -> Self {
-        Self(value)
+        Self::new(value)
     }
 }
 
