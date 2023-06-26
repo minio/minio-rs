@@ -333,6 +333,7 @@ impl Policy {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct SortedStatement(Statement);
 impl SortedStatement {
     pub fn new(mut statement: Statement) -> Self {
@@ -345,6 +346,7 @@ impl SortedStatement {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct SortedPolicy(Policy);
 impl SortedPolicy{
     pub fn new(mut policy: Policy) -> Self {
