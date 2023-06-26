@@ -313,4 +313,78 @@ impl Statement {
     pub fn new_resource(res: &str) -> String {
         format!("arn:aws:s3:::{res}")
     }
+
+    pub fn sort(&mut self) -> &mut Self {
+        self.action.sort();
+        if let Some(res) = &mut self.resource {
+            res.sort();
+        }
+        self
+    }
+}
+
+impl Policy {
+    pub fn sort(&mut self) -> &mut Self {
+        self.statement.sort();
+        self.statement.iter_mut().for_each(|x| {
+            x.sort();
+        });
+        self
+    }
+}
+
+pub struct SortedStatement(Statement);
+impl SortedStatement {
+    pub fn new(mut statement: Statement) -> Self {
+        statement.sort();
+        Self (statement)
+    }
+
+    pub fn get(&self) -> &Statement{
+        &self.0
+    }
+
+    pub fn get_mut(&mut self) -> &mut Statement {
+        &mut self.0
+    }
+}
+
+pub struct SortedPolicy(Policy);
+impl SortedPolicy{
+    pub fn new(mut policy: Policy) -> Self {
+        policy.sort();
+        Self (policy)
+    }
+
+    pub fn get(&self) -> &Policy {
+        &self.0
+    }
+
+    pub fn get_mut(&mut self) -> &mut Policy {
+        &mut self.0
+    }
+}
+
+impl From<Policy> for SortedPolicy {
+    fn from(value: Policy) -> Self {
+        Self(value)
+    }
+}
+
+impl From<SortedPolicy> for Policy {
+    fn from(value: SortedPolicy) -> Self {
+        value.0
+    }
+}
+
+impl From<Statement> for SortedStatement {
+    fn from(value: Statement) -> Self {
+        Self(value)
+    }
+}
+
+impl From<SortedStatement> for Statement {
+    fn from(value: SortedStatement) -> Self {
+        value.0
+    }
 }
