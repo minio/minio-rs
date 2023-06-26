@@ -343,10 +343,6 @@ impl SortedStatement {
     pub fn get(&self) -> &Statement{
         &self.0
     }
-
-    pub fn get_mut(&mut self) -> &mut Statement {
-        &mut self.0
-    }
 }
 
 pub struct SortedPolicy(Policy);
@@ -358,10 +354,6 @@ impl SortedPolicy{
 
     pub fn get(&self) -> &Policy {
         &self.0
-    }
-
-    pub fn get_mut(&mut self) -> &mut Policy {
-        &mut self.0
     }
 }
 
