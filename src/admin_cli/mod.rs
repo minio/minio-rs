@@ -227,6 +227,8 @@ impl AdminCliClient {
             )
             .await?;
 
+        tempfile_path.close()?;
+
         if process_response.output.status.success() {
             Ok(CreatePolicyResponse {
                 policy_name: args.policy_name.into(),
