@@ -110,6 +110,7 @@ impl AdminCliClient {
         }
 
         let output = cmd_base
+            .kill_on_drop(true)
             .output()
             .await
             .map_err(|x| Error::ExecutionError(format!("{}: {}", cmd_string, x)))?;
