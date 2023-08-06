@@ -16,11 +16,22 @@
 //! HTTP URL definitions
 
 use crate::s3::error::Error;
+use crate::s3::utils::match_hostname;
 use crate::s3::utils::{to_query_string, Multimap};
 use derivative::Derivative;
 use hyper::http::Method;
 use hyper::Uri;
+use lazy_static::lazy_static;
+use regex::Regex;
 use std::fmt;
+
+const AWS_S3_PREFIX: &str = r"^(((bucket\.|accesspoint\.)vpce(-[a-z_\d]+)+\.s3\.)|([a-z_\d-]{1,63}\.)s3-control(-[a-z_\d]+)*\.|(s3(-[a-z_\d]+)*\.))";
+
+lazy_static! {
+    static ref AWS_ELB_ENDPOINT_REGEX: Regex =
+        Regex::new(r"^[a-z_\d-]{1,63}\.[a-z_\d-]{1,63}\.elb\.amazonaws\.com$").unwrap();
+    static ref AWS_S3_PREFIX_REGEX: Regex = Regex::new(AWS_S3_PREFIX).unwrap();
+}
 
 #[derive(Derivative)]
 #[derivative(Clone, Debug, Default)]
@@ -75,20 +86,120 @@ impl fmt::Display for Url {
     }
 }
 
-fn extract_region(host: &str) -> String {
-    let tokens: Vec<&str> = host.split('.').collect();
-    let region = match tokens.get(1) {
-        Some(r) => match *r {
-            "dualstack" => match tokens.get(2) {
-                Some(t) => t,
-                _ => "",
-            },
-            "amazonaws" => "",
-            _ => r,
-        },
-        _ => "",
-    };
-    region.to_string()
+pub fn match_aws_endpoint(value: &str) -> bool {
+    lazy_static! {
+        static ref AWS_ENDPOINT_REGEX: Regex = Regex::new(r".*\.amazonaws\.com(|\.cn)$").unwrap();
+    }
+
+    AWS_ENDPOINT_REGEX.is_match(value.to_lowercase().as_str())
+}
+
+pub fn match_aws_s3_endpoint(value: &str) -> bool {
+    lazy_static! {
+        static ref AWS_S3_ENDPOINT_REGEX: Regex = Regex::new(
+            &(AWS_S3_PREFIX.to_string() + r"([a-z_\d-]{1,63}\.)*amazonaws\.com(|\.cn)$")
+        )
+        .unwrap();
+    }
+
+    let binding = value.to_lowercase();
+    let lvalue = binding.as_str();
+
+    if !AWS_S3_ENDPOINT_REGEX.is_match(lvalue) {
+        return false;
+    }
+
+    for token in lvalue.split('.') {
+        if token.starts_with('-')
+            || token.starts_with('_')
+            || token.ends_with('-')
+            || token.ends_with('_')
+            || token.starts_with("vpce-_")
+            || token.starts_with("s3-control-_")
+            || token.starts_with("s3-_")
+        {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn get_aws_info(
+    host: &String,
+    https: bool,
+    region: &mut String,
+    aws_s3_prefix: &mut String,
+    aws_domain_suffix: &mut String,
+    dualstack: &mut bool,
+) -> Result<(), Error> {
+    if !match_hostname(host.as_str()) {
+        return Ok(());
+    }
+
+    if AWS_ELB_ENDPOINT_REGEX.is_match(host.as_str()) {
+        let token = host
+            .get(..host.rfind(".elb.amazonaws.com").unwrap() - 1)
+            .unwrap();
+        *region = token
+            .get(token.rfind('.').unwrap() + 1..)
+            .unwrap()
+            .to_string();
+        return Ok(());
+    }
+
+    if !match_aws_endpoint(host.as_str()) {
+        return Ok(());
+    }
+
+    if !match_aws_s3_endpoint(host.as_str()) {
+        return Err(Error::UrlBuildError(
+            String::from("invalid Amazon AWS host ") + host,
+        ));
+    }
+
+    let matcher = AWS_S3_PREFIX_REGEX.find(host.as_str()).unwrap();
+    let s3_prefix = host.get(..matcher.end()).unwrap();
+
+    if s3_prefix.contains("s3-accesspoint") && !https {
+        return Err(Error::UrlBuildError(
+            String::from("use HTTPS scheme for host ") + host,
+        ));
+    }
+
+    let mut tokens: Vec<_> = host.get(matcher.len()..).unwrap().split('.').collect();
+    *dualstack = tokens[0] == "dualstack";
+    if *dualstack {
+        tokens.remove(0);
+    }
+
+    let mut region_in_host = String::new();
+    if tokens[0] != "vpce" && tokens[0] != "amazonaws" {
+        region_in_host = tokens[0].to_string();
+        tokens.remove(0);
+    }
+
+    let domain_suffix = tokens.join(".");
+
+    if host == "s3-external-1.amazonaws.com" {
+        region_in_host = "us-east-1".to_string();
+    }
+    if host == "s3-us-gov-west-1.amazonaws.com" || host == "s3-fips-us-gov-west-1.amazonaws.com" {
+        region_in_host = "us-gov-west-1".to_string();
+    }
+
+    if domain_suffix.ends_with(".cn") && !s3_prefix.ends_with("s3-accelerate.") && region.is_empty()
+    {
+        return Err(Error::UrlBuildError(
+            String::from("region missing in Amazon S3 China endpoint ") + host,
+        ));
+    }
+
+    *region = region_in_host;
+    *aws_s3_prefix = s3_prefix.to_string();
+    *aws_domain_suffix = domain_suffix;
+
+    Ok(())
 }
 
 #[derive(Derivative)]
@@ -100,13 +211,89 @@ pub struct BaseUrl {
     host: String,
     port: u16,
     pub region: String,
-    pub aws_host: bool,
-    accelerate_host: bool,
-    dualstack_host: bool,
-    virtual_style: bool,
+    aws_s3_prefix: String,
+    aws_domain_suffix: String,
+    pub dualstack: bool,
+    pub virtual_style: bool,
 }
 
 impl BaseUrl {
+    /// Checks base URL is AWS host
+    pub fn is_aws_host(&self) -> bool {
+        !self.aws_domain_suffix.is_empty()
+    }
+
+    fn build_aws_url(
+        &self,
+        url: &mut Url,
+        bucket_name: &str,
+        enforce_path_style: bool,
+        region: &str,
+    ) -> Result<(), Error> {
+        let mut host = String::from(&self.aws_s3_prefix);
+        host.push_str(&self.aws_domain_suffix);
+        if host == "s3-external-1.amazonaws.com"
+            || host == "s3-us-gov-west-1.amazonaws.com"
+            || host == "s3-fips-us-gov-west-1.amazonaws.com"
+        {
+            url.host = host;
+            return Ok(());
+        }
+
+        host = String::from(&self.aws_s3_prefix);
+        if self.aws_s3_prefix.contains("s3-accelerate") {
+            if bucket_name.contains('.') {
+                return Err(Error::UrlBuildError(String::from(
+                    "bucket name with '.' is not allowed for accelerate endpoint",
+                )));
+            }
+
+            if enforce_path_style {
+                host = host.replacen("-accelerate", "", 1);
+            }
+        }
+
+        if self.dualstack {
+            host.push_str("dualstack.");
+        }
+        if !self.aws_s3_prefix.contains("s3-accelerate") {
+            host.push_str(region);
+            host.push('.');
+        }
+        host.push_str(&self.aws_domain_suffix);
+
+        url.host = host;
+
+        Ok(())
+    }
+
+    fn build_list_buckets_url(&self, url: &mut Url, region: &String) {
+        if self.aws_domain_suffix.is_empty() {
+            return;
+        }
+
+        let mut host = String::from(&self.aws_s3_prefix);
+        host.push_str(&self.aws_domain_suffix);
+        if host == "s3-external-1.amazonaws.com"
+            || host == "s3-us-gov-west-1.amazonaws.com"
+            || host == "s3-fips-us-gov-west-1.amazonaws.com"
+        {
+            url.host = host;
+            return;
+        }
+
+        let mut s3_prefix = String::from(&self.aws_s3_prefix);
+        let mut domain_suffix = String::from(&self.aws_domain_suffix);
+        if s3_prefix.starts_with("s3.") || s3_prefix.starts_with("s3-") {
+            s3_prefix = "s3.".to_string();
+            domain_suffix = "amazonaws.com".to_string();
+            if self.aws_domain_suffix.ends_with(".cn") {
+                domain_suffix.push_str(".cn");
+            }
+        }
+        url.host = s3_prefix + region + "." + &domain_suffix;
+    }
+
     /// Builds URL from base URL for given parameters for S3 operation
     pub fn build_url(
         &self,
@@ -127,15 +314,13 @@ impl BaseUrl {
             https: self.https,
             host: self.host.clone(),
             port: self.port,
+            path: String::from("/"),
             query: query.clone(),
             ..Default::default()
         };
 
         if bucket_name.is_none() {
-            url.path.push('/');
-            if self.aws_host {
-                url.host = format!("s3.{}.{}", region, self.host);
-            }
+            self.build_list_buckets_url(&mut url, region);
             return Ok(url);
         }
 
@@ -151,44 +336,30 @@ impl BaseUrl {
 	// SSL certificate validation error.
 	    (bucket.contains('.') && self.https);
 
-        if self.aws_host {
-            let mut s3_domain = "s3.".to_string();
-            if self.accelerate_host {
-                if bucket.contains('.') {
-                    return Err(Error::UrlBuildError(String::from(
-                        "bucket name with '.' is not allowed for accelerate endpoint",
-                    )));
-                }
-
-                if !enforce_path_style {
-                    s3_domain = "s3-accelerate.".to_string();
-                }
-            }
-
-            if self.dualstack_host {
-                s3_domain.push_str("dualstack.");
-            }
-            if enforce_path_style || !self.accelerate_host {
-                s3_domain.push_str(region);
-                s3_domain.push('.');
-            }
-            url.host = s3_domain + &url.host;
+        if !self.aws_domain_suffix.is_empty() {
+            self.build_aws_url(&mut url, bucket, enforce_path_style, region)?;
         }
 
+        let mut host = String::from(&url.host);
+        let mut path = String::new();
+
         if enforce_path_style || !self.virtual_style {
-            url.path.push('/');
-            url.path.push_str(bucket);
+            path.push('/');
+            path.push_str(bucket);
         } else {
-            url.host = format!("{}.{}", bucket, url.host);
+            host = format!("{}.{}", bucket, url.host);
         }
 
         if let Some(v) = object_name {
             if !v.starts_with('/') {
-                url.path.push('/');
+                path.push('/');
             }
             // FIXME: urlencode path
-            url.path.push_str(v);
+            path.push_str(v);
         }
+
+        url.host = host;
+        url.path = path;
 
         Ok(url)
     }
@@ -259,42 +430,28 @@ impl BaseUrl {
             )));
         }
 
-        let mut accelerate_host = host.starts_with("s3-accelerate.");
-        let aws_host = (host.starts_with("s3.") || accelerate_host)
-            && (host.ends_with(".amazonaws.com") || host.ends_with(".amazonaws.com.cn"));
-        let virtual_style = aws_host || host.ends_with("aliyuncs.com");
-
         let mut region = String::new();
-        let mut dualstack_host = false;
-
-        if aws_host {
-            let mut aws_domain = "amazonaws.com";
-            region = extract_region(host);
-
-            let is_aws_china_host = host.ends_with(".cn");
-            if is_aws_china_host {
-                aws_domain = "amazonaws.com.cn";
-                if region.is_empty() {
-                    return Err(Error::InvalidBaseUrl(String::from(
-                        "region must be provided in Amazon S3 China endpoint",
-                    )));
-                }
-            }
-
-            dualstack_host = host.contains(".dualstack.");
-            host = aws_domain;
-        } else {
-            accelerate_host = false;
-        }
+        let mut aws_s3_prefix = String::new();
+        let mut aws_domain_suffix = String::new();
+        let mut dualstack: bool = false;
+        get_aws_info(
+            &host.to_string(),
+            https,
+            &mut region,
+            &mut aws_s3_prefix,
+            &mut aws_domain_suffix,
+            &mut dualstack,
+        )?;
+        let virtual_style = !aws_domain_suffix.is_empty() || host.ends_with("aliyuncs.com");
 
         Ok(BaseUrl {
             https,
             host: host.to_string(),
             port,
             region,
-            aws_host,
-            accelerate_host,
-            dualstack_host,
+            aws_s3_prefix,
+            aws_domain_suffix,
+            dualstack,
             virtual_style,
         })
     }

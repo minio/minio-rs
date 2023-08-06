@@ -244,6 +244,43 @@ pub fn get_canonical_headers(map: &Multimap) -> (String, String) {
     (signed_headers, canonical_headers)
 }
 
+/// Checks if given hostname is valid or not
+pub fn match_hostname(value: &str) -> bool {
+    lazy_static! {
+        static ref HOSTNAME_REGEX: Regex =
+            Regex::new(r"^([a-z_\d-]{1,63}\.)*([a-z_\d-]{1,63})$").unwrap();
+    }
+
+    if !HOSTNAME_REGEX.is_match(value.to_lowercase().as_str()) {
+        return false;
+    }
+
+    for token in value.split('.') {
+        if token.starts_with('-')
+            || token.starts_with('_')
+            || token.ends_with('-')
+            || token.ends_with('_')
+        {
+            return false;
+        }
+    }
+
+    true
+}
+
+/// Checks if given region is valid or not
+pub fn match_region(value: &str) -> bool {
+    lazy_static! {
+        static ref REGION_REGEX: Regex = Regex::new(r"^([a-z_\d-]{1,63})$").unwrap();
+    }
+
+    !REGION_REGEX.is_match(value.to_lowercase().as_str())
+        || value.starts_with('-')
+        || value.starts_with('_')
+        || value.ends_with('-')
+        || value.ends_with('_')
+}
+
 /// Validates given bucket name
 pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
     if bucket_name.trim().is_empty() {
@@ -265,14 +302,14 @@ pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
     }
 
     lazy_static! {
-        static ref VALID_IP_ADDR_REGEX: Regex = Regex::new("^(\\d+\\.){3}\\d+$").unwrap();
+    static ref IPV4_REGEX: Regex = Regex::new(r"^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$").unwrap();
         static ref VALID_BUCKET_NAME_REGEX: Regex =
             Regex::new("^[A-Za-z0-9][A-Za-z0-9\\.\\-_:]{1,61}[A-Za-z0-9]$").unwrap();
         static ref VALID_BUCKET_NAME_STRICT_REGEX: Regex =
             Regex::new("^[a-z0-9][a-z0-9\\.\\-]{1,61}[a-z0-9]$").unwrap();
     }
 
-    if VALID_IP_ADDR_REGEX.is_match(bucket_name) {
+    if IPV4_REGEX.is_match(bucket_name) {
         return Err(Error::InvalidBucketName(String::from(
             "bucket name cannot be an IP address",
         )));

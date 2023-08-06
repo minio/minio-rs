@@ -13,9 +13,10 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build
       run: |
         cargo fmt --all -- --check
