@@ -1669,7 +1669,9 @@ impl ReplicationRule {
     }
 
     pub fn to_xml(&self) -> String {
-        let mut data = self.destination.to_xml();
+        let mut data = String::from("<Rule>");
+
+        data.push_str(&self.destination.to_xml());
 
         if let Some(v) = self.delete_marker_replication_status {
             data.push_str("<DeleteMarkerReplication>");
@@ -1748,7 +1750,8 @@ impl ReplicationRule {
         });
         data.push_str("</Status>");
 
-        return data;
+        data.push_str("</Rule>");
+        data
     }
 }
 
@@ -1781,9 +1784,9 @@ impl ReplicationConfig {
         let mut data = String::from("<ReplicationConfiguration>");
 
         if let Some(v) = &self.role {
-            data.push_str("<Status>");
-            data.push_str(&v);
-            data.push_str("</Status>");
+            data.push_str("<Role>");
+            data.push_str(v);
+            data.push_str("</Role>");
         }
 
         for rule in &self.rules {
@@ -1791,7 +1794,7 @@ impl ReplicationConfig {
         }
 
         data.push_str("</ReplicationConfiguration>");
-        return data;
+        data
     }
 }
 
