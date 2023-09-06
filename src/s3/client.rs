@@ -55,7 +55,7 @@ fn url_decode(
         return Ok(Some(v.to_string()));
     }
 
-    return Ok(None);
+    Ok(None)
 }
 
 fn add_common_list_objects_query_params(
@@ -92,18 +92,18 @@ fn parse_common_list_objects_response(
     ),
     Error,
 > {
-    let encoding_type = get_option_text(&root, "EncodingType");
-    let prefix = url_decode(&encoding_type, Some(get_default_text(&root, "Prefix")))?;
+    let encoding_type = get_option_text(root, "EncodingType");
+    let prefix = url_decode(&encoding_type, Some(get_default_text(root, "Prefix")))?;
     Ok((
-        get_text(&root, "Name")?,
+        get_text(root, "Name")?,
         encoding_type,
         prefix,
-        get_option_text(&root, "Delimiter"),
-        match get_option_text(&root, "IsTruncated") {
+        get_option_text(root, "Delimiter"),
+        match get_option_text(root, "IsTruncated") {
             Some(v) => v.to_lowercase() == "true",
             None => false,
         },
-        match get_option_text(&root, "MaxKeys") {
+        match get_option_text(root, "MaxKeys") {
             Some(v) => Some(v.parse::<u16>()?),
             None => None,
         },
@@ -117,13 +117,9 @@ fn parse_list_objects_contents(
     encoding_type: &Option<String>,
     is_delete_marker: bool,
 ) -> Result<(), Error> {
-    loop {
-        let content = match root.take_child(tag) {
-            Some(v) => v,
-            None => break,
-        };
-
-        let etype = encoding_type.as_ref().map(|v| v.clone());
+    while let Some(v) = root.take_child(tag) {
+        let content = v;
+        let etype = encoding_type.as_ref().cloned();
         let key = url_decode(&etype, Some(get_text(&content, "Key")?))?.unwrap();
         let last_modified = Some(from_iso8601utc(&get_text(&content, "LastModified")?)?);
         let etag = get_option_text(&content, "ETag");
@@ -136,10 +132,7 @@ fn parse_list_objects_contents(
         let is_latest = get_default_text(&content, "IsLatest").to_lowercase() == "true";
         let version_id = get_option_text(&content, "VersionId");
         let (owner_id, owner_name) = match content.get_child("Owner") {
-            Some(v) => (
-                get_option_text(&v, "ID"),
-                get_option_text(&v, "DisplayName"),
-            ),
+            Some(v) => (get_option_text(v, "ID"), get_option_text(v, "DisplayName")),
             None => (None, None),
         };
         let user_metadata = match content.get_child("UserMetadata") {
@@ -148,7 +141,7 @@ fn parse_list_objects_contents(
                 for xml_node in &v.children {
                     let u = xml_node
                         .as_element()
-                        .ok_or(Error::XmlError(format!("unable to convert to element")))?;
+                        .ok_or(Error::XmlError("unable to convert to element".to_string()))?;
                     map.insert(
                         u.name.to_string(),
                         u.get_text().unwrap_or_default().to_string(),
@@ -161,17 +154,17 @@ fn parse_list_objects_contents(
 
         contents.push(Item {
             name: key,
-            last_modified: last_modified,
-            etag: etag,
-            owner_id: owner_id,
-            owner_name: owner_name,
-            size: size,
-            storage_class: storage_class,
-            is_latest: is_latest,
-            version_id: version_id,
-            user_metadata: user_metadata,
+            last_modified,
+            etag,
+            owner_id,
+            owner_name,
+            size,
+            storage_class,
+            is_latest,
+            version_id,
+            user_metadata,
             is_prefix: false,
-            is_delete_marker: is_delete_marker,
+            is_delete_marker,
             encoding_type: etype,
         });
     }
@@ -184,14 +177,10 @@ fn parse_list_objects_common_prefixes(
     root: &mut Element,
     encoding_type: &Option<String>,
 ) -> Result<(), Error> {
-    loop {
-        let common_prefix = match root.take_child("CommonPrefixes") {
-            Some(v) => v,
-            None => break,
-        };
-
+    while let Some(v) = root.take_child("CommonPrefixes") {
+        let common_prefix = v;
         contents.push(Item {
-            name: url_decode(&encoding_type, Some(get_text(&common_prefix, "Prefix")?))?.unwrap(),
+            name: url_decode(encoding_type, Some(get_text(&common_prefix, "Prefix")?))?.unwrap(),
             last_modified: None,
             etag: None,
             owner_id: None,
@@ -203,7 +192,7 @@ fn parse_list_objects_common_prefixes(
             user_metadata: None,
             is_prefix: true,
             is_delete_marker: false,
-            encoding_type: encoding_type.as_ref().map(|v| v.clone()),
+            encoding_type: encoding_type.as_ref().cloned(),
         });
     }
 
@@ -218,19 +207,17 @@ pub struct Client<'a> {
     pub ignore_cert_check: bool,
     pub user_agent: String,
     region_map: DashMap<String, String>,
-    debug: bool,
 }
 
 impl<'a> Client<'a> {
     pub fn new(base_url: BaseUrl, provider: Option<&(dyn Provider + Send + Sync)>) -> Client {
         Client {
-            base_url: base_url,
-            provider: provider,
+            base_url,
+            provider,
             ssl_cert_file: String::new(),
             ignore_cert_check: false,
             user_agent: String::new(),
             region_map: DashMap::new(),
-            debug: false,
         }
     }
 
@@ -238,7 +225,7 @@ impl<'a> Client<'a> {
         &self,
         headers: &mut Multimap,
         query_params: &Multimap,
-        region: &String,
+        region: &str,
         url: &Url,
         method: &Method,
         data: &[u8],
@@ -292,7 +279,7 @@ impl<'a> Client<'a> {
                 );
             }
             sign_v4_s3(
-                &method,
+                method,
                 &url.path,
                 region,
                 headers,
@@ -342,7 +329,7 @@ impl<'a> Client<'a> {
             }
         }
 
-        return Ok((code, message));
+        Ok((code, message))
     }
 
     fn get_error_response(
@@ -356,7 +343,7 @@ impl<'a> Client<'a> {
         object_name: Option<&str>,
         retry: bool,
     ) -> Error {
-        if body.len() > 0 {
+        if !body.is_empty() {
             return match header_map.get("Content-Type") {
                 Some(v) => match v.to_str() {
                     Ok(s) => match s.to_lowercase().contains("application/xml") {
@@ -438,11 +425,11 @@ impl<'a> Client<'a> {
         };
 
         Error::S3Error(ErrorResponse {
-            code: code,
-            message: message,
+            code,
+            message,
             resource: resource.to_string(),
-            request_id: request_id,
-            host_id: host_id,
+            request_id,
+            host_id,
             bucket_name: bucket_name.unwrap_or_default().to_string(),
             object_name: object_name.unwrap_or_default().to_string(),
         })
@@ -471,7 +458,7 @@ impl<'a> Client<'a> {
         }
         if !self.ssl_cert_file.is_empty() {
             let mut buf = Vec::new();
-            File::open(self.ssl_cert_file.to_string())?.read_to_end(&mut buf)?;
+            File::open(&self.ssl_cert_file)?.read_to_end(&mut buf)?;
             let cert = reqwest::Certificate::from_pem(&buf)?;
             builder = builder.add_root_certificate(cert);
         }
@@ -520,7 +507,7 @@ impl<'a> Client<'a> {
             _ => return Err(e),
         };
 
-        return Err(e);
+        Err(e)
     }
 
     pub async fn execute(
@@ -631,7 +618,7 @@ impl<'a> Client<'a> {
         &self,
         args: &AbortMultipartUploadArgs<'_>,
     ) -> Result<AbortMultipartUploadResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -649,8 +636,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 None,
             )
             .await?;
@@ -666,7 +653,7 @@ impl<'a> Client<'a> {
 
     pub async fn bucket_exists(&self, args: &BucketExistsArgs<'_>) -> Result<bool, Error> {
         let region;
-        match self.get_region(&args.bucket, args.region).await {
+        match self.get_region(args.bucket, args.region).await {
             Ok(r) => region = r,
             Err(e) => match e {
                 Error::S3Error(ref er) => {
@@ -693,8 +680,8 @@ impl<'a> Client<'a> {
                 Method::HEAD,
                 &region,
                 &mut headers,
-                &query_params,
-                Some(&args.bucket),
+                query_params,
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -706,9 +693,9 @@ impl<'a> Client<'a> {
                     if er.code == "NoSuchBucket" {
                         return Ok(false);
                     }
-                    return Err(e);
+                    Err(e)
                 }
-                _ => return Err(e),
+                _ => Err(e),
             },
         }
     }
@@ -717,7 +704,7 @@ impl<'a> Client<'a> {
         &self,
         args: &CompleteMultipartUploadArgs<'_>,
     ) -> Result<CompleteMultipartUploadResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut data = String::from("<CompleteMultipartUpload>");
         for part in args.parts.iter() {
@@ -752,9 +739,9 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
-                Some(&b),
+                Some(args.bucket),
+                Some(args.object),
+                Some(b),
             )
             .await?;
         let header_map = resp.headers().clone();
@@ -863,7 +850,7 @@ impl<'a> Client<'a> {
             }
         }
 
-        return Ok(part_count);
+        Ok(part_count)
     }
 
     #[async_recursion(?Send)]
@@ -872,7 +859,7 @@ impl<'a> Client<'a> {
         args: &mut ComposeObjectArgs<'_>,
         upload_id: &mut String,
     ) -> Result<ComposeObjectResponse, Error> {
-        let part_count = self.calculate_part_count(&mut args.sources).await?;
+        let part_count = self.calculate_part_count(args.sources).await?;
 
         if part_count == 1 && args.sources[0].offset.is_none() && args.sources[0].length.is_none() {
             let mut source =
@@ -1001,7 +988,7 @@ impl<'a> Client<'a> {
         let mut cmu_args =
             CompleteMultipartUploadArgs::new(args.bucket, args.object, upload_id, &parts)?;
         cmu_args.region = args.region;
-        return self.complete_multipart_upload(&cmu_args).await;
+        self.complete_multipart_upload(&cmu_args).await
     }
 
     pub async fn compose_object(
@@ -1017,11 +1004,11 @@ impl<'a> Client<'a> {
         let mut upload_id = String::new();
         let res = self.do_compose_object(args, &mut upload_id).await;
         if res.is_err() && !upload_id.is_empty() {
-            let amuargs = &AbortMultipartUploadArgs::new(&args.bucket, &args.object, &upload_id)?;
-            self.abort_multipart_upload(&amuargs).await?;
+            let amuargs = &AbortMultipartUploadArgs::new(args.bucket, args.object, &upload_id)?;
+            self.abort_multipart_upload(amuargs).await?;
         }
 
-        return res;
+        res
     }
 
     pub async fn copy_object(
@@ -1101,7 +1088,7 @@ impl<'a> Client<'a> {
             merge(&mut query_params, v);
         }
 
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let resp = self
             .execute(
@@ -1109,8 +1096,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 None,
             )
             .await?;
@@ -1136,7 +1123,7 @@ impl<'a> Client<'a> {
         &self,
         args: &CreateMultipartUploadArgs<'_>,
     ) -> Result<CreateMultipartUploadResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1161,8 +1148,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 None,
             )
             .await?;
@@ -1183,7 +1170,7 @@ impl<'a> Client<'a> {
         &self,
         args: &DeleteBucketEncryptionArgs<'_>,
     ) -> Result<DeleteBucketEncryptionResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1202,7 +1189,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -1222,9 +1209,9 @@ impl<'a> Client<'a> {
                             bucket_name: args.bucket.to_string(),
                         });
                     }
-                    return Err(e);
+                    Err(e)
                 }
-                _ => return Err(e),
+                _ => Err(e),
             },
         }
     }
@@ -1233,7 +1220,7 @@ impl<'a> Client<'a> {
         &self,
         args: &DisableObjectLegalHoldArgs<'_>,
     ) -> Result<DisableObjectLegalHoldResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1255,8 +1242,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 Some(b"<LegalHold><Status>OFF</Status></LegalHold>"),
             )
             .await?;
@@ -1274,7 +1261,7 @@ impl<'a> Client<'a> {
         &self,
         args: &DeleteBucketLifecycleArgs<'_>,
     ) -> Result<DeleteBucketLifecycleResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1293,7 +1280,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -1328,7 +1315,7 @@ impl<'a> Client<'a> {
         &self,
         args: &DeleteBucketPolicyArgs<'_>,
     ) -> Result<DeleteBucketPolicyResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1347,7 +1334,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -1367,9 +1354,9 @@ impl<'a> Client<'a> {
                             bucket_name: args.bucket.to_string(),
                         });
                     }
-                    return Err(e);
+                    Err(e)
                 }
-                _ => return Err(e),
+                _ => Err(e),
             },
         }
     }
@@ -1378,7 +1365,7 @@ impl<'a> Client<'a> {
         &self,
         args: &DeleteBucketReplicationArgs<'_>,
     ) -> Result<DeleteBucketReplicationResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1397,7 +1384,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -1417,9 +1404,9 @@ impl<'a> Client<'a> {
                             bucket_name: args.bucket.to_string(),
                         });
                     }
-                    return Err(e);
+                    Err(e)
                 }
-                _ => return Err(e),
+                _ => Err(e),
             },
         }
     }
@@ -1428,7 +1415,7 @@ impl<'a> Client<'a> {
         &self,
         args: &DeleteBucketTagsArgs<'_>,
     ) -> Result<DeleteBucketTagsResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1447,7 +1434,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -1482,7 +1469,7 @@ impl<'a> Client<'a> {
         &self,
         args: &DeleteObjectTagsArgs<'_>,
     ) -> Result<DeleteObjectTagsResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1504,8 +1491,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 None,
             )
             .await?;
@@ -1556,7 +1543,7 @@ impl<'a> Client<'a> {
 
         Ok(DownloadObjectResponse {
             headers: resp.headers().clone(),
-            region: args.region.map_or(String::new(), |v| String::from(v)),
+            region: args.region.map_or(String::new(), String::from),
             bucket_name: args.bucket.to_string(),
             object_name: args.object.to_string(),
             version_id: args.version_id.as_ref().map(|v| v.to_string()),
@@ -1567,7 +1554,7 @@ impl<'a> Client<'a> {
         &self,
         args: &EnableObjectLegalHoldArgs<'_>,
     ) -> Result<EnableObjectLegalHoldResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1589,8 +1576,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 Some(b"<LegalHold><Status>ON</Status></LegalHold>"),
             )
             .await?;
@@ -1608,7 +1595,7 @@ impl<'a> Client<'a> {
         &self,
         args: &GetBucketEncryptionArgs<'_>,
     ) -> Result<GetBucketEncryptionResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1627,7 +1614,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -1660,7 +1647,7 @@ impl<'a> Client<'a> {
         &self,
         args: &GetBucketLifecycleArgs<'_>,
     ) -> Result<GetBucketLifecycleResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1679,7 +1666,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -1690,12 +1677,12 @@ impl<'a> Client<'a> {
                 let body = resp.bytes().await?;
                 let root = Element::parse(body.reader())?;
 
-                return Ok(GetBucketLifecycleResponse {
+                Ok(GetBucketLifecycleResponse {
                     headers: header_map.clone(),
                     region: region.clone(),
                     bucket_name: args.bucket.to_string(),
                     config: LifecycleConfig::from_xml(&root)?,
-                });
+                })
             }
             Err(e) => match e {
                 Error::S3Error(ref err) => {
@@ -1707,9 +1694,9 @@ impl<'a> Client<'a> {
                             config: LifecycleConfig { rules: Vec::new() },
                         });
                     }
-                    return Err(e);
+                    Err(e)
                 }
-                _ => return Err(e),
+                _ => Err(e),
             },
         }
     }
@@ -1718,7 +1705,7 @@ impl<'a> Client<'a> {
         &self,
         args: &GetBucketNotificationArgs<'_>,
     ) -> Result<GetBucketNotificationResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1737,7 +1724,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -1747,19 +1734,19 @@ impl<'a> Client<'a> {
         let body = resp.bytes().await?;
         let mut root = Element::parse(body.reader())?;
 
-        return Ok(GetBucketNotificationResponse {
+        Ok(GetBucketNotificationResponse {
             headers: header_map.clone(),
             region: region.clone(),
             bucket_name: args.bucket.to_string(),
             config: NotificationConfig::from_xml(&mut root)?,
-        });
+        })
     }
 
     pub async fn get_bucket_policy(
         &self,
         args: &GetBucketPolicyArgs<'_>,
     ) -> Result<GetBucketPolicyResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1778,7 +1765,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -1802,9 +1789,9 @@ impl<'a> Client<'a> {
                             config: String::from("{}"),
                         });
                     }
-                    return Err(e);
+                    Err(e)
                 }
-                _ => return Err(e),
+                _ => Err(e),
             },
         }
     }
@@ -1813,7 +1800,7 @@ impl<'a> Client<'a> {
         &self,
         args: &GetBucketReplicationArgs<'_>,
     ) -> Result<GetBucketReplicationResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1832,7 +1819,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -1842,19 +1829,19 @@ impl<'a> Client<'a> {
         let body = resp.bytes().await?;
         let root = Element::parse(body.reader())?;
 
-        return Ok(GetBucketReplicationResponse {
+        Ok(GetBucketReplicationResponse {
             headers: header_map.clone(),
             region: region.clone(),
             bucket_name: args.bucket.to_string(),
             config: ReplicationConfig::from_xml(&root)?,
-        });
+        })
     }
 
     pub async fn get_bucket_tags(
         &self,
         args: &GetBucketTagsArgs<'_>,
     ) -> Result<GetBucketTagsResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1873,7 +1860,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -1886,21 +1873,18 @@ impl<'a> Client<'a> {
 
                 let element = root
                     .get_mut_child("TagSet")
-                    .ok_or(Error::XmlError(format!("<TagSet> tag not found")))?;
+                    .ok_or(Error::XmlError("<TagSet> tag not found".to_string()))?;
                 let mut tags = std::collections::HashMap::new();
-                loop {
-                    match element.take_child("Tag") {
-                        Some(v) => tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?),
-                        _ => break,
-                    };
+                while let Some(v) = element.take_child("Tag") {
+                    tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
                 }
 
-                return Ok(GetBucketTagsResponse {
+                Ok(GetBucketTagsResponse {
                     headers: header_map.clone(),
                     region: region.clone(),
                     bucket_name: args.bucket.to_string(),
-                    tags: tags,
-                });
+                    tags,
+                })
             }
             Err(e) => match e {
                 Error::S3Error(ref err) => {
@@ -1912,9 +1896,9 @@ impl<'a> Client<'a> {
                             tags: HashMap::new(),
                         });
                     }
-                    return Err(e);
+                    Err(e)
                 }
-                _ => return Err(e),
+                _ => Err(e),
             },
         }
     }
@@ -1923,7 +1907,7 @@ impl<'a> Client<'a> {
         &self,
         args: &GetBucketVersioningArgs<'_>,
     ) -> Result<GetBucketVersioningResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1942,7 +1926,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -1952,13 +1936,13 @@ impl<'a> Client<'a> {
         let body = resp.bytes().await?;
         let root = Element::parse(body.reader())?;
 
-        return Ok(GetBucketVersioningResponse {
+        Ok(GetBucketVersioningResponse {
             headers: header_map.clone(),
             region: region.clone(),
             bucket_name: args.bucket.to_string(),
             status: get_option_text(&root, "Status").map(|v| v == "Enabled"),
             mfa_delete: get_option_text(&root, "MFADelete").map(|v| v == "Enabled"),
-        });
+        })
     }
 
     pub async fn get_object(&self, args: &GetObjectArgs<'_>) -> Result<reqwest::Response, Error> {
@@ -1966,7 +1950,7 @@ impl<'a> Client<'a> {
             return Err(Error::SseTlsRequired(None));
         }
 
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1987,8 +1971,8 @@ impl<'a> Client<'a> {
             &region,
             &mut headers,
             &query_params,
-            Some(&args.bucket),
-            Some(&args.object),
+            Some(args.bucket),
+            Some(args.object),
             None,
         )
         .await
@@ -1998,7 +1982,7 @@ impl<'a> Client<'a> {
         &self,
         args: &GetObjectLockConfigArgs<'_>,
     ) -> Result<GetObjectLockConfigResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -2017,7 +2001,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -2027,19 +2011,19 @@ impl<'a> Client<'a> {
         let body = resp.bytes().await?;
         let root = Element::parse(body.reader())?;
 
-        return Ok(GetObjectLockConfigResponse {
+        Ok(GetObjectLockConfigResponse {
             headers: header_map.clone(),
             region: region.clone(),
             bucket_name: args.bucket.to_string(),
             config: ObjectLockConfig::from_xml(&root)?,
-        });
+        })
     }
 
     pub async fn get_object_retention(
         &self,
         args: &GetObjectRetentionArgs<'_>,
     ) -> Result<GetObjectRetentionResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -2061,8 +2045,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 None,
             )
             .await
@@ -2101,9 +2085,9 @@ impl<'a> Client<'a> {
                             retain_until_date: None,
                         });
                     }
-                    return Err(e);
+                    Err(e)
                 }
-                _ => return Err(e),
+                _ => Err(e),
             },
         }
     }
@@ -2112,7 +2096,7 @@ impl<'a> Client<'a> {
         &self,
         args: &GetObjectTagsArgs<'_>,
     ) -> Result<GetObjectTagsResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -2134,8 +2118,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 None,
             )
             .await?;
@@ -2146,13 +2130,10 @@ impl<'a> Client<'a> {
 
         let element = root
             .get_mut_child("TagSet")
-            .ok_or(Error::XmlError(format!("<TagSet> tag not found")))?;
+            .ok_or(Error::XmlError("<TagSet> tag not found".to_string()))?;
         let mut tags = std::collections::HashMap::new();
-        loop {
-            match element.take_child("Tag") {
-                Some(v) => tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?),
-                _ => break,
-            };
+        while let Some(v) = element.take_child("Tag") {
+            tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
         }
 
         return Ok(GetObjectTagsResponse {
@@ -2161,7 +2142,7 @@ impl<'a> Client<'a> {
             bucket_name: args.bucket.to_string(),
             object_name: args.object.to_string(),
             version_id: args.version_id.as_ref().map(|v| v.to_string()),
-            tags: tags,
+            tags,
         });
     }
 
@@ -2169,7 +2150,7 @@ impl<'a> Client<'a> {
         &self,
         args: &GetPresignedObjectUrlArgs<'_>,
     ) -> Result<GetPresignedObjectUrlResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut query_params = Multimap::new();
         if let Some(v) = &args.extra_query_params {
@@ -2227,12 +2208,12 @@ impl<'a> Client<'a> {
         policy: &PostPolicy<'_>,
     ) -> Result<HashMap<String, String>, Error> {
         if self.provider.is_none() {
-            return Err(Error::PostPolicyError(format!(
-                "anonymous access does not require presigned post form-data"
-            )));
+            return Err(Error::PostPolicyError(
+                "anonymous access does not require presigned post form-data".to_string(),
+            ));
         }
 
-        let region = self.get_region(&policy.bucket, policy.region).await?;
+        let region = self.get_region(policy.bucket, policy.region).await?;
         let creds = self.provider.unwrap().fetch();
         policy.form_data(
             creds.access_key,
@@ -2246,7 +2227,7 @@ impl<'a> Client<'a> {
         &self,
         args: &IsObjectLegalHoldEnabledArgs<'_>,
     ) -> Result<IsObjectLegalHoldEnabledResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -2268,8 +2249,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 None,
             )
             .await
@@ -2299,9 +2280,9 @@ impl<'a> Client<'a> {
                             enabled: false,
                         });
                     }
-                    return Err(e);
+                    Err(e)
                 }
-                _ => return Err(e),
+                _ => Err(e),
             },
         }
     }
@@ -2323,7 +2304,7 @@ impl<'a> Client<'a> {
                 Method::GET,
                 &String::from("us-east-1"),
                 &mut headers,
-                &query_params,
+                query_params,
                 None,
                 None,
                 None,
@@ -2337,12 +2318,8 @@ impl<'a> Client<'a> {
             .ok_or(Error::XmlError(String::from("<Buckets> tag not found")))?;
 
         let mut bucket_list: Vec<Bucket> = Vec::new();
-        loop {
-            let bucket = match buckets.take_child("Bucket") {
-                Some(b) => b,
-                None => break,
-            };
-
+        while let Some(b) = buckets.take_child("Bucket") {
+            let bucket = b;
             bucket_list.push(Bucket {
                 name: get_text(&bucket, "Name")?,
                 creation_date: from_iso8601utc(&get_text(&bucket, "CreationDate")?)?,
@@ -2365,7 +2342,7 @@ impl<'a> Client<'a> {
             )));
         }
 
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -2398,7 +2375,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -2419,9 +2396,10 @@ impl<'a> Client<'a> {
             buf.extend(chunk.iter().copied());
 
             while !done {
-                match buf.iter().position(|&v| v == '\n' as u8) {
+                match buf.iter().position(|&v| v == b'\n') {
                     Some(i) => {
                         let mut data = vec![0_u8; i + 1];
+                        #[allow(clippy::needless_range_loop)]
                         for j in 0..=i {
                             data[j] = buf.pop_front().ok_or(Error::InsufficientData(i, j))?;
                         }
@@ -2440,7 +2418,7 @@ impl<'a> Client<'a> {
         Ok(ListenBucketNotificationResponse::new(
             header_map,
             &region,
-            &args.bucket,
+            args.bucket,
         ))
     }
 
@@ -2448,7 +2426,7 @@ impl<'a> Client<'a> {
         &self,
         args: &ListObjectsV1Args<'_>,
     ) -> Result<ListObjectsV1Response, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -2476,7 +2454,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -2492,24 +2470,21 @@ impl<'a> Client<'a> {
         let mut contents: Vec<Item> = Vec::new();
         parse_list_objects_contents(&mut contents, &mut root, "Contents", &encoding_type, false)?;
         if is_truncated && next_marker.is_none() {
-            next_marker = match contents.last() {
-                Some(v) => Some(v.name.clone()),
-                None => None,
-            }
+            next_marker = contents.last().map(|v| v.name.clone())
         }
         parse_list_objects_common_prefixes(&mut contents, &mut root, &encoding_type)?;
 
         Ok(ListObjectsV1Response {
             headers: header_map,
-            name: name,
-            encoding_type: encoding_type,
-            prefix: prefix,
-            delimiter: delimiter,
-            is_truncated: is_truncated,
-            max_keys: max_keys,
-            contents: contents,
-            marker: marker,
-            next_marker: next_marker,
+            name,
+            encoding_type,
+            prefix,
+            delimiter,
+            is_truncated,
+            max_keys,
+            contents,
+            marker,
+            next_marker,
         })
     }
 
@@ -2517,7 +2492,7 @@ impl<'a> Client<'a> {
         &self,
         args: &ListObjectsV2Args<'_>,
     ) -> Result<ListObjectsV2Response, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -2555,7 +2530,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -2583,17 +2558,17 @@ impl<'a> Client<'a> {
 
         Ok(ListObjectsV2Response {
             headers: header_map,
-            name: name,
-            encoding_type: encoding_type,
-            prefix: prefix,
-            delimiter: delimiter,
-            is_truncated: is_truncated,
-            max_keys: max_keys,
-            contents: contents,
-            key_count: key_count,
-            start_after: start_after,
-            continuation_token: continuation_token,
-            next_continuation_token: next_continuation_token,
+            name,
+            encoding_type,
+            prefix,
+            delimiter,
+            is_truncated,
+            max_keys,
+            contents,
+            key_count,
+            start_after,
+            continuation_token,
+            next_continuation_token,
         })
     }
 
@@ -2601,7 +2576,7 @@ impl<'a> Client<'a> {
         &self,
         args: &ListObjectVersionsArgs<'_>,
     ) -> Result<ListObjectVersionsResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -2633,7 +2608,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -2661,22 +2636,22 @@ impl<'a> Client<'a> {
 
         Ok(ListObjectVersionsResponse {
             headers: header_map,
-            name: name,
-            encoding_type: encoding_type,
-            prefix: prefix,
-            delimiter: delimiter,
-            is_truncated: is_truncated,
-            max_keys: max_keys,
-            contents: contents,
-            key_marker: key_marker,
-            next_key_marker: next_key_marker,
-            version_id_marker: version_id_marker,
-            next_version_id_marker: next_version_id_marker,
+            name,
+            encoding_type,
+            prefix,
+            delimiter,
+            is_truncated,
+            max_keys,
+            contents,
+            key_marker,
+            next_key_marker,
+            version_id_marker,
+            next_version_id_marker,
         })
     }
 
     pub async fn list_objects(&self, args: &ListObjectsArgs<'_>) -> Result<(), Error> {
-        let mut lov1_args = ListObjectsV1Args::new(&args.bucket)?;
+        let mut lov1_args = ListObjectsV1Args::new(args.bucket)?;
         lov1_args.extra_headers = args.extra_headers;
         lov1_args.extra_query_params = args.extra_query_params;
         lov1_args.region = args.region;
@@ -2693,7 +2668,7 @@ impl<'a> Client<'a> {
         lov1_args.prefix = args.prefix;
         lov1_args.marker = args.marker.map(|x| x.to_string());
 
-        let mut lov2_args = ListObjectsV2Args::new(&args.bucket)?;
+        let mut lov2_args = ListObjectsV2Args::new(args.bucket)?;
         lov2_args.extra_headers = args.extra_headers;
         lov2_args.extra_query_params = args.extra_query_params;
         lov2_args.region = args.region;
@@ -2713,7 +2688,7 @@ impl<'a> Client<'a> {
         lov2_args.fetch_owner = args.fetch_owner;
         lov2_args.include_user_metadata = args.include_user_metadata;
 
-        let mut lov_args = ListObjectVersionsArgs::new(&args.bucket)?;
+        let mut lov_args = ListObjectVersionsArgs::new(args.bucket)?;
         lov_args.extra_headers = args.extra_headers;
         lov_args.extra_query_params = args.extra_query_params;
         lov_args.region = args.region;
@@ -2811,8 +2786,8 @@ impl<'a> Client<'a> {
                 Method::PUT,
                 &region.to_string(),
                 &mut headers,
-                &query_params,
-                Some(&args.bucket),
+                query_params,
+                Some(args.bucket),
                 None,
                 body,
             )
@@ -2887,7 +2862,7 @@ impl<'a> Client<'a> {
                 }
             } else {
                 let mut size = part_size + 1;
-                let mut newbuf = match one_byte.len() == 1 {
+                let newbuf = match one_byte.len() == 1 {
                     true => {
                         buf[0] = one_byte.pop().unwrap();
                         size -= 1;
@@ -2897,7 +2872,7 @@ impl<'a> Client<'a> {
                     false => buf,
                 };
 
-                let n = Client::read_part(&mut args.stream, &mut newbuf, size)?;
+                let n = Client::read_part(&mut args.stream, newbuf, size)?;
                 bytes_read += n;
 
                 // If bytes read is less than or equals to part size, then we have reached last part.
@@ -2914,7 +2889,7 @@ impl<'a> Client<'a> {
             uploaded_size += part_size;
 
             if part_count == 1_i16 {
-                let mut poaargs = PutObjectApiArgs::new(&args.bucket, &args.object, &data)?;
+                let mut poaargs = PutObjectApiArgs::new(args.bucket, args.object, data)?;
                 poaargs.extra_query_params = args.extra_query_params;
                 poaargs.region = args.region;
                 poaargs.headers = Some(&headers);
@@ -2923,7 +2898,7 @@ impl<'a> Client<'a> {
             }
 
             if upload_id.is_empty() {
-                let mut cmuargs = CreateMultipartUploadArgs::new(&args.bucket, &args.object)?;
+                let mut cmuargs = CreateMultipartUploadArgs::new(args.bucket, args.object)?;
                 cmuargs.extra_query_params = args.extra_query_params;
                 cmuargs.region = args.region;
                 cmuargs.headers = Some(&headers);
@@ -2933,11 +2908,11 @@ impl<'a> Client<'a> {
             }
 
             let mut upargs = UploadPartArgs::new(
-                &args.bucket,
-                &args.object,
-                &upload_id,
+                args.bucket,
+                args.object,
+                upload_id,
                 part_number as u16,
-                &data,
+                data,
             )?;
             upargs.region = args.region;
 
@@ -2958,10 +2933,10 @@ impl<'a> Client<'a> {
         }
 
         let mut cmuargs =
-            CompleteMultipartUploadArgs::new(&args.bucket, &args.object, &upload_id, &parts)?;
+            CompleteMultipartUploadArgs::new(args.bucket, args.object, upload_id, &parts)?;
         cmuargs.region = args.region;
 
-        return self.complete_multipart_upload(&cmuargs).await;
+        self.complete_multipart_upload(&cmuargs).await
     }
 
     pub async fn put_object(
@@ -2975,8 +2950,8 @@ impl<'a> Client<'a> {
         }
 
         let bufsize = match args.part_count > 0 {
-            true => args.part_size as usize,
-            false => (args.part_size as usize) + 1,
+            true => args.part_size,
+            false => args.part_size + 1,
         };
         let mut buf = vec![0_u8; bufsize];
 
@@ -2986,18 +2961,18 @@ impl<'a> Client<'a> {
         std::mem::drop(buf);
 
         if res.is_err() && !upload_id.is_empty() {
-            let amuargs = &AbortMultipartUploadArgs::new(&args.bucket, &args.object, &upload_id)?;
-            self.abort_multipart_upload(&amuargs).await?;
+            let amuargs = &AbortMultipartUploadArgs::new(args.bucket, args.object, &upload_id)?;
+            self.abort_multipart_upload(amuargs).await?;
         }
 
-        return res;
+        res
     }
 
     pub async fn put_object_api(
         &self,
         args: &PutObjectApiArgs<'_>,
     ) -> Result<PutObjectApiResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = args.get_headers();
 
@@ -3015,9 +2990,9 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
-                Some(&args.data),
+                Some(args.bucket),
+                Some(args.object),
+                Some(args.data),
             )
             .await?;
         let header_map = resp.headers();
@@ -3042,7 +3017,7 @@ impl<'a> Client<'a> {
         &self,
         args: &RemoveBucketArgs<'_>,
     ) -> Result<RemoveBucketResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3058,8 +3033,8 @@ impl<'a> Client<'a> {
                 Method::DELETE,
                 &region,
                 &mut headers,
-                &query_params,
-                Some(&args.bucket),
+                query_params,
+                Some(args.bucket),
                 None,
                 None,
             )
@@ -3077,7 +3052,7 @@ impl<'a> Client<'a> {
         &self,
         args: &RemoveObjectArgs<'_>,
     ) -> Result<RemoveObjectResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3097,8 +3072,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 None,
             )
             .await?;
@@ -3108,10 +3083,7 @@ impl<'a> Client<'a> {
             region: region.to_string(),
             bucket_name: args.bucket.to_string(),
             object_name: args.object.to_string(),
-            version_id: match args.version_id {
-                Some(v) => Some(v.to_string()),
-                None => None,
-            },
+            version_id: args.version_id.map(|v| v.to_string()),
         })
     }
 
@@ -3119,7 +3091,7 @@ impl<'a> Client<'a> {
         &self,
         args: &RemoveObjectsApiArgs<'_>,
     ) -> Result<RemoveObjectsApiResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut data = String::from("<Delete>");
         if args.quiet {
@@ -3128,11 +3100,11 @@ impl<'a> Client<'a> {
         for object in args.objects.iter() {
             data.push_str("<Object>");
             data.push_str("<Key>");
-            data.push_str(&object.name);
+            data.push_str(object.name);
             data.push_str("</Key>");
             if let Some(v) = object.version_id {
                 data.push_str("<VersionId>");
-                data.push_str(&v);
+                data.push_str(v);
                 data.push_str("</VersionId>");
             }
             data.push_str("</Object>");
@@ -3168,9 +3140,9 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
-                Some(&b),
+                Some(b),
             )
             .await?;
         let header_map = resp.headers().clone();
@@ -3178,12 +3150,8 @@ impl<'a> Client<'a> {
         let mut root = Element::parse(body.reader())?;
 
         let mut objects: Vec<DeletedObject> = Vec::new();
-        loop {
-            let deleted = match root.take_child("Deleted") {
-                Some(v) => v,
-                None => break,
-            };
-
+        while let Some(v) = root.take_child("Deleted") {
+            let deleted = v;
             objects.push(DeletedObject {
                 name: get_text(&deleted, "Key")?,
                 version_id: get_option_text(&deleted, "VersionId"),
@@ -3193,12 +3161,8 @@ impl<'a> Client<'a> {
         }
 
         let mut errors: Vec<DeleteError> = Vec::new();
-        loop {
-            let error = match root.take_child("Error") {
-                Some(v) => v,
-                None => break,
-            };
-
+        while let Some(v) = root.take_child("Error") {
+            let error = v;
             errors.push(DeleteError {
                 code: get_text(&error, "Code")?,
                 message: get_text(&error, "Message")?,
@@ -3211,8 +3175,8 @@ impl<'a> Client<'a> {
             headers: header_map.clone(),
             region: region.clone(),
             bucket_name: args.bucket.to_string(),
-            objects: objects,
-            errors: errors,
+            objects,
+            errors,
         })
     }
 
@@ -3220,25 +3184,25 @@ impl<'a> Client<'a> {
         &self,
         args: &mut RemoveObjectsArgs<'_>,
     ) -> Result<RemoveObjectsResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         loop {
             let mut objects: Vec<DeleteObject> = Vec::new();
             for object in args.objects.take(1000) {
                 objects.push(*object);
             }
-            if objects.len() == 0 {
+            if objects.is_empty() {
                 break;
             }
 
-            let mut roa_args = RemoveObjectsApiArgs::new(&args.bucket, &objects)?;
+            let mut roa_args = RemoveObjectsApiArgs::new(args.bucket, &objects)?;
             roa_args.extra_headers = args.extra_headers;
             roa_args.extra_query_params = args.extra_query_params;
             roa_args.region = args.region;
             roa_args.bypass_governance_mode = args.bypass_governance_mode;
             roa_args.quiet = true;
             let resp = self.remove_objects_api(&roa_args).await?;
-            if resp.errors.len() > 0 {
+            if !resp.errors.is_empty() {
                 return Ok(resp);
             }
         }
@@ -3256,7 +3220,7 @@ impl<'a> Client<'a> {
         &self,
         args: &SetBucketEncryptionArgs<'_>,
     ) -> Result<SetBucketEncryptionResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3275,7 +3239,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 Some(args.config.to_xml().as_bytes()),
             )
@@ -3292,7 +3256,7 @@ impl<'a> Client<'a> {
         &self,
         args: &SetBucketLifecycleArgs<'_>,
     ) -> Result<SetBucketLifecycleResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3311,7 +3275,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 Some(args.config.to_xml().as_bytes()),
             )
@@ -3328,7 +3292,7 @@ impl<'a> Client<'a> {
         &self,
         args: &SetBucketNotificationArgs<'_>,
     ) -> Result<SetBucketNotificationResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3347,7 +3311,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 Some(args.config.to_xml().as_bytes()),
             )
@@ -3364,7 +3328,7 @@ impl<'a> Client<'a> {
         &self,
         args: &SetBucketPolicyArgs<'_>,
     ) -> Result<SetBucketPolicyResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3383,7 +3347,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 Some(args.config.as_bytes()),
             )
@@ -3400,7 +3364,7 @@ impl<'a> Client<'a> {
         &self,
         args: &SetBucketReplicationArgs<'_>,
     ) -> Result<SetBucketReplicationResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3419,7 +3383,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 Some(args.config.to_xml().as_bytes()),
             )
@@ -3436,7 +3400,7 @@ impl<'a> Client<'a> {
         &self,
         args: &SetBucketTagsArgs<'_>,
     ) -> Result<SetBucketTagsResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3455,10 +3419,10 @@ impl<'a> Client<'a> {
             for (key, value) in args.tags.iter() {
                 data.push_str("<Tag>");
                 data.push_str("<Key>");
-                data.push_str(&key);
+                data.push_str(key);
                 data.push_str("</Key>");
                 data.push_str("<Value>");
-                data.push_str(&value);
+                data.push_str(value);
                 data.push_str("</Value>");
                 data.push_str("</Tag>");
             }
@@ -3472,7 +3436,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 Some(data.as_bytes()),
             )
@@ -3489,7 +3453,7 @@ impl<'a> Client<'a> {
         &self,
         args: &SetBucketVersioningArgs<'_>,
     ) -> Result<SetBucketVersioningResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3525,7 +3489,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 Some(data.as_bytes()),
             )
@@ -3542,7 +3506,7 @@ impl<'a> Client<'a> {
         &self,
         args: &SetObjectLockConfigArgs<'_>,
     ) -> Result<SetObjectLockConfigResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3561,7 +3525,7 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
+                Some(args.bucket),
                 None,
                 Some(args.config.to_xml().as_bytes()),
             )
@@ -3578,7 +3542,7 @@ impl<'a> Client<'a> {
         &self,
         args: &SetObjectRetentionArgs<'_>,
     ) -> Result<SetObjectRetentionResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3613,7 +3577,7 @@ impl<'a> Client<'a> {
         }
         data.push_str("</Retention>");
 
-        headers.insert(String::from("Content-MD5"), md5sum_hash(&data.as_bytes()));
+        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_bytes()));
 
         let resp = self
             .execute(
@@ -3621,8 +3585,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 Some(data.as_bytes()),
             )
             .await?;
@@ -3640,7 +3604,7 @@ impl<'a> Client<'a> {
         &self,
         args: &SetObjectTagsArgs<'_>,
     ) -> Result<SetObjectTagsResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3662,10 +3626,10 @@ impl<'a> Client<'a> {
             for (key, value) in args.tags.iter() {
                 data.push_str("<Tag>");
                 data.push_str("<Key>");
-                data.push_str(&key);
+                data.push_str(key);
                 data.push_str("</Key>");
                 data.push_str("<Value>");
-                data.push_str(&value);
+                data.push_str(value);
                 data.push_str("</Value>");
                 data.push_str("</Tag>");
             }
@@ -3679,8 +3643,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 Some(data.as_bytes()),
             )
             .await?;
@@ -3702,7 +3666,7 @@ impl<'a> Client<'a> {
             return Err(Error::SseTlsRequired(None));
         }
 
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let data = args.request.to_xml();
         let b = data.as_bytes();
@@ -3711,7 +3675,7 @@ impl<'a> Client<'a> {
         if let Some(v) = &args.extra_headers {
             merge(&mut headers, v);
         }
-        headers.insert(String::from("Content-MD5"), md5sum_hash(&b));
+        headers.insert(String::from("Content-MD5"), md5sum_hash(b));
 
         let mut query_params = Multimap::new();
         if let Some(v) = &args.extra_query_params {
@@ -3726,14 +3690,14 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
-                Some(&b),
+                Some(args.bucket),
+                Some(args.object),
+                Some(b),
             )
             .await?,
             &region,
-            &args.bucket,
-            &args.object,
+            args.bucket,
+            args.object,
         ))
     }
 
@@ -3745,7 +3709,7 @@ impl<'a> Client<'a> {
             return Err(Error::SseTlsRequired(None));
         }
 
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3767,13 +3731,13 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 None,
             )
             .await?;
 
-        StatObjectResponse::new(&resp.headers(), &region, &args.bucket, &args.object)
+        StatObjectResponse::new(resp.headers(), &region, args.bucket, args.object)
     }
 
     pub async fn upload_object(
@@ -3811,7 +3775,7 @@ impl<'a> Client<'a> {
         query_params.insert(String::from("partNumber"), args.part_number.to_string());
         query_params.insert(String::from("uploadId"), args.upload_id.to_string());
 
-        let mut poa_args = PutObjectApiArgs::new(&args.bucket, &args.object, &args.data)?;
+        let mut poa_args = PutObjectApiArgs::new(args.bucket, args.object, args.data)?;
         poa_args.query_params = Some(&query_params);
 
         poa_args.extra_headers = args.extra_headers;
@@ -3831,7 +3795,7 @@ impl<'a> Client<'a> {
         &self,
         args: &UploadPartCopyArgs<'_>,
     ) -> Result<UploadPartCopyResponse, Error> {
-        let region = self.get_region(&args.bucket, args.region).await?;
+        let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -3852,8 +3816,8 @@ impl<'a> Client<'a> {
                 &region,
                 &mut headers,
                 &query_params,
-                Some(&args.bucket),
-                Some(&args.object),
+                Some(args.bucket),
+                Some(args.object),
                 None,
             )
             .await?;

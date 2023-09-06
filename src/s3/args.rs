@@ -67,10 +67,10 @@ fn object_write_args_headers(
         let mut tagging = String::new();
         for (key, value) in v.iter() {
             if !tagging.is_empty() {
-                tagging.push_str("&");
+                tagging.push('&');
             }
             tagging.push_str(&urlencode(key));
-            tagging.push_str("=");
+            tagging.push('=');
             tagging.push_str(&urlencode(value));
         }
 
@@ -94,7 +94,7 @@ fn object_write_args_headers(
         );
     }
 
-    return map;
+    map
 }
 
 fn calc_part_info(
@@ -146,7 +146,7 @@ fn calc_part_info(
         ));
     }
 
-    return Ok((psize, part_count));
+    Ok((psize, part_count))
 }
 
 #[derive(Clone, Debug, Default)]
@@ -307,7 +307,7 @@ impl<'a> AbortMultipartUploadArgs<'a> {
             region: None,
             bucket: bucket_name,
             object: object_name,
-            upload_id: upload_id,
+            upload_id,
         })
     }
 }
@@ -344,7 +344,7 @@ impl<'a> CompleteMultipartUploadArgs<'a> {
             )));
         }
 
-        if parts.len() == 0 {
+        if parts.is_empty() {
             return Err(Error::EmptyParts(String::from("parts cannot be empty")));
         }
 
@@ -354,8 +354,8 @@ impl<'a> CompleteMultipartUploadArgs<'a> {
             region: None,
             bucket: bucket_name,
             object: object_name,
-            upload_id: upload_id,
-            parts: parts,
+            upload_id,
+            parts,
         })
     }
 }
@@ -437,7 +437,7 @@ impl<'a> PutObjectApiArgs<'a> {
             tags: None,
             retention: None,
             legal_hold: false,
-            data: data,
+            data,
             query_params: None,
         })
     }
@@ -495,7 +495,7 @@ impl<'a> UploadPartArgs<'a> {
             )));
         }
 
-        if part_number < 1 || part_number > 10000 {
+        if !(1..=10000).contains(&part_number) {
             return Err(Error::InvalidPartNumber(String::from(
                 "part number must be between 1 and 1000",
             )));
@@ -513,9 +513,9 @@ impl<'a> UploadPartArgs<'a> {
             tags: None,
             retention: None,
             legal_hold: false,
-            upload_id: upload_id,
-            part_number: part_number,
-            data: data,
+            upload_id,
+            part_number,
+            data,
         })
     }
 
@@ -581,11 +581,11 @@ impl<'a> PutObjectArgs<'a> {
             tags: None,
             retention: None,
             legal_hold: false,
-            object_size: object_size,
+            object_size,
             part_size: psize,
-            part_count: part_count,
+            part_count,
             content_type: "application/octet-stream",
-            stream: stream,
+            stream,
         })
     }
 
@@ -659,13 +659,13 @@ impl<'a> ObjectConditionalReadArgs<'a> {
         if let Some(o) = offset {
             range.push_str("bytes=");
             range.push_str(&o.to_string());
-            range.push_str("-");
+            range.push('-');
             if let Some(l) = length {
                 range.push_str(&(o + l - 1).to_string());
             }
         }
 
-        return range;
+        range
     }
 
     pub fn get_headers(&self) -> Multimap {
@@ -673,7 +673,7 @@ impl<'a> ObjectConditionalReadArgs<'a> {
 
         let range = self.get_range_value();
         if !range.is_empty() {
-            headers.insert(String::from("Range"), range.clone());
+            headers.insert(String::from("Range"), range);
         }
 
         if let Some(v) = self.match_etag {
@@ -696,7 +696,7 @@ impl<'a> ObjectConditionalReadArgs<'a> {
             merge(&mut headers, &v.headers());
         }
 
-        return headers;
+        headers
     }
 
     pub fn get_copy_headers(&self) -> Multimap {
@@ -704,7 +704,7 @@ impl<'a> ObjectConditionalReadArgs<'a> {
 
         let mut copy_source = String::from("/");
         copy_source.push_str(self.bucket);
-        copy_source.push_str("/");
+        copy_source.push('/');
         copy_source.push_str(self.object);
         if let Some(v) = self.version_id {
             copy_source.push_str("?versionId=");
@@ -714,7 +714,7 @@ impl<'a> ObjectConditionalReadArgs<'a> {
 
         let range = self.get_range_value();
         if !range.is_empty() {
-            headers.insert(String::from("x-amz-copy-source-range"), range.clone());
+            headers.insert(String::from("x-amz-copy-source-range"), range);
         }
 
         if let Some(v) = self.match_etag {
@@ -746,7 +746,7 @@ impl<'a> ObjectConditionalReadArgs<'a> {
             merge(&mut headers, &v.copy_headers());
         }
 
-        return headers;
+        headers
     }
 }
 
@@ -782,7 +782,7 @@ impl<'a> RemoveObjectsApiArgs<'a> {
             bucket: bucket_name,
             bypass_governance_mode: false,
             quiet: true,
-            objects: objects,
+            objects,
         })
     }
 }
@@ -809,7 +809,7 @@ impl<'a> RemoveObjectsArgs<'a> {
             region: None,
             bucket: bucket_name,
             bypass_governance_mode: false,
-            objects: objects,
+            objects,
         })
     }
 }
@@ -960,7 +960,7 @@ impl<'a> ListObjectsArgs<'a> {
             recursive: false,
             use_api_v1: false,
             include_versions: false,
-            result_fn: result_fn,
+            result_fn,
         })
     }
 }
@@ -998,7 +998,7 @@ impl<'a> SelectObjectContentArgs<'a> {
             object: object_name,
             version_id: None,
             ssec: None,
-            request: request,
+            request,
         })
     }
 }
@@ -1029,7 +1029,7 @@ impl<'a> ListenBucketNotificationArgs<'a> {
             prefix: None,
             suffix: None,
             events: None,
-            event_fn: event_fn,
+            event_fn,
         })
     }
 }
@@ -1068,7 +1068,7 @@ impl<'a> UploadPartCopyArgs<'a> {
             )));
         }
 
-        if part_number < 1 || part_number > 10000 {
+        if !(1..=10000).contains(&part_number) {
             return Err(Error::InvalidPartNumber(String::from(
                 "part number must be between 1 and 1000",
             )));
@@ -1080,9 +1080,9 @@ impl<'a> UploadPartCopyArgs<'a> {
             region: None,
             bucket: bucket_name,
             object: object_name,
-            upload_id: upload_id,
-            part_number: part_number,
-            headers: headers,
+            upload_id,
+            part_number,
+            headers,
         })
     }
 }
@@ -1131,7 +1131,7 @@ impl<'a> CopyObjectArgs<'a> {
             tags: None,
             retention: None,
             legal_hold: false,
-            source: source,
+            source,
             metadata_directive: None,
             tagging_directive: None,
         })
@@ -1200,7 +1200,7 @@ impl<'a> ComposeSource<'a> {
     }
 
     pub fn get_object_size(&self) -> usize {
-        return self.object_size.expect("ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This shoud not happen.");
+        self.object_size.expect("ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This shoud not happen.")
     }
 
     pub fn get_headers(&self) -> Multimap {
@@ -1248,7 +1248,7 @@ impl<'a> ComposeSource<'a> {
 
         let mut copy_source = String::from("/");
         copy_source.push_str(self.bucket);
-        copy_source.push_str("/");
+        copy_source.push('/');
         copy_source.push_str(self.object);
         if let Some(v) = self.version_id {
             copy_source.push_str("?versionId=");
@@ -1291,7 +1291,7 @@ impl<'a> ComposeSource<'a> {
 
         self.headers = Some(headers);
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -1336,7 +1336,7 @@ impl<'a> ComposeObjectArgs<'a> {
             tags: None,
             retention: None,
             legal_hold: false,
-            sources: sources,
+            sources,
         })
     }
 
@@ -1378,7 +1378,7 @@ impl<'a> SetBucketEncryptionArgs<'a> {
             extra_query_params: None,
             region: None,
             bucket: bucket_name,
-            config: config,
+            config,
         })
     }
 }
@@ -1425,7 +1425,7 @@ impl<'a> SetBucketNotificationArgs<'a> {
             extra_query_params: None,
             region: None,
             bucket: bucket_name,
-            config: config,
+            config,
         })
     }
 }
@@ -1451,7 +1451,7 @@ impl<'a> SetBucketPolicyArgs<'a> {
             extra_query_params: None,
             region: None,
             bucket: bucket_name,
-            config: config,
+            config,
         })
     }
 }
@@ -1492,7 +1492,7 @@ impl<'a> SetBucketTagsArgs<'a> {
             extra_query_params: None,
             region: None,
             bucket: bucket_name,
-            tags: tags,
+            tags,
         })
     }
 }
@@ -1517,7 +1517,7 @@ impl<'a> SetBucketVersioningArgs<'a> {
             extra_query_params: None,
             region: None,
             bucket: bucket_name,
-            status: status,
+            status,
             mfa_delete: None,
         })
     }
@@ -1547,7 +1547,7 @@ impl<'a> SetObjectLockConfigArgs<'a> {
             extra_query_params: None,
             region: None,
             bucket: bucket_name,
-            config: config,
+            config,
         })
     }
 }
@@ -1628,7 +1628,7 @@ impl<'a> SetObjectTagsArgs<'a> {
             bucket: bucket_name,
             object: object_name,
             version_id: None,
-            tags: tags,
+            tags,
         })
     }
 }
@@ -1664,7 +1664,7 @@ impl<'a> GetPresignedObjectUrlArgs<'a> {
             bucket: bucket_name,
             object: object_name,
             version_id: None,
-            method: method,
+            method,
             expiry_seconds: Some(DEFAULT_EXPIRY_SECONDS),
             request_time: None,
         })
@@ -1693,7 +1693,7 @@ impl<'a> PostPolicy<'a> {
         Ok(PostPolicy {
             region: None,
             bucket: bucket_name,
-            expiration: expiration,
+            expiration,
             eq_conditions: HashMap::new(),
             starts_with_conditions: HashMap::new(),
             lower_limit: None,
@@ -1703,35 +1703,35 @@ impl<'a> PostPolicy<'a> {
 
     fn trim_dollar(value: &str) -> String {
         let mut s = value.to_string();
-        if s.starts_with("$") {
+        if s.starts_with('$') {
             s.remove(0);
         }
-        return s;
+        s
     }
 
     fn is_reserved_element(element: &str) -> bool {
-        return element == "bucket"
+        element == "bucket"
             || element == "x-amz-algorithm"
             || element == "x-amz-credential"
             || element == "x-amz-date"
             || element == "policy"
-            || element == "x-amz-signature";
+            || element == "x-amz-signature"
     }
 
     fn get_credential_string(access_key: &String, date: &UtcTime, region: &String) -> String {
-        return format!(
+        format!(
             "{}/{}/{}/s3/aws4_request",
             access_key,
             to_signer_date(*date),
             region
-        );
+        )
     }
 
     pub fn add_equals_condition(&mut self, element: &str, value: &str) -> Result<(), Error> {
         if element.is_empty() {
-            return Err(Error::PostPolicyError(format!(
-                "condition element cannot be empty"
-            )));
+            return Err(Error::PostPolicyError(
+                "condition element cannot be empty".to_string(),
+            ));
         }
 
         let v = PostPolicy::trim_dollar(element);
@@ -1742,7 +1742,7 @@ impl<'a> PostPolicy<'a> {
             )));
         }
 
-        if PostPolicy::is_reserved_element(&v.as_str()) {
+        if PostPolicy::is_reserved_element(v.as_str()) {
             return Err(Error::PostPolicyError(format!("{} cannot set", element)));
         }
 
@@ -1756,9 +1756,9 @@ impl<'a> PostPolicy<'a> {
 
     pub fn add_starts_with_condition(&mut self, element: &str, value: &str) -> Result<(), Error> {
         if element.is_empty() {
-            return Err(Error::PostPolicyError(format!(
-                "condition element cannot be empty"
-            )));
+            return Err(Error::PostPolicyError(
+                "condition element cannot be empty".to_string(),
+            ));
         }
 
         let v = PostPolicy::trim_dollar(element);
@@ -1772,12 +1772,11 @@ impl<'a> PostPolicy<'a> {
             )));
         }
 
-        if PostPolicy::is_reserved_element(&v.as_str()) {
+        if PostPolicy::is_reserved_element(v.as_str()) {
             return Err(Error::PostPolicyError(format!("{} cannot set", element)));
         }
 
-        self.starts_with_conditions
-            .insert(v.clone(), value.to_string());
+        self.starts_with_conditions.insert(v, value.to_string());
         Ok(())
     }
 
@@ -1791,9 +1790,9 @@ impl<'a> PostPolicy<'a> {
         upper_limit: usize,
     ) -> Result<(), Error> {
         if lower_limit > upper_limit {
-            return Err(Error::PostPolicyError(format!(
-                "lower limit cannot be greater than upper limit"
-            )));
+            return Err(Error::PostPolicyError(
+                "lower limit cannot be greater than upper limit".to_string(),
+            ));
         }
 
         self.lower_limit = Some(lower_limit);
@@ -1814,24 +1813,26 @@ impl<'a> PostPolicy<'a> {
         region: String,
     ) -> Result<HashMap<String, String>, Error> {
         if region.is_empty() {
-            return Err(Error::PostPolicyError(format!("region cannot be empty")));
+            return Err(Error::PostPolicyError("region cannot be empty".to_string()));
         }
 
         if !self.eq_conditions.contains_key("key")
             && !self.starts_with_conditions.contains_key("key")
         {
-            return Err(Error::PostPolicyError(format!("key condition must be set")));
+            return Err(Error::PostPolicyError(
+                "key condition must be set".to_string(),
+            ));
         }
 
         let mut conditions: Vec<Value> = Vec::new();
         conditions.push(json!([PostPolicy::EQ, "$bucket", self.bucket]));
         for (key, value) in &self.eq_conditions {
-            conditions.push(json!([PostPolicy::EQ, String::from("$") + &key, value]));
+            conditions.push(json!([PostPolicy::EQ, String::from("$") + key, value]));
         }
         for (key, value) in &self.starts_with_conditions {
             conditions.push(json!([
                 PostPolicy::STARTS_WITH,
-                String::from("$") + &key,
+                String::from("$") + key,
                 value
             ]));
         }
@@ -1916,7 +1917,7 @@ impl<'a> DownloadObjectArgs<'a> {
             object: object_name,
             version_id: None,
             ssec: None,
-            filename: filename,
+            filename,
             overwrite: false,
         })
     }
@@ -1978,11 +1979,11 @@ impl<'a> UploadObjectArgs<'a> {
             tags: None,
             retention: None,
             legal_hold: false,
-            object_size: object_size,
+            object_size,
             part_size: psize,
-            part_count: part_count,
+            part_count,
             content_type: "application/octet-stream",
-            filename: filename,
+            filename,
         })
     }
 }
