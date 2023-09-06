@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         None,
     );
 
-    let mut client = Client::new(base_url.clone(), Some(static_provider));
+    let mut client = Client::new(base_url.clone(), Some(&static_provider), None, None).unwrap();
 
     let bucket_name = "asiatrip";
 

@@ -77,8 +77,8 @@ struct ClientTest<'a> {
     base_url: BaseUrl,
     access_key: String,
     secret_key: String,
-    ignore_cert_check: bool,
-    ssl_cert_file: String,
+    ignore_cert_check: Option<bool>,
+    ssl_cert_file: Option<String>,
     client: Client<'a>,
     test_bucket: String,
 }
@@ -91,12 +91,16 @@ impl<'a> ClientTest<'_> {
         access_key: String,
         secret_key: String,
         static_provider: &'a StaticProvider,
-        ignore_cert_check: bool,
-        ssl_cert_file: String,
+        ignore_cert_check: Option<bool>,
+        ssl_cert_file: Option<String>,
     ) -> ClientTest<'a> {
-        let mut client = Client::new(base_url.clone(), Some(static_provider));
-        client.ignore_cert_check = ignore_cert_check;
-        client.ssl_cert_file = ssl_cert_file.to_string();
+        let client = Client::new(
+            base_url.clone(),
+            Some(static_provider),
+            ssl_cert_file.as_ref().cloned(),
+            ignore_cert_check,
+        )
+        .unwrap();
 
         ClientTest {
             base_url,
@@ -533,9 +537,13 @@ impl<'a> ClientTest<'_> {
 
         let listen_task = move || async move {
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
-            let mut client = Client::new(base_url, Some(&static_provider));
-            client.ignore_cert_check = ignore_cert_check;
-            client.ssl_cert_file = ssl_cert_file;
+            let client = Client::new(
+                base_url,
+                Some(&static_provider),
+                ssl_cert_file,
+                ignore_cert_check,
+            )
+            .unwrap();
 
             let event_fn = |event: NotificationRecords| {
                 for record in event.records.iter() {
@@ -1135,7 +1143,11 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let access_key = std::env::var("ACCESS_KEY")?;
     let secret_key = std::env::var("SECRET_KEY")?;
     let secure = std::env::var("ENABLE_HTTPS").is_ok();
-    let ssl_cert_file = std::env::var("SSL_CERT_FILE")?;
+    let value = std::env::var("SSL_CERT_FILE")?;
+    let mut ssl_cert_file = None;
+    if !value.is_empty() {
+        ssl_cert_file = Some(value);
+    }
     let ignore_cert_check = std::env::var("IGNORE_CERT_CHECK").is_ok();
     let region = std::env::var("SERVER_REGION").ok();
 
@@ -1151,7 +1163,7 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         access_key,
         secret_key,
         &static_provider,
-        ignore_cert_check,
+        Some(ignore_cert_check),
         ssl_cert_file,
     );
     ctest.init().await;

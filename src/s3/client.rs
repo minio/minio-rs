@@ -32,6 +32,7 @@ use async_recursion::async_recursion;
 use bytes::{Buf, Bytes};
 use dashmap::DashMap;
 use hyper::http::Method;
+use os_info;
 use reqwest::header::HeaderMap;
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
@@ -201,24 +202,48 @@ fn parse_list_objects_common_prefixes(
 
 #[derive(Clone, Debug, Default)]
 pub struct Client<'a> {
+    client: reqwest::Client,
     base_url: BaseUrl,
     provider: Option<&'a (dyn Provider + Send + Sync)>,
-    pub ssl_cert_file: String,
-    pub ignore_cert_check: bool,
-    pub user_agent: String,
     region_map: DashMap<String, String>,
 }
 
 impl<'a> Client<'a> {
-    pub fn new(base_url: BaseUrl, provider: Option<&(dyn Provider + Send + Sync)>) -> Client {
-        Client {
+    pub fn new(
+        base_url: BaseUrl,
+        provider: Option<&(dyn Provider + Send + Sync)>,
+        ssl_cert_file: Option<String>,
+        ignore_cert_check: Option<bool>,
+    ) -> Result<Client, Error> {
+        let info = os_info::get();
+        let user_agent = String::from("MinIO (")
+            + &info.os_type().to_string()
+            + "; "
+            + info.architecture().unwrap_or("unknown")
+            + ") minio-rs/"
+            + env!("CARGO_PKG_VERSION");
+
+        let mut builder = reqwest::Client::builder()
+            .no_gzip()
+            .user_agent(user_agent.to_string());
+        if let Some(v) = ignore_cert_check {
+            builder = builder.danger_accept_invalid_certs(v);
+        }
+        if let Some(v) = ssl_cert_file {
+            let mut buf = Vec::new();
+            File::open(v.to_string())?.read_to_end(&mut buf)?;
+            let cert = reqwest::Certificate::from_pem(&buf)?;
+            builder = builder.add_root_certificate(cert);
+        }
+
+        let client = builder.build()?;
+
+        Ok(Client {
+            client,
             base_url,
             provider,
-            ssl_cert_file: String::new(),
-            ignore_cert_check: false,
-            user_agent: String::new(),
             region_map: DashMap::new(),
-        }
+        })
     }
 
     fn build_headers(
@@ -452,20 +477,7 @@ impl<'a> Client<'a> {
                 .build_url(&method, region, query_params, bucket_name, object_name)?;
         self.build_headers(headers, query_params, region, &url, &method, body);
 
-        let mut builder = reqwest::Client::builder().no_gzip();
-        if self.ignore_cert_check {
-            builder = builder.danger_accept_invalid_certs(self.ignore_cert_check);
-        }
-        if !self.ssl_cert_file.is_empty() {
-            let mut buf = Vec::new();
-            File::open(&self.ssl_cert_file)?.read_to_end(&mut buf)?;
-            let cert = reqwest::Certificate::from_pem(&buf)?;
-            builder = builder.add_root_certificate(cert);
-        }
-
-        let client = builder.build()?;
-
-        let mut req = client.request(method.clone(), url.to_string());
+        let mut req = self.client.request(method.clone(), url.to_string());
 
         for (key, values) in headers.iter_all() {
             for value in values {
