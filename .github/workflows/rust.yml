@@ -24,6 +24,7 @@ jobs:
 
     - name: Run tests
       run: |
+        truncate --size=6M asiaphotos-2015.zip
         ./tests/start-server.sh
         export SERVER_ENDPOINT=localhost:9000
         export ACCESS_KEY=minioadmin

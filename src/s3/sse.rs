@@ -13,9 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Server side encryption definitions
+
 use crate::s3::utils;
 use std::any::Any;
 
+/// Base server side encryption
 pub trait Sse: std::fmt::Debug {
     fn headers(&self) -> utils::Multimap;
     fn copy_headers(&self) -> utils::Multimap;
@@ -24,6 +27,7 @@ pub trait Sse: std::fmt::Debug {
 }
 
 #[derive(Clone, Debug)]
+/// Server side encryption customer key type
 pub struct SseCustomerKey {
     headers: utils::Multimap,
     copy_headers: utils::Multimap,
@@ -88,6 +92,7 @@ impl Sse for SseCustomerKey {
 }
 
 #[derive(Clone, Debug)]
+/// Server side encryption KMS type
 pub struct SseKms {
     headers: utils::Multimap,
 }
@@ -133,6 +138,7 @@ impl Sse for SseKms {
 }
 
 #[derive(Clone, Debug)]
+/// Server side encryption S3 type
 pub struct SseS3 {
     headers: utils::Multimap,
 }

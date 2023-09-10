@@ -13,23 +13,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Credential providers
+
 #[derive(Clone, Debug, Default)]
+/// Credentials contain access key, secret key and session token optionally
 pub struct Credentials {
     pub access_key: String,
     pub secret_key: String,
     pub session_token: Option<String>,
 }
 
+/// Provider trait to fetch credentials
 pub trait Provider: std::fmt::Debug {
     fn fetch(&self) -> Credentials;
 }
 
 #[derive(Clone, Debug)]
+/// Static credential provider
 pub struct StaticProvider {
     creds: Credentials,
 }
 
 impl StaticProvider {
+    /// Returns a static provider with given access key, secret key and optional session token
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::creds::StaticProvider;
+    /// let provider = StaticProvider::new("minioadmin", "minio123", None);
+    /// ```
     pub fn new(access_key: &str, secret_key: &str, session_token: Option<&str>) -> StaticProvider {
         StaticProvider {
             creds: Credentials {

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Various utility and helper functions
+
 use crate::s3::error::Error;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::engine::Engine as _;
@@ -29,14 +31,18 @@ pub use urlencoding::decode as urldecode;
 pub use urlencoding::encode as urlencode;
 use xmltree::Element;
 
+/// Date and time with UTC timezone
 pub type UtcTime = DateTime<Utc>;
 
+/// Multimap for string key and string value
 pub type Multimap = MultiMap<String, String>;
 
+/// Encodes data using base64 algorithm
 pub fn b64encode<T: AsRef<[u8]>>(input: T) -> String {
     BASE64.encode(input)
 }
 
+/// Merges two multimaps.
 pub fn merge(m1: &mut Multimap, m2: &Multimap) {
     for (key, values) in m2.iter_all() {
         for value in values {
@@ -45,36 +51,44 @@ pub fn merge(m1: &mut Multimap, m2: &Multimap) {
     }
 }
 
+/// Computes CRC32 of given data.
 pub fn crc32(data: &[u8]) -> u32 {
     Crc::<u32>::new(&CRC_32_ISO_HDLC).checksum(data)
 }
 
+/// Converts data array into 32 bit unsigned int
 pub fn uint32(mut data: &[u8]) -> Result<u32, std::io::Error> {
     data.read_u32::<BigEndian>()
 }
 
+/// Gets hex encoded SHA256 hash of given data
 pub fn sha256_hash(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
     format!("{:x}", hasher.finalize())
 }
 
+/// Gets bas64 encoded MD5 hash of given data
 pub fn md5sum_hash(data: &[u8]) -> String {
     b64encode(md5compute(data).as_slice())
 }
 
+/// Gets current UTC time
 pub fn utc_now() -> UtcTime {
     chrono::offset::Utc::now()
 }
 
+/// Gets signer date value of given time
 pub fn to_signer_date(time: UtcTime) -> String {
     time.format("%Y%m%d").to_string()
 }
 
+/// Gets AMZ date value of given time
 pub fn to_amz_date(time: UtcTime) -> String {
     time.format("%Y%m%dT%H%M%SZ").to_string()
 }
 
+/// Gets HTTP header value of given time
 pub fn to_http_header_value(time: UtcTime) -> String {
     format!(
         "{}, {} {} {} GMT",
@@ -99,10 +113,12 @@ pub fn to_http_header_value(time: UtcTime) -> String {
     )
 }
 
+/// Gets ISO8601 UTC formatted value of given time
 pub fn to_iso8601utc(time: UtcTime) -> String {
     time.format("%Y-%m-%dT%H:%M:%S.%3fZ").to_string()
 }
 
+/// Parses ISO8601 UTC formatted value to time
 pub fn from_iso8601utc(s: &str) -> Result<UtcTime, ParseError> {
     Ok(DateTime::<Utc>::from_naive_utc_and_offset(
         match NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S.%3fZ") {
@@ -113,6 +129,7 @@ pub fn from_iso8601utc(s: &str) -> Result<UtcTime, ParseError> {
     ))
 }
 
+/// Parses HTTP header value to time
 pub fn from_http_header_value(s: &str) -> Result<UtcTime, ParseError> {
     Ok(DateTime::<Utc>::from_naive_utc_and_offset(
         NaiveDateTime::parse_from_str(s, "%a, %d %b %Y %H:%M:%S GMT")?,
@@ -120,6 +137,7 @@ pub fn from_http_header_value(s: &str) -> Result<UtcTime, ParseError> {
     ))
 }
 
+/// Converts multimap to HTTP headers
 pub fn to_http_headers(map: &Multimap) -> Vec<String> {
     let mut headers: Vec<String> = Vec::new();
     for (key, values) in map.iter_all() {
@@ -134,6 +152,7 @@ pub fn to_http_headers(map: &Multimap) -> Vec<String> {
     headers
 }
 
+/// Converts multimap to HTTP query string
 pub fn to_query_string(map: &Multimap) -> String {
     let mut query = String::new();
     for (key, values) in map.iter_all() {
@@ -149,6 +168,7 @@ pub fn to_query_string(map: &Multimap) -> String {
     query
 }
 
+/// Converts multimap to canonical query string
 pub fn get_canonical_query_string(map: &Multimap) -> String {
     let mut keys: Vec<String> = Vec::new();
     for (key, _) in map.iter() {
@@ -176,6 +196,7 @@ pub fn get_canonical_query_string(map: &Multimap) -> String {
     query
 }
 
+/// Converts multimap to signed headers and canonical headers
 pub fn get_canonical_headers(map: &Multimap) -> (String, String) {
     lazy_static! {
         static ref MULTI_SPACE_REGEX: Regex = Regex::new("( +)").unwrap();
@@ -223,6 +244,7 @@ pub fn get_canonical_headers(map: &Multimap) -> (String, String) {
     (signed_headers, canonical_headers)
 }
 
+/// Validates given bucket name
 pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
     if bucket_name.trim().is_empty() {
         return Err(Error::InvalidBucketName(String::from(
@@ -277,6 +299,7 @@ pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
     Ok(())
 }
 
+/// Gets text value of given XML element for given tag.
 pub fn get_text(element: &Element, tag: &str) -> Result<String, Error> {
     Ok(element
         .get_child(tag)
@@ -286,6 +309,7 @@ pub fn get_text(element: &Element, tag: &str) -> Result<String, Error> {
         .to_string())
 }
 
+/// Gets optional text value of given XML element for given tag.
 pub fn get_option_text(element: &Element, tag: &str) -> Option<String> {
     if let Some(v) = element.get_child(tag) {
         return Some(v.get_text().unwrap_or_default().to_string());
@@ -294,12 +318,14 @@ pub fn get_option_text(element: &Element, tag: &str) -> Option<String> {
     None
 }
 
+/// Gets default text value of given XML element for given tag.
 pub fn get_default_text(element: &Element, tag: &str) -> String {
     element.get_child(tag).map_or(String::new(), |v| {
         v.get_text().unwrap_or_default().to_string()
     })
 }
 
+/// Copies source byte slice into destination byte slice
 pub fn copy_slice(dst: &mut [u8], src: &[u8]) -> usize {
     let mut c = 0;
     for (d, s) in dst.iter_mut().zip(src.iter()) {

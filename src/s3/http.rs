@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! HTTP URL definitions
+
 use crate::s3::error::Error;
 use crate::s3::utils::{to_query_string, Multimap};
 use derivative::Derivative;
@@ -22,6 +24,7 @@ use std::fmt;
 
 #[derive(Derivative)]
 #[derivative(Clone, Debug, Default)]
+/// Represents HTTP URL
 pub struct Url {
     #[derivative(Default(value = "true"))]
     pub https: bool,
@@ -90,6 +93,7 @@ fn extract_region(host: &str) -> String {
 
 #[derive(Derivative)]
 #[derivative(Clone, Debug, Default)]
+/// Represents Base URL of S3 endpoint
 pub struct BaseUrl {
     #[derivative(Default(value = "true"))]
     pub https: bool,
@@ -103,6 +107,7 @@ pub struct BaseUrl {
 }
 
 impl BaseUrl {
+    /// Builds URL from base URL for given parameters for S3 operation
     pub fn build_url(
         &self,
         method: &Method,
@@ -188,6 +193,21 @@ impl BaseUrl {
         Ok(url)
     }
 
+    /// Returns a base URL from given host string
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::http::BaseUrl;
+    /// // Get base URL from host name
+    /// let base_url = BaseUrl::from_string("play.min.io".to_string()).unwrap();
+    /// // Get base URL from host:port
+    /// let base_url = BaseUrl::from_string("play.minio.io:9000".to_string()).unwrap();
+    /// // Get base URL from IPv4 address
+    /// let base_url = BaseUrl::from_string("http://192.168.124.63:9000".to_string()).unwrap();
+    /// // Get base URL from IPv6 address
+    /// let base_url = BaseUrl::from_string("[0:0:0:0:0:ffff:c0a8:7c3f]:9000".to_string()).unwrap();
+    /// ```
     pub fn from_string(s: String) -> Result<BaseUrl, Error> {
         let url = s.parse::<Uri>()?;
 

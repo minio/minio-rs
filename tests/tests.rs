@@ -567,7 +567,7 @@ impl<'a> ClientTest<'_> {
         };
 
         let spawned_task = task::spawn(listen_task());
-        task::sleep(std::time::Duration::from_millis(100)).await;
+        task::sleep(std::time::Duration::from_millis(200)).await;
 
         let size = 16_usize;
         self.client
@@ -1059,10 +1059,14 @@ impl<'a> ClientTest<'_> {
             .await
             .unwrap();
 
-        let mut args = SetObjectRetentionArgs::new(&bucket_name, &object_name).unwrap();
-        args.retention_mode = Some(RetentionMode::GOVERNANCE);
         let retain_until_date = utc_now() + Duration::days(1);
-        args.retain_until_date = Some(retain_until_date);
+        let args = SetObjectRetentionArgs::new(
+            &bucket_name,
+            &object_name,
+            Some(RetentionMode::GOVERNANCE),
+            Some(retain_until_date),
+        )
+        .unwrap();
 
         self.client.set_object_retention(&args).await.unwrap();
 
@@ -1080,7 +1084,7 @@ impl<'a> ClientTest<'_> {
             _ => false,
         },);
 
-        let mut args = SetObjectRetentionArgs::new(&bucket_name, &object_name).unwrap();
+        let mut args = SetObjectRetentionArgs::new(&bucket_name, &object_name, None, None).unwrap();
         args.bypass_governance_mode = true;
         self.client.set_object_retention(&args).await.unwrap();
 

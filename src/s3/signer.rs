@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Signature V4 for S3 API
+
 use crate::s3::utils::{
     get_canonical_headers, get_canonical_query_string, sha256_hash, to_amz_date, to_signer_date,
     Multimap, UtcTime,
@@ -22,16 +24,19 @@ use hmac::{Hmac, Mac};
 use hyper::http::Method;
 use sha2::Sha256;
 
+/// Returns HMAC hash for given key and data
 pub fn hmac_hash(key: &[u8], data: &[u8]) -> Vec<u8> {
     let mut hasher = Hmac::<Sha256>::new_from_slice(key).expect("HMAC can take key of any size");
     hasher.update(data);
     hasher.finalize().into_bytes().to_vec()
 }
 
+/// Returns hex encoded HMAC hash for given key and data
 pub fn hmac_hash_hex(key: &[u8], data: &[u8]) -> String {
     hexencode(hmac_hash(key, data))
 }
 
+/// Returns scope value of given date, region and service name
 pub fn get_scope(date: UtcTime, region: &str, service_name: &str) -> String {
     format!(
         "{}/{}/{}/aws4_request",
@@ -41,6 +46,7 @@ pub fn get_scope(date: UtcTime, region: &str, service_name: &str) -> String {
     )
 }
 
+/// Returns hex encoded SHA256 hash of canonical request
 pub fn get_canonical_request_hash(
     method: &Method,
     uri: &str,
@@ -63,6 +69,7 @@ pub fn get_canonical_request_hash(
     return sha256_hash(canonical_request.as_bytes());
 }
 
+/// Returns string-to-sign value of given date, scope and canonical request hash
 pub fn get_string_to_sign(date: UtcTime, scope: &str, canonical_request_hash: &str) -> String {
     format!(
         "AWS4-HMAC-SHA256\n{}\n{}\n{}",
@@ -72,6 +79,7 @@ pub fn get_string_to_sign(date: UtcTime, scope: &str, canonical_request_hash: &s
     )
 }
 
+/// Returns signing key of given secret key, date, region and service name
 pub fn get_signing_key(
     secret_key: &str,
     date: UtcTime,
@@ -87,10 +95,12 @@ pub fn get_signing_key(
     return hmac_hash(date_region_service_key.as_slice(), b"aws4_request");
 }
 
+/// Returns signature value for given signing key and string-to-sign
 pub fn get_signature(signing_key: &[u8], string_to_sign: &[u8]) -> String {
     hmac_hash_hex(signing_key, string_to_sign)
 }
 
+/// Returns authorization value for given access key, scope, signed headers and signature
 pub fn get_authorization(
     access_key: &str,
     scope: &str,
@@ -103,6 +113,7 @@ pub fn get_authorization(
     )
 }
 
+/// Signs and updates headers for given parameters
 pub fn sign_v4(
     service_name: &str,
     method: &Method,
@@ -134,6 +145,7 @@ pub fn sign_v4(
     headers.insert("Authorization".to_string(), authorization);
 }
 
+/// Signs and updates headers for given parameters for S3 request
 pub fn sign_v4_s3(
     method: &Method,
     uri: &str,
@@ -159,6 +171,7 @@ pub fn sign_v4_s3(
     )
 }
 
+/// Signs and updates headers for given parameters for STS request
 pub fn sign_v4_sts(
     method: &Method,
     uri: &str,
@@ -184,6 +197,7 @@ pub fn sign_v4_sts(
     )
 }
 
+/// Signs and updates headers for given parameters for pre-sign request
 pub fn presign_v4(
     method: &Method,
     host: &str,
@@ -230,6 +244,7 @@ pub fn presign_v4(
     query_params.insert("X-Amz-Signature".to_string(), signature);
 }
 
+/// Signs and updates headers for given parameters for pre-sign POST request
 pub fn post_presign_v4(
     string_to_sign: &str,
     secret_key: &str,

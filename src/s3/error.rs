@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Error definitions for S3 operations
+
 extern crate alloc;
 use crate::s3::utils::get_default_text;
 use bytes::{Buf, Bytes};
@@ -20,6 +22,7 @@ use std::fmt;
 use xmltree::Element;
 
 #[derive(Clone, Debug, Default)]
+/// Error response for S3 operations
 pub struct ErrorResponse {
     pub code: String,
     pub message: String,
@@ -50,6 +53,7 @@ impl ErrorResponse {
 }
 
 #[derive(Debug)]
+/// Error definitions
 pub enum Error {
     TimeParseError(chrono::ParseError),
     InvalidUrl(http::uri::InvalidUri),
@@ -74,6 +78,7 @@ pub enum Error {
     InvalidPartNumber(String),
     EmptyParts(String),
     InvalidRetentionMode(String),
+    InvalidRetentionConfig(String),
     InvalidMinPartSize(usize),
     InvalidMaxPartSize(usize),
     InvalidObjectSize(usize),
@@ -128,6 +133,7 @@ impl fmt::Display for Error {
 	    Error::InvalidPartNumber(m) => write!(f, "{}", m),
 	    Error::EmptyParts(m) => write!(f, "{}", m),
 	    Error::InvalidRetentionMode(m) => write!(f, "invalid retention mode {}", m),
+	    Error::InvalidRetentionConfig(m) => write!(f, "invalid retention configuration; {}", m),
 	    Error::InvalidMinPartSize(s) => write!(f, "part size {} is not supported; minimum allowed 5MiB", s),
 	    Error::InvalidMaxPartSize(s) => write!(f, "part size {} is not supported; maximum allowed 5GiB", s),
 	    Error::InvalidObjectSize(s) => write!(f, "object size {} is not supported; maximum allowed 5TiB", s),
