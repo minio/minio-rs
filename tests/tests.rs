@@ -567,7 +567,7 @@ impl<'a> ClientTest<'_> {
         };
 
         let spawned_task = task::spawn(listen_task());
-        task::sleep(std::time::Duration::from_millis(100)).await;
+        task::sleep(std::time::Duration::from_millis(200)).await;
 
         let size = 16_usize;
         self.client
