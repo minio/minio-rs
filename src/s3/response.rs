@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Responses for [minio::s3::client::Client](crate::s3::client::Client) APIs
+
 use crate::s3::error::Error;
 use crate::s3::types::{
     parse_legal_hold, Bucket, Item, LifecycleConfig, NotificationConfig, ObjectLockConfig,
@@ -28,23 +30,28 @@ use std::io::BufReader;
 use xmltree::Element;
 
 #[derive(Debug)]
+/// Response of [list_buckets()](crate::s3::client::Client::list_buckets) API
 pub struct ListBucketsResponse {
     pub headers: HeaderMap,
     pub buckets: Vec<Bucket>,
 }
 
 #[derive(Debug)]
+/// Base response for bucket operation
 pub struct BucketResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket_name: String,
 }
 
+/// Response of [make_bucket()](crate::s3::client::Client::make_bucket) API
 pub type MakeBucketResponse = BucketResponse;
 
+/// Response of [remove_bucket()](crate::s3::client::Client::remove_bucket) API
 pub type RemoveBucketResponse = BucketResponse;
 
 #[derive(Debug)]
+/// Base response for object operation
 pub struct ObjectResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -53,9 +60,11 @@ pub struct ObjectResponse {
     pub version_id: Option<String>,
 }
 
+/// Response of [remove_object()](crate::s3::client::Client::remove_object) API
 pub type RemoveObjectResponse = ObjectResponse;
 
 #[derive(Debug)]
+/// Base Upload ID response
 pub struct UploadIdResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -64,11 +73,14 @@ pub struct UploadIdResponse {
     pub upload_id: String,
 }
 
+/// Response of [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload) API
 pub type AbortMultipartUploadResponse = UploadIdResponse;
 
+/// Response of [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload) API
 pub type CreateMultipartUploadResponse = UploadIdResponse;
 
 #[derive(Debug)]
+/// Base response for put object
 pub struct PutObjectBaseResponse {
     pub headers: HeaderMap,
     pub bucket_name: String,
@@ -78,23 +90,32 @@ pub struct PutObjectBaseResponse {
     pub version_id: Option<String>,
 }
 
+/// Response of [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload) API
 pub type CompleteMultipartUploadResponse = PutObjectBaseResponse;
 
+/// Response of [put_object_api()](crate::s3::client::Client::put_object_api) S3 API
 pub type PutObjectApiResponse = PutObjectBaseResponse;
 
+/// Response of [upload_part()](crate::s3::client::Client::upload_part) S3 API
 pub type UploadPartResponse = PutObjectApiResponse;
 
+/// Response of [put_object()](crate::s3::client::Client::put_object) API
 pub type PutObjectResponse = PutObjectApiResponse;
 
+/// Response of [upload_part_copy()](crate::s3::client::Client::upload_part_copy) S3 API
 pub type UploadPartCopyResponse = PutObjectApiResponse;
 
+/// Response of [copy_object()](crate::s3::client::Client::copy_object) API
 pub type CopyObjectResponse = PutObjectApiResponse;
 
+/// Response of [compose_object()](crate::s3::client::Client::compose_object) API
 pub type ComposeObjectResponse = PutObjectApiResponse;
 
+/// Response of [upload_object()](crate::s3::client::Client::upload_object) API
 pub type UploadObjectResponse = PutObjectApiResponse;
 
 #[derive(Debug)]
+/// Response of [stat_object()](crate::s3::client::Client::stat_object) API
 pub struct StatObjectResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -184,6 +205,7 @@ impl StatObjectResponse {
 }
 
 #[derive(Clone, Debug)]
+/// Error defintion of [remove_objects_api()](crate::s3::client::Client::remove_objects_api) S3 API
 pub struct DeleteError {
     pub code: String,
     pub message: String,
@@ -192,6 +214,7 @@ pub struct DeleteError {
 }
 
 #[derive(Clone, Debug)]
+/// Deleted object defintion of [remove_objects_api()](crate::s3::client::Client::remove_objects_api) S3 API
 pub struct DeletedObject {
     pub name: String,
     pub version_id: Option<String>,
@@ -200,6 +223,7 @@ pub struct DeletedObject {
 }
 
 #[derive(Clone, Debug)]
+/// Response of [remove_objects_api()](crate::s3::client::Client::remove_objects_api) S3 API
 pub struct RemoveObjectsApiResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -208,9 +232,11 @@ pub struct RemoveObjectsApiResponse {
     pub errors: Vec<DeleteError>,
 }
 
+/// Response of [remove_objects()](crate::s3::client::Client::remove_objects) API
 pub type RemoveObjectsResponse = RemoveObjectsApiResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [list_objects_v1()](crate::s3::client::Client::list_objects_v1) S3 API
 pub struct ListObjectsV1Response {
     pub headers: HeaderMap,
     pub name: String,
@@ -225,6 +251,7 @@ pub struct ListObjectsV1Response {
 }
 
 #[derive(Clone, Debug)]
+/// Response of [list_objects_v2()](crate::s3::client::Client::list_objects_v2) S3 API
 pub struct ListObjectsV2Response {
     pub headers: HeaderMap,
     pub name: String,
@@ -241,6 +268,7 @@ pub struct ListObjectsV2Response {
 }
 
 #[derive(Clone, Debug)]
+/// Response of [list_object_versions()](crate::s3::client::Client::list_object_versions) S3 API
 pub struct ListObjectVersionsResponse {
     pub headers: HeaderMap,
     pub name: String,
@@ -257,6 +285,7 @@ pub struct ListObjectVersionsResponse {
 }
 
 #[derive(Clone, Debug)]
+/// Response of [list_objects()](crate::s3::client::Client::list_objects) API
 pub struct ListObjectsResponse {
     pub headers: HeaderMap,
     pub name: String,
@@ -284,6 +313,7 @@ pub struct ListObjectsResponse {
     pub next_version_id_marker: String,
 }
 
+/// Response of [select_object_content()](crate::s3::client::Client::select_object_content) API
 pub struct SelectObjectContentResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -607,6 +637,7 @@ impl SelectObjectContentResponse {
 }
 
 #[derive(Clone, Debug)]
+/// Response of [listen_bucket_notification()](crate::s3::client::Client::listen_bucket_notification) API
 pub struct ListenBucketNotificationResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -627,9 +658,11 @@ impl ListenBucketNotificationResponse {
     }
 }
 
+/// Response of [delete_bucket_encryption()](crate::s3::client::Client::delete_bucket_encryption) API
 pub type DeleteBucketEncryptionResponse = BucketResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [get_bucket_encryption()](crate::s3::client::Client::get_bucket_encryption) API
 pub struct GetBucketEncryptionResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -637,13 +670,17 @@ pub struct GetBucketEncryptionResponse {
     pub config: SseConfig,
 }
 
+/// Response of [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption) API
 pub type SetBucketEncryptionResponse = BucketResponse;
 
+/// Response of [enable_object_legal_hold()](crate::s3::client::Client::enable_object_legal_hold) API
 pub type EnableObjectLegalHoldResponse = ObjectResponse;
 
+/// Response of [disable_object_legal_hold()](crate::s3::client::Client::disable_object_legal_hold) API
 pub type DisableObjectLegalHoldResponse = ObjectResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [is_object_legal_hold_enabled()](crate::s3::client::Client::is_object_legal_hold_enabled) API
 pub struct IsObjectLegalHoldEnabledResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -653,9 +690,11 @@ pub struct IsObjectLegalHoldEnabledResponse {
     pub enabled: bool,
 }
 
+/// Response of [delete_bucket_lifecycle()](crate::s3::client::Client::delete_bucket_lifecycle) API
 pub type DeleteBucketLifecycleResponse = BucketResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [get_bucket_lifecycle()](crate::s3::client::Client::get_bucket_lifecycle) API
 pub struct GetBucketLifecycleResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -663,11 +702,14 @@ pub struct GetBucketLifecycleResponse {
     pub config: LifecycleConfig,
 }
 
+/// Response of [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API
 pub type SetBucketLifecycleResponse = BucketResponse;
 
+/// Response of [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API
 pub type DeleteBucketNotificationResponse = BucketResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [get_bucket_notification()](crate::s3::client::Client::get_bucket_notification) API
 pub struct GetBucketNotificationResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -675,11 +717,14 @@ pub struct GetBucketNotificationResponse {
     pub config: NotificationConfig,
 }
 
+/// Response of [set_bucket_notification()](crate::s3::client::Client::set_bucket_notification) API
 pub type SetBucketNotificationResponse = BucketResponse;
 
+/// Response of [delete_bucket_policy()](crate::s3::client::Client::delete_bucket_policy) API
 pub type DeleteBucketPolicyResponse = BucketResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [get_bucket_policy()](crate::s3::client::Client::get_bucket_policy) API
 pub struct GetBucketPolicyResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -687,11 +732,14 @@ pub struct GetBucketPolicyResponse {
     pub config: String,
 }
 
+/// Response of [set_bucket_policy()](crate::s3::client::Client::set_bucket_policy) API
 pub type SetBucketPolicyResponse = BucketResponse;
 
+/// Response of [delete_bucket_replication()](crate::s3::client::Client::delete_bucket_replication) API
 pub type DeleteBucketReplicationResponse = BucketResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [get_bucket_replication()](crate::s3::client::Client::get_bucket_replication) API
 pub struct GetBucketReplicationResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -699,11 +747,14 @@ pub struct GetBucketReplicationResponse {
     pub config: ReplicationConfig,
 }
 
+/// Response of [set_bucket_replication()](crate::s3::client::Client::set_bucket_replication) API
 pub type SetBucketReplicationResponse = BucketResponse;
 
+/// Response of [delete_bucket_tags()](crate::s3::client::Client::delete_bucket_tags) API
 pub type DeleteBucketTagsResponse = BucketResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [get_bucket_tags()](crate::s3::client::Client::get_bucket_tags) API
 pub struct GetBucketTagsResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -711,9 +762,11 @@ pub struct GetBucketTagsResponse {
     pub tags: std::collections::HashMap<String, String>,
 }
 
+/// Response of [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags) API
 pub type SetBucketTagsResponse = BucketResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [get_bucket_versioning()](crate::s3::client::Client::get_bucket_versioning) API
 pub struct GetBucketVersioningResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -722,11 +775,14 @@ pub struct GetBucketVersioningResponse {
     pub mfa_delete: Option<bool>,
 }
 
+/// Response of [set_bucket_versioning()](crate::s3::client::Client::set_bucket_versioning) API
 pub type SetBucketVersioningResponse = BucketResponse;
 
+/// Response of [delete_object_lock_config()](crate::s3::client::Client::delete_object_lock_config) API
 pub type DeleteObjectLockConfigResponse = BucketResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [get_object_lock_config()](crate::s3::client::Client::get_object_lock_config) API
 pub struct GetObjectLockConfigResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -734,9 +790,11 @@ pub struct GetObjectLockConfigResponse {
     pub config: ObjectLockConfig,
 }
 
+/// Response of [set_object_lock_config()](crate::s3::client::Client::set_object_lock_config) API
 pub type SetObjectLockConfigResponse = BucketResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [get_object_retention()](crate::s3::client::Client::get_object_retention) API
 pub struct GetObjectRetentionResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -747,11 +805,14 @@ pub struct GetObjectRetentionResponse {
     pub retain_until_date: Option<UtcTime>,
 }
 
+/// Response of [set_object_retention()](crate::s3::client::Client::set_object_retention) API
 pub type SetObjectRetentionResponse = ObjectResponse;
 
+/// Response of [delete_object_tags()](crate::s3::client::Client::delete_object_tags) API
 pub type DeleteObjectTagsResponse = ObjectResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [get_object_tags()](crate::s3::client::Client::get_object_tags) API
 pub struct GetObjectTagsResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -761,9 +822,11 @@ pub struct GetObjectTagsResponse {
     pub tags: std::collections::HashMap<String, String>,
 }
 
+/// Response of [set_object_tags()](crate::s3::client::Client::set_object_tags) API
 pub type SetObjectTagsResponse = ObjectResponse;
 
 #[derive(Clone, Debug)]
+/// Response of [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API
 pub struct GetPresignedObjectUrlResponse {
     pub region: String,
     pub bucket_name: String,
@@ -773,6 +836,7 @@ pub struct GetPresignedObjectUrlResponse {
 }
 
 #[derive(Clone, Debug)]
+/// Response of [download_object()](crate::s3::client::Client::download_object) API
 pub struct DownloadObjectResponse {
     pub headers: HeaderMap,
     pub region: String,

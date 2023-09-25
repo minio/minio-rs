@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Arguments for [minio::s3::client::Client](crate::s3::client::Client) APIs
+
 use crate::s3::error::Error;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
@@ -150,6 +152,7 @@ fn calc_part_info(
 }
 
 #[derive(Clone, Debug, Default)]
+/// Base bucket argument
 pub struct BucketArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -158,6 +161,14 @@ pub struct BucketArgs<'a> {
 }
 
 impl<'a> BucketArgs<'a> {
+    /// Returns a bucket argument with given bucket name
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = BucketArgs::new("my-bucket").unwrap();
+    /// ```
     pub fn new(bucket_name: &'a str) -> Result<BucketArgs<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
@@ -170,11 +181,14 @@ impl<'a> BucketArgs<'a> {
     }
 }
 
+/// Argument for [bucket_exists()](crate::s3::client::Client::bucket_exists) API
 pub type BucketExistsArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [remove_bucket()](crate::s3::client::Client::remove_bucket) API
 pub type RemoveBucketArgs<'a> = BucketArgs<'a>;
 
 #[derive(Clone, Debug, Default)]
+/// Base object argument
 pub struct ObjectArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -184,6 +198,14 @@ pub struct ObjectArgs<'a> {
 }
 
 impl<'a> ObjectArgs<'a> {
+    /// Returns a object argument with given bucket name and object name
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = ObjectArgs::new("my-bucket", "my-object").unwrap();
+    /// ```
     pub fn new(bucket_name: &'a str, object_name: &'a str) -> Result<ObjectArgs<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
@@ -204,6 +226,7 @@ impl<'a> ObjectArgs<'a> {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Base object argument with optional version ID
 pub struct ObjectVersionArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -214,6 +237,15 @@ pub struct ObjectVersionArgs<'a> {
 }
 
 impl<'a> ObjectVersionArgs<'a> {
+    /// Returns a object argument with given bucket name and object name
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let mut args = ObjectVersionArgs::new("my-bucket", "my-object").unwrap();
+    /// args.version_id = Some("ef090b89-cfbe-4a04-aa90-03c09110ba23");
+    /// ```
     pub fn new(bucket_name: &'a str, object_name: &'a str) -> Result<ObjectVersionArgs<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
@@ -234,9 +266,11 @@ impl<'a> ObjectVersionArgs<'a> {
     }
 }
 
+/// Argument for [remove_object()](crate::s3::client::Client::remove_object) API
 pub type RemoveObjectArgs<'a> = ObjectVersionArgs<'a>;
 
 #[derive(Clone, Debug, Default)]
+/// Argument for [make_bucket()](crate::s3::client::Client::make_bucket) API
 pub struct MakeBucketArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -246,6 +280,14 @@ pub struct MakeBucketArgs<'a> {
 }
 
 impl<'a> MakeBucketArgs<'a> {
+    /// Returns argument for [make_bucket()](crate::s3::client::Client::make_bucket) API with given bucket name
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = MakeBucketArgs::new("my-bucket").unwrap();
+    /// ```
     pub fn new(bucket_name: &'a str) -> Result<MakeBucketArgs<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
@@ -260,18 +302,28 @@ impl<'a> MakeBucketArgs<'a> {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Argument for [list_buckets()](crate::s3::client::Client::list_buckets) API
 pub struct ListBucketsArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
 }
 
 impl<'a> ListBucketsArgs<'a> {
+    /// Returns argument for [list_buckets()](crate::s3::client::Client::list_buckets) API
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = ListBucketsArgs::new();
+    /// ```
     pub fn new() -> ListBucketsArgs<'a> {
         ListBucketsArgs::default()
     }
 }
 
 #[derive(Clone, Debug, Default)]
+/// Argument for [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload) API
 pub struct AbortMultipartUploadArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -282,6 +334,18 @@ pub struct AbortMultipartUploadArgs<'a> {
 }
 
 impl<'a> AbortMultipartUploadArgs<'a> {
+    /// Returns argument for [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload) API with given bucket name, object name and upload ID
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = AbortMultipartUploadArgs::new(
+    ///     "my-bucket",
+    ///     "my-object",
+    ///     "c53a2b73-f5e6-484a-9bc0-09cce13e8fd0",
+    /// ).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -313,6 +377,7 @@ impl<'a> AbortMultipartUploadArgs<'a> {
 }
 
 #[derive(Clone, Debug)]
+/// Argument for [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload) API
 pub struct CompleteMultipartUploadArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -324,6 +389,23 @@ pub struct CompleteMultipartUploadArgs<'a> {
 }
 
 impl<'a> CompleteMultipartUploadArgs<'a> {
+    /// Returns argument for [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload) API with given bucket name, object name, upload ID and parts information
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::types::Part;
+    /// let mut parts: Vec<Part> = Vec::new();
+    /// parts.push(Part {number: 1, etag: String::from("0b2daaba1d0b52a15a98c7ab6927347a")});
+    /// parts.push(Part {number: 2, etag: String::from("acc0485d88ec53f47b599e4e8998706d")});
+    /// let args = CompleteMultipartUploadArgs::new(
+    ///     "my-bucket",
+    ///     "my-object",
+    ///     "c53a2b73-f5e6-484a-9bc0-09cce13e8fd0",
+    ///     &parts,
+    /// ).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -361,6 +443,7 @@ impl<'a> CompleteMultipartUploadArgs<'a> {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Argument for [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload) API
 pub struct CreateMultipartUploadArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -371,6 +454,14 @@ pub struct CreateMultipartUploadArgs<'a> {
 }
 
 impl<'a> CreateMultipartUploadArgs<'a> {
+    /// Returns argument for [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload) API with given bucket name and object name
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = CreateMultipartUploadArgs::new("my-bucket", "my-object").unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -395,6 +486,7 @@ impl<'a> CreateMultipartUploadArgs<'a> {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Argument for [put_object_api()](crate::s3::client::Client::put_object_api) S3 API
 pub struct PutObjectApiArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -412,6 +504,15 @@ pub struct PutObjectApiArgs<'a> {
 }
 
 impl<'a> PutObjectApiArgs<'a> {
+    /// Returns argument for [put_object_api()](crate::s3::client::Client::put_object_api) S3 API with given bucket name, object name and data
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let data: &[u8] = &[65, 67, 69];
+    /// let args = PutObjectApiArgs::new("my-bucket", "my-object", data).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -456,6 +557,7 @@ impl<'a> PutObjectApiArgs<'a> {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Argument for [upload_part()](crate::s3::client::Client::upload_part) S3 API
 pub struct UploadPartArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -474,6 +576,21 @@ pub struct UploadPartArgs<'a> {
 }
 
 impl<'a> UploadPartArgs<'a> {
+    /// Returns argument for [upload_part()](crate::s3::client::Client::upload_part) API with given bucket name, object name, part number and data
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let data: &[u8] = &[65, 67, 69];
+    /// let args = UploadPartArgs::new(
+    ///     "my-bucket",
+    ///     "my-object",
+    ///     "c53a2b73-f5e6-484a-9bc0-09cce13e8fd0",
+    ///     3,
+    ///     data,
+    /// ).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -532,6 +649,7 @@ impl<'a> UploadPartArgs<'a> {
     }
 }
 
+/// Argument for [put_object()](crate::s3::client::Client::put_object) API
 pub struct PutObjectArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -552,6 +670,22 @@ pub struct PutObjectArgs<'a> {
 }
 
 impl<'a> PutObjectArgs<'a> {
+    /// Returns argument for [put_object()](crate::s3::client::Client::put_object) API with given bucket name, object name, stream, optional object size and optional part size
+    ///
+    /// * If stream size is known and wanted to create object with entire stream data, pass stream size as object size.
+    /// * If part size is omitted, this API calculates optimal part size for given object size.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use std::fs::File;
+    /// let filename = "asiaphotos-2015.zip";
+    /// let meta = std::fs::metadata(filename).unwrap();
+    /// let object_size = Some(meta.len() as usize);
+    /// let mut file = File::open(filename).unwrap();
+    /// let args = PutObjectArgs::new("my-bucket", "my-object", &mut file, object_size, None).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -603,6 +737,7 @@ impl<'a> PutObjectArgs<'a> {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Base argument for object conditional read APIs
 pub struct ObjectConditionalReadArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -620,6 +755,14 @@ pub struct ObjectConditionalReadArgs<'a> {
 }
 
 impl<'a> ObjectConditionalReadArgs<'a> {
+    /// Returns a object conditional read argument with given bucket name and object name
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = ObjectConditionalReadArgs::new("my-bucket", "my-object").unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -750,13 +893,17 @@ impl<'a> ObjectConditionalReadArgs<'a> {
     }
 }
 
+/// Argument for [get_object()](crate::s3::client::Client::get_object) API
 pub type GetObjectArgs<'a> = ObjectConditionalReadArgs<'a>;
 
+/// Argument for [stat_object()](crate::s3::client::Client::stat_object) API
 pub type StatObjectArgs<'a> = ObjectConditionalReadArgs<'a>;
 
+/// Source object information for [copy object argument](CopyObjectArgs)
 pub type CopySource<'a> = ObjectConditionalReadArgs<'a>;
 
 #[derive(Derivative, Clone, Debug, Default)]
+/// Argument for [remove_objects_api()](crate::s3::client::Client::remove_objects_api) S3 API
 pub struct RemoveObjectsApiArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -769,6 +916,18 @@ pub struct RemoveObjectsApiArgs<'a> {
 }
 
 impl<'a> RemoveObjectsApiArgs<'a> {
+    /// Returns argument for [remove_objects_api()](crate::s3::client::Client::remove_objects_api) S3 API with given bucket name and list of delete object information
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::types::DeleteObject;
+    /// let mut objects: Vec<DeleteObject> = Vec::new();
+    /// objects.push(DeleteObject{name: "my-object-1", version_id: None});
+    /// objects.push(DeleteObject{name: "my-object-2", version_id: Some("0e295d23-10e1-4c39-b134-5b08ad146df6")});
+    /// let args = RemoveObjectsApiArgs::new("my-bucket", &objects).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         objects: &'a [DeleteObject],
@@ -787,6 +946,7 @@ impl<'a> RemoveObjectsApiArgs<'a> {
     }
 }
 
+/// Argument for [remove_objects()](crate::s3::client::Client::remove_objects) API
 pub struct RemoveObjectsArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -797,6 +957,18 @@ pub struct RemoveObjectsArgs<'a> {
 }
 
 impl<'a> RemoveObjectsArgs<'a> {
+    /// Returns argument for [remove_objects()](crate::s3::client::Client::remove_objects) API with given bucket name and iterable delete object information
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::types::DeleteObject;
+    /// let mut objects: Vec<DeleteObject> = Vec::new();
+    /// objects.push(DeleteObject{name: "my-object-1", version_id: None});
+    /// objects.push(DeleteObject{name: "my-object-2", version_id: Some("0e295d23-10e1-4c39-b134-5b08ad146df6")});
+    /// let args = RemoveObjectsArgs::new("my-bucket", &mut objects.iter()).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         objects: &'a mut core::slice::Iter<'a, DeleteObject<'a>>,
@@ -814,6 +986,7 @@ impl<'a> RemoveObjectsArgs<'a> {
     }
 }
 
+/// Argument for [list_objects_v1()](crate::s3::client::Client::list_objects_v1) S3 API
 pub struct ListObjectsV1Args<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -827,6 +1000,14 @@ pub struct ListObjectsV1Args<'a> {
 }
 
 impl<'a> ListObjectsV1Args<'a> {
+    /// Returns argument for [list_objects_v1()](crate::s3::client::Client::list_objects_v1) S3 API with given bucket name
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = ListObjectsV1Args::new("my-bucket").unwrap();
+    /// ```
     pub fn new(bucket_name: &'a str) -> Result<ListObjectsV1Args<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
@@ -844,6 +1025,7 @@ impl<'a> ListObjectsV1Args<'a> {
     }
 }
 
+/// Argument for [list_objects_v2()](crate::s3::client::Client::list_objects_v2) S3 API
 pub struct ListObjectsV2Args<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -860,6 +1042,14 @@ pub struct ListObjectsV2Args<'a> {
 }
 
 impl<'a> ListObjectsV2Args<'a> {
+    /// Returns argument for [list_objects_v2()](crate::s3::client::Client::list_objects_v2) S3 API with given bucket name
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = ListObjectsV2Args::new("my-bucket").unwrap();
+    /// ```
     pub fn new(bucket_name: &'a str) -> Result<ListObjectsV2Args<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
@@ -880,6 +1070,7 @@ impl<'a> ListObjectsV2Args<'a> {
     }
 }
 
+/// Argument for [list_object_versions()](crate::s3::client::Client::list_object_versions) S3 API
 pub struct ListObjectVersionsArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -894,6 +1085,14 @@ pub struct ListObjectVersionsArgs<'a> {
 }
 
 impl<'a> ListObjectVersionsArgs<'a> {
+    /// Returns argument for [list_object_versions()](crate::s3::client::Client::list_object_versions) S3 API with given bucket name
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = ListObjectVersionsArgs::new("my-bucket").unwrap();
+    /// ```
     pub fn new(bucket_name: &'a str) -> Result<ListObjectVersionsArgs<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
@@ -912,6 +1111,7 @@ impl<'a> ListObjectVersionsArgs<'a> {
     }
 }
 
+/// Argument for [list_objects()](crate::s3::client::Client::list_objects) API
 pub struct ListObjectsArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -935,6 +1135,22 @@ pub struct ListObjectsArgs<'a> {
 }
 
 impl<'a> ListObjectsArgs<'a> {
+    /// Returns argument for [list_objects()](crate::s3::client::Client::list_objects) API with given bucket name and callback function for results.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = ListObjectsArgs::new(
+    ///     "my-bucket",
+    ///     &|items| {
+    ///         for item in items.iter() {
+    ///             println!("{:?}", item.name);
+    ///         }
+    ///         true
+    ///     },
+    /// ).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         result_fn: &'a dyn Fn(Vec<Item>) -> bool,
@@ -965,6 +1181,7 @@ impl<'a> ListObjectsArgs<'a> {
     }
 }
 
+/// Argument for [select_object_content()](crate::s3::client::Client::select_object_content) API
 pub struct SelectObjectContentArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -977,6 +1194,35 @@ pub struct SelectObjectContentArgs<'a> {
 }
 
 impl<'a> SelectObjectContentArgs<'a> {
+    /// Returns argument for [select_object_content()](crate::s3::client::Client::select_object_content) API with given bucket name, object name and callback function for results.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::types::*;
+    /// let request = SelectRequest::new_csv_input_output(
+    ///     "select * from S3Object",
+    ///     CsvInputSerialization {
+    ///         compression_type: None,
+    ///         allow_quoted_record_delimiter: false,
+    ///         comments: None,
+    ///         field_delimiter: None,
+    ///         file_header_info: Some(FileHeaderInfo::USE),
+    ///         quote_character: None,
+    ///         quote_escape_character: None,
+    ///         record_delimiter: None,
+    ///     },
+    ///     CsvOutputSerialization {
+    ///         field_delimiter: None,
+    ///         quote_character: None,
+    ///         quote_escape_character: None,
+    ///         quote_fields: Some(QuoteFields::ASNEEDED),
+    ///         record_delimiter: None,
+    ///     },
+    /// ).unwrap();
+    /// let args = SelectObjectContentArgs::new("my-bucket", "my-object", &request).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -1003,6 +1249,7 @@ impl<'a> SelectObjectContentArgs<'a> {
     }
 }
 
+/// Argument for [listen_bucket_notification()](crate::s3::client::Client::listen_bucket_notification) API
 pub struct ListenBucketNotificationArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1015,6 +1262,27 @@ pub struct ListenBucketNotificationArgs<'a> {
 }
 
 impl<'a> ListenBucketNotificationArgs<'a> {
+    /// Returns argument for [listen_bucket_notification()](crate::s3::client::Client::listen_bucket_notification) API with given bucket name and callback function for results.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::types::NotificationRecords;
+    /// let event_fn = |event: NotificationRecords| {
+    ///     for record in event.records.iter() {
+    ///         if let Some(s3) = &record.s3 {
+    ///             if let Some(object) = &s3.object {
+    ///                 if let Some(key) = &object.key {
+    ///                     println!("{:?} {:?}", record.event_name, key);
+    ///                 }
+    ///             }
+    ///         }
+    ///     }
+    ///     true
+    /// };
+    /// let args = ListenBucketNotificationArgs::new("my-bucket", &event_fn).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         event_fn: &'a (dyn Fn(NotificationRecords) -> bool + Send + Sync),
@@ -1035,6 +1303,7 @@ impl<'a> ListenBucketNotificationArgs<'a> {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Argument for [upload_part_copy()](crate::s3::client::Client::upload_part_copy) S3 API
 pub struct UploadPartCopyArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1047,6 +1316,21 @@ pub struct UploadPartCopyArgs<'a> {
 }
 
 impl<'a> UploadPartCopyArgs<'a> {
+    /// Returns argument for [upload_part_copy()](crate::s3::client::Client::upload_part_copy) S3 API with given bucket name, object name, upload ID, part number and headers
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let src = CopySource::new("my-src-bucket", "my-src-object").unwrap();
+    /// let args = UploadPartCopyArgs::new(
+    ///     "my-bucket",
+    ///     "my-object",
+    ///     "c53a2b73-f5e6-484a-9bc0-09cce13e8fd0",
+    ///     3,
+    ///     src.get_copy_headers(),
+    /// ).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -1088,6 +1372,7 @@ impl<'a> UploadPartCopyArgs<'a> {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Argument for [copy_object()](crate::s3::client::Client::copy_object) API
 pub struct CopyObjectArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1106,6 +1391,15 @@ pub struct CopyObjectArgs<'a> {
 }
 
 impl<'a> CopyObjectArgs<'a> {
+    /// Returns argument for [copy_object()](crate::s3::client::Client::copy_object) API with given bucket name, object name and copy source.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let src = CopySource::new("my-src-bucket", "my-src-object").unwrap();
+    /// let args = CopyObjectArgs::new("my-bucket", "my-object", src).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -1151,6 +1445,7 @@ impl<'a> CopyObjectArgs<'a> {
 }
 
 #[derive(Clone, Debug, Default)]
+/// Source object information for [compose object argument](ComposeObjectArgs)
 pub struct ComposeSource<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1171,6 +1466,14 @@ pub struct ComposeSource<'a> {
 }
 
 impl<'a> ComposeSource<'a> {
+    /// Returns a compose source with given bucket name and object name
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let src = ComposeSource::new("my-src-bucket", "my-src-object").unwrap();
+    /// ```
     pub fn new(bucket_name: &'a str, object_name: &'a str) -> Result<ComposeSource<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
@@ -1295,6 +1598,7 @@ impl<'a> ComposeSource<'a> {
     }
 }
 
+/// Argument for [compose_object()](crate::s3::client::Client::compose_object) API
 pub struct ComposeObjectArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1311,6 +1615,17 @@ pub struct ComposeObjectArgs<'a> {
 }
 
 impl<'a> ComposeObjectArgs<'a> {
+    /// Returns argument for [compose_object()](crate::s3::client::Client::compose_object) API with given bucket name, object name and list of compose sources.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let mut sources: Vec<ComposeSource> = Vec::new();
+    /// sources.push(ComposeSource::new("my-src-bucket", "my-src-object-1").unwrap());
+    /// sources.push(ComposeSource::new("my-src-bucket", "my-src-object-2").unwrap());
+    /// let args = ComposeObjectArgs::new("my-bucket", "my-object", &mut sources).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -1353,11 +1668,14 @@ impl<'a> ComposeObjectArgs<'a> {
     }
 }
 
+/// Argument for [delete_bucket_encryption()](crate::s3::client::Client::delete_bucket_encryption) API
 pub type DeleteBucketEncryptionArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [get_bucket_encryption()](crate::s3::client::Client::get_bucket_encryption) API
 pub type GetBucketEncryptionArgs<'a> = BucketArgs<'a>;
 
 #[derive(Clone, Debug)]
+/// Argument for [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption) API
 pub struct SetBucketEncryptionArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1367,6 +1685,15 @@ pub struct SetBucketEncryptionArgs<'a> {
 }
 
 impl<'a> SetBucketEncryptionArgs<'a> {
+    /// Returns argument for [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption) API with given bucket name and configuration
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::types::SseConfig;
+    /// let args = SetBucketEncryptionArgs::new("my-bucket", &SseConfig::s3()).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         config: &'a SseConfig,
@@ -1383,16 +1710,22 @@ impl<'a> SetBucketEncryptionArgs<'a> {
     }
 }
 
+/// Argument for [enable_object_legal_hold()](crate::s3::client::Client::enable_object_legal_hold) API
 pub type EnableObjectLegalHoldArgs<'a> = ObjectVersionArgs<'a>;
 
+/// Argument for [disable_object_legal_hold()](crate::s3::client::Client::disable_object_legal_hold) API
 pub type DisableObjectLegalHoldArgs<'a> = ObjectVersionArgs<'a>;
 
+/// Argument for [is_object_legal_hold_enabled()](crate::s3::client::Client::is_object_legal_hold_enabled) API
 pub type IsObjectLegalHoldEnabledArgs<'a> = ObjectVersionArgs<'a>;
 
+/// Argument for [delete_bucket_lifecycle()](crate::s3::client::Client::delete_bucket_lifecycle) API
 pub type DeleteBucketLifecycleArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [get_bucket_lifecycle()](crate::s3::client::Client::get_bucket_lifecycle) API
 pub type GetBucketLifecycleArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API
 pub struct SetBucketLifecycleArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1401,10 +1734,56 @@ pub struct SetBucketLifecycleArgs<'a> {
     pub config: &'a LifecycleConfig,
 }
 
+impl<'a> SetBucketLifecycleArgs<'a> {
+    /// Returns argument for [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API with given bucket name and configuration
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::types::*;
+    /// let mut rules: Vec<LifecycleRule> = Vec::new();
+    /// rules.push(LifecycleRule {
+    ///     abort_incomplete_multipart_upload_days_after_initiation: None,
+    ///     expiration_date: None,
+    ///     expiration_days: Some(365),
+    ///     expiration_expired_object_delete_marker: None,
+    ///     filter: Filter {and_operator: None, prefix: Some(String::from("logs/")), tag: None},
+    ///     id: String::from("rule1"),
+    ///     noncurrent_version_expiration_noncurrent_days: None,
+    ///     noncurrent_version_transition_noncurrent_days: None,
+    ///     noncurrent_version_transition_storage_class: None,
+    ///     status: true,
+    ///     transition_date: None,
+    ///     transition_days: None,
+    ///     transition_storage_class: None,
+    /// });
+    /// let mut config = LifecycleConfig {rules};
+    /// let args = SetBucketLifecycleArgs::new("my-bucket", &config).unwrap();
+    /// ```
+    pub fn new(
+        bucket_name: &'a str,
+        config: &'a LifecycleConfig,
+    ) -> Result<SetBucketLifecycleArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        Ok(SetBucketLifecycleArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            config,
+        })
+    }
+}
+
+/// Argument for [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API
 pub type DeleteBucketNotificationArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API
 pub type GetBucketNotificationArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [set_bucket_notification()](crate::s3::client::Client::set_bucket_notification) API
 pub struct SetBucketNotificationArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1414,6 +1793,33 @@ pub struct SetBucketNotificationArgs<'a> {
 }
 
 impl<'a> SetBucketNotificationArgs<'a> {
+    /// Returns argument for [set_bucket_notification()](crate::s3::client::Client::set_bucket_notification) API with given bucket name and configuration
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::types::*;
+    /// let config = NotificationConfig {
+    ///     cloud_func_config_list: None,
+    ///     queue_config_list: Some(vec![QueueConfig {
+    ///         events: vec![
+    ///             String::from("s3:ObjectCreated:Put"),
+    ///             String::from("s3:ObjectCreated:Copy"),
+    ///         ],
+    ///         id: None,
+    ///         prefix_filter_rule: Some(PrefixFilterRule {
+    ///             value: String::from("images"),
+    ///         }),
+    ///         suffix_filter_rule: Some(SuffixFilterRule {
+    ///             value: String::from("pg"),
+    ///         }),
+    ///         queue: String::from("arn:minio:sqs::miniojavatest:webhook"),
+    ///     }]),
+    ///     topic_config_list: None,
+    /// };
+    /// let args = SetBucketNotificationArgs::new("my-bucket", &config).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         config: &'a NotificationConfig,
@@ -1430,10 +1836,13 @@ impl<'a> SetBucketNotificationArgs<'a> {
     }
 }
 
+/// Argument for [delete_bucket_policy()](crate::s3::client::Client::delete_bucket_policy) API
 pub type DeleteBucketPolicyArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [get_bucket_policy()](crate::s3::client::Client::get_bucket_policy) API
 pub type GetBucketPolicyArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [set_bucket_policy()](crate::s3::client::Client::set_bucket_policy) API
 pub struct SetBucketPolicyArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1443,6 +1852,38 @@ pub struct SetBucketPolicyArgs<'a> {
 }
 
 impl<'a> SetBucketPolicyArgs<'a> {
+    /// Returns argument for [set_bucket_policy()](crate::s3::client::Client::set_bucket_policy) API with given bucket name and configuration
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let config = r#"{
+    ///   "Version": "2012-10-17",
+    ///   "Statement": [
+    ///     {
+    ///       "Effect": "Allow",
+    ///       "Principal": {
+    ///         "AWS": "*"
+    ///       },
+    ///       "Action": [
+    ///         "s3:GetBucketLocation",
+    ///         "s3:ListBucket"
+    ///       ],
+    ///       "Resource": "arn:aws:s3:::my-bucket"
+    ///     },
+    ///     {
+    ///       "Effect": "Allow",
+    ///       "Principal": {
+    ///         "AWS": "*"
+    ///       },
+    ///       "Action": "s3:GetObject",
+    ///       "Resource": "arn:aws:s3:::my-bucket/*"
+    ///     }
+    ///   ]
+    /// }"#;
+    /// let args = SetBucketPolicyArgs::new("my-bucket", config).unwrap();
+    /// ```
     pub fn new(bucket_name: &'a str, config: &'a str) -> Result<SetBucketPolicyArgs<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
@@ -1456,10 +1897,13 @@ impl<'a> SetBucketPolicyArgs<'a> {
     }
 }
 
+/// Argument for [delete_bucket_replication()](crate::s3::client::Client::delete_bucket_replication) API
 pub type DeleteBucketReplicationArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [get_bucket_replication()](crate::s3::client::Client::get_bucket_replication) API
 pub type GetBucketReplicationArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [set_bucket_replication()](crate::s3::client::Client::set_bucket_replication) API
 pub struct SetBucketReplicationArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1468,10 +1912,72 @@ pub struct SetBucketReplicationArgs<'a> {
     pub config: &'a ReplicationConfig,
 }
 
+impl<'a> SetBucketReplicationArgs<'a> {
+    /// Returns argument for [set_bucket_replication()](crate::s3::client::Client::set_bucket_replication) API with given bucket name and configuration
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::types::*;
+    /// use std::collections::HashMap;
+    /// let mut tags: HashMap<String, String> = HashMap::new();
+    /// tags.insert(String::from("key1"), String::from("value1"));
+    /// tags.insert(String::from("key2"), String::from("value2"));
+    /// let mut rules: Vec<ReplicationRule> = Vec::new();
+    /// rules.push(ReplicationRule {
+    ///     destination: Destination {
+    ///         bucket_arn: String::from("REPLACE-WITH-ACTUAL-DESTINATION-BUCKET-ARN"),
+    ///         access_control_translation: None,
+    ///         account: None,
+    ///         encryption_config: None,
+    ///         metrics: None,
+    ///         replication_time: None,
+    ///         storage_class: None,
+    ///     },
+    ///     delete_marker_replication_status: None,
+    ///     existing_object_replication_status: None,
+    ///     filter: Some(Filter {
+    ///         and_operator: Some(AndOperator {
+    ///     	    prefix: Some(String::from("TaxDocs")),
+    ///     	    tags: Some(tags),
+    ///         }),
+    ///         prefix: None,
+    ///         tag: None,
+    ///     }),
+    ///     id: Some(String::from("rule1")),
+    ///     prefix: None,
+    ///     priority: Some(1),
+    ///     source_selection_criteria: None,
+    ///     delete_replication_status: Some(false),
+    ///     status: true,
+    /// });
+    /// let config = ReplicationConfig {role: None, rules: rules};
+    /// let args = SetBucketReplicationArgs::new("my-bucket", &config).unwrap();
+    /// ```
+    pub fn new(
+        bucket_name: &'a str,
+        config: &'a ReplicationConfig,
+    ) -> Result<SetBucketReplicationArgs<'a>, Error> {
+        check_bucket_name(bucket_name, true)?;
+
+        Ok(SetBucketReplicationArgs {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket: bucket_name,
+            config,
+        })
+    }
+}
+
+/// Argument for [delete_bucket_tags()](crate::s3::client::Client::delete_bucket_tags) API
 pub type DeleteBucketTagsArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [get_bucket_tags()](crate::s3::client::Client::get_bucket_tags) API
 pub type GetBucketTagsArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags) API
 pub struct SetBucketTagsArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1481,6 +1987,18 @@ pub struct SetBucketTagsArgs<'a> {
 }
 
 impl<'a> SetBucketTagsArgs<'a> {
+    /// Returns argument for [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags) API with given bucket name and tags
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use std::collections::HashMap;
+    /// let mut tags: HashMap<String, String> = HashMap::new();
+    /// tags.insert(String::from("Project"), String::from("Project One"));
+    /// tags.insert(String::from("User"), String::from("jsmith"));
+    /// let args = SetBucketTagsArgs::new("my-bucket", &tags).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         tags: &'a HashMap<String, String>,
@@ -1497,8 +2015,10 @@ impl<'a> SetBucketTagsArgs<'a> {
     }
 }
 
+/// Argument for [get_bucket_versioning()](crate::s3::client::Client::get_bucket_versioning) API
 pub type GetBucketVersioningArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [set_bucket_versioning()](crate::s3::client::Client::set_bucket_versioning) API
 pub struct SetBucketVersioningArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1509,6 +2029,14 @@ pub struct SetBucketVersioningArgs<'a> {
 }
 
 impl<'a> SetBucketVersioningArgs<'a> {
+    /// Returns argument for [set_bucket_versioning()](crate::s3::client::Client::set_bucket_versioning) API with given bucket name and status
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = SetBucketVersioningArgs::new("my-bucket", true).unwrap();
+    /// ```
     pub fn new(bucket_name: &'a str, status: bool) -> Result<SetBucketVersioningArgs<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
@@ -1523,10 +2051,13 @@ impl<'a> SetBucketVersioningArgs<'a> {
     }
 }
 
+/// Argument for [delete_object_lock_config()](crate::s3::client::Client::delete_object_lock_config) API
 pub type DeleteObjectLockConfigArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [get_object_lock_config()](crate::s3::client::Client::get_object_lock_config) API
 pub type GetObjectLockConfigArgs<'a> = BucketArgs<'a>;
 
+/// Argument for [set_object_lock_config()](crate::s3::client::Client::set_object_lock_config) API
 pub struct SetObjectLockConfigArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1536,6 +2067,16 @@ pub struct SetObjectLockConfigArgs<'a> {
 }
 
 impl<'a> SetObjectLockConfigArgs<'a> {
+    /// Returns argument for [set_object_lock_config()](crate::s3::client::Client::set_object_lock_config) API with given bucket name and configuration
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::types::*;
+    /// let config = ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(100), None).unwrap();
+    /// let args = SetObjectLockConfigArgs::new("my-bucket", &config).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         config: &'a ObjectLockConfig,
@@ -1552,8 +2093,10 @@ impl<'a> SetObjectLockConfigArgs<'a> {
     }
 }
 
+/// Argument for [get_object_retention()](crate::s3::client::Client::get_object_retention) API
 pub type GetObjectRetentionArgs<'a> = ObjectVersionArgs<'a>;
 
+/// Argument for [set_object_retention()](crate::s3::client::Client::set_object_retention) API
 pub struct SetObjectRetentionArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1567,15 +2110,39 @@ pub struct SetObjectRetentionArgs<'a> {
 }
 
 impl<'a> SetObjectRetentionArgs<'a> {
+    /// Returns argument for [set_object_retention()](crate::s3::client::Client::set_object_retention) API with given bucket name, object name, retention mode and retain-until date.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::types::RetentionMode;
+    /// use minio::s3::utils::*;
+    /// use chrono::Timelike;
+    /// let args = SetObjectRetentionArgs::new(
+    ///     "my-bucket",
+    ///     "my-object",
+    ///     Some(RetentionMode::COMPLIANCE),
+    ///     Some(utc_now().with_nanosecond(0).unwrap()),
+    /// ).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
+        retention_mode: Option<RetentionMode>,
+        retain_until_date: Option<UtcTime>,
     ) -> Result<SetObjectRetentionArgs<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
         if object_name.is_empty() {
             return Err(Error::InvalidObjectName(String::from(
                 "object name cannot be empty",
+            )));
+        }
+
+        if retention_mode.is_some() ^ retain_until_date.is_some() {
+            return Err(Error::InvalidRetentionConfig(String::from(
+                "both mode and retain_until_date must be set or unset",
             )));
         }
 
@@ -1587,16 +2154,19 @@ impl<'a> SetObjectRetentionArgs<'a> {
             object: object_name,
             version_id: None,
             bypass_governance_mode: false,
-            retention_mode: None,
-            retain_until_date: None,
+            retention_mode,
+            retain_until_date,
         })
     }
 }
 
+/// Argument for [delete_object_tags()](crate::s3::client::Client::delete_object_tags) API
 pub type DeleteObjectTagsArgs<'a> = ObjectVersionArgs<'a>;
 
+/// Argument for [get_object_tags()](crate::s3::client::Client::get_object_tags) API
 pub type GetObjectTagsArgs<'a> = ObjectVersionArgs<'a>;
 
+/// Argument for [set_object_tags()](crate::s3::client::Client::set_object_tags) API
 pub struct SetObjectTagsArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1608,6 +2178,18 @@ pub struct SetObjectTagsArgs<'a> {
 }
 
 impl<'a> SetObjectTagsArgs<'a> {
+    /// Returns argument for [set_object_tags()](crate::s3::client::Client::set_object_tags) API with given bucket name, object name and tags
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use std::collections::HashMap;
+    /// let mut tags: HashMap<String, String> = HashMap::new();
+    /// tags.insert(String::from("Project"), String::from("Project One"));
+    /// tags.insert(String::from("User"), String::from("jsmith"));
+    /// let args = SetObjectTagsArgs::new("my-bucket", "my-object", &tags).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -1633,6 +2215,7 @@ impl<'a> SetObjectTagsArgs<'a> {
     }
 }
 
+/// Argument for [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API
 pub struct GetPresignedObjectUrlArgs<'a> {
     pub extra_query_params: Option<&'a Multimap>,
     pub region: Option<&'a str>,
@@ -1645,6 +2228,15 @@ pub struct GetPresignedObjectUrlArgs<'a> {
 }
 
 impl<'a> GetPresignedObjectUrlArgs<'a> {
+    /// Returns argument for [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API with given bucket name, object name and method
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use hyper::http::Method;
+    /// let args = GetPresignedObjectUrlArgs::new("my-bucket", "my-object", Method::GET).unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -1671,6 +2263,10 @@ impl<'a> GetPresignedObjectUrlArgs<'a> {
     }
 }
 
+/// Post policy information for presigned post policy form-data
+///
+/// Condition elements and respective condition for Post policy is available <a
+/// href="https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html#sigv4-PolicyConditions">here</a>.
 pub struct PostPolicy<'a> {
     pub region: Option<&'a str>,
     pub bucket: &'a str,
@@ -1687,6 +2283,17 @@ impl<'a> PostPolicy<'a> {
     const STARTS_WITH: &str = "starts-with";
     const ALGORITHM: &str = "AWS4-HMAC-SHA256";
 
+    /// Returns post policy with given bucket name and expiration
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::utils::*;
+    /// use chrono::Duration;
+    /// let expiration = utc_now() + Duration::days(7);
+    /// let policy = PostPolicy::new("my-bucket", &expiration).unwrap();
+    /// ```
     pub fn new(bucket_name: &'a str, expiration: &'a UtcTime) -> Result<PostPolicy<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
@@ -1727,6 +2334,19 @@ impl<'a> PostPolicy<'a> {
         )
     }
 
+    /// Adds equals condition for given element and value
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::utils::*;
+    /// use chrono::Duration;
+    /// let expiration = utc_now() + Duration::days(7);
+    /// let mut policy = PostPolicy::new("my-bucket", &expiration).unwrap();
+    ///
+    /// // Add condition that 'key' (object name) equals to 'my-objectname'
+    /// policy.add_equals_condition("key", "my-object");
+    /// ```
     pub fn add_equals_condition(&mut self, element: &str, value: &str) -> Result<(), Error> {
         if element.is_empty() {
             return Err(Error::PostPolicyError(
@@ -1750,10 +2370,36 @@ impl<'a> PostPolicy<'a> {
         Ok(())
     }
 
+    /// Removes equals condition for given element
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::utils::*;
+    /// use chrono::Duration;
+    /// let expiration = utc_now() + Duration::days(7);
+    /// let mut policy = PostPolicy::new("my-bucket", &expiration).unwrap();
+    /// policy.add_equals_condition("key", "my-object");
+    ///
+    /// policy.remove_equals_condition("key");
+    /// ```
     pub fn remove_equals_condition(&mut self, element: &str) {
         self.eq_conditions.remove(element);
     }
 
+    /// Adds starts-with condition for given element and value
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::utils::*;
+    /// use chrono::Duration;
+    /// let expiration = utc_now() + Duration::days(7);
+    /// let mut policy = PostPolicy::new("my-bucket", &expiration).unwrap();
+    ///
+    /// // Add condition that 'Content-Type' starts with 'image/'
+    /// policy.add_starts_with_condition("Content-Type", "image/");
+    /// ```
     pub fn add_starts_with_condition(&mut self, element: &str, value: &str) -> Result<(), Error> {
         if element.is_empty() {
             return Err(Error::PostPolicyError(
@@ -1780,10 +2426,36 @@ impl<'a> PostPolicy<'a> {
         Ok(())
     }
 
+    /// Removes starts-with condition for given element
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::utils::*;
+    /// use chrono::Duration;
+    /// let expiration = utc_now() + Duration::days(7);
+    /// let mut policy = PostPolicy::new("my-bucket", &expiration).unwrap();
+    /// policy.add_starts_with_condition("Content-Type", "image/");
+    ///
+    /// policy.remove_starts_with_condition("Content-Type");
+    /// ```
     pub fn remove_starts_with_condition(&mut self, element: &str) {
         self.starts_with_conditions.remove(element);
     }
 
+    /// Adds content-length range condition with given lower and upper limits
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// use minio::s3::utils::*;
+    /// use chrono::Duration;
+    /// let expiration = utc_now() + Duration::days(7);
+    /// let mut policy = PostPolicy::new("my-bucket", &expiration).unwrap();
+    ///
+    /// // Add condition that 'content-length-range' is between 64kiB to 10MiB
+    /// policy.add_content_length_range_condition(64 * 1024, 10 * 1024 * 1024);
+    /// ```
     pub fn add_content_length_range_condition(
         &mut self,
         lower_limit: usize,
@@ -1800,11 +2472,14 @@ impl<'a> PostPolicy<'a> {
         Ok(())
     }
 
+    /// Removes content-length range condition
     pub fn remove_content_length_range_condition(&mut self) {
         self.lower_limit = None;
         self.upper_limit = None;
     }
 
+    /// Generates form data for given access/secret keys, optional session token and region.
+    /// The returned map contains `x-amz-algorithm`, `x-amz-credential`, `x-amz-security-token`, `x-amz-date`, `policy` and `x-amz-signature` keys and values.
     pub fn form_data(
         &self,
         access_key: String,
@@ -1883,6 +2558,7 @@ impl<'a> PostPolicy<'a> {
     }
 }
 
+/// Argument for [download_object()](crate::s3::client::Client::download_object) API
 pub struct DownloadObjectArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1896,6 +2572,14 @@ pub struct DownloadObjectArgs<'a> {
 }
 
 impl<'a> DownloadObjectArgs<'a> {
+    /// Returns argument for [download_object()](crate::s3::client::Client::download_object) API with given bucket name, object name and filename
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = DownloadObjectArgs::new("my-bucket", "my-object", "/path/to/my/object/download").unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,
@@ -1923,6 +2607,7 @@ impl<'a> DownloadObjectArgs<'a> {
     }
 }
 
+/// Argument for [upload_object()](crate::s3::client::Client::upload_object) API
 pub struct UploadObjectArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
@@ -1943,6 +2628,14 @@ pub struct UploadObjectArgs<'a> {
 }
 
 impl<'a> UploadObjectArgs<'a> {
+    /// Returns argument for [upload_object()](crate::s3::client::Client::upload_object) API with given bucket name, object name and filename
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::args::*;
+    /// let args = UploadObjectArgs::new("my-bucket", "my-object", "asiaphotos-2015.zip").unwrap();
+    /// ```
     pub fn new(
         bucket_name: &'a str,
         object_name: &'a str,

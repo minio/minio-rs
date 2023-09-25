@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! S3 client to perform bucket and object operations
+
 use crate::s3::args::*;
 use crate::s3::creds::Provider;
 use crate::s3::error::{Error, ErrorResponse};
@@ -201,6 +203,10 @@ fn parse_list_objects_common_prefixes(
 }
 
 #[derive(Clone, Debug, Default)]
+/// Simple Storage Service (aka S3) client to perform bucket and object operations.
+///
+/// If credential provider is passed, all S3 operation requests are signed using AWS Signature
+/// Version 4; else they are performed anonymously.
 pub struct Client<'a> {
     client: reqwest::Client,
     base_url: BaseUrl,
@@ -209,6 +215,22 @@ pub struct Client<'a> {
 }
 
 impl<'a> Client<'a> {
+    /// Returns a S3 client with given base URL.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::client::Client;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
+    /// let mut base_url = BaseUrl::from_string("play.min.io".to_string()).unwrap();
+    /// let static_provider = StaticProvider::new(
+    ///     "Q3AM3UQ867SPQQA43P2F",
+    ///     "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
+    ///     None,
+    /// );
+    /// let client = Client::new(base_url.clone(), Some(&static_provider), None, None).unwrap();
+    /// ```
     pub fn new(
         base_url: BaseUrl,
         provider: Option<&(dyn Provider + Send + Sync)>,
@@ -626,6 +648,7 @@ impl<'a> Client<'a> {
         Ok(location)
     }
 
+    /// Executes [AbortMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_AbortMultipartUpload.html) S3 API
     pub async fn abort_multipart_upload(
         &self,
         args: &AbortMultipartUploadArgs<'_>,
@@ -712,6 +735,7 @@ impl<'a> Client<'a> {
         }
     }
 
+    /// Executes [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html) S3 API
     pub async fn complete_multipart_upload(
         &self,
         args: &CompleteMultipartUploadArgs<'_>,
@@ -1131,6 +1155,7 @@ impl<'a> Client<'a> {
         })
     }
 
+    /// Executes [CreateMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html) S3 API
     pub async fn create_multipart_upload(
         &self,
         args: &CreateMultipartUploadArgs<'_>,
@@ -2434,6 +2459,7 @@ impl<'a> Client<'a> {
         ))
     }
 
+    /// Executes [ListObjects](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html) S3 API
     pub async fn list_objects_v1(
         &self,
         args: &ListObjectsV1Args<'_>,
@@ -2500,6 +2526,7 @@ impl<'a> Client<'a> {
         })
     }
 
+    /// Executes [ListObjectsV2](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html) S3 API
     pub async fn list_objects_v2(
         &self,
         args: &ListObjectsV2Args<'_>,
@@ -2584,6 +2611,7 @@ impl<'a> Client<'a> {
         })
     }
 
+    /// Executes [ListObjectVersions](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectVersions.html) S3 API
     pub async fn list_object_versions(
         &self,
         args: &ListObjectVersionsArgs<'_>,
@@ -2980,6 +3008,7 @@ impl<'a> Client<'a> {
         res
     }
 
+    /// Executes [PutObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html) S3 API
     pub async fn put_object_api(
         &self,
         args: &PutObjectApiArgs<'_>,
@@ -3099,6 +3128,7 @@ impl<'a> Client<'a> {
         })
     }
 
+    /// Executes [DeleteObjects](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html) S3 API
     pub async fn remove_objects_api(
         &self,
         args: &RemoveObjectsApiArgs<'_>,
@@ -3779,6 +3809,7 @@ impl<'a> Client<'a> {
         .await
     }
 
+    /// Executes [UploadPart](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html) S3 API
     pub async fn upload_part(
         &self,
         args: &UploadPartArgs<'_>,
@@ -3803,6 +3834,7 @@ impl<'a> Client<'a> {
         self.put_object_api(&poa_args).await
     }
 
+    /// Executes [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) S3 API
     pub async fn upload_part_copy(
         &self,
         args: &UploadPartCopyArgs<'_>,

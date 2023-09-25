@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Various types for S3 API requests and responses
+
 use crate::s3::error::Error;
 use crate::s3::utils::{
     from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc, UtcTime,
@@ -23,6 +25,7 @@ use std::fmt;
 use xmltree::Element;
 
 #[derive(Clone, Debug, Default)]
+/// Contains information of an item of [list_objects()](crate::s3::client::Client::list_objects) API
 pub struct Item {
     pub name: String,
     pub last_modified: Option<UtcTime>,
@@ -40,18 +43,21 @@ pub struct Item {
 }
 
 #[derive(Clone, Debug)]
+/// Contains bucket name and creation date
 pub struct Bucket {
     pub name: String,
     pub creation_date: UtcTime,
 }
 
 #[derive(Clone, Debug)]
+/// Contains part number and etag of multipart upload
 pub struct Part {
     pub number: u16,
     pub etag: String,
 }
 
 #[derive(Clone, Debug)]
+/// Contains retention mode information
 pub enum RetentionMode {
     GOVERNANCE,
     COMPLIANCE,
@@ -77,11 +83,13 @@ impl fmt::Display for RetentionMode {
 }
 
 #[derive(Clone, Debug)]
+/// Contains retention mode and retain until date
 pub struct Retention {
     pub mode: RetentionMode,
     pub retain_until_date: UtcTime,
 }
 
+/// Parses legal hold string value
 pub fn parse_legal_hold(s: &str) -> Result<bool, Error> {
     match s {
         "ON" => Ok(true),
@@ -91,12 +99,14 @@ pub fn parse_legal_hold(s: &str) -> Result<bool, Error> {
 }
 
 #[derive(Clone, Debug, Copy)]
+/// Contains delete object name and optional version ID
 pub struct DeleteObject<'a> {
     pub name: &'a str,
     pub version_id: Option<&'a str>,
 }
 
 #[derive(Clone, Debug)]
+/// Compression types
 pub enum CompressionType {
     NONE,
     GZIP,
@@ -114,6 +124,7 @@ impl fmt::Display for CompressionType {
 }
 
 #[derive(Clone, Debug)]
+/// File header information types
 pub enum FileHeaderInfo {
     USE,
     IGNORE,
@@ -131,6 +142,7 @@ impl fmt::Display for FileHeaderInfo {
 }
 
 #[derive(Clone, Debug)]
+/// JSON document types
 pub enum JsonType {
     DOCUMENT,
     LINES,
@@ -146,6 +158,7 @@ impl fmt::Display for JsonType {
 }
 
 #[derive(Clone, Debug)]
+/// Quote fields types
 pub enum QuoteFields {
     ALWAYS,
     ASNEEDED,
@@ -161,6 +174,7 @@ impl fmt::Display for QuoteFields {
 }
 
 #[derive(Clone, Debug, Default)]
+/// CSV input serialization definitions
 pub struct CsvInputSerialization {
     pub compression_type: Option<CompressionType>,
     pub allow_quoted_record_delimiter: bool,
@@ -173,15 +187,18 @@ pub struct CsvInputSerialization {
 }
 
 #[derive(Clone, Debug, Default)]
+/// JSON input serialization definitions
 pub struct JsonInputSerialization {
     pub compression_type: Option<CompressionType>,
     pub json_type: Option<JsonType>,
 }
 
 #[derive(Clone, Debug, Default)]
+/// Parque input serialization definitions
 pub struct ParquetInputSerialization;
 
 #[derive(Clone, Debug, Default)]
+/// CSV output serialization definitions
 pub struct CsvOutputSerialization {
     pub field_delimiter: Option<char>,
     pub quote_character: Option<char>,
@@ -191,11 +208,13 @@ pub struct CsvOutputSerialization {
 }
 
 #[derive(Clone, Debug, Default)]
+/// JSON output serialization definitions
 pub struct JsonOutputSerialization {
     pub record_delimiter: Option<char>,
 }
 
 #[derive(Clone, Debug, Default)]
+/// Select request for [select_object_content()](crate::s3::client::Client::select_object_content) API
 pub struct SelectRequest<'a> {
     pub expr: &'a str,
     pub csv_input: Option<CsvInputSerialization>,
@@ -456,6 +475,7 @@ impl<'a> SelectRequest<'a> {
 }
 
 #[derive(Clone, Debug)]
+/// Progress information of [select_object_content()](crate::s3::client::Client::select_object_content) API
 pub struct SelectProgress {
     pub bytes_scanned: usize,
     pub bytes_progressed: usize,
@@ -463,14 +483,17 @@ pub struct SelectProgress {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+/// User identity contains principal ID
 pub struct UserIdentity {
     #[serde(alias = "principalId")]
     pub principal_id: Option<String>,
 }
 
+/// Owner identity contains principal ID
 pub type OwnerIdentity = UserIdentity;
 
 #[derive(Debug, Deserialize, Serialize)]
+/// Request parameters contain principal ID, region and source IP address
 pub struct RequestParameters {
     #[serde(alias = "principalId")]
     pub principal_id: Option<String>,
@@ -481,6 +504,7 @@ pub struct RequestParameters {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+/// Response elements information
 pub struct ResponseElements {
     #[serde(alias = "content-length")]
     pub content_length: Option<String>,
@@ -493,6 +517,7 @@ pub struct ResponseElements {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+/// S3 bucket information
 pub struct S3Bucket {
     #[serde(alias = "name")]
     pub name: Option<String>,
@@ -503,6 +528,7 @@ pub struct S3Bucket {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+/// S3 object information
 pub struct S3Object {
     #[serde(alias = "key")]
     pub key: Option<String>,
@@ -519,6 +545,7 @@ pub struct S3Object {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+/// S3 definitions for NotificationRecord
 pub struct S3 {
     #[serde(alias = "s3SchemaVersion")]
     pub s3_schema_version: Option<String>,
@@ -531,6 +558,7 @@ pub struct S3 {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+/// Source information
 pub struct Source {
     #[serde(alias = "host")]
     pub host: Option<String>,
@@ -541,6 +569,7 @@ pub struct Source {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+/// Notification record information
 pub struct NotificationRecord {
     #[serde(alias = "eventVersion")]
     pub event_version: Option<String>,
@@ -565,12 +594,14 @@ pub struct NotificationRecord {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+/// Contains notification records
 pub struct NotificationRecords {
     #[serde(alias = "Records")]
     pub records: Vec<NotificationRecord>,
 }
 
 #[derive(Clone, Debug)]
+/// Directive types
 pub enum Directive {
     Copy,
     Replace,
@@ -596,6 +627,7 @@ impl fmt::Display for Directive {
 }
 
 #[derive(Clone, Debug)]
+/// Server-side information configuration
 pub struct SseConfig {
     pub sse_algorithm: String,
     pub kms_master_key_id: Option<String>,
@@ -636,18 +668,21 @@ impl SseConfig {
 }
 
 #[derive(Clone, Debug)]
+/// Contains key and value
 pub struct Tag {
     pub key: String,
     pub value: String,
 }
 
 #[derive(Clone, Debug)]
+/// And operator contains prefix and tags
 pub struct AndOperator {
     pub prefix: Option<String>,
     pub tags: Option<HashMap<String, String>>,
 }
 
 #[derive(Clone, Debug)]
+/// Filter information
 pub struct Filter {
     pub and_operator: Option<AndOperator>,
     pub prefix: Option<String>,
@@ -763,6 +798,7 @@ impl Filter {
 }
 
 #[derive(Clone, Debug)]
+/// Lifecycle rule information
 pub struct LifecycleRule {
     pub abort_incomplete_multipart_upload_days_after_initiation: Option<usize>,
     pub expiration_date: Option<UtcTime>,
@@ -900,6 +936,7 @@ impl LifecycleRule {
 }
 
 #[derive(Clone, Debug)]
+/// Lifecycle configuration
 pub struct LifecycleConfig {
     pub rules: Vec<LifecycleRule>,
 }
@@ -1155,6 +1192,7 @@ fn to_xml_common_notification_config(
 }
 
 #[derive(Clone, Debug)]
+/// Prefix filter rule
 pub struct PrefixFilterRule {
     pub value: String,
 }
@@ -1164,6 +1202,7 @@ impl PrefixFilterRule {
 }
 
 #[derive(Clone, Debug)]
+/// Suffix filter rule
 pub struct SuffixFilterRule {
     pub value: String,
 }
@@ -1173,6 +1212,7 @@ impl SuffixFilterRule {
 }
 
 #[derive(Clone, Debug)]
+/// Cloud function configuration information
 pub struct CloudFuncConfig {
     pub events: Vec<String>,
     pub id: Option<String>,
@@ -1223,6 +1263,7 @@ impl CloudFuncConfig {
 }
 
 #[derive(Clone, Debug)]
+/// Queue configuration information
 pub struct QueueConfig {
     pub events: Vec<String>,
     pub id: Option<String>,
@@ -1273,6 +1314,7 @@ impl QueueConfig {
 }
 
 #[derive(Clone, Debug)]
+/// Topic configuration information
 pub struct TopicConfig {
     pub events: Vec<String>,
     pub id: Option<String>,
@@ -1323,6 +1365,7 @@ impl TopicConfig {
 }
 
 #[derive(Clone, Debug)]
+/// Notification configuration information
 pub struct NotificationConfig {
     pub cloud_func_config_list: Option<Vec<CloudFuncConfig>>,
     pub queue_config_list: Option<Vec<QueueConfig>>,
@@ -1413,6 +1456,7 @@ impl NotificationConfig {
 }
 
 #[derive(Clone, Debug)]
+/// Access control translation information
 pub struct AccessControlTranslation {
     pub owner: String,
 }
@@ -1432,11 +1476,13 @@ impl Default for AccessControlTranslation {
 }
 
 #[derive(Clone, Debug)]
+/// Encryption configuration information
 pub struct EncryptionConfig {
     pub replica_kms_key_id: Option<String>,
 }
 
 #[derive(Clone, Debug)]
+/// Metrics information
 pub struct Metrics {
     pub event_threshold_minutes: Option<i32>,
     pub status: bool,
@@ -1452,6 +1498,7 @@ impl Metrics {
 }
 
 #[derive(Clone, Debug)]
+/// Replication time information
 pub struct ReplicationTime {
     pub time_minutes: Option<i32>,
     pub status: bool,
@@ -1467,6 +1514,7 @@ impl ReplicationTime {
 }
 
 #[derive(Clone, Debug)]
+/// Destination information
 pub struct Destination {
     pub bucket_arn: String,
     pub access_control_translation: Option<AccessControlTranslation>,
@@ -1601,11 +1649,13 @@ impl Destination {
 }
 
 #[derive(Clone, Debug)]
+/// Source selection criteria information
 pub struct SourceSelectionCriteria {
     pub sse_kms_encrypted_objects_status: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
+/// Replication rule information
 pub struct ReplicationRule {
     pub destination: Destination,
     pub delete_marker_replication_status: Option<bool>,
@@ -1750,6 +1800,7 @@ impl ReplicationRule {
 }
 
 #[derive(Clone, Debug)]
+/// Replication configuration information
 pub struct ReplicationConfig {
     pub role: Option<String>,
     pub rules: Vec<ReplicationRule>,
@@ -1794,6 +1845,7 @@ impl ReplicationConfig {
 }
 
 #[derive(Clone, Debug)]
+/// Object lock configuration information
 pub struct ObjectLockConfig {
     pub retention_mode: Option<RetentionMode>,
     pub retention_duration_days: Option<i32>,
