@@ -73,30 +73,30 @@ fn rand_object_name() -> String {
     Alphanumeric.sample_string(&mut rand::thread_rng(), 8)
 }
 
-struct ClientTest<'a> {
+struct ClientTest {
     base_url: BaseUrl,
     access_key: String,
     secret_key: String,
     ignore_cert_check: Option<bool>,
     ssl_cert_file: Option<String>,
-    client: Client<'a>,
+    client: Client,
     test_bucket: String,
 }
 
-impl<'a> ClientTest<'_> {
+impl ClientTest {
     const SQS_ARN: &str = "arn:minio:sqs::miniojavatest:webhook";
 
     fn new(
         base_url: BaseUrl,
         access_key: String,
         secret_key: String,
-        static_provider: &'a StaticProvider,
+        static_provider: StaticProvider,
         ignore_cert_check: Option<bool>,
         ssl_cert_file: Option<String>,
-    ) -> ClientTest<'a> {
+    ) -> ClientTest {
         let client = Client::new(
             base_url.clone(),
-            Some(static_provider),
+            Some(Box::new(static_provider)),
             ssl_cert_file.as_ref().cloned(),
             ignore_cert_check,
         )
@@ -539,7 +539,7 @@ impl<'a> ClientTest<'_> {
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
             let client = Client::new(
                 base_url,
-                Some(&static_provider),
+                Some(Box::new(static_provider)),
                 ssl_cert_file,
                 ignore_cert_check,
             )
@@ -1166,7 +1166,7 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         base_url,
         access_key,
         secret_key,
-        &static_provider,
+        static_provider,
         Some(ignore_cert_check),
         ssl_cert_file,
     );
