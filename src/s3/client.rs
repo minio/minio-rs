@@ -2218,7 +2218,7 @@ impl<'a> Client<'a> {
 
             presign_v4(
                 &args.method,
-                &url.host,
+                &url.host_header_value(),
                 &url.path,
                 &region,
                 &mut query_params,
