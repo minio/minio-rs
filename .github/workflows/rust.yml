@@ -21,7 +21,7 @@ jobs:
       run: |
         cargo fmt --all -- --check
         cargo clippy --all-targets --all-features -- -A clippy::result_large_err -A clippy::type_complexity -A clippy::too_many_arguments
-        cargo build --verbose
+        cargo build --bins --examples --tests --benches --verbose
 
     - name: Run tests
       run: |

@@ -40,6 +40,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use xmltree::Element;
 
@@ -203,6 +204,92 @@ fn parse_list_objects_common_prefixes(
     Ok(())
 }
 
+/// Client Builder manufactures a Client using given parameters.
+#[derive(Debug, Default)]
+pub struct ClientBuilder {
+    base_url: BaseUrl,
+    provider: Option<Arc<Box<(dyn Provider + Send + Sync + 'static)>>>,
+    ssl_cert_file: Option<PathBuf>,
+    ignore_cert_check: Option<bool>,
+    app_info: Option<(String, String)>,
+}
+
+impl ClientBuilder {
+    /// Creates a builder given a base URL for the MinIO service or other AWS S3
+    /// compatible object storage service.
+    pub fn new(base_url: BaseUrl) -> Self {
+        let mut c = ClientBuilder::default();
+        c.base_url = base_url;
+        c
+    }
+
+    /// Set the credential provider. If not set anonymous access is used.
+    pub fn provider(
+        mut self,
+        provider: Option<Box<(dyn Provider + Send + Sync + 'static)>>,
+    ) -> Self {
+        self.provider = provider.map(Arc::new);
+        self
+    }
+
+    /// Set the app info as an Option of (app_name, app_version) pair. This will
+    /// show up in the client's user-agent.
+    pub fn app_info(mut self, app_info: Option<(String, String)>) -> Self {
+        self.app_info = app_info;
+        self
+    }
+
+    /// Set file for loading a trust certificate.
+    pub fn ssl_cert_file(mut self, ssl_cert_file: Option<&Path>) -> Self {
+        self.ssl_cert_file = ssl_cert_file.map(PathBuf::from);
+        self
+    }
+
+    /// Set flag to ignore certificate check.
+    pub fn ignore_cert_check(mut self, ignore_cert_check: Option<bool>) -> Self {
+        self.ignore_cert_check = ignore_cert_check;
+        self
+    }
+
+    /// Build the Client.
+    pub fn build(self) -> Result<Client, Error> {
+        let mut builder = reqwest::Client::builder().no_gzip();
+
+        let info = os_info::get();
+        let mut user_agent = String::from("MinIO (")
+            + &info.os_type().to_string()
+            + "; "
+            + info.architecture().unwrap_or("unknown")
+            + ") minio-rs/"
+            + env!("CARGO_PKG_VERSION");
+
+        if let Some((app_name, app_version)) = self.app_info {
+            user_agent.push_str(format!(" {app_name}/{app_version}").as_str());
+            builder = builder.user_agent(user_agent);
+        }
+
+        if let Some(v) = self.ignore_cert_check {
+            builder = builder.danger_accept_invalid_certs(v);
+        }
+
+        if let Some(v) = self.ssl_cert_file {
+            let mut buf = Vec::new();
+            File::open(v)?.read_to_end(&mut buf)?;
+            let cert = reqwest::Certificate::from_pem(&buf)?;
+            builder = builder.add_root_certificate(cert);
+        }
+
+        let client = builder.build()?;
+
+        Ok(Client {
+            client,
+            base_url: self.base_url,
+            provider: self.provider,
+            region_map: DashMap::new(),
+        })
+    }
+}
+
 /// Simple Storage Service (aka S3) client to perform bucket and object operations.
 ///
 /// If credential provider is passed, all S3 operation requests are signed using
@@ -235,38 +322,14 @@ impl Client {
     pub fn new(
         base_url: BaseUrl,
         provider: Option<Box<(dyn Provider + Send + Sync + 'static)>>,
-        ssl_cert_file: Option<String>,
+        ssl_cert_file: Option<&Path>,
         ignore_cert_check: Option<bool>,
     ) -> Result<Client, Error> {
-        let info = os_info::get();
-        let user_agent = String::from("MinIO (")
-            + &info.os_type().to_string()
-            + "; "
-            + info.architecture().unwrap_or("unknown")
-            + ") minio-rs/"
-            + env!("CARGO_PKG_VERSION");
-
-        let mut builder = reqwest::Client::builder()
-            .no_gzip()
-            .user_agent(user_agent.to_string());
-        if let Some(v) = ignore_cert_check {
-            builder = builder.danger_accept_invalid_certs(v);
-        }
-        if let Some(v) = ssl_cert_file {
-            let mut buf = Vec::new();
-            File::open(v.to_string())?.read_to_end(&mut buf)?;
-            let cert = reqwest::Certificate::from_pem(&buf)?;
-            builder = builder.add_root_certificate(cert);
-        }
-
-        let client = builder.build()?;
-
-        Ok(Client {
-            client,
-            base_url,
-            provider: provider.map(|v| Arc::new(v)),
-            region_map: DashMap::new(),
-        })
+        ClientBuilder::new(base_url)
+            .provider(provider)
+            .ssl_cert_file(ssl_cert_file)
+            .ignore_cert_check(ignore_cert_check)
+            .build()
     }
 
     fn build_headers(
