@@ -677,7 +677,7 @@ impl<'a> PutObjectArgs<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
     /// use minio::s3::args::*;
     /// use std::fs::File;
     /// let filename = "asiaphotos-2015.zip";
@@ -2632,7 +2632,7 @@ impl<'a> UploadObjectArgs<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
     /// use minio::s3::args::*;
     /// let args = UploadObjectArgs::new("my-bucket", "my-object", "asiaphotos-2015.zip").unwrap();
     /// ```

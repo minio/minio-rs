@@ -40,6 +40,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Read;
+use std::sync::Arc;
 use xmltree::Element;
 
 fn url_decode(
@@ -202,19 +203,19 @@ fn parse_list_objects_common_prefixes(
     Ok(())
 }
 
-#[derive(Clone, Debug, Default)]
 /// Simple Storage Service (aka S3) client to perform bucket and object operations.
 ///
-/// If credential provider is passed, all S3 operation requests are signed using AWS Signature
-/// Version 4; else they are performed anonymously.
-pub struct Client<'a> {
+/// If credential provider is passed, all S3 operation requests are signed using
+/// AWS Signature Version 4; else they are performed anonymously.
+#[derive(Clone, Debug, Default)]
+pub struct Client {
     client: reqwest::Client,
     base_url: BaseUrl,
-    provider: Option<&'a (dyn Provider + Send + Sync)>,
+    provider: Option<Arc<Box<(dyn Provider + Send + Sync + 'static)>>>,
     region_map: DashMap<String, String>,
 }
 
-impl<'a> Client<'a> {
+impl Client {
     /// Returns a S3 client with given base URL.
     ///
     /// # Examples
@@ -229,11 +230,11 @@ impl<'a> Client<'a> {
     ///     "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
     ///     None,
     /// );
-    /// let client = Client::new(base_url.clone(), Some(&static_provider), None, None).unwrap();
+    /// let client = Client::new(base_url.clone(), Some(Box::new(static_provider)), None, None).unwrap();
     /// ```
     pub fn new(
         base_url: BaseUrl,
-        provider: Option<&(dyn Provider + Send + Sync)>,
+        provider: Option<Box<(dyn Provider + Send + Sync + 'static)>>,
         ssl_cert_file: Option<String>,
         ignore_cert_check: Option<bool>,
     ) -> Result<Client, Error> {
@@ -263,7 +264,7 @@ impl<'a> Client<'a> {
         Ok(Client {
             client,
             base_url,
-            provider,
+            provider: provider.map(|v| Arc::new(v)),
             region_map: DashMap::new(),
         })
     }
@@ -317,7 +318,7 @@ impl<'a> Client<'a> {
         let date = utc_now();
         headers.insert(String::from("x-amz-date"), to_amz_date(date));
 
-        if let Some(p) = self.provider {
+        if let Some(p) = &self.provider {
             let creds = p.fetch();
             if creds.session_token.is_some() {
                 headers.insert(
@@ -797,7 +798,7 @@ impl<'a> Client<'a> {
         })
     }
 
-    async fn calculate_part_count(
+    async fn calculate_part_count<'a>(
         &self,
         sources: &'a mut Vec<ComposeSource<'_>>,
     ) -> Result<u16, Error> {
@@ -2205,7 +2206,7 @@ impl<'a> Client<'a> {
             Some(args.object),
         )?;
 
-        if let Some(p) = self.provider {
+        if let Some(p) = &self.provider {
             let creds = p.fetch();
             if let Some(t) = creds.session_token {
                 query_params.insert(String::from("X-Amz-Security-Token"), t);
@@ -2251,7 +2252,7 @@ impl<'a> Client<'a> {
         }
 
         let region = self.get_region(policy.bucket, policy.region).await?;
-        let creds = self.provider.unwrap().fetch();
+        let creds = self.provider.as_ref().unwrap().fetch();
         policy.form_data(
             creds.access_key,
             creds.secret_key,
