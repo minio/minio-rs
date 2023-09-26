@@ -224,7 +224,7 @@ impl Client {
     /// use minio::s3::client::Client;
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
-    /// let mut base_url = BaseUrl::from_string("play.min.io".to_string()).unwrap();
+    /// let mut base_url: BaseUrl = "play.min.io".parse().unwrap();
     /// let static_provider = StaticProvider::new(
     ///     "Q3AM3UQ867SPQQA43P2F",
     ///     "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
