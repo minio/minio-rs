@@ -2373,7 +2373,7 @@ impl<'a> Client<'a> {
         &self,
         args: &ListenBucketNotificationArgs<'_>,
     ) -> Result<ListenBucketNotificationResponse, Error> {
-        if self.base_url.aws_host {
+        if self.base_url.is_aws_host() {
             return Err(Error::UnsupportedApi(String::from(
                 "ListenBucketNotification",
             )));
