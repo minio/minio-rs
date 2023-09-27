@@ -5,7 +5,7 @@ use minio::s3::http::BaseUrl;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let base_url = BaseUrl::from_string("https://play.min.io".to_string()).unwrap();
+    let base_url = "https://play.min.io".parse::<BaseUrl>()?;
 
     let static_provider = StaticProvider::new(
         "Q3AM3UQ867SPQQA43P2F",

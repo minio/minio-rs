@@ -24,6 +24,7 @@ use hyper::Uri;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::fmt;
+use std::str::FromStr;
 
 const AWS_S3_PREFIX: &str = r"^(((bucket\.|accesspoint\.)vpce(-[a-z_\d]+)+\.s3\.)|([a-z_\d-]{1,63}\.)s3-control(-[a-z_\d]+)*\.|(s3(-[a-z_\d]+)*\.))";
 
@@ -217,6 +218,107 @@ pub struct BaseUrl {
     pub virtual_style: bool,
 }
 
+impl FromStr for BaseUrl {
+    type Err = Error;
+
+    /// Convert a string to a BaseUrl.
+    ///
+    /// Enables use of [`str`]'s [`parse`] method to create a [`BaseUrl`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minio::s3::http::BaseUrl;
+    /// use std::str::FromStr;
+    ///
+    /// // Get base URL from host name
+    /// let base_url = "play.min.io".parse::<BaseUrl>().unwrap();
+    /// let base_url = BaseUrl::from_str("play.min.io").unwrap();
+    /// // Get base URL from host:port
+    /// let base_url: BaseUrl = "play.minio.io:9000".parse().unwrap();
+    /// // Get base URL from IPv4 address
+    /// let base_url: BaseUrl = "http://192.168.124.63:9000".parse().unwrap();
+    /// // Get base URL from IPv6 address
+    /// let base_url: BaseUrl = "[0:0:0:0:0:ffff:c0a8:7c3f]:9000".parse().unwrap();
+    /// ```
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let url = s.parse::<Uri>()?;
+
+        let https = match url.scheme() {
+            None => true,
+            Some(scheme) => match scheme.as_str() {
+                "http" => false,
+                "https" => true,
+                _ => {
+                    return Err(Error::InvalidBaseUrl(String::from(
+                        "scheme must be http or https",
+                    )))
+                }
+            },
+        };
+
+        let mut host = match url.host() {
+            Some(h) => h,
+            _ => {
+                return Err(Error::InvalidBaseUrl(String::from(
+                    "valid host must be provided",
+                )))
+            }
+        };
+
+        let ipv6host = "[".to_string() + host + "]";
+        if host.parse::<std::net::Ipv6Addr>().is_ok() {
+            host = &ipv6host;
+        }
+
+        let mut port = match url.port() {
+            Some(p) => p.as_u16(),
+            _ => 0u16,
+        };
+
+        if (https && port == 443) || (!https && port == 80) {
+            port = 0u16;
+        }
+
+        if url.path() != "/" && url.path() != "" {
+            return Err(Error::InvalidBaseUrl(String::from(
+                "path must be empty for base URL",
+            )));
+        }
+
+        if url.query().is_some() {
+            return Err(Error::InvalidBaseUrl(String::from(
+                "query must be none for base URL",
+            )));
+        }
+
+        let mut region = String::new();
+        let mut aws_s3_prefix = String::new();
+        let mut aws_domain_suffix = String::new();
+        let mut dualstack: bool = false;
+        get_aws_info(
+            &host.to_string(),
+            https,
+            &mut region,
+            &mut aws_s3_prefix,
+            &mut aws_domain_suffix,
+            &mut dualstack,
+        )?;
+        let virtual_style = !aws_domain_suffix.is_empty() || host.ends_with("aliyuncs.com");
+
+        Ok(BaseUrl {
+            https,
+            host: host.to_string(),
+            port,
+            region,
+            aws_s3_prefix,
+            aws_domain_suffix,
+            dualstack,
+            virtual_style,
+        })
+    }
+}
+
 impl BaseUrl {
     /// Checks base URL is AWS host
     pub fn is_aws_host(&self) -> bool {
@@ -362,97 +464,5 @@ impl BaseUrl {
         url.path = path;
 
         Ok(url)
-    }
-
-    /// Returns a base URL from given host string
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::http::BaseUrl;
-    /// // Get base URL from host name
-    /// let base_url = BaseUrl::from_string("play.min.io".to_string()).unwrap();
-    /// // Get base URL from host:port
-    /// let base_url = BaseUrl::from_string("play.minio.io:9000".to_string()).unwrap();
-    /// // Get base URL from IPv4 address
-    /// let base_url = BaseUrl::from_string("http://192.168.124.63:9000".to_string()).unwrap();
-    /// // Get base URL from IPv6 address
-    /// let base_url = BaseUrl::from_string("[0:0:0:0:0:ffff:c0a8:7c3f]:9000".to_string()).unwrap();
-    /// ```
-    pub fn from_string(s: String) -> Result<BaseUrl, Error> {
-        let url = s.parse::<Uri>()?;
-
-        let https = match url.scheme() {
-            None => true,
-            Some(scheme) => match scheme.as_str() {
-                "http" => false,
-                "https" => true,
-                _ => {
-                    return Err(Error::InvalidBaseUrl(String::from(
-                        "scheme must be http or https",
-                    )))
-                }
-            },
-        };
-
-        let mut host = match url.host() {
-            Some(h) => h,
-            _ => {
-                return Err(Error::InvalidBaseUrl(String::from(
-                    "valid host must be provided",
-                )))
-            }
-        };
-
-        let ipv6host = "[".to_string() + host + "]";
-        if host.parse::<std::net::Ipv6Addr>().is_ok() {
-            host = &ipv6host;
-        }
-
-        let mut port = match url.port() {
-            Some(p) => p.as_u16(),
-            _ => 0u16,
-        };
-
-        if (https && port == 443) || (!https && port == 80) {
-            port = 0u16;
-        }
-
-        if url.path() != "/" && url.path() != "" {
-            return Err(Error::InvalidBaseUrl(String::from(
-                "path must be empty for base URL",
-            )));
-        }
-
-        if url.query().is_some() {
-            return Err(Error::InvalidBaseUrl(String::from(
-                "query must be none for base URL",
-            )));
-        }
-
-        let mut region = String::new();
-        let mut aws_s3_prefix = String::new();
-        let mut aws_domain_suffix = String::new();
-        let mut dualstack: bool = false;
-        get_aws_info(
-            &host.to_string(),
-            https,
-            &mut region,
-            &mut aws_s3_prefix,
-            &mut aws_domain_suffix,
-            &mut dualstack,
-        )?;
-        let virtual_style = !aws_domain_suffix.is_empty() || host.ends_with("aliyuncs.com");
-
-        Ok(BaseUrl {
-            https,
-            host: host.to_string(),
-            port,
-            region,
-            aws_s3_prefix,
-            aws_domain_suffix,
-            dualstack,
-            virtual_style,
-        })
     }
 }

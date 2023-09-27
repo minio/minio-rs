@@ -1155,7 +1155,7 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let ignore_cert_check = std::env::var("IGNORE_CERT_CHECK").is_ok();
     let region = std::env::var("SERVER_REGION").ok();
 
-    let mut base_url = BaseUrl::from_string(host).unwrap();
+    let mut base_url: BaseUrl = host.parse().unwrap();
     base_url.https = secure;
     if let Some(v) = region {
         base_url.region = v;
