@@ -265,8 +265,8 @@ impl ClientBuilder {
 
         if let Some((app_name, app_version)) = self.app_info {
             user_agent.push_str(format!(" {app_name}/{app_version}").as_str());
-            builder = builder.user_agent(user_agent);
         }
+        builder = builder.user_agent(user_agent);
 
         if let Some(v) = self.ignore_cert_check {
             builder = builder.danger_accept_invalid_certs(v);
@@ -342,10 +342,6 @@ impl Client {
         data: &[u8],
     ) {
         headers.insert(String::from("Host"), url.host_header_value());
-        headers.insert(
-            String::from("User-Agent"),
-            String::from("MinIO (Linux; x86_64) minio-rs/0.1.0"),
-        );
 
         let mut md5sum = String::new();
         let mut sha256 = String::new();
