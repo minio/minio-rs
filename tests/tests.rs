@@ -21,6 +21,7 @@ use rand::distributions::{Alphanumeric, DistString};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::BufReader;
+use std::path::{Path, PathBuf};
 use std::{fs, io};
 use tokio::sync::mpsc;
 
@@ -78,7 +79,7 @@ struct ClientTest {
     access_key: String,
     secret_key: String,
     ignore_cert_check: Option<bool>,
-    ssl_cert_file: Option<String>,
+    ssl_cert_file: Option<PathBuf>,
     client: Client,
     test_bucket: String,
 }
@@ -92,7 +93,7 @@ impl ClientTest {
         secret_key: String,
         static_provider: StaticProvider,
         ignore_cert_check: Option<bool>,
-        ssl_cert_file: Option<String>,
+        ssl_cert_file: Option<&Path>,
     ) -> ClientTest {
         let client = Client::new(
             base_url.clone(),
@@ -107,7 +108,7 @@ impl ClientTest {
             access_key,
             secret_key,
             ignore_cert_check,
-            ssl_cert_file,
+            ssl_cert_file: ssl_cert_file.map(PathBuf::from),
             client,
             test_bucket: rand_bucket_name(),
         }
@@ -537,10 +538,11 @@ impl ClientTest {
 
         let listen_task = move || async move {
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
+            let ssl_cert_file = &ssl_cert_file;
             let client = Client::new(
                 base_url,
                 Some(Box::new(static_provider)),
-                ssl_cert_file,
+                ssl_cert_file.as_deref(),
                 ignore_cert_check,
             )
             .unwrap();
@@ -1150,7 +1152,7 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let value = std::env::var("SSL_CERT_FILE")?;
     let mut ssl_cert_file = None;
     if !value.is_empty() {
-        ssl_cert_file = Some(value);
+        ssl_cert_file = Some(Path::new(&value));
     }
     let ignore_cert_check = std::env::var("IGNORE_CERT_CHECK").is_ok();
     let region = std::env::var("SERVER_REGION").ok();
