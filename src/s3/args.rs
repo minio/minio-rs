@@ -19,7 +19,7 @@ use crate::s3::error::Error;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{
-    DeleteObject, Directive, Item, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part,
+    DeleteObject, Directive, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part,
     ReplicationConfig, Retention, RetentionMode, SelectRequest, SseConfig,
 };
 use crate::s3::utils::{
@@ -987,19 +987,48 @@ impl<'a> RemoveObjectsArgs<'a> {
 }
 
 /// Argument for [list_objects_v1()](crate::s3::client::Client::list_objects_v1) S3 API
-pub struct ListObjectsV1Args<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub delimiter: Option<&'a str>,
-    pub encoding_type: Option<&'a str>,
+#[derive(Clone, Debug)]
+pub struct ListObjectsV1Args {
+    pub extra_headers: Option<Multimap>,
+    pub extra_query_params: Option<Multimap>,
+    pub region: Option<String>,
+    pub bucket: String,
+    pub delimiter: Option<String>,
+    pub use_url_encoding_type: bool,
     pub max_keys: Option<u16>,
-    pub prefix: Option<&'a str>,
+    pub prefix: Option<String>,
     pub marker: Option<String>,
 }
 
-impl<'a> ListObjectsV1Args<'a> {
+// Helper function delimiter based on recursive flag when delimiter is not
+// provided.
+fn delim_helper(delim: Option<String>, recursive: bool) -> Option<String> {
+    if delim.is_some() {
+        return delim;
+    }
+    match recursive {
+        true => None,
+        false => Some(String::from("/")),
+    }
+}
+
+impl From<ListObjectsArgs> for ListObjectsV1Args {
+    fn from(value: ListObjectsArgs) -> Self {
+        ListObjectsV1Args {
+            extra_headers: value.extra_headers,
+            extra_query_params: value.extra_query_params,
+            region: value.region,
+            bucket: value.bucket,
+            delimiter: delim_helper(value.delimiter, value.recursive),
+            use_url_encoding_type: value.use_url_encoding_type,
+            max_keys: value.max_keys,
+            prefix: value.prefix,
+            marker: value.marker,
+        }
+    }
+}
+
+impl ListObjectsV1Args {
     /// Returns argument for [list_objects_v1()](crate::s3::client::Client::list_objects_v1) S3 API with given bucket name
     ///
     /// # Examples
@@ -1008,16 +1037,16 @@ impl<'a> ListObjectsV1Args<'a> {
     /// use minio::s3::args::*;
     /// let args = ListObjectsV1Args::new("my-bucket").unwrap();
     /// ```
-    pub fn new(bucket_name: &'a str) -> Result<ListObjectsV1Args<'a>, Error> {
+    pub fn new(bucket_name: &str) -> Result<ListObjectsV1Args, Error> {
         check_bucket_name(bucket_name, true)?;
 
         Ok(ListObjectsV1Args {
             extra_headers: None,
             extra_query_params: None,
             region: None,
-            bucket: bucket_name,
+            bucket: bucket_name.to_owned(),
             delimiter: None,
-            encoding_type: None,
+            use_url_encoding_type: true,
             max_keys: None,
             prefix: None,
             marker: None,
@@ -1026,22 +1055,42 @@ impl<'a> ListObjectsV1Args<'a> {
 }
 
 /// Argument for [list_objects_v2()](crate::s3::client::Client::list_objects_v2) S3 API
-pub struct ListObjectsV2Args<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub delimiter: Option<&'a str>,
-    pub encoding_type: Option<&'a str>,
+#[derive(Clone, Debug)]
+pub struct ListObjectsV2Args {
+    pub extra_headers: Option<Multimap>,
+    pub extra_query_params: Option<Multimap>,
+    pub region: Option<String>,
+    pub bucket: String,
+    pub delimiter: Option<String>,
+    pub use_url_encoding_type: bool,
     pub max_keys: Option<u16>,
-    pub prefix: Option<&'a str>,
+    pub prefix: Option<String>,
     pub start_after: Option<String>,
     pub continuation_token: Option<String>,
     pub fetch_owner: bool,
     pub include_user_metadata: bool,
 }
 
-impl<'a> ListObjectsV2Args<'a> {
+impl From<ListObjectsArgs> for ListObjectsV2Args {
+    fn from(value: ListObjectsArgs) -> Self {
+        ListObjectsV2Args {
+            extra_headers: value.extra_headers,
+            extra_query_params: value.extra_query_params,
+            region: value.region,
+            bucket: value.bucket,
+            delimiter: delim_helper(value.delimiter, value.recursive),
+            use_url_encoding_type: value.use_url_encoding_type,
+            max_keys: value.max_keys,
+            prefix: value.prefix,
+            start_after: value.start_after,
+            continuation_token: value.continuation_token,
+            fetch_owner: value.fetch_owner,
+            include_user_metadata: value.include_user_metadata,
+        }
+    }
+}
+
+impl ListObjectsV2Args {
     /// Returns argument for [list_objects_v2()](crate::s3::client::Client::list_objects_v2) S3 API with given bucket name
     ///
     /// # Examples
@@ -1050,16 +1099,15 @@ impl<'a> ListObjectsV2Args<'a> {
     /// use minio::s3::args::*;
     /// let args = ListObjectsV2Args::new("my-bucket").unwrap();
     /// ```
-    pub fn new(bucket_name: &'a str) -> Result<ListObjectsV2Args<'a>, Error> {
+    pub fn new(bucket_name: &str) -> Result<ListObjectsV2Args, Error> {
         check_bucket_name(bucket_name, true)?;
-
         Ok(ListObjectsV2Args {
             extra_headers: None,
             extra_query_params: None,
             region: None,
-            bucket: bucket_name,
+            bucket: bucket_name.to_owned(),
             delimiter: None,
-            encoding_type: None,
+            use_url_encoding_type: true,
             max_keys: None,
             prefix: None,
             start_after: None,
@@ -1071,20 +1119,37 @@ impl<'a> ListObjectsV2Args<'a> {
 }
 
 /// Argument for [list_object_versions()](crate::s3::client::Client::list_object_versions) S3 API
-pub struct ListObjectVersionsArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub delimiter: Option<&'a str>,
-    pub encoding_type: Option<&'a str>,
+pub struct ListObjectVersionsArgs {
+    pub extra_headers: Option<Multimap>,
+    pub extra_query_params: Option<Multimap>,
+    pub region: Option<String>,
+    pub bucket: String,
+    pub delimiter: Option<String>,
+    pub use_url_encoding_type: bool,
     pub max_keys: Option<u16>,
-    pub prefix: Option<&'a str>,
+    pub prefix: Option<String>,
     pub key_marker: Option<String>,
     pub version_id_marker: Option<String>,
 }
 
-impl<'a> ListObjectVersionsArgs<'a> {
+impl From<ListObjectsArgs> for ListObjectVersionsArgs {
+    fn from(value: ListObjectsArgs) -> Self {
+        ListObjectVersionsArgs {
+            extra_headers: value.extra_headers,
+            extra_query_params: value.extra_query_params,
+            region: value.region,
+            bucket: value.bucket,
+            delimiter: delim_helper(value.delimiter, value.recursive),
+            use_url_encoding_type: value.use_url_encoding_type,
+            max_keys: value.max_keys,
+            prefix: value.prefix,
+            key_marker: value.key_marker,
+            version_id_marker: value.version_id_marker,
+        }
+    }
+}
+
+impl ListObjectVersionsArgs {
     /// Returns argument for [list_object_versions()](crate::s3::client::Client::list_object_versions) S3 API with given bucket name
     ///
     /// # Examples
@@ -1093,16 +1158,16 @@ impl<'a> ListObjectVersionsArgs<'a> {
     /// use minio::s3::args::*;
     /// let args = ListObjectVersionsArgs::new("my-bucket").unwrap();
     /// ```
-    pub fn new(bucket_name: &'a str) -> Result<ListObjectVersionsArgs<'a>, Error> {
+    pub fn new(bucket_name: &str) -> Result<ListObjectVersionsArgs, Error> {
         check_bucket_name(bucket_name, true)?;
 
         Ok(ListObjectVersionsArgs {
             extra_headers: None,
             extra_query_params: None,
             region: None,
-            bucket: bucket_name,
+            bucket: bucket_name.to_owned(),
             delimiter: None,
-            encoding_type: None,
+            use_url_encoding_type: true,
             max_keys: None,
             prefix: None,
             key_marker: None,
@@ -1112,68 +1177,62 @@ impl<'a> ListObjectVersionsArgs<'a> {
 }
 
 /// Argument for [list_objects()](crate::s3::client::Client::list_objects) API
-pub struct ListObjectsArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
+#[derive(Clone, Debug)]
+pub struct ListObjectsArgs {
+    pub extra_headers: Option<Multimap>,
+    pub extra_query_params: Option<Multimap>,
+    pub region: Option<String>,
     /// Specifies the bucket name on which listing is to be performed.
-    pub bucket: &'a str,
+    pub bucket: String,
     /// Delimiter to roll up common prefixes on.
-    pub delimiter: Option<&'a str>,
+    pub delimiter: Option<String>,
     pub use_url_encoding_type: bool,
-    /// Used only with ListObjectsV1.
-    pub marker: Option<&'a str>,
-    /// Used only with ListObjectsV2
-    pub start_after: Option<&'a str>,
-    /// Used only with GetObjectVersions.
-    pub key_marker: Option<&'a str>,
     pub max_keys: Option<u16>,
-    pub prefix: Option<&'a str>,
+    pub prefix: Option<String>,
+
+    /// Used only with ListObjectsV1.
+    pub marker: Option<String>,
+
+    /// Used only with ListObjectsV2
+    pub start_after: Option<String>,
     /// Used only with ListObjectsV2.
-    pub continuation_token: Option<&'a str>,
+    pub continuation_token: Option<String>,
     /// Used only with ListObjectsV2.
     pub fetch_owner: bool,
-    /// Used only with GetObjectVersions.
-    pub version_id_marker: Option<&'a str>,
     /// MinIO extension for ListObjectsV2.
     pub include_user_metadata: bool,
+
+    /// Used only with GetObjectVersions.
+    pub key_marker: Option<String>,
+    /// Used only with GetObjectVersions.
+    pub version_id_marker: Option<String>,
+
+    /// This parameter takes effect only when delimiter is None. Enables
+    /// recursive traversal for listing of the bucket and prefix.
     pub recursive: bool,
     /// Set this to use ListObjectsV1. Defaults to false.
     pub use_api_v1: bool,
     /// Set this to include versions.
     pub include_versions: bool,
-    /// A callback function to process results of object listing.
-    pub result_fn: &'a dyn Fn(Vec<Item>) -> bool,
 }
 
-impl<'a> ListObjectsArgs<'a> {
+impl ListObjectsArgs {
     /// Returns argument for [list_objects()](crate::s3::client::Client::list_objects) API with given bucket name and callback function for results.
     ///
     /// # Examples
     ///
     /// ```
     /// use minio::s3::args::*;
-    /// let args = ListObjectsArgs::new(
-    ///     "my-bucket",
-    ///     &|items| {
-    ///         for item in items.iter() {
-    ///             println!("{:?}", item.name);
-    ///         }
-    ///         true
-    ///     },
-    /// ).unwrap();
+    /// let args = ListObjectsArgs::new("my-bucket").unwrap();
     /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        result_fn: &'a dyn Fn(Vec<Item>) -> bool,
-    ) -> Result<ListObjectsArgs<'a>, Error> {
+    pub fn new(bucket_name: &str) -> Result<ListObjectsArgs, Error> {
         check_bucket_name(bucket_name, true)?;
 
         Ok(ListObjectsArgs {
             extra_headers: None,
             extra_query_params: None,
             region: None,
-            bucket: bucket_name,
+            bucket: bucket_name.to_owned(),
             delimiter: None,
             use_url_encoding_type: true,
             marker: None,
@@ -1188,7 +1247,6 @@ impl<'a> ListObjectsArgs<'a> {
             recursive: false,
             use_api_v1: false,
             include_versions: false,
-            result_fn,
         })
     }
 }

@@ -15,7 +15,6 @@
 
 use async_std::task;
 use chrono::Duration;
-use futures_util::stream::StreamExt;
 use hyper::http::Method;
 use minio::s3::types::NotificationRecords;
 use rand::distributions::{Alphanumeric, DistString};
@@ -25,6 +24,7 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 
 use minio::s3::args::*;
 use minio::s3::client::Client;
@@ -421,18 +421,17 @@ impl ClientTest {
             names.push(object_name);
         }
 
-        self.client
-            .list_objects(
-                &ListObjectsArgs::new(&self.test_bucket, &|items| {
-                    for item in items.iter() {
-                        assert!(names.contains(&item.name));
-                    }
-                    true
-                })
-                .unwrap(),
-            )
-            .await
-            .unwrap();
+        let mut stream = self
+            .client
+            .list_objects(ListObjectsArgs::new(&self.test_bucket).unwrap())
+            .await;
+
+        while let Some(items) = stream.next().await {
+            let items = items.unwrap();
+            for item in items.iter() {
+                assert!(names.contains(&item.name));
+            }
+        }
 
         let mut objects: Vec<DeleteObject> = Vec::new();
         for name in names.iter() {
