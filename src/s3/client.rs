@@ -2750,6 +2750,9 @@ impl Client {
         })
     }
 
+    /// List objects with version information optionally. `results_fn` callback
+    /// function is repeatedly called with object information and returning
+    /// false from the callback stops further listing.
     pub async fn list_objects(&self, args: &ListObjectsArgs<'_>) -> Result<(), Error> {
         let mut lov1_args = ListObjectsV1Args::new(args.bucket)?;
         lov1_args.extra_headers = args.extra_headers;

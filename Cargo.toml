@@ -1,6 +1,6 @@
 [package]
 name = "minio"
-version = "0.1.0"
+version = "0.2.0-alpha"
 edition = "2021"
 authors = ["MinIO Dev Team <dev@min.io>"]
 description = "MinIO SDK for Amazon S3 compatible object storage access"
