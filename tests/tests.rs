@@ -15,6 +15,7 @@
 
 use async_std::task;
 use chrono::Duration;
+use futures_util::stream::StreamExt;
 use hyper::http::Method;
 use minio::s3::types::NotificationRecords;
 use rand::distributions::{Alphanumeric, DistString};
@@ -564,8 +565,15 @@ impl ClientTest {
                 false
             };
 
-            let args = &ListenBucketNotificationArgs::new(&test_bucket, &event_fn).unwrap();
-            client.listen_bucket_notification(args).await.unwrap();
+            let args = ListenBucketNotificationArgs::new(&test_bucket).unwrap();
+            let (_, mut event_stream) = client.listen_bucket_notification(args).await.unwrap();
+            while let Some(event) = event_stream.next().await {
+                // println!("event: {:?}", event);
+                let event = event.unwrap();
+                if !event_fn(event) {
+                    break;
+                }
+            }
         };
 
         let spawned_task = task::spawn(listen_task());

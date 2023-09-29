@@ -23,8 +23,8 @@ use crate::s3::response::*;
 use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
 use crate::s3::types::{
-    Bucket, DeleteObject, Directive, Item, LifecycleConfig, NotificationConfig,
-    NotificationRecords, ObjectLockConfig, Part, ReplicationConfig, RetentionMode, SseConfig,
+    Bucket, DeleteObject, Directive, Item, LifecycleConfig, NotificationConfig, ObjectLockConfig,
+    Part, ReplicationConfig, RetentionMode, SseConfig,
 };
 use crate::s3::utils::{
     from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash, merge, sha256_hash,
@@ -36,13 +36,17 @@ use dashmap::DashMap;
 use hyper::http::Method;
 use os_info;
 use reqwest::header::HeaderMap;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use xmltree::Element;
+
+mod listen_bucket_notification;
+
+pub use listen_bucket_notification::*;
 
 fn url_decode(
     encoding_type: &Option<String>,
@@ -2427,96 +2431,6 @@ impl Client {
             headers: header_map.clone(),
             buckets: bucket_list,
         })
-    }
-
-    pub async fn listen_bucket_notification(
-        &self,
-        args: &ListenBucketNotificationArgs<'_>,
-    ) -> Result<ListenBucketNotificationResponse, Error> {
-        if self.base_url.is_aws_host() {
-            return Err(Error::UnsupportedApi(String::from(
-                "ListenBucketNotification",
-            )));
-        }
-
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.prefix {
-            query_params.insert(String::from("prefix"), v.to_string());
-        }
-        if let Some(v) = args.suffix {
-            query_params.insert(String::from("suffix"), v.to_string());
-        }
-        if let Some(v) = &args.events {
-            for e in v.iter() {
-                query_params.insert(String::from("events"), e.to_string());
-            }
-        } else {
-            query_params.insert(String::from("events"), String::from("s3:ObjectCreated:*"));
-            query_params.insert(String::from("events"), String::from("s3:ObjectRemoved:*"));
-            query_params.insert(String::from("events"), String::from("s3:ObjectAccessed:*"));
-        }
-
-        let mut resp = self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await?;
-
-        let header_map = resp.headers().clone();
-
-        let mut done = false;
-        let mut buf = VecDeque::<u8>::new();
-        while !done {
-            let chunk = match resp.chunk().await? {
-                Some(v) => v,
-                None => {
-                    done = true;
-                    Bytes::new()
-                }
-            };
-            buf.extend(chunk.iter().copied());
-
-            while !done {
-                match buf.iter().position(|&v| v == b'\n') {
-                    Some(i) => {
-                        let mut data = vec![0_u8; i + 1];
-                        #[allow(clippy::needless_range_loop)]
-                        for j in 0..=i {
-                            data[j] = buf.pop_front().ok_or(Error::InsufficientData(i, j))?;
-                        }
-                        let mut line = String::from_utf8(data)?;
-                        line = line.trim().to_string();
-                        if !line.is_empty() {
-                            let records: NotificationRecords = serde_json::from_str(&line)?;
-                            done = !(args.event_fn)(records);
-                        }
-                    }
-                    None => break,
-                };
-            }
-        }
-
-        Ok(ListenBucketNotificationResponse::new(
-            header_map,
-            &region,
-            args.bucket,
-        ))
     }
 
     /// Executes [ListObjects](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html) S3 API
