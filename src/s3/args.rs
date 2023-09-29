@@ -1116,21 +1116,33 @@ pub struct ListObjectsArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
     pub extra_query_params: Option<&'a Multimap>,
     pub region: Option<&'a str>,
+    /// Specifies the bucket name on which listing is to be performed.
     pub bucket: &'a str,
+    /// Delimiter to roll up common prefixes on.
     pub delimiter: Option<&'a str>,
     pub use_url_encoding_type: bool,
-    pub marker: Option<&'a str>,      // only for ListObjectsV1.
-    pub start_after: Option<&'a str>, // only for ListObjectsV2.
-    pub key_marker: Option<&'a str>,  // only for GetObjectVersions.
+    /// Used only with ListObjectsV1.
+    pub marker: Option<&'a str>,
+    /// Used only with ListObjectsV2
+    pub start_after: Option<&'a str>,
+    /// Used only with GetObjectVersions.
+    pub key_marker: Option<&'a str>,
     pub max_keys: Option<u16>,
     pub prefix: Option<&'a str>,
-    pub continuation_token: Option<&'a str>, // only for ListObjectsV2.
-    pub fetch_owner: bool,                   // only for ListObjectsV2.
-    pub version_id_marker: Option<&'a str>,  // only for GetObjectVersions.
-    pub include_user_metadata: bool,         // MinIO extension for ListObjectsV2.
+    /// Used only with ListObjectsV2.
+    pub continuation_token: Option<&'a str>,
+    /// Used only with ListObjectsV2.
+    pub fetch_owner: bool,
+    /// Used only with GetObjectVersions.
+    pub version_id_marker: Option<&'a str>,
+    /// MinIO extension for ListObjectsV2.
+    pub include_user_metadata: bool,
     pub recursive: bool,
+    /// Set this to use ListObjectsV1. Defaults to false.
     pub use_api_v1: bool,
+    /// Set this to include versions.
     pub include_versions: bool,
+    /// A callback function to process results of object listing.
     pub result_fn: &'a dyn Fn(Vec<Item>) -> bool,
 }
 
