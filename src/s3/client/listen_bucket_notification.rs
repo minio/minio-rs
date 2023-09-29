@@ -1,9 +1,25 @@
-use std::collections::VecDeque;
+// MinIO Rust Library for Amazon S3 Compatible Cloud Storage
+// Copyright 2023 MinIO, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-use bytes::{Bytes, BytesMut};
-use futures_core::Stream;
+//! MinIO Extension API for S3 Buckets: ListenBucketNotification
+
 use futures_util::stream;
 use http::Method;
+use tokio::io::AsyncBufReadExt;
+use tokio_stream::{Stream, StreamExt};
+use tokio_util::io::StreamReader;
 
 use crate::s3::{
     args::ListenBucketNotificationArgs,
@@ -81,112 +97,30 @@ impl Client {
 
         let header_map = resp.headers().clone();
 
-        let line = BytesMut::with_capacity(16 * 1024);
-        let lines: VecDeque<Bytes> = VecDeque::new();
+        let body_stream = resp.bytes_stream();
+        let body_stream = body_stream
+            .map(|r| r.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err)));
+        let stream_reader = StreamReader::new(body_stream);
 
-        // We use a stream::unfold to process the response body. The unfold
-        // state consists of the current (possibly incomplete) line , a deque of
-        // (complete) lines extracted from the response body and the response
-        // itself wrapped in an Option (the Option is to indicate if the
-        // response body has been fully consumed). The unfold operation here
-        // generates a stream of notification records.
         let record_stream = Box::pin(stream::unfold(
-            (line, lines, Some(resp)),
-            move |(mut line, mut lines, mut resp_opt)| async move {
+            stream_reader,
+            move |mut reader| async move {
                 loop {
-                    // 1. If we have some lines in the deque, deserialize and return them.
-                    while let Some(v) = lines.pop_front() {
-                        let s = match String::from_utf8((&v).to_vec()) {
-                            Err(e) => return Some((Err(e.into()), (line, lines, resp_opt))),
-                            Ok(s) => {
-                                let s = s.trim().to_string();
-                                // Skip empty strings.
-                                if s.is_empty() {
-                                    continue;
-                                }
-                                s
+                    let mut line = String::new();
+                    match reader.read_line(&mut line).await {
+                        Ok(n) => {
+                            if n == 0 {
+                                return None;
                             }
-                        };
-                        let records_res: Result<NotificationRecords, Error> =
-                            serde_json::from_str(&s).map_err(|e| e.into());
-                        return Some((records_res, (line, lines, resp_opt)));
-                    }
-
-                    // At this point `lines` is empty. We may have a partial line in
-                    // `line`. We now process the next chunk in the response body.
-
-                    if resp_opt.is_none() {
-                        if line.len() > 0 {
-                            // Since we have no more chunks to process, we
-                            // consider this as a complete line and deserialize
-                            // it in the next loop iteration.
-                            lines.push_back(line.freeze());
-                            line = BytesMut::with_capacity(16 * 1024);
-                            continue;
+                            let s = line.trim();
+                            if s.is_empty() {
+                                continue;
+                            }
+                            let records_res: Result<NotificationRecords, Error> =
+                                serde_json::from_str(&s).map_err(|e| e.into());
+                            return Some((records_res, reader));
                         }
-                        // We have no more chunks to process, no partial line
-                        // and no more lines to return. So we are done.
-                        return None;
-                    }
-
-                    // Attempt to read the next chunk of the response.
-                    let next_chunk_res = resp_opt.as_mut().map(|r| r.chunk()).unwrap().await;
-                    let mut done = false;
-                    let chunk = match next_chunk_res {
-                        Err(e) => return Some((Err(e.into()), (line, lines, None))),
-                        Ok(Some(chunk)) => chunk,
-                        Ok(None) => {
-                            done = true;
-                            Bytes::new()
-                        }
-                    };
-
-                    // Now we process the chunk. The `.split()` splits the chunk
-                    // around each newline character.
-                    //
-                    // For e.g. "\nab\nc\n\n" becomes ["", "ab", "c", "", ""].
-                    //
-                    // This means that a newline was found in the chunk only
-                    // when `.split()` returns at least 2 elements. The main
-                    // tricky situation is when a line is split across chunks.
-                    // We use the length of `lines_in_chunk` to determine if
-                    // this is the case.
-                    let lines_in_chunk = chunk.split(|&v| v == b'\n').collect::<Vec<_>>();
-
-                    if lines_in_chunk.len() == 1 {
-                        // No newline found in the chunk. So we just append the
-                        // chunk to the current line and continue to the next
-                        // chunk.
-                        line.extend_from_slice(&chunk);
-                        continue;
-                    }
-
-                    // At least one newline was found in the chunk.
-                    for (i, chunk_line) in lines_in_chunk.iter().enumerate() {
-                        if i == 0 {
-                            // The first split component in the chunk completes
-                            // the line.
-                            line.extend_from_slice(chunk_line);
-                            lines.push_back(line.freeze());
-                            line = BytesMut::with_capacity(16 * 1024);
-                            continue;
-                        }
-                        if i == lines_in_chunk.len() - 1 {
-                            // The last split component in the chunk is a
-                            // partial line. We append it to the current line
-                            // (which will be empty because we just re-created
-                            // it).
-                            line.extend_from_slice(chunk_line);
-                            continue;
-                        }
-
-                        lines.push_back(Bytes::copy_from_slice(chunk_line));
-                    }
-
-                    if done {
-                        lines.push_back(line.freeze());
-                        line = BytesMut::with_capacity(16 * 1024);
-                        resp_opt = None;
+                        Err(e) => return Some((Err(e.into()), reader)),
                     }
                 }
             },

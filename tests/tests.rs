@@ -568,7 +568,6 @@ impl ClientTest {
             let args = ListenBucketNotificationArgs::new(&test_bucket).unwrap();
             let (_, mut event_stream) = client.listen_bucket_notification(args).await.unwrap();
             while let Some(event) = event_stream.next().await {
-                // println!("event: {:?}", event);
                 let event = event.unwrap();
                 if !event_fn(event) {
                     break;
