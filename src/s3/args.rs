@@ -19,8 +19,8 @@ use crate::s3::error::Error;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{
-    DeleteObject, Directive, Item, LifecycleConfig, NotificationConfig, NotificationRecords,
-    ObjectLockConfig, Part, ReplicationConfig, Retention, RetentionMode, SelectRequest, SseConfig,
+    DeleteObject, Directive, Item, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part,
+    ReplicationConfig, Retention, RetentionMode, SelectRequest, SseConfig,
 };
 use crate::s3::utils::{
     b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value, to_iso8601utc,
@@ -1262,18 +1262,18 @@ impl<'a> SelectObjectContentArgs<'a> {
 }
 
 /// Argument for [listen_bucket_notification()](crate::s3::client::Client::listen_bucket_notification) API
-pub struct ListenBucketNotificationArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub prefix: Option<&'a str>,
-    pub suffix: Option<&'a str>,
-    pub events: Option<Vec<&'a str>>,
-    pub event_fn: &'a (dyn Fn(NotificationRecords) -> bool + Send + Sync),
+#[derive(Clone, Debug)]
+pub struct ListenBucketNotificationArgs {
+    pub extra_headers: Option<Multimap>,
+    pub extra_query_params: Option<Multimap>,
+    pub region: Option<String>,
+    pub bucket: String,
+    pub prefix: Option<String>,
+    pub suffix: Option<String>,
+    pub events: Option<Vec<String>>,
 }
 
-impl<'a> ListenBucketNotificationArgs<'a> {
+impl ListenBucketNotificationArgs {
     /// Returns argument for [listen_bucket_notification()](crate::s3::client::Client::listen_bucket_notification) API with given bucket name and callback function for results.
     ///
     /// # Examples
@@ -1281,35 +1281,19 @@ impl<'a> ListenBucketNotificationArgs<'a> {
     /// ```
     /// use minio::s3::args::*;
     /// use minio::s3::types::NotificationRecords;
-    /// let event_fn = |event: NotificationRecords| {
-    ///     for record in event.records.iter() {
-    ///         if let Some(s3) = &record.s3 {
-    ///             if let Some(object) = &s3.object {
-    ///                 if let Some(key) = &object.key {
-    ///                     println!("{:?} {:?}", record.event_name, key);
-    ///                 }
-    ///             }
-    ///         }
-    ///     }
-    ///     true
-    /// };
-    /// let args = ListenBucketNotificationArgs::new("my-bucket", &event_fn).unwrap();
+    ///
+    /// let args = ListenBucketNotificationArgs::new("my-bucket").unwrap();
     /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        event_fn: &'a (dyn Fn(NotificationRecords) -> bool + Send + Sync),
-    ) -> Result<ListenBucketNotificationArgs<'a>, Error> {
+    pub fn new(bucket_name: &str) -> Result<ListenBucketNotificationArgs, Error> {
         check_bucket_name(bucket_name, true)?;
-
         Ok(ListenBucketNotificationArgs {
             extra_headers: None,
             extra_query_params: None,
             region: None,
-            bucket: bucket_name,
+            bucket: bucket_name.to_owned(),
             prefix: None,
             suffix: None,
             events: None,
-            event_fn,
         })
     }
 }
