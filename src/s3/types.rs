@@ -26,7 +26,7 @@ use xmltree::Element;
 
 #[derive(Clone, Debug, Default)]
 /// Contains information of an item of [list_objects()](crate::s3::client::Client::list_objects) API
-pub struct Item {
+pub struct ListEntry {
     pub name: String,
     pub last_modified: Option<UtcTime>,
     pub etag: Option<String>, // except DeleteMarker

@@ -17,7 +17,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{
-    parse_legal_hold, Bucket, Item, LifecycleConfig, NotificationConfig, ObjectLockConfig,
+    parse_legal_hold, Bucket, LifecycleConfig, ListEntry, NotificationConfig, ObjectLockConfig,
     ReplicationConfig, RetentionMode, SelectProgress, SseConfig,
 };
 use crate::s3::utils::{
@@ -245,7 +245,7 @@ pub struct ListObjectsV1Response {
     pub delimiter: Option<String>,
     pub is_truncated: bool,
     pub max_keys: Option<u16>,
-    pub contents: Vec<Item>,
+    pub contents: Vec<ListEntry>,
     pub marker: Option<String>,
     pub next_marker: Option<String>,
 }
@@ -260,7 +260,7 @@ pub struct ListObjectsV2Response {
     pub delimiter: Option<String>,
     pub is_truncated: bool,
     pub max_keys: Option<u16>,
-    pub contents: Vec<Item>,
+    pub contents: Vec<ListEntry>,
     pub key_count: Option<u16>,
     pub start_after: Option<String>,
     pub continuation_token: Option<String>,
@@ -277,7 +277,7 @@ pub struct ListObjectVersionsResponse {
     pub delimiter: Option<String>,
     pub is_truncated: bool,
     pub max_keys: Option<u16>,
-    pub contents: Vec<Item>,
+    pub contents: Vec<ListEntry>,
     pub key_marker: Option<String>,
     pub next_key_marker: Option<String>,
     pub version_id_marker: Option<String>,
@@ -294,7 +294,7 @@ pub struct ListObjectsResponse {
     pub delimiter: Option<String>,
     pub is_truncated: bool,
     pub max_keys: Option<u16>,
-    pub contents: Vec<Item>,
+    pub contents: Vec<ListEntry>,
 
     // ListObjectsV1
     pub marker: String,
