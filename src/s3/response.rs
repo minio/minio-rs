@@ -32,10 +32,12 @@ use crate::s3::utils::{
 };
 
 mod list_objects;
+mod listen_bucket_notification;
 
 pub use list_objects::{
     ListObjectVersionsResponse, ListObjectsResponse, ListObjectsV1Response, ListObjectsV2Response,
 };
+pub use listen_bucket_notification::ListenBucketNotificationResponse;
 
 #[derive(Debug)]
 /// Response of [list_buckets()](crate::s3::client::Client::list_buckets) API
@@ -562,28 +564,6 @@ impl SelectObjectContentResponse {
                     }
                 }
             }
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-/// Response of [listen_bucket_notification()](crate::s3::client::Client::listen_bucket_notification) API
-pub struct ListenBucketNotificationResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-}
-
-impl ListenBucketNotificationResponse {
-    pub fn new(
-        headers: HeaderMap,
-        region: &str,
-        bucket_name: &str,
-    ) -> ListenBucketNotificationResponse {
-        ListenBucketNotificationResponse {
-            headers,
-            region: region.to_string(),
-            bucket_name: bucket_name.to_string(),
         }
     }
 }

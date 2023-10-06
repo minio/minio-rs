@@ -33,13 +33,13 @@ use std::fmt;
 pub struct S3Request<'a> {
     client: &'a Client,
 
-    method: Method,
-    region: Option<&'a str>,
-    bucket: Option<&'a str>,
-    object: Option<&'a str>,
-    query_params: Multimap,
-    headers: Multimap,
-    body: Option<Vec<u8>>,
+    pub method: Method,
+    pub region: Option<&'a str>,
+    pub bucket: Option<&'a str>,
+    pub object: Option<&'a str>,
+    pub query_params: Multimap,
+    pub headers: Multimap,
+    pub body: Option<Vec<u8>>,
 
     // Computed region
     inner_region: String,
@@ -88,6 +88,10 @@ impl<'a> S3Request<'a> {
     pub fn body(mut self, body: Option<Vec<u8>>) -> Self {
         self.body = body;
         self
+    }
+
+    pub fn get_computed_region(&self) -> String {
+        self.inner_region.clone()
     }
 
     pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
@@ -592,126 +596,165 @@ impl<'a> SelectRequest<'a> {
     }
 }
 
-#[derive(Clone, Debug)]
 /// Progress information of [select_object_content()](crate::s3::client::Client::select_object_content) API
+#[derive(Clone, Debug)]
 pub struct SelectProgress {
     pub bytes_scanned: usize,
     pub bytes_progressed: usize,
     pub bytes_returned: usize,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
 /// User identity contains principal ID
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct UserIdentity {
-    #[serde(alias = "principalId")]
-    pub principal_id: Option<String>,
+    #[serde(alias = "principalId", default)]
+    pub principal_id: String,
 }
 
 /// Owner identity contains principal ID
 pub type OwnerIdentity = UserIdentity;
 
-#[derive(Debug, Deserialize, Serialize)]
-/// Request parameters contain principal ID, region and source IP address
-pub struct RequestParameters {
-    #[serde(alias = "principalId")]
-    pub principal_id: Option<String>,
-    #[serde(alias = "region")]
-    pub region: Option<String>,
-    #[serde(alias = "sourceIPAddress")]
-    pub source_ip_address: Option<String>,
+/// Request parameters contain principal ID, region and source IP address, but
+/// they are represented as a string-to-string map in the MinIO server. So we
+/// provide methods to fetch the known fields and a map for underlying
+/// representation.
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct RequestParameters(HashMap<String, String>);
+
+impl RequestParameters {
+    pub fn principal_id(&self) -> Option<&String> {
+        self.0.get("principalId")
+    }
+
+    pub fn region(&self) -> Option<&String> {
+        self.0.get("region")
+    }
+
+    pub fn source_ip_address(&self) -> Option<&String> {
+        self.0.get("sourceIPAddress")
+    }
+
+    pub fn get_map(&self) -> &HashMap<String, String> {
+        &self.0
+    }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-/// Response elements information
-pub struct ResponseElements {
-    #[serde(alias = "content-length")]
-    pub content_length: Option<String>,
-    #[serde(alias = "x-amz-request-id")]
-    pub x_amz_request_id: Option<String>,
-    #[serde(alias = "x-minio-deployment-id")]
-    pub x_minio_deployment_id: Option<String>,
-    #[serde(alias = "x-minio-origin-endpoint")]
-    pub x_minio_origin_endpoint: Option<String>,
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+/// Response elements information: they are represented as a string-to-string
+/// map in the MinIO server. So we provide methods to fetch the known fields and
+/// a map for underlying representation.
+pub struct ResponseElements(HashMap<String, String>);
+
+impl ResponseElements {
+    pub fn content_length(&self) -> Option<&String> {
+        self.0.get("content-length")
+    }
+
+    pub fn x_amz_request_id(&self) -> Option<&String> {
+        self.0.get("x-amz-request-id")
+    }
+
+    pub fn x_minio_deployment_id(&self) -> Option<&String> {
+        self.0.get("x-minio-deployment-id")
+    }
+
+    pub fn x_amz_id_2(&self) -> Option<&String> {
+        self.0.get("x-amz-id-2")
+    }
+
+    pub fn x_minio_origin_endpoint(&self) -> Option<&String> {
+        self.0.get("x-minio-origin-endpoint")
+    }
+
+    pub fn get_map(&self) -> &HashMap<String, String> {
+        &self.0
+    }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 /// S3 bucket information
 pub struct S3Bucket {
-    #[serde(alias = "name")]
-    pub name: Option<String>,
-    #[serde(alias = "arn")]
-    pub arn: Option<String>,
-    #[serde(alias = "ownerIdentity")]
-    pub owner_identity: Option<OwnerIdentity>,
+    #[serde(alias = "name", default)]
+    pub name: String,
+    #[serde(alias = "arn", default)]
+    pub arn: String,
+    #[serde(alias = "ownerIdentity", default)]
+    pub owner_identity: OwnerIdentity,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 /// S3 object information
 pub struct S3Object {
-    #[serde(alias = "key")]
-    pub key: Option<String>,
+    #[serde(alias = "key", default)]
+    pub key: String,
     #[serde(alias = "size")]
-    pub size: Option<usize>,
+    pub size: Option<u64>,
     #[serde(alias = "eTag")]
     pub etag: Option<String>,
     #[serde(alias = "contentType")]
     pub content_type: Option<String>,
     #[serde(alias = "userMetadata")]
     pub user_metadata: Option<HashMap<String, String>>,
-    #[serde(alias = "sequencer")]
-    pub sequencer: Option<String>,
+    #[serde(alias = "versionId", default)]
+    pub version_id: String,
+    #[serde(alias = "sequencer", default)]
+    pub sequencer: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 /// S3 definitions for NotificationRecord
 pub struct S3 {
-    #[serde(alias = "s3SchemaVersion")]
-    pub s3_schema_version: Option<String>,
-    #[serde(alias = "configurationId")]
-    pub configuration_id: Option<String>,
-    #[serde(alias = "bucket")]
-    pub bucket: Option<S3Bucket>,
-    #[serde(alias = "object")]
-    pub object: Option<S3Object>,
+    #[serde(alias = "s3SchemaVersion", default)]
+    pub s3_schema_version: String,
+    #[serde(alias = "configurationId", default)]
+    pub configuration_id: String,
+    #[serde(alias = "bucket", default)]
+    pub bucket: S3Bucket,
+    #[serde(alias = "object", default)]
+    pub object: S3Object,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 /// Source information
 pub struct Source {
-    #[serde(alias = "host")]
-    pub host: Option<String>,
+    #[serde(alias = "host", default)]
+    pub host: String,
     #[serde(alias = "port")]
     pub port: Option<String>,
-    #[serde(alias = "userAgent")]
-    pub user_agent: Option<String>,
+    #[serde(alias = "userAgent", default)]
+    pub user_agent: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
 /// Notification record information
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct NotificationRecord {
-    #[serde(alias = "eventVersion")]
-    pub event_version: Option<String>,
-    #[serde(alias = "eventSource")]
-    pub event_source: Option<String>,
-    #[serde(alias = "awsRegion")]
-    pub aws_region: Option<String>,
-    #[serde(alias = "eventTime")]
-    pub event_time: Option<String>,
-    #[serde(alias = "eventName")]
-    pub event_name: Option<String>,
-    #[serde(alias = "userIdentity")]
-    pub user_identity: Option<UserIdentity>,
-    #[serde(alias = "requestParameters")]
-    pub request_parameters: Option<RequestParameters>,
-    #[serde(alias = "responseElements")]
-    pub response_elements: Option<ResponseElements>,
-    #[serde(alias = "s3")]
-    pub s3: Option<S3>,
-    #[serde(alias = "source")]
-    pub source: Option<Source>,
+    #[serde(alias = "eventVersion", default)]
+    pub event_version: String,
+    #[serde(alias = "eventSource", default)]
+    pub event_source: String,
+    #[serde(alias = "awsRegion", default)]
+    pub aws_region: String,
+    #[serde(
+        alias = "eventTime",
+        default,
+        with = "crate::s3::utils::aws_date_format"
+    )]
+    pub event_time: UtcTime,
+    #[serde(alias = "eventName", default)]
+    pub event_name: String,
+    #[serde(alias = "userIdentity", default)]
+    pub user_identity: UserIdentity,
+    #[serde(alias = "requestParameters", default)]
+    pub request_parameters: RequestParameters,
+    #[serde(alias = "responseElements", default)]
+    pub response_elements: ResponseElements,
+    #[serde(alias = "s3", default)]
+    pub s3: S3,
+    #[serde(alias = "source", default)]
+    pub source: Source,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 /// Contains notification records
 pub struct NotificationRecords {
     #[serde(alias = "Records")]
