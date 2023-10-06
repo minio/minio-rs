@@ -1,6 +1,3 @@
-// MinIO Rust Library for Amazon S3 Compatible Cloud Storage
-// Copyright 2022 MinIO, Inc.
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -13,16 +10,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implementation of Simple Storage Service (aka S3) client
+//! Argument builders for [minio::s3::client::Client](crate::s3::client::Client) APIs
 
-pub mod args;
-pub mod builders;
-pub mod client;
-pub mod creds;
-pub mod error;
-pub mod http;
-pub mod response;
-pub mod signer;
-pub mod sse;
-pub mod types;
-pub mod utils;
+mod list_objects;
+
+pub use list_objects::*;

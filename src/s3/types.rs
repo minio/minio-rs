@@ -15,14 +15,132 @@
 
 //! Various types for S3 API requests and responses
 
+use super::client::Client;
 use crate::s3::error::Error;
 use crate::s3::utils::{
-    from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc, UtcTime,
+    from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc, Multimap, UtcTime,
 };
+
+use async_trait::async_trait;
+use futures_util::Stream;
+use http::Method;
 use serde::{Deserialize, Serialize};
+use xmltree::Element;
+
 use std::collections::HashMap;
 use std::fmt;
-use xmltree::Element;
+
+pub struct S3Request<'a> {
+    client: &'a Client,
+
+    method: Method,
+    region: Option<&'a str>,
+    bucket: Option<&'a str>,
+    object: Option<&'a str>,
+    query_params: Multimap,
+    headers: Multimap,
+    body: Option<Vec<u8>>,
+
+    // Computed region
+    inner_region: String,
+}
+
+impl<'a> S3Request<'a> {
+    pub fn new(client: &'a Client, method: Method) -> S3Request<'a> {
+        S3Request {
+            client,
+            method,
+            region: None,
+            bucket: None,
+            object: None,
+            query_params: Multimap::new(),
+            headers: Multimap::new(),
+            body: None,
+            inner_region: String::new(),
+        }
+    }
+
+    pub fn region(mut self, region: Option<&'a str>) -> Self {
+        self.region = region;
+        self
+    }
+
+    pub fn bucket(mut self, bucket: Option<&'a str>) -> Self {
+        self.bucket = bucket;
+        self
+    }
+
+    pub fn object(mut self, object: Option<&'a str>) -> Self {
+        self.object = object;
+        self
+    }
+
+    pub fn query_params(mut self, query_params: Multimap) -> Self {
+        self.query_params = query_params;
+        self
+    }
+
+    pub fn headers(mut self, headers: Multimap) -> Self {
+        self.headers = headers;
+        self
+    }
+
+    pub fn body(mut self, body: Option<Vec<u8>>) -> Self {
+        self.body = body;
+        self
+    }
+
+    pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
+        // Lookup the region of the bucket if provided.
+        self.inner_region = if let Some(bucket) = self.bucket {
+            self.client.get_region(bucket, self.region).await?
+        } else {
+            "us-east-1".to_string()
+        };
+
+        // Execute the API request.
+        self.client
+            .execute(
+                self.method.clone(),
+                &self.inner_region,
+                &mut self.headers,
+                &self.query_params,
+                self.bucket,
+                self.object,
+                self.body.as_ref().map(|x| x.as_slice()),
+            )
+            .await
+    }
+}
+
+pub trait ToS3Request {
+    fn to_s3request(&self) -> Result<S3Request, Error>;
+}
+
+#[async_trait]
+pub trait FromS3Response: Sized {
+    async fn from_s3response<'a>(
+        s3req: S3Request<'a>,
+        resp: reqwest::Response,
+    ) -> Result<Self, Error>;
+}
+
+#[async_trait]
+pub trait S3Api: ToS3Request {
+    type S3Response: FromS3Response;
+
+    async fn send(&self) -> Result<Self::S3Response, Error> {
+        let mut req = self.to_s3request()?;
+        let resp = req.execute().await?;
+        Self::S3Response::from_s3response(req, resp).await
+    }
+}
+
+#[async_trait]
+pub trait ToStream: Sized {
+    type Item;
+    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send>;
+}
 
 #[derive(Clone, Debug, Default)]
 /// Contains information of an item of [list_objects()](crate::s3::client::Client::list_objects) API
