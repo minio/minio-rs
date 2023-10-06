@@ -16,7 +16,7 @@
 use async_std::task;
 use chrono::Duration;
 use hyper::http::Method;
-use minio::s3::types::NotificationRecords;
+
 use rand::distributions::{Alphanumeric, DistString};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -30,6 +30,8 @@ use minio::s3::args::*;
 use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
+use minio::s3::types::ExecuteStream;
+use minio::s3::types::NotificationRecords;
 use minio::s3::types::{
     CsvInputSerialization, CsvOutputSerialization, DeleteObject, FileHeaderInfo,
     NotificationConfig, ObjectLockConfig, PrefixFilterRule, QueueConfig, QuoteFields,
@@ -423,15 +425,19 @@ impl ClientTest {
 
         let mut stream = self
             .client
-            .list_objects(ListObjectsArgs::new(&self.test_bucket).unwrap())
+            .list_objects(&self.test_bucket)
+            .execute_stream()
             .await;
 
+        let mut count = 0;
         while let Some(items) = stream.next().await {
-            let items = items.unwrap();
+            let items = items.unwrap().contents;
             for item in items.iter() {
                 assert!(names.contains(&item.name));
+                count += 1;
             }
         }
+        assert!(count == 3);
 
         let mut objects: Vec<DeleteObject> = Vec::new();
         for name in names.iter() {
