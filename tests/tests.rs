@@ -30,13 +30,13 @@ use minio::s3::args::*;
 use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
-use minio::s3::types::NotificationRecords;
 use minio::s3::types::ToStream;
 use minio::s3::types::{
     CsvInputSerialization, CsvOutputSerialization, DeleteObject, FileHeaderInfo,
     NotificationConfig, ObjectLockConfig, PrefixFilterRule, QueueConfig, QuoteFields,
     RetentionMode, SelectRequest, SuffixFilterRule,
 };
+use minio::s3::types::{NotificationRecords, S3Api};
 use minio::s3::utils::{to_iso8601utc, utc_now};
 
 struct RandReader {
@@ -554,24 +554,23 @@ impl ClientTest {
             .unwrap();
 
             let event_fn = |event: NotificationRecords| {
-                for record in event.records.iter() {
-                    if let Some(s3) = &record.s3 {
-                        if let Some(object) = &s3.object {
-                            if let Some(key) = &object.key {
-                                if name == *key {
-                                    sender.send(true).unwrap();
-                                }
-                                return false;
-                            }
-                        }
+                let record = event.records.iter().next();
+                if let Some(record) = record {
+                    let key = &record.s3.object.key;
+                    if name == *key {
+                        sender.send(true).unwrap();
+                        return false;
                     }
                 }
                 sender.send(false).unwrap();
                 false
             };
 
-            let args = ListenBucketNotificationArgs::new(&test_bucket).unwrap();
-            let (_, mut event_stream) = client.listen_bucket_notification(args).await.unwrap();
+            let (_, mut event_stream) = client
+                .listen_bucket_notification(&test_bucket)
+                .send()
+                .await
+                .unwrap();
             while let Some(event) = event_stream.next().await {
                 let event = event.unwrap();
                 if !event_fn(event) {
