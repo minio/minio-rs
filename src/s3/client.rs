@@ -179,6 +179,10 @@ impl Client {
             .build()
     }
 
+    pub fn is_aws_host(&self) -> bool {
+        self.base_url.is_aws_host()
+    }
+
     fn build_headers(
         &self,
         headers: &mut Multimap,

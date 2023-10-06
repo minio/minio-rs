@@ -1054,43 +1054,6 @@ impl<'a> SelectObjectContentArgs<'a> {
     }
 }
 
-/// Argument for [listen_bucket_notification()](crate::s3::client::Client::listen_bucket_notification) API
-#[derive(Clone, Debug)]
-pub struct ListenBucketNotificationArgs {
-    pub extra_headers: Option<Multimap>,
-    pub extra_query_params: Option<Multimap>,
-    pub region: Option<String>,
-    pub bucket: String,
-    pub prefix: Option<String>,
-    pub suffix: Option<String>,
-    pub events: Option<Vec<String>>,
-}
-
-impl ListenBucketNotificationArgs {
-    /// Returns argument for [listen_bucket_notification()](crate::s3::client::Client::listen_bucket_notification) API with given bucket name and callback function for results.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// use minio::s3::types::NotificationRecords;
-    ///
-    /// let args = ListenBucketNotificationArgs::new("my-bucket").unwrap();
-    /// ```
-    pub fn new(bucket_name: &str) -> Result<ListenBucketNotificationArgs, Error> {
-        check_bucket_name(bucket_name, true)?;
-        Ok(ListenBucketNotificationArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name.to_owned(),
-            prefix: None,
-            suffix: None,
-            events: None,
-        })
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 /// Argument for [upload_part_copy()](crate::s3::client::Client::upload_part_copy) S3 API
 pub struct UploadPartCopyArgs<'a> {
