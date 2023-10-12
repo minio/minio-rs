@@ -12,8 +12,10 @@
 
 //! Argument builders for [minio::s3::client::Client](crate::s3::client::Client) APIs
 
+mod buckets;
 mod list_objects;
 mod listen_bucket_notification;
 
+pub use buckets::*;
 pub use list_objects::*;
 pub use listen_bucket_notification::*;

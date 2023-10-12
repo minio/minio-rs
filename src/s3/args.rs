@@ -302,27 +302,6 @@ impl<'a> MakeBucketArgs<'a> {
 }
 
 #[derive(Clone, Debug, Default)]
-/// Argument for [list_buckets()](crate::s3::client::Client::list_buckets) API
-pub struct ListBucketsArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-}
-
-impl<'a> ListBucketsArgs<'a> {
-    /// Returns argument for [list_buckets()](crate::s3::client::Client::list_buckets) API
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// let args = ListBucketsArgs::new();
-    /// ```
-    pub fn new() -> ListBucketsArgs<'a> {
-        ListBucketsArgs::default()
-    }
-}
-
-#[derive(Clone, Debug, Default)]
 /// Argument for [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload) API
 pub struct AbortMultipartUploadArgs<'a> {
     pub extra_headers: Option<&'a Multimap>,
@@ -1766,9 +1745,6 @@ impl<'a> SetBucketTagsArgs<'a> {
         })
     }
 }
-
-/// Argument for [get_bucket_versioning()](crate::s3::client::Client::get_bucket_versioning) API
-pub type GetBucketVersioningArgs<'a> = BucketArgs<'a>;
 
 /// Argument for [set_bucket_versioning()](crate::s3::client::Client::set_bucket_versioning) API
 pub struct SetBucketVersioningArgs<'a> {

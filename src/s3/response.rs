@@ -24,27 +24,22 @@ use xmltree::Element;
 
 use crate::s3::error::Error;
 use crate::s3::types::{
-    parse_legal_hold, Bucket, LifecycleConfig, NotificationConfig, ObjectLockConfig,
-    ReplicationConfig, RetentionMode, SelectProgress, SseConfig,
+    parse_legal_hold, LifecycleConfig, NotificationConfig, ObjectLockConfig, ReplicationConfig,
+    RetentionMode, SelectProgress, SseConfig,
 };
 use crate::s3::utils::{
     copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32, UtcTime,
 };
 
+mod buckets;
 mod list_objects;
 mod listen_bucket_notification;
 
+pub use buckets::{GetBucketVersioningResponse, ListBucketsResponse};
 pub use list_objects::{
     ListObjectVersionsResponse, ListObjectsResponse, ListObjectsV1Response, ListObjectsV2Response,
 };
 pub use listen_bucket_notification::ListenBucketNotificationResponse;
-
-#[derive(Debug)]
-/// Response of [list_buckets()](crate::s3::client::Client::list_buckets) API
-pub struct ListBucketsResponse {
-    pub headers: HeaderMap,
-    pub buckets: Vec<Bucket>,
-}
 
 #[derive(Debug)]
 /// Base response for bucket operation
@@ -674,16 +669,6 @@ pub struct GetBucketTagsResponse {
 
 /// Response of [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags) API
 pub type SetBucketTagsResponse = BucketResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [get_bucket_versioning()](crate::s3::client::Client::get_bucket_versioning) API
-pub struct GetBucketVersioningResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub status: Option<bool>,
-    pub mfa_delete: Option<bool>,
-}
 
 /// Response of [set_bucket_versioning()](crate::s3::client::Client::set_bucket_versioning) API
 pub type SetBucketVersioningResponse = BucketResponse;

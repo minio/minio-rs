@@ -163,11 +163,7 @@ impl ClientTest {
         }
 
         let mut count = 0;
-        let resp = self
-            .client
-            .list_buckets(&ListBucketsArgs::new())
-            .await
-            .unwrap();
+        let resp = self.client.list_buckets().send().await.unwrap();
         for bucket in resp.buckets.iter() {
             if names.contains(&bucket.name) {
                 count += 1;
@@ -1016,7 +1012,8 @@ impl ClientTest {
 
         let resp = self
             .client
-            .get_bucket_versioning(&GetBucketVersioningArgs::new(&bucket_name).unwrap())
+            .get_bucket_versioning(&bucket_name)
+            .send()
             .await
             .unwrap();
         assert!(match resp.status {
@@ -1031,7 +1028,8 @@ impl ClientTest {
 
         let resp = self
             .client
-            .get_bucket_versioning(&GetBucketVersioningArgs::new(&bucket_name).unwrap())
+            .get_bucket_versioning(&bucket_name)
+            .send()
             .await
             .unwrap();
         assert!(
