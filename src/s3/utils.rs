@@ -391,3 +391,157 @@ pub fn copy_slice(dst: &mut [u8], src: &[u8]) -> usize {
     }
     c
 }
+
+pub mod xml {
+    use std::collections::HashMap;
+
+    use crate::s3::error::Error;
+
+    struct XmlElementIndex {
+        children: HashMap<String, Vec<usize>>,
+    }
+
+    impl XmlElementIndex {
+        fn get_first(&self, tag: &str) -> Option<usize> {
+            let tag: String = tag.to_string();
+            let is = self.children.get(&tag)?;
+            is.first().map(|v| *v)
+        }
+
+        fn get(&self, tag: &str) -> Option<&Vec<usize>> {
+            let tag: String = tag.to_string();
+            self.children.get(&tag)
+        }
+    }
+
+    impl From<&xmltree::Element> for XmlElementIndex {
+        fn from(value: &xmltree::Element) -> Self {
+            let mut children = HashMap::new();
+            for (i, e) in value
+                .children
+                .iter()
+                .enumerate()
+                .filter_map(|(i, v)| v.as_element().map(|e| (i, e)))
+            {
+                children
+                    .entry(e.name.clone())
+                    .or_insert_with(Vec::new)
+                    .push(i);
+            }
+            Self { children }
+        }
+    }
+
+    pub struct Element<'a> {
+        inner: &'a xmltree::Element,
+        child_element_index: XmlElementIndex,
+    }
+
+    impl<'a> From<&'a xmltree::Element> for Element<'a> {
+        fn from(value: &'a xmltree::Element) -> Self {
+            let element_index = XmlElementIndex::from(value);
+            Self {
+                inner: value,
+                child_element_index: element_index,
+            }
+        }
+    }
+
+    impl Element<'_> {
+        pub fn name(&self) -> &str {
+            self.inner.name.as_str()
+        }
+
+        pub fn get_child_text(&self, tag: &str) -> Option<String> {
+            let index = self.child_element_index.get_first(tag)?;
+            self.inner.children[index]
+                .as_element()?
+                .get_text()
+                .map(|v| v.to_string())
+        }
+
+        pub fn get_child_text_or_error(&self, tag: &str) -> Result<String, Error> {
+            let i = self
+                .child_element_index
+                .get_first(tag)
+                .ok_or(Error::XmlError(format!("<{}> tag not found", tag)))?;
+            self.inner.children[i]
+                .as_element()
+                .unwrap()
+                .get_text()
+                .map(|x| x.to_string())
+                .ok_or(Error::XmlError(format!("text of <{}> tag not found", tag)))
+        }
+
+        // Returns all children with given tag along with their index.
+        pub fn get_matching_children(&self, tag: &str) -> Vec<(usize, Element)> {
+            self.child_element_index
+                .get(tag)
+                .unwrap_or(&vec![])
+                .into_iter()
+                .map(|i| (*i, self.inner.children[*i].as_element().unwrap().into()))
+                .collect()
+        }
+
+        pub fn get_child(&self, tag: &str) -> Option<Element> {
+            let index = self.child_element_index.get_first(tag)?;
+            Some(self.inner.children[index].as_element()?.into())
+        }
+
+        pub fn get_xmltree_children(&self) -> Vec<&xmltree::Element> {
+            self.inner
+                .children
+                .iter()
+                .filter_map(|v| v.as_element())
+                .collect()
+        }
+    }
+
+    // Helper type that implements merge sort in the iterator.
+    pub struct MergeXmlElements<'a> {
+        v1: &'a Vec<(usize, Element<'a>)>,
+        v2: &'a Vec<(usize, Element<'a>)>,
+        i1: usize,
+        i2: usize,
+    }
+
+    impl<'a> MergeXmlElements<'a> {
+        pub fn new(v1: &'a Vec<(usize, Element<'a>)>, v2: &'a Vec<(usize, Element<'a>)>) -> Self {
+            Self {
+                v1,
+                v2,
+                i1: 0,
+                i2: 0,
+            }
+        }
+    }
+
+    impl<'a> Iterator for MergeXmlElements<'a> {
+        type Item = &'a Element<'a>;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let c1 = self.v1.get(self.i1);
+            let c2 = self.v2.get(self.i2);
+            match (c1, c2) {
+                (Some(val1), Some(val2)) => {
+                    if val1.0 < val2.0 {
+                        self.i1 += 1;
+                        Some(&val1.1)
+                    } else {
+                        self.i2 += 1;
+                        Some(&val2.1)
+                    }
+                }
+                (Some(val1), None) => {
+                    self.i1 += 1;
+                    Some(&val1.1)
+                }
+                (None, Some(val2)) => {
+                    self.i2 += 1;
+                    Some(&val2.1)
+                }
+                (None, None) => None,
+            }
+        }
+    }
+}

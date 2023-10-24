@@ -17,12 +17,14 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use bytes::Buf;
 use reqwest::header::HeaderMap;
-use xmltree::Element;
 
 use crate::s3::{
     error::Error,
     types::{FromS3Response, ListEntry, S3Request},
-    utils::{from_iso8601utc, get_default_text, get_option_text, get_text, urldecode},
+    utils::{
+        from_iso8601utc, urldecode,
+        xml::{Element, MergeXmlElements},
+    },
 };
 
 fn url_decode(
@@ -57,65 +59,73 @@ fn parse_common_list_objects_response(
     ),
     Error,
 > {
-    let encoding_type = get_option_text(root, "EncodingType");
-    let prefix = url_decode(&encoding_type, Some(get_default_text(root, "Prefix")))?;
+    let encoding_type = root.get_child_text("EncodingType");
+    let prefix = url_decode(
+        &encoding_type,
+        Some(root.get_child_text("Prefix").unwrap_or_default()),
+    )?;
     Ok((
-        get_text(root, "Name")?,
+        root.get_child_text_or_error("Name")?,
         encoding_type,
         prefix,
-        get_option_text(root, "Delimiter"),
-        match get_option_text(root, "IsTruncated") {
-            Some(v) => v.to_lowercase() == "true",
-            None => false,
-        },
-        match get_option_text(root, "MaxKeys") {
-            Some(v) => Some(v.parse::<u16>()?),
-            None => None,
-        },
+        root.get_child_text("Delimiter"),
+        root.get_child_text("IsTruncated")
+            .map(|x| x.to_lowercase() == "true")
+            .unwrap_or(false),
+        root.get_child_text("MaxKeys")
+            .map(|x| x.parse::<u16>())
+            .transpose()?,
     ))
 }
 
 fn parse_list_objects_contents(
     contents: &mut Vec<ListEntry>,
-    root: &mut xmltree::Element,
-    tag: &str,
+    root: &Element,
+    main_tag: &str,
     encoding_type: &Option<String>,
-    is_delete_marker: bool,
+    with_delete_marker: bool,
 ) -> Result<(), Error> {
-    while let Some(v) = root.take_child(tag) {
-        let content = v;
+    let children1 = root.get_matching_children(main_tag);
+    let children2 = if with_delete_marker {
+        root.get_matching_children("DeleteMarker")
+    } else {
+        vec![]
+    };
+    let mut merged = MergeXmlElements::new(&children1, &children2);
+    while let Some(content) = merged.next() {
         let etype = encoding_type.as_ref().cloned();
-        let key = url_decode(&etype, Some(get_text(&content, "Key")?))?.unwrap();
-        let last_modified = Some(from_iso8601utc(&get_text(&content, "LastModified")?)?);
-        let etag = get_option_text(&content, "ETag");
-        let v = get_default_text(&content, "Size");
-        let size = match v.is_empty() {
-            true => None,
-            false => Some(v.parse::<usize>()?),
-        };
-        let storage_class = get_option_text(&content, "StorageClass");
-        let is_latest = get_default_text(&content, "IsLatest").to_lowercase() == "true";
-        let version_id = get_option_text(&content, "VersionId");
-        let (owner_id, owner_name) = match content.get_child("Owner") {
-            Some(v) => (get_option_text(v, "ID"), get_option_text(v, "DisplayName")),
-            None => (None, None),
-        };
-        let user_metadata = match content.get_child("UserMetadata") {
-            Some(v) => {
-                let mut map: HashMap<String, String> = HashMap::new();
-                for xml_node in &v.children {
-                    let u = xml_node
-                        .as_element()
-                        .ok_or(Error::XmlError("unable to convert to element".to_string()))?;
-                    map.insert(
-                        u.name.to_string(),
-                        u.get_text().unwrap_or_default().to_string(),
-                    );
-                }
-                Some(map)
-            }
-            None => None,
-        };
+        let key = url_decode(&etype, Some(content.get_child_text_or_error("Key")?))?.unwrap();
+        let last_modified = Some(from_iso8601utc(
+            &content.get_child_text_or_error("LastModified")?,
+        )?);
+        let etag = content.get_child_text("ETag");
+        let size: Option<usize> = content
+            .get_child_text("Size")
+            .map(|x| x.parse::<usize>())
+            .transpose()?;
+        let storage_class = content.get_child_text("StorageClass");
+        let is_latest = content
+            .get_child_text("IsLatest")
+            .unwrap_or_default()
+            .to_lowercase()
+            == "true";
+        let version_id = content.get_child_text("VersionId");
+        let (owner_id, owner_name) = content
+            .get_child("Owner")
+            .map(|v| (v.get_child_text("ID"), v.get_child_text("DisplayName")))
+            .unwrap_or((None, None));
+        let user_metadata = content.get_child("UserMetadata").map(|v| {
+            v.get_xmltree_children()
+                .into_iter()
+                .map(|elem| {
+                    (
+                        elem.name.to_string(),
+                        elem.get_text().unwrap_or_default().to_string(),
+                    )
+                })
+                .collect::<HashMap<String, String>>()
+        });
+        let is_delete_marker = content.name() == "DeleteMarker";
 
         contents.push(ListEntry {
             name: key,
@@ -139,13 +149,16 @@ fn parse_list_objects_contents(
 
 fn parse_list_objects_common_prefixes(
     contents: &mut Vec<ListEntry>,
-    root: &mut Element,
+    root: &Element,
     encoding_type: &Option<String>,
 ) -> Result<(), Error> {
-    while let Some(v) = root.take_child("CommonPrefixes") {
-        let common_prefix = v;
+    for (_, common_prefix) in root.get_matching_children("CommonPrefixes") {
         contents.push(ListEntry {
-            name: url_decode(encoding_type, Some(get_text(&common_prefix, "Prefix")?))?.unwrap(),
+            name: url_decode(
+                encoding_type,
+                Some(common_prefix.get_child_text_or_error("Prefix")?),
+            )?
+            .unwrap(),
             last_modified: None,
             etag: None,
             owner_id: None,
@@ -187,18 +200,19 @@ impl FromS3Response for ListObjectsV1Response {
     ) -> Result<Self, Error> {
         let headers = resp.headers().clone();
         let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
+        let xmltree_root = xmltree::Element::parse(body.reader())?;
+        let root = Element::from(&xmltree_root);
 
         let (name, encoding_type, prefix, delimiter, is_truncated, max_keys) =
             parse_common_list_objects_response(&root)?;
-        let marker = url_decode(&encoding_type, get_option_text(&root, "Marker"))?;
-        let mut next_marker = url_decode(&encoding_type, get_option_text(&root, "NextMarker"))?;
+        let marker = url_decode(&encoding_type, root.get_child_text("Marker"))?;
+        let mut next_marker = url_decode(&encoding_type, root.get_child_text("NextMarker"))?;
         let mut contents: Vec<ListEntry> = Vec::new();
-        parse_list_objects_contents(&mut contents, &mut root, "Contents", &encoding_type, false)?;
+        parse_list_objects_contents(&mut contents, &root, "Contents", &encoding_type, false)?;
         if is_truncated && next_marker.is_none() {
             next_marker = contents.last().map(|v| v.name.clone())
         }
-        parse_list_objects_common_prefixes(&mut contents, &mut root, &encoding_type)?;
+        parse_list_objects_common_prefixes(&mut contents, &root, &encoding_type)?;
 
         Ok(ListObjectsV1Response {
             headers,
@@ -240,24 +254,21 @@ impl FromS3Response for ListObjectsV2Response {
     ) -> Result<Self, Error> {
         let headers = resp.headers().clone();
         let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
+        let xmltree_root = xmltree::Element::parse(body.reader())?;
+        let root = Element::from(&xmltree_root);
 
         let (name, encoding_type, prefix, delimiter, is_truncated, max_keys) =
             parse_common_list_objects_response(&root)?;
-        let text = get_option_text(&root, "KeyCount");
-        let key_count = match text {
-            Some(v) => match v.is_empty() {
-                true => None,
-                false => Some(v.parse::<u16>()?),
-            },
-            None => None,
-        };
-        let start_after = url_decode(&encoding_type, get_option_text(&root, "StartAfter"))?;
-        let continuation_token = get_option_text(&root, "ContinuationToken");
-        let next_continuation_token = get_option_text(&root, "NextContinuationToken");
+        let key_count = root
+            .get_child_text("KeyCount")
+            .map(|x| x.parse::<u16>())
+            .transpose()?;
+        let start_after = url_decode(&encoding_type, root.get_child_text("StartAfter"))?;
+        let continuation_token = root.get_child_text("ContinuationToken");
+        let next_continuation_token = root.get_child_text("NextContinuationToken");
         let mut contents: Vec<ListEntry> = Vec::new();
-        parse_list_objects_contents(&mut contents, &mut root, "Contents", &encoding_type, false)?;
-        parse_list_objects_common_prefixes(&mut contents, &mut root, &encoding_type)?;
+        parse_list_objects_contents(&mut contents, &root, "Contents", &encoding_type, false)?;
+        parse_list_objects_common_prefixes(&mut contents, &root, &encoding_type)?;
 
         Ok(ListObjectsV2Response {
             headers,
@@ -301,24 +312,18 @@ impl FromS3Response for ListObjectVersionsResponse {
     ) -> Result<Self, Error> {
         let headers = resp.headers().clone();
         let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
+        let xmltree_root = xmltree::Element::parse(body.reader())?;
+        let root = Element::from(&xmltree_root);
 
         let (name, encoding_type, prefix, delimiter, is_truncated, max_keys) =
             parse_common_list_objects_response(&root)?;
-        let key_marker = url_decode(&encoding_type, get_option_text(&root, "KeyMarker"))?;
-        let next_key_marker = url_decode(&encoding_type, get_option_text(&root, "NextKeyMarker"))?;
-        let version_id_marker = get_option_text(&root, "VersionIdMarker");
-        let next_version_id_marker = get_option_text(&root, "NextVersionIdMarker");
+        let key_marker = url_decode(&encoding_type, root.get_child_text("KeyMarker"))?;
+        let next_key_marker = url_decode(&encoding_type, root.get_child_text("NextKeyMarker"))?;
+        let version_id_marker = root.get_child_text("VersionIdMarker");
+        let next_version_id_marker = root.get_child_text("NextVersionIdMarker");
         let mut contents: Vec<ListEntry> = Vec::new();
-        parse_list_objects_contents(&mut contents, &mut root, "Version", &encoding_type, false)?;
-        parse_list_objects_common_prefixes(&mut contents, &mut root, &encoding_type)?;
-        parse_list_objects_contents(
-            &mut contents,
-            &mut root,
-            "DeleteMarker",
-            &encoding_type,
-            true,
-        )?;
+        parse_list_objects_contents(&mut contents, &root, "Version", &encoding_type, true)?;
+        parse_list_objects_common_prefixes(&mut contents, &root, &encoding_type)?;
 
         Ok(ListObjectVersionsResponse {
             headers,

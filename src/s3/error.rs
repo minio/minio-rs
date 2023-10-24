@@ -52,8 +52,8 @@ impl ErrorResponse {
     }
 }
 
-#[derive(Debug)]
 /// Error definitions
+#[derive(Debug)]
 pub enum Error {
     TimeParseError(chrono::ParseError),
     InvalidUrl(http::uri::InvalidUri),
