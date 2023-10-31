@@ -29,6 +29,7 @@ lazy_static = "1.4.0"
 md5 = "0.7.0"
 multimap = "0.10.0"
 os_info = "3.7.0"
+percent-encoding = "2.3.0"
 rand = "0.8.5"
 regex = "1.9.4"
 serde = { version = "1.0.188", features = ["derive"] }

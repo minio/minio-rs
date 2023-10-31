@@ -110,6 +110,7 @@ pub enum Error {
     PostPolicyError(String),
     InvalidObjectLockConfig(String),
     NoClientProvided,
+    TagDecodingError(String, String),
 }
 
 impl std::error::Error for Error {}
@@ -214,6 +215,7 @@ impl fmt::Display for Error {
             Error::PostPolicyError(m) => write!(f, "{}", m),
             Error::InvalidObjectLockConfig(m) => write!(f, "{}", m),
             Error::NoClientProvided => write!(f, "no client provided"),
+            Error::TagDecodingError(input, error_message) => write!(f, "tag decoding failed: {} on input '{}'", error_message, input),
         }
     }
 }

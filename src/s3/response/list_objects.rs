@@ -22,7 +22,7 @@ use crate::s3::{
     error::Error,
     types::{FromS3Response, ListEntry, S3Request},
     utils::{
-        from_iso8601utc, urldecode,
+        from_iso8601utc, parse_tags, urldecode,
         xml::{Element, MergeXmlElements},
     },
 };
@@ -125,6 +125,11 @@ fn parse_list_objects_contents(
                 })
                 .collect::<HashMap<String, String>>()
         });
+        let user_tags = content
+            .get_child_text("UserTags")
+            .as_ref()
+            .map(|x| parse_tags(x))
+            .transpose()?;
         let is_delete_marker = content.name() == "DeleteMarker";
 
         contents.push(ListEntry {
@@ -138,6 +143,7 @@ fn parse_list_objects_contents(
             is_latest,
             version_id,
             user_metadata,
+            user_tags,
             is_prefix: false,
             is_delete_marker,
             encoding_type: etype,
@@ -168,6 +174,7 @@ fn parse_list_objects_common_prefixes(
             is_latest: false,
             version_id: None,
             user_metadata: None,
+            user_tags: None,
             is_prefix: true,
             is_delete_marker: false,
             encoding_type: encoding_type.as_ref().cloned(),
