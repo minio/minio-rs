@@ -2,6 +2,7 @@ use minio::s3::args::{BucketExistsArgs, MakeBucketArgs, UploadObjectArgs};
 use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
+use minio::s3::sse::SseCustomerKey;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -41,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // 'asiaphotos-2015.zip' to bucket 'asiatrip'.
     client
         .upload_object(
-            &mut UploadObjectArgs::new(
+            &mut UploadObjectArgs::<SseCustomerKey>::new(
                 &bucket_name,
                 "asiaphotos-2015.zip",
                 "/home/user/Photos/asiaphotos.zip",

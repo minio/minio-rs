@@ -51,6 +51,8 @@ mod listen_bucket_notification;
 pub use list_objects::*;
 pub use listen_bucket_notification::*;
 
+use super::sse::Sse;
+
 /// Client Builder manufactures a Client using given parameters.
 #[derive(Debug, Default)]
 pub struct ClientBuilder {
@@ -797,11 +799,14 @@ impl Client {
     }
 
     #[async_recursion(?Send)]
-    pub async fn do_compose_object(
+    pub async fn do_compose_object<S>(
         &self,
-        args: &mut ComposeObjectArgs<'_>,
+        args: &mut ComposeObjectArgs<'_, S>,
         upload_id: &mut String,
-    ) -> Result<ComposeObjectResponse, Error> {
+    ) -> Result<ComposeObjectResponse, Error>
+    where
+        S: Sse,
+    {
         let part_count = self.calculate_part_count(args.sources).await?;
 
         if part_count == 1 && args.sources[0].offset.is_none() && args.sources[0].length.is_none() {
@@ -934,10 +939,13 @@ impl Client {
         self.complete_multipart_upload(&cmu_args).await
     }
 
-    pub async fn compose_object(
+    pub async fn compose_object<S>(
         &self,
-        args: &mut ComposeObjectArgs<'_>,
-    ) -> Result<ComposeObjectResponse, Error> {
+        args: &mut ComposeObjectArgs<'_, S>,
+    ) -> Result<ComposeObjectResponse, Error>
+    where
+        S: Sse,
+    {
         if let Some(v) = &args.sse {
             if v.tls_required() && !self.base_url.https {
                 return Err(Error::SseTlsRequired(None));
@@ -954,10 +962,13 @@ impl Client {
         res
     }
 
-    pub async fn copy_object(
+    pub async fn copy_object<S>(
         &self,
-        args: &CopyObjectArgs<'_>,
-    ) -> Result<CopyObjectResponse, Error> {
+        args: &CopyObjectArgs<'_, S>,
+    ) -> Result<CopyObjectResponse, Error>
+    where
+        S: Sse,
+    {
         if let Some(v) = &args.sse {
             if v.tls_required() && !self.base_url.https {
                 return Err(Error::SseTlsRequired(None));
@@ -2341,11 +2352,10 @@ impl Client {
         })
     }
 
-    fn read_part(
-        reader: &mut dyn std::io::Read,
-        buf: &mut [u8],
-        size: usize,
-    ) -> Result<usize, Error> {
+    fn read_part<T>(reader: &mut T, buf: &mut [u8], size: usize) -> Result<usize, Error>
+    where
+        T: std::io::Read,
+    {
         let mut bytes_read = 0_usize;
         let mut i = 0_usize;
         let mut stop = false;
@@ -2359,12 +2369,16 @@ impl Client {
         Ok(bytes_read)
     }
 
-    async fn do_put_object(
+    async fn do_put_object<R, S>(
         &self,
-        args: &mut PutObjectArgs<'_>,
+        args: &mut PutObjectArgs<'_, R, S>,
         buf: &mut [u8],
         upload_id: &mut String,
-    ) -> Result<PutObjectResponse, Error> {
+    ) -> Result<PutObjectResponse, Error>
+    where
+        R: std::io::Read,
+        S: Sse,
+    {
         let mut headers = args.get_headers();
         if !headers.contains_key("Content-Type") {
             if args.content_type.is_empty() {
@@ -2428,7 +2442,8 @@ impl Client {
             uploaded_size += part_size;
 
             if part_count == 1_i16 {
-                let mut poaargs = PutObjectApiArgs::new(args.bucket, args.object, data)?;
+                let mut poaargs =
+                    PutObjectApiArgs::<SseCustomerKey>::new(args.bucket, args.object, data)?;
                 poaargs.extra_query_params = args.extra_query_params;
                 poaargs.region = args.region;
                 poaargs.headers = Some(&headers);
@@ -2446,7 +2461,7 @@ impl Client {
                 upload_id.push_str(&resp.upload_id);
             }
 
-            let mut upargs = UploadPartArgs::new(
+            let mut upargs = UploadPartArgs::<SseCustomerKey>::new(
                 args.bucket,
                 args.object,
                 upload_id,
@@ -2478,10 +2493,14 @@ impl Client {
         self.complete_multipart_upload(&cmuargs).await
     }
 
-    pub async fn put_object(
+    pub async fn put_object<R, S>(
         &self,
-        args: &mut PutObjectArgs<'_>,
-    ) -> Result<PutObjectResponse, Error> {
+        args: &mut PutObjectArgs<'_, R, S>,
+    ) -> Result<PutObjectResponse, Error>
+    where
+        R: std::io::Read,
+        S: Sse,
+    {
         if let Some(v) = &args.sse {
             if v.tls_required() && !self.base_url.https {
                 return Err(Error::SseTlsRequired(None));
@@ -2508,10 +2527,13 @@ impl Client {
     }
 
     /// Executes [PutObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html) S3 API
-    pub async fn put_object_api(
+    pub async fn put_object_api<S>(
         &self,
-        args: &PutObjectApiArgs<'_>,
-    ) -> Result<PutObjectApiResponse, Error> {
+        args: &PutObjectApiArgs<'_, S>,
+    ) -> Result<PutObjectApiResponse, Error>
+    where
+        S: Sse,
+    {
         let region = self.get_region(args.bucket, args.region).await?;
 
         let mut headers = args.get_headers();
@@ -3281,10 +3303,13 @@ impl Client {
         StatObjectResponse::new(resp.headers(), &region, args.bucket, args.object)
     }
 
-    pub async fn upload_object(
+    pub async fn upload_object<S>(
         &self,
-        args: &UploadObjectArgs<'_>,
-    ) -> Result<UploadObjectResponse, Error> {
+        args: &UploadObjectArgs<'_, S>,
+    ) -> Result<UploadObjectResponse, Error>
+    where
+        S: Sse,
+    {
         let mut file = File::open(args.filename)?;
 
         self.put_object(&mut PutObjectArgs {
@@ -3309,10 +3334,13 @@ impl Client {
     }
 
     /// Executes [UploadPart](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html) S3 API
-    pub async fn upload_part(
+    pub async fn upload_part<S>(
         &self,
-        args: &UploadPartArgs<'_>,
-    ) -> Result<UploadPartResponse, Error> {
+        args: &UploadPartArgs<'_, S>,
+    ) -> Result<UploadPartResponse, Error>
+    where
+        S: Sse,
+    {
         let mut query_params = Multimap::new();
         query_params.insert(String::from("partNumber"), args.part_number.to_string());
         query_params.insert(String::from("uploadId"), args.upload_id.to_string());
