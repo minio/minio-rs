@@ -517,7 +517,7 @@ impl<'a, S: Sse> PutObjectApiArgs<'a, S> {
     /// ```
     /// use minio::s3::args::*;
     /// let data: &[u8] = &[65, 67, 69];
-    /// let args = PutObjectApiArgs::new("my-bucket", "my-object", data).unwrap();
+    /// let args = PutObjectApiArgs::<S>::new("my-bucket", "my-object", data).unwrap();
     /// ```
     pub fn new(
         bucket_name: &'a str,
@@ -592,7 +592,7 @@ impl<'a, S: Sse> UploadPartArgs<'a, S> {
     /// ```
     /// use minio::s3::args::*;
     /// let data: &[u8] = &[65, 67, 69];
-    /// let args = UploadPartArgs::new(
+    /// let args = UploadPartArgs::<S>::new(
     ///     "my-bucket",
     ///     "my-object",
     ///     "c53a2b73-f5e6-484a-9bc0-09cce13e8fd0",
@@ -697,8 +697,7 @@ impl<'a, R: std::io::Read, S: Sse> PutObjectArgs<'a, R, S> {
     ///   let meta = std::fs::metadata(filename).unwrap();
     ///   let object_size = Some(meta.len() as usize);
     ///   let mut file = File::open(filename).unwrap();
-    ///   let args = PutObjectArgs::new("my-bucket", "my-object", &mut file, object_size, None).unwrap();
-    /// ...
+    ///   let args = PutObjectArgs::<R,S>::new("my-bucket", "my-object", &mut file, object_size, None).unwrap();
     /// ```
     pub fn new(
         bucket_name: &'a str,
@@ -1469,7 +1468,7 @@ impl<'a, S: Sse> CopyObjectArgs<'a, S> {
     /// ```
     /// use minio::s3::args::*;
     /// let src = CopySource::new("my-src-bucket", "my-src-object").unwrap();
-    /// let args = CopyObjectArgs::new("my-bucket", "my-object", src).unwrap();
+    /// let args = CopyObjectArgs::<S>::new("my-bucket", "my-object", src).unwrap();
     /// ```
     pub fn new(
         bucket_name: &'a str,
@@ -1698,7 +1697,7 @@ impl<'a, S: Sse> ComposeObjectArgs<'a, S> {
     /// let mut sources: Vec<ComposeSource> = Vec::new();
     /// sources.push(ComposeSource::new("my-src-bucket", "my-src-object-1").unwrap());
     /// sources.push(ComposeSource::new("my-src-bucket", "my-src-object-2").unwrap());
-    /// let args = ComposeObjectArgs::new("my-bucket", "my-object", &mut sources).unwrap();
+    /// let args = ComposeObjectArgs::<S>::new("my-bucket", "my-object", &mut sources).unwrap();
     /// ```
     pub fn new(
         bucket_name: &'a str,
@@ -2711,7 +2710,7 @@ impl<'a, S: Sse> UploadObjectArgs<'a, S> {
     ///
     /// ```no_run
     /// use minio::s3::args::*;
-    /// let args = UploadObjectArgs::new("my-bucket", "my-object", "asiaphotos-2015.zip").unwrap();
+    /// let args = UploadObjectArgs::<S>::new("my-bucket", "my-object", "asiaphotos-2015.zip").unwrap();
     /// ```
     pub fn new(
         bucket_name: &'a str,
