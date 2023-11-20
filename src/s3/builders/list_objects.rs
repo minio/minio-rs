@@ -13,7 +13,6 @@
 //! Argument builders for ListObject APIs.
 
 use async_trait::async_trait;
-use futures_util::{stream as futures_stream, Stream, StreamExt};
 use http::Method;
 
 use crate::s3::{
@@ -23,7 +22,7 @@ use crate::s3::{
         ListObjectVersionsResponse, ListObjectsResponse, ListObjectsV1Response,
         ListObjectsV2Response,
     },
-    types::{S3Api, S3Request, ToS3Request, ToStream},
+    types::{Paginated, S3Api, S3Request, ToS3Request},
     utils::{check_bucket_name, merge, Multimap},
 };
 
@@ -63,31 +62,6 @@ pub struct ListObjectsV1 {
     max_keys: Option<u16>,
     prefix: Option<String>,
     marker: Option<String>,
-}
-
-#[async_trait]
-impl ToStream for ListObjectsV1 {
-    type Item = ListObjectsV1Response;
-
-    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
-        Box::new(Box::pin(futures_stream::unfold(
-            (self.clone(), false),
-            move |(mut args, mut is_done)| async move {
-                if is_done {
-                    return None;
-                }
-                let resp = args.send().await;
-                match resp {
-                    Ok(resp) => {
-                        args.marker = resp.next_marker.clone();
-                        is_done = !resp.is_truncated;
-                        Some((Ok(resp), (args, is_done)))
-                    }
-                    Err(e) => Some((Err(e), (args, true))),
-                }
-            },
-        )))
-    }
 }
 
 impl ToS3Request for ListObjectsV1 {
@@ -161,6 +135,32 @@ impl From<ListObjects> for ListObjectsV1 {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ListObjectsV1Paginated {
+    args: ListObjectsV1,
+    is_done: bool,
+}
+
+#[async_trait]
+impl Paginated for ListObjectsV1Paginated {
+    type Item = ListObjectsV1Response;
+
+    async fn next_page(&mut self, max_items: Option<u16>) -> Option<Result<Self::Item, Error>> {
+        if self.is_done {
+            return None;
+        }
+        self.args.max_keys = max_items.or(self.args.max_keys);
+        let resp = self.args.send().await;
+        if let Ok(ref resp) = resp {
+            self.args.marker = resp.next_marker.clone();
+            self.is_done = !resp.is_truncated;
+        } else {
+            self.is_done = true;
+        }
+        Some(resp)
+    }
+}
+
 impl ListObjectsV1 {
     pub fn new(bucket: &str) -> Self {
         Self {
@@ -213,6 +213,15 @@ impl ListObjectsV1 {
         self.marker = marker;
         self
     }
+
+    /// Enables pagination for ListObjectsV1 API by converting to a type that is
+    /// an instance of `Paginated`.
+    pub fn to_paginated(self) -> ListObjectsV1Paginated {
+        ListObjectsV1Paginated {
+            args: self,
+            is_done: false,
+        }
+    }
 }
 
 /// Argument builder for ListObjectsV2 S3 API, created by
@@ -233,31 +242,6 @@ pub struct ListObjectsV2 {
     continuation_token: Option<String>,
     fetch_owner: bool,
     include_user_metadata: bool,
-}
-
-#[async_trait]
-impl ToStream for ListObjectsV2 {
-    type Item = ListObjectsV2Response;
-
-    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
-        Box::new(Box::pin(futures_stream::unfold(
-            (self.clone(), false),
-            move |(mut args, mut is_done)| async move {
-                if is_done {
-                    return None;
-                }
-                let resp = args.send().await;
-                match resp {
-                    Ok(resp) => {
-                        args.continuation_token = resp.next_continuation_token.clone();
-                        is_done = !resp.is_truncated;
-                        Some((Ok(resp), (args, is_done)))
-                    }
-                    Err(e) => Some((Err(e), (args, true))),
-                }
-            },
-        )))
-    }
 }
 
 impl S3Api for ListObjectsV2 {
@@ -330,6 +314,32 @@ impl From<ListObjects> for ListObjectsV2 {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ListObjectsV2Paginated {
+    args: ListObjectsV2,
+    is_done: bool,
+}
+
+#[async_trait]
+impl Paginated for ListObjectsV2Paginated {
+    type Item = ListObjectsV2Response;
+
+    async fn next_page(&mut self, max_items: Option<u16>) -> Option<Result<Self::Item, Error>> {
+        if self.is_done {
+            return None;
+        }
+        self.args.max_keys = max_items.or(self.args.max_keys);
+        let resp = self.args.send().await;
+        if let Ok(ref resp) = resp {
+            self.args.continuation_token = resp.next_continuation_token.clone();
+            self.is_done = !resp.is_truncated;
+        } else {
+            self.is_done = true;
+        }
+        Some(resp)
+    }
+}
+
 impl ListObjectsV2 {
     pub fn new(bucket: &str) -> Self {
         Self {
@@ -397,6 +407,13 @@ impl ListObjectsV2 {
         self.include_user_metadata = include_user_metadata;
         self
     }
+
+    pub fn to_paginated(self) -> ListObjectsV2Paginated {
+        ListObjectsV2Paginated {
+            args: self,
+            is_done: false,
+        }
+    }
 }
 
 /// Argument builder for ListObjectVerions S3 API created by
@@ -416,33 +433,6 @@ pub struct ListObjectVersions {
     key_marker: Option<String>,
     version_id_marker: Option<String>,
     include_user_metadata: bool,
-}
-
-#[async_trait]
-impl ToStream for ListObjectVersions {
-    type Item = ListObjectVersionsResponse;
-
-    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
-        Box::new(Box::pin(futures_stream::unfold(
-            (self.clone(), false),
-            move |(mut args, mut is_done)| async move {
-                if is_done {
-                    return None;
-                }
-                let resp = args.send().await;
-                match resp {
-                    Ok(resp) => {
-                        args.key_marker = resp.next_key_marker.clone();
-                        args.version_id_marker = resp.next_version_id_marker.clone();
-
-                        is_done = !resp.is_truncated;
-                        Some((Ok(resp), (args, is_done)))
-                    }
-                    Err(e) => Some((Err(e), (args, true))),
-                }
-            },
-        )))
-    }
 }
 
 impl S3Api for ListObjectVersions {
@@ -511,6 +501,33 @@ impl From<ListObjects> for ListObjectVersions {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ListObjectVersionsPaginated {
+    args: ListObjectVersions,
+    is_done: bool,
+}
+
+#[async_trait]
+impl Paginated for ListObjectVersionsPaginated {
+    type Item = ListObjectVersionsResponse;
+
+    async fn next_page(&mut self, max_items: Option<u16>) -> Option<Result<Self::Item, Error>> {
+        if self.is_done {
+            return None;
+        }
+        self.args.max_keys = max_items.or(self.args.max_keys);
+        let resp = self.args.send().await;
+        if let Ok(ref resp) = resp {
+            self.args.key_marker = resp.next_key_marker.clone();
+            self.args.version_id_marker = resp.next_version_id_marker.clone();
+            self.is_done = !resp.is_truncated;
+        } else {
+            self.is_done = true;
+        }
+        Some(resp)
+    }
+}
+
 impl ListObjectVersions {
     pub fn new(bucket: &str) -> Self {
         Self {
@@ -573,14 +590,21 @@ impl ListObjectVersions {
         self.include_user_metadata = include_user_metadata;
         self
     }
+
+    pub fn to_paginated(self) -> ListObjectVersionsPaginated {
+        ListObjectVersionsPaginated {
+            args: self,
+            is_done: false,
+        }
+    }
 }
 
 /// Argument builder for
 /// [list_objects()](crate::s3::client::Client::list_objects) API.
 ///
-/// Use the various builder methods to set parameters on the request. Finally to
-/// send the request and consume the results use the `ToStream` instance to get
-/// a stream of results. Pagination is automatically performed.
+/// Use the various builder methods to set parameters on the request. To send
+/// the request, use [`.send()`](ListObjects::send), or to paginate
+/// automatically, use [`.to_paginated()`](ListObjects::to_paginated).
 #[derive(Clone, Debug, Default)]
 pub struct ListObjects {
     client: Option<Client>,
@@ -614,21 +638,34 @@ pub struct ListObjects {
     include_versions: bool,
 }
 
+/// Adds pagination to the [`ListObjects`] type.
+#[derive(Debug, Clone)]
+pub struct ListObjectsPaginated {
+    args: ListObjects,
+    is_done: bool,
+}
+
 #[async_trait]
-impl ToStream for ListObjects {
+impl Paginated for ListObjectsPaginated {
     type Item = ListObjectsResponse;
 
-    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
-        if self.use_api_v1 {
-            let stream = ListObjectsV1::from(self).to_stream().await;
-            Box::new(stream.map(|v| v.map(|v| v.into())))
-        } else if self.include_versions {
-            let stream = ListObjectVersions::from(self).to_stream().await;
-            Box::new(stream.map(|v| v.map(|v| v.into())))
-        } else {
-            let stream = ListObjectsV2::from(self).to_stream().await;
-            Box::new(stream.map(|v| v.map(|v| v.into())))
+    async fn next_page(&mut self, max_items: Option<u16>) -> Option<Result<Self::Item, Error>> {
+        if self.is_done {
+            return None;
         }
+        self.args.max_keys = max_items.or(self.args.max_keys);
+
+        let resp = self.args.send().await;
+        if let Ok(ref resp) = resp {
+            self.args.marker = resp.next_marker.clone();
+            self.args.continuation_token = resp.next_continuation_token.clone();
+            self.args.key_marker = resp.next_key_marker.clone();
+            self.args.version_id_marker = resp.next_version_id_marker.clone();
+            self.is_done = !resp.is_truncated;
+        } else {
+            self.is_done = true;
+        }
+        Some(resp)
     }
 }
 
@@ -742,5 +779,27 @@ impl ListObjects {
     pub fn include_versions(mut self, include_versions: bool) -> Self {
         self.include_versions = include_versions;
         self
+    }
+
+    /// Send a single list objects request and return the response.
+    pub async fn send(&self) -> Result<ListObjectsResponse, Error> {
+        if self.use_api_v1 {
+            let rsp = ListObjectsV1::from(self.clone()).send().await?;
+            Ok(rsp.into())
+        } else if self.include_versions {
+            let rsp = ListObjectVersions::from(self.clone()).send().await?;
+            Ok(rsp.into())
+        } else {
+            let rsp = ListObjectsV2::from(self.clone()).send().await?;
+            Ok(rsp.into())
+        }
+    }
+
+    /// Converts to a type that performs pagination automatically.
+    pub fn to_paginated(self) -> ListObjectsPaginated {
+        ListObjectsPaginated {
+            args: self,
+            is_done: false,
+        }
     }
 }

@@ -423,3 +423,27 @@ impl From<ListObjectsV1Response> for ListObjectsResponse {
         }
     }
 }
+
+#[async_trait]
+impl FromS3Response for ListObjectsResponse {
+    async fn from_s3response<'a>(
+        req: S3Request<'a>,
+        resp: reqwest::Response,
+    ) -> Result<Self, Error> {
+        let qp = &req.query_params;
+
+        if qp.get_vec("versions") == Some(&vec![]) {
+            return ListObjectVersionsResponse::from_s3response(req, resp)
+                .await
+                .map(|v| v.into());
+        } else if qp.get_vec("list-type") == Some(&vec!["2".to_string()]) {
+            return ListObjectsV2Response::from_s3response(req, resp)
+                .await
+                .map(|v| v.into());
+        } else {
+            return ListObjectsV1Response::from_s3response(req, resp)
+                .await
+                .map(|v| v.into());
+        }
+    }
+}

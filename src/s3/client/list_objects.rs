@@ -19,21 +19,31 @@ use super::Client;
 use crate::s3::builders::{ListObjectVersions, ListObjects, ListObjectsV1, ListObjectsV2};
 
 impl Client {
+    /// Returns a builder type to list objects in a bucket using the older
+    /// ListObjectsV1 API. This is a lower level API - prefer using the more
+    /// powerful `list_objects` method instead.
     pub fn list_objects_v1(&self, bucket: &str) -> ListObjectsV1 {
         ListObjectsV1::new(bucket).client(self)
     }
 
+    /// Returns a builder type to list objects in a bucket using the newer
+    /// ListObjectsV2 API. This is a lower level API - prefer using the more
+    /// powerful `list_objects` method instead.
     pub fn list_objects_v2(&self, bucket: &str) -> ListObjectsV2 {
         ListObjectsV2::new(bucket).client(self)
     }
 
+    /// Returns a builder type to list object versions in a bucket. This is a
+    /// lower level API - prefer using the more powerful `list_objects` method
+    /// instead.
     pub fn list_object_versions(&self, bucket: &str) -> ListObjectVersions {
         ListObjectVersions::new(bucket).client(self)
     }
 
-    /// List objects with version information optionally. This function handles
-    /// pagination and returns a stream of results. Each result corresponds to
-    /// the response of a single listing API call.
+    /// List objects with version information optionally. This function returns
+    /// the ListObjects builder type. This builder type has methods to set
+    /// listing parameters and provides the `.to_paginated()` method to perform
+    /// automatic pagination and return a stream of list "pages" as results.
     ///
     /// # Example
     ///
@@ -41,7 +51,7 @@ impl Client {
     /// use minio::s3::client::{Client, ClientBuilder};
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
-    /// use minio::s3::types::ToStream;
+    /// use minio::s3::types::Paginated;
     /// use futures_util::StreamExt;
     ///
     /// #[tokio::main]
@@ -62,7 +72,8 @@ impl Client {
     ///     let mut list_objects = client
     ///         .list_objects("my-bucket")
     ///         .recursive(true)
-    ///         .to_stream()
+    ///         .to_paginated()
+    ///         .page_stream(Some(3))
     ///         .await;
     ///     while let Some(result) = list_objects.next().await {
     ///        match result {

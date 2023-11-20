@@ -22,7 +22,7 @@ use crate::s3::utils::{
 };
 
 use async_trait::async_trait;
-use futures_util::Stream;
+use futures_util::{stream as futures_stream, Stream};
 use http::Method;
 use serde::{Deserialize, Serialize};
 use xmltree::Element;
@@ -140,10 +140,36 @@ pub trait S3Api: ToS3Request {
     }
 }
 
+/// Trait that provides pagination for object listing APIs. Call
+/// [.next_page(max_items)](Paginated::next_page) to get the next page of
+/// results or call [.page_stream(max_items)](Paginated::page_stream) to get a
+/// stream of pages.
 #[async_trait]
-pub trait ToStream: Sized {
+pub trait Paginated: Sized + 'static {
     type Item;
-    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send>;
+
+    /// Returns the next page of results. The `max_items` parameter specifies
+    /// the maximum number of items to return in the next page. If `max_items`
+    /// is `None`, the value in the original request builder is used.
+    async fn next_page(&mut self, max_items: Option<u16>) -> Option<Result<Self::Item, Error>>;
+
+    /// Returns a stream of "pages". The `max_items` parameter specifies the
+    /// maximum number of items to return in each page. If `max_items` is
+    /// `None`, the value in the original request builder is used.
+    async fn page_stream(
+        self,
+        max_items: Option<u16>,
+    ) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
+        Box::new(Box::pin(futures_stream::unfold(
+            self,
+            move |mut this| async move {
+                match this.next_page(max_items).await {
+                    Some(v) => Some((v, this)),
+                    None => None,
+                }
+            },
+        )))
+    }
 }
 
 #[derive(Clone, Debug, Default)]

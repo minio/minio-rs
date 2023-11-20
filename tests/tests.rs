@@ -30,10 +30,9 @@ use minio::s3::args::*;
 use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
-use minio::s3::types::ToStream;
 use minio::s3::types::{
     CsvInputSerialization, CsvOutputSerialization, DeleteObject, FileHeaderInfo,
-    NotificationConfig, ObjectLockConfig, PrefixFilterRule, QueueConfig, QuoteFields,
+    NotificationConfig, ObjectLockConfig, Paginated, PrefixFilterRule, QueueConfig, QuoteFields,
     RetentionMode, SelectRequest, SuffixFilterRule,
 };
 use minio::s3::types::{NotificationRecords, S3Api};
@@ -422,7 +421,8 @@ impl ClientTest {
         let mut stream = self
             .client
             .list_objects(&self.test_bucket)
-            .to_stream()
+            .to_paginated()
+            .page_stream(None)
             .await;
 
         let mut count = 0;
