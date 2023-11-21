@@ -23,7 +23,7 @@ use crate::s3::response::*;
 use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
 use crate::s3::types::{
-    Bucket, DeleteObject, Directive, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part,
+    DeleteObject, Directive, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part,
     ReplicationConfig, RetentionMode, SseConfig,
 };
 use crate::s3::utils::{
@@ -50,6 +50,8 @@ mod listen_bucket_notification;
 
 pub use list_objects::*;
 pub use listen_bucket_notification::*;
+
+use super::builders::{GetBucketVersioning, ListBuckets};
 
 /// Client Builder manufactures a Client using given parameters.
 #[derive(Debug, Default)]
@@ -177,6 +179,10 @@ impl Client {
             .ssl_cert_file(ssl_cert_file)
             .ignore_cert_check(ignore_cert_check)
             .build()
+    }
+
+    pub fn is_aws_host(&self) -> bool {
+        self.base_url.is_aws_host()
     }
 
     fn build_headers(
@@ -391,7 +397,7 @@ impl Client {
 
     pub async fn do_execute(
         &self,
-        method: Method,
+        method: &Method,
         region: &String,
         headers: &mut Multimap,
         query_params: &Multimap,
@@ -403,7 +409,7 @@ impl Client {
         let body = data.unwrap_or_default();
         let url =
             self.base_url
-                .build_url(&method, region, query_params, bucket_name, object_name)?;
+                .build_url(method, region, query_params, bucket_name, object_name)?;
         self.build_headers(headers, query_params, region, &url, &method, body);
 
         let mut req = self.client.request(method.clone(), url.to_string());
@@ -414,7 +420,7 @@ impl Client {
             }
         }
 
-        if method == Method::PUT || method == Method::POST {
+        if *method == Method::PUT || *method == Method::POST {
             req = req.body(body.to_vec());
         }
 
@@ -430,7 +436,7 @@ impl Client {
             &mut body,
             status_code,
             &header_map,
-            &method,
+            method,
             &url.path,
             bucket_name,
             object_name,
@@ -463,7 +469,7 @@ impl Client {
     ) -> Result<reqwest::Response, Error> {
         let res = self
             .do_execute(
-                method.clone(),
+                &method,
                 region,
                 headers,
                 query_params,
@@ -487,7 +493,7 @@ impl Client {
 
         // Retry only once on RetryHead error.
         self.do_execute(
-            method.clone(),
+            &method,
             region,
             headers,
             query_params,
@@ -1847,46 +1853,8 @@ impl Client {
         }
     }
 
-    pub async fn get_bucket_versioning(
-        &self,
-        args: &GetBucketVersioningArgs<'_>,
-    ) -> Result<GetBucketVersioningResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("versioning"), String::new());
-
-        let resp = self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await?;
-
-        let header_map = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let root = Element::parse(body.reader())?;
-
-        Ok(GetBucketVersioningResponse {
-            headers: header_map.clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            status: get_option_text(&root, "Status").map(|v| v == "Enabled"),
-            mfa_delete: get_option_text(&root, "MFADelete").map(|v| v == "Enabled"),
-        })
+    pub fn get_bucket_versioning(&self, bucket: &str) -> GetBucketVersioning {
+        GetBucketVersioning::new(bucket).client(self)
     }
 
     pub async fn get_object(&self, args: &GetObjectArgs<'_>) -> Result<reqwest::Response, Error> {
@@ -2231,49 +2199,8 @@ impl Client {
         }
     }
 
-    pub async fn list_buckets(
-        &self,
-        args: &ListBucketsArgs<'_>,
-    ) -> Result<ListBucketsResponse, Error> {
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        let mut query_params = &Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            query_params = v;
-        }
-        let resp = self
-            .execute(
-                Method::GET,
-                &String::from("us-east-1"),
-                &mut headers,
-                query_params,
-                None,
-                None,
-                None,
-            )
-            .await?;
-        let header_map = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
-        let buckets = root
-            .get_mut_child("Buckets")
-            .ok_or(Error::XmlError(String::from("<Buckets> tag not found")))?;
-
-        let mut bucket_list: Vec<Bucket> = Vec::new();
-        while let Some(b) = buckets.take_child("Bucket") {
-            let bucket = b;
-            bucket_list.push(Bucket {
-                name: get_text(&bucket, "Name")?,
-                creation_date: from_iso8601utc(&get_text(&bucket, "CreationDate")?)?,
-            })
-        }
-
-        Ok(ListBucketsResponse {
-            headers: header_map.clone(),
-            buckets: bucket_list,
-        })
+    pub fn list_buckets(&self) -> ListBuckets {
+        ListBuckets::new().client(self)
     }
 
     pub async fn make_bucket(

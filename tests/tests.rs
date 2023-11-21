@@ -16,7 +16,7 @@
 use async_std::task;
 use chrono::Duration;
 use hyper::http::Method;
-use minio::s3::types::NotificationRecords;
+
 use rand::distributions::{Alphanumeric, DistString};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -32,9 +32,10 @@ use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::{
     CsvInputSerialization, CsvOutputSerialization, DeleteObject, FileHeaderInfo,
-    NotificationConfig, ObjectLockConfig, PrefixFilterRule, QueueConfig, QuoteFields,
+    NotificationConfig, ObjectLockConfig, Paginated, PrefixFilterRule, QueueConfig, QuoteFields,
     RetentionMode, SelectRequest, SuffixFilterRule,
 };
+use minio::s3::types::{NotificationRecords, S3Api};
 use minio::s3::utils::{to_iso8601utc, utc_now};
 
 struct RandReader {
@@ -161,11 +162,7 @@ impl ClientTest {
         }
 
         let mut count = 0;
-        let resp = self
-            .client
-            .list_buckets(&ListBucketsArgs::new())
-            .await
-            .unwrap();
+        let resp = self.client.list_buckets().send().await.unwrap();
         for bucket in resp.buckets.iter() {
             if names.contains(&bucket.name) {
                 count += 1;
@@ -423,15 +420,20 @@ impl ClientTest {
 
         let mut stream = self
             .client
-            .list_objects(ListObjectsArgs::new(&self.test_bucket).unwrap())
+            .list_objects(&self.test_bucket)
+            .to_paginated()
+            .page_stream(None)
             .await;
 
+        let mut count = 0;
         while let Some(items) = stream.next().await {
-            let items = items.unwrap();
+            let items = items.unwrap().contents;
             for item in items.iter() {
                 assert!(names.contains(&item.name));
+                count += 1;
             }
         }
+        assert!(count == 3);
 
         let mut objects: Vec<DeleteObject> = Vec::new();
         for name in names.iter() {
@@ -548,24 +550,23 @@ impl ClientTest {
             .unwrap();
 
             let event_fn = |event: NotificationRecords| {
-                for record in event.records.iter() {
-                    if let Some(s3) = &record.s3 {
-                        if let Some(object) = &s3.object {
-                            if let Some(key) = &object.key {
-                                if name == *key {
-                                    sender.send(true).unwrap();
-                                }
-                                return false;
-                            }
-                        }
+                let record = event.records.iter().next();
+                if let Some(record) = record {
+                    let key = &record.s3.object.key;
+                    if name == *key {
+                        sender.send(true).unwrap();
+                        return false;
                     }
                 }
                 sender.send(false).unwrap();
                 false
             };
 
-            let args = ListenBucketNotificationArgs::new(&test_bucket).unwrap();
-            let (_, mut event_stream) = client.listen_bucket_notification(args).await.unwrap();
+            let (_, mut event_stream) = client
+                .listen_bucket_notification(&test_bucket)
+                .send()
+                .await
+                .unwrap();
             while let Some(event) = event_stream.next().await {
                 let event = event.unwrap();
                 if !event_fn(event) {
@@ -1011,7 +1012,8 @@ impl ClientTest {
 
         let resp = self
             .client
-            .get_bucket_versioning(&GetBucketVersioningArgs::new(&bucket_name).unwrap())
+            .get_bucket_versioning(&bucket_name)
+            .send()
             .await
             .unwrap();
         assert!(match resp.status {
@@ -1026,7 +1028,8 @@ impl ClientTest {
 
         let resp = self
             .client
-            .get_bucket_versioning(&GetBucketVersioningArgs::new(&bucket_name).unwrap())
+            .get_bucket_versioning(&bucket_name)
+            .send()
             .await
             .unwrap();
         assert!(

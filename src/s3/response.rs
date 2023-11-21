@@ -15,26 +15,31 @@
 
 //! Responses for [minio::s3::client::Client](crate::s3::client::Client) APIs
 
+use std::collections::HashMap;
+use std::collections::VecDeque;
+
+use reqwest::header::HeaderMap;
+use std::io::BufReader;
+use xmltree::Element;
+
 use crate::s3::error::Error;
 use crate::s3::types::{
-    parse_legal_hold, Bucket, LifecycleConfig, ListEntry, NotificationConfig, ObjectLockConfig,
-    ReplicationConfig, RetentionMode, SelectProgress, SseConfig,
+    parse_legal_hold, LifecycleConfig, NotificationConfig, ObjectLockConfig, ReplicationConfig,
+    RetentionMode, SelectProgress, SseConfig,
 };
 use crate::s3::utils::{
     copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32, UtcTime,
 };
-use reqwest::header::HeaderMap;
-use std::collections::HashMap;
-use std::collections::VecDeque;
-use std::io::BufReader;
-use xmltree::Element;
 
-#[derive(Debug)]
-/// Response of [list_buckets()](crate::s3::client::Client::list_buckets) API
-pub struct ListBucketsResponse {
-    pub headers: HeaderMap,
-    pub buckets: Vec<Bucket>,
-}
+mod buckets;
+mod list_objects;
+mod listen_bucket_notification;
+
+pub use buckets::{GetBucketVersioningResponse, ListBucketsResponse};
+pub use list_objects::{
+    ListObjectVersionsResponse, ListObjectsResponse, ListObjectsV1Response, ListObjectsV2Response,
+};
+pub use listen_bucket_notification::ListenBucketNotificationResponse;
 
 #[derive(Debug)]
 /// Base response for bucket operation
@@ -234,84 +239,6 @@ pub struct RemoveObjectsApiResponse {
 
 /// Response of [remove_objects()](crate::s3::client::Client::remove_objects) API
 pub type RemoveObjectsResponse = RemoveObjectsApiResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [list_objects_v1()](crate::s3::client::Client::list_objects_v1) S3 API
-pub struct ListObjectsV1Response {
-    pub headers: HeaderMap,
-    pub name: String,
-    pub encoding_type: Option<String>,
-    pub prefix: Option<String>,
-    pub delimiter: Option<String>,
-    pub is_truncated: bool,
-    pub max_keys: Option<u16>,
-    pub contents: Vec<ListEntry>,
-    pub marker: Option<String>,
-    pub next_marker: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-/// Response of [list_objects_v2()](crate::s3::client::Client::list_objects_v2) S3 API
-pub struct ListObjectsV2Response {
-    pub headers: HeaderMap,
-    pub name: String,
-    pub encoding_type: Option<String>,
-    pub prefix: Option<String>,
-    pub delimiter: Option<String>,
-    pub is_truncated: bool,
-    pub max_keys: Option<u16>,
-    pub contents: Vec<ListEntry>,
-    pub key_count: Option<u16>,
-    pub start_after: Option<String>,
-    pub continuation_token: Option<String>,
-    pub next_continuation_token: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-/// Response of [list_object_versions()](crate::s3::client::Client::list_object_versions) S3 API
-pub struct ListObjectVersionsResponse {
-    pub headers: HeaderMap,
-    pub name: String,
-    pub encoding_type: Option<String>,
-    pub prefix: Option<String>,
-    pub delimiter: Option<String>,
-    pub is_truncated: bool,
-    pub max_keys: Option<u16>,
-    pub contents: Vec<ListEntry>,
-    pub key_marker: Option<String>,
-    pub next_key_marker: Option<String>,
-    pub version_id_marker: Option<String>,
-    pub next_version_id_marker: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-/// Response of [list_objects()](crate::s3::client::Client::list_objects) API
-pub struct ListObjectsResponse {
-    pub headers: HeaderMap,
-    pub name: String,
-    pub encoding_type: Option<String>,
-    pub prefix: Option<String>,
-    pub delimiter: Option<String>,
-    pub is_truncated: bool,
-    pub max_keys: Option<u16>,
-    pub contents: Vec<ListEntry>,
-
-    // ListObjectsV1
-    pub marker: String,
-    pub next_marker: String,
-
-    // ListObjectsV2
-    pub key_count: u16,
-    pub start_after: String,
-    pub continuation_token: String,
-    pub next_continuation_token: String,
-
-    // ListObjectVersions
-    pub key_marker: String,
-    pub next_key_marker: String,
-    pub version_id_marker: String,
-    pub next_version_id_marker: String,
-}
 
 /// Response of [select_object_content()](crate::s3::client::Client::select_object_content) API
 pub struct SelectObjectContentResponse {
@@ -636,28 +563,6 @@ impl SelectObjectContentResponse {
     }
 }
 
-#[derive(Clone, Debug)]
-/// Response of [listen_bucket_notification()](crate::s3::client::Client::listen_bucket_notification) API
-pub struct ListenBucketNotificationResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-}
-
-impl ListenBucketNotificationResponse {
-    pub fn new(
-        headers: HeaderMap,
-        region: &str,
-        bucket_name: &str,
-    ) -> ListenBucketNotificationResponse {
-        ListenBucketNotificationResponse {
-            headers,
-            region: region.to_string(),
-            bucket_name: bucket_name.to_string(),
-        }
-    }
-}
-
 /// Response of [delete_bucket_encryption()](crate::s3::client::Client::delete_bucket_encryption) API
 pub type DeleteBucketEncryptionResponse = BucketResponse;
 
@@ -764,16 +669,6 @@ pub struct GetBucketTagsResponse {
 
 /// Response of [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags) API
 pub type SetBucketTagsResponse = BucketResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [get_bucket_versioning()](crate::s3::client::Client::get_bucket_versioning) API
-pub struct GetBucketVersioningResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub status: Option<bool>,
-    pub mfa_delete: Option<bool>,
-}
 
 /// Response of [set_bucket_versioning()](crate::s3::client::Client::set_bucket_versioning) API
 pub type SetBucketVersioningResponse = BucketResponse;
