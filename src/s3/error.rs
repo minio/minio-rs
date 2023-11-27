@@ -79,11 +79,11 @@ pub enum Error {
     EmptyParts(String),
     InvalidRetentionMode(String),
     InvalidRetentionConfig(String),
-    InvalidMinPartSize(usize),
-    InvalidMaxPartSize(usize),
-    InvalidObjectSize(usize),
+    InvalidMinPartSize(u64),
+    InvalidMaxPartSize(u64),
+    InvalidObjectSize(u64),
     MissingPartSize,
-    InvalidPartCount(usize, usize, u16),
+    InvalidPartCount(u64, u64, u16),
     SseTlsRequired(Option<String>),
     InsufficientData(usize, usize),
     InvalidLegalHold(String),
@@ -111,6 +111,7 @@ pub enum Error {
     InvalidObjectLockConfig(String),
     NoClientProvided,
     TagDecodingError(String, String),
+    ContentLengthUnknown,
 }
 
 impl std::error::Error for Error {}
@@ -216,6 +217,7 @@ impl fmt::Display for Error {
             Error::InvalidObjectLockConfig(m) => write!(f, "{}", m),
             Error::NoClientProvided => write!(f, "no client provided"),
             Error::TagDecodingError(input, error_message) => write!(f, "tag decoding failed: {} on input '{}'", error_message, input),
+            Error::ContentLengthUnknown => write!(f, "content length is unknown"),
         }
     }
 }

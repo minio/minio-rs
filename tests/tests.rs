@@ -14,16 +14,23 @@
 // limitations under the License.
 
 use async_std::task;
+use bytes::Bytes;
 use chrono::Duration;
+use futures_util::Stream;
 use hyper::http::Method;
 
-use rand::distributions::{Alphanumeric, DistString};
+use minio::s3::builders::ObjectContent;
+use rand::{
+    distributions::{Alphanumeric, DistString},
+    rngs::SmallRng,
+    SeedableRng,
+};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use tokio::sync::mpsc;
+use tokio::{io::AsyncRead, sync::mpsc};
 use tokio_stream::StreamExt;
 
 use minio::s3::args::*;
@@ -64,6 +71,72 @@ impl std::io::Read for RandReader {
         self.size -= bytes_read;
 
         Ok(bytes_read)
+    }
+}
+
+struct RandSrc {
+    size: u64,
+    rng: SmallRng,
+}
+
+impl RandSrc {
+    fn new(size: u64) -> RandSrc {
+        let rng = SmallRng::from_entropy();
+        RandSrc { size, rng }
+    }
+}
+
+impl Stream for RandSrc {
+    type Item = Result<Bytes, std::io::Error>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut task::Context<'_>,
+    ) -> task::Poll<Option<Self::Item>> {
+        if self.size == 0 {
+            return task::Poll::Ready(None);
+        }
+
+        let bytes_read = match self.size > 64 * 1024 {
+            true => 64 * 1024,
+            false => self.size as usize,
+        };
+
+        let this = self.get_mut();
+
+        let mut buf = vec![0; bytes_read];
+        let random: &mut dyn rand::RngCore = &mut this.rng;
+        random.fill_bytes(&mut buf);
+
+        this.size -= bytes_read as u64;
+
+        task::Poll::Ready(Some(Ok(Bytes::from(buf))))
+    }
+}
+
+impl AsyncRead for RandSrc {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        read_buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        let buf = read_buf.initialize_unfilled();
+        let bytes_read = match self.size > (buf.len() as u64) {
+            true => buf.len(),
+            false => self.size as usize,
+        };
+
+        let this = self.get_mut();
+
+        if bytes_read > 0 {
+            let random: &mut dyn rand::RngCore = &mut this.rng;
+            random.fill_bytes(&mut buf[0..bytes_read]);
+        }
+
+        this.size -= bytes_read as u64;
+
+        read_buf.advance(bytes_read);
+        std::task::Poll::Ready(Ok(()))
     }
 }
 
@@ -183,7 +256,7 @@ impl ClientTest {
         let object_name = rand_object_name();
         let size = 16_usize;
         self.client
-            .put_object(
+            .put_object_old(
                 &mut PutObjectArgs::new(
                     &self.test_bucket,
                     &object_name,
@@ -213,7 +286,7 @@ impl ClientTest {
         let object_name = rand_object_name();
         let size: usize = 16 + 5 * 1024 * 1024;
         self.client
-            .put_object(
+            .put_object_old(
                 &mut PutObjectArgs::new(
                     &self.test_bucket,
                     &object_name,
@@ -239,11 +312,41 @@ impl ClientTest {
             .unwrap();
     }
 
-    async fn get_object(&self) {
+    async fn put_object_content(&self) {
+        let object_name = rand_object_name();
+        let sizes = vec![16_u64, 5 * 1024 * 1024, 16 + 5 * 1024 * 1024];
+        for size in sizes.iter() {
+            let data_src = RandSrc::new(*size);
+            let rsp = self
+                .client
+                .put_object_content(
+                    &self.test_bucket,
+                    &object_name,
+                    ObjectContent::new(data_src, Some(*size)),
+                )
+                .send()
+                .await
+                .unwrap();
+            let etag = rsp.etag;
+            let resp = self
+                .client
+                .stat_object(&StatObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(resp.size, *size as usize);
+            assert_eq!(resp.etag, etag);
+            self.client
+                .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+                .await
+                .unwrap();
+        }
+    }
+
+    async fn get_object_old(&self) {
         let object_name = rand_object_name();
         let data = "hello, world";
         self.client
-            .put_object(
+            .put_object_old(
                 &mut PutObjectArgs::new(
                     &self.test_bucket,
                     &object_name,
@@ -257,10 +360,32 @@ impl ClientTest {
             .unwrap();
         let resp = self
             .client
-            .get_object(&GetObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .get_object_old(&GetObjectArgs::new(&self.test_bucket, &object_name).unwrap())
             .await
             .unwrap();
         let got = resp.text().await.unwrap();
+        assert_eq!(got, data);
+        self.client
+            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await
+            .unwrap();
+    }
+
+    async fn get_object(&self) {
+        let object_name = rand_object_name();
+        let data = Bytes::from("hello, world".to_string().into_bytes());
+        self.client
+            .put_object_content(&self.test_bucket, &object_name, data.clone())
+            .send()
+            .await
+            .unwrap();
+        let resp = self
+            .client
+            .get_object(&self.test_bucket, &object_name)
+            .send()
+            .await
+            .unwrap();
+        let got = resp.content.to_segmented_bytes().await.unwrap().to_bytes();
         assert_eq!(got, data);
         self.client
             .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
@@ -357,7 +482,7 @@ impl ClientTest {
             let object_name = rand_object_name();
             let size = 0_usize;
             self.client
-                .put_object(
+                .put_object_old(
                     &mut PutObjectArgs::new(
                         &self.test_bucket,
                         &object_name,
@@ -404,7 +529,7 @@ impl ClientTest {
             let object_name = rand_object_name();
             let size = 0_usize;
             self.client
-                .put_object(
+                .put_object_old(
                     &mut PutObjectArgs::new(
                         &self.test_bucket,
                         &object_name,
@@ -467,7 +592,7 @@ impl ClientTest {
         let body = String::from("Year,Make,Model,Description,Price\n") + &data;
 
         self.client
-            .put_object(
+            .put_object_old(
                 &mut PutObjectArgs::new(
                     &self.test_bucket,
                     &object_name,
@@ -580,7 +705,7 @@ impl ClientTest {
 
         let size = 16_usize;
         self.client
-            .put_object(
+            .put_object_old(
                 &mut PutObjectArgs::new(
                     &self.test_bucket,
                     &object_name,
@@ -607,7 +732,7 @@ impl ClientTest {
 
         let size = 16_usize;
         self.client
-            .put_object(
+            .put_object_old(
                 &mut PutObjectArgs::new(
                     &self.test_bucket,
                     &src_object_name,
@@ -656,7 +781,7 @@ impl ClientTest {
 
         let size = 16_usize;
         self.client
-            .put_object(
+            .put_object_old(
                 &mut PutObjectArgs::new(
                     &self.test_bucket,
                     &src_object_name,
@@ -945,7 +1070,7 @@ impl ClientTest {
 
         let size = 16_usize;
         self.client
-            .put_object(
+            .put_object_old(
                 &mut PutObjectArgs::new(
                     &self.test_bucket,
                     &object_name,
@@ -1057,7 +1182,7 @@ impl ClientTest {
         let size = 16_usize;
         let obj_resp = self
             .client
-            .put_object(
+            .put_object_old(
                 &mut PutObjectArgs::new(
                     &bucket_name,
                     &object_name,
@@ -1194,6 +1319,12 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     println!("[Multipart] put_object()");
     ctest.put_object_multipart().await;
+
+    println!("put_object_stream()");
+    ctest.put_object_content().await;
+
+    println!("get_object_old()");
+    ctest.get_object_old().await;
 
     println!("get_object()");
     ctest.get_object().await;
