@@ -417,7 +417,7 @@ impl BaseUrl {
             host: self.host.clone(),
             port: self.port,
             path: String::from("/"),
-            query: query.clone()
+            query: query.clone(),
         };
 
         if bucket_name.is_none() {
