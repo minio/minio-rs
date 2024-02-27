@@ -2333,9 +2333,9 @@ pub struct PostPolicy<'a> {
 }
 
 impl<'a> PostPolicy<'a> {
-    const EQ: &str = "eq";
-    const STARTS_WITH: &str = "starts-with";
-    const ALGORITHM: &str = "AWS4-HMAC-SHA256";
+    const EQ: &'static str = "eq";
+    const STARTS_WITH: &'static str = "starts-with";
+    const ALGORITHM: &'static str = "AWS4-HMAC-SHA256";
 
     /// Returns post policy with given bucket name and expiration
     ///
