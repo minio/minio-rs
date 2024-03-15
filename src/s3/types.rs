@@ -1198,7 +1198,7 @@ pub struct PrefixFilterRule {
 }
 
 impl PrefixFilterRule {
-    pub const NAME: &str = "prefix";
+    pub const NAME: &'static str = "prefix";
 }
 
 #[derive(Clone, Debug)]
@@ -1208,7 +1208,7 @@ pub struct SuffixFilterRule {
 }
 
 impl SuffixFilterRule {
-    pub const NAME: &str = "suffix";
+    pub const NAME: &'static str = "suffix";
 }
 
 #[derive(Clone, Debug)]

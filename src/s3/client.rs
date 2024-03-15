@@ -35,21 +35,16 @@ use async_recursion::async_recursion;
 use bytes::{Buf, Bytes};
 use dashmap::DashMap;
 use hyper::http::Method;
-use os_info;
 use reqwest::header::HeaderMap;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use xmltree::Element;
 
 mod list_objects;
 mod listen_bucket_notification;
-
-pub use list_objects::*;
-pub use listen_bucket_notification::*;
 
 /// Client Builder manufactures a Client using given parameters.
 #[derive(Debug, Default)]
@@ -706,7 +701,7 @@ impl Client {
 
     async fn calculate_part_count<'a>(
         &self,
-        sources: &'a mut Vec<ComposeSource<'_>>,
+        sources: &'a mut [ComposeSource<'_>],
     ) -> Result<u16, Error> {
         let mut object_size = 0_usize;
         let mut i = 0;

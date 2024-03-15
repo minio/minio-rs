@@ -86,7 +86,7 @@ struct ClientTest {
 }
 
 impl ClientTest {
-    const SQS_ARN: &str = "arn:minio:sqs::miniojavatest:webhook";
+    const SQS_ARN: &'static str = "arn:minio:sqs::miniojavatest:webhook";
 
     fn new(
         base_url: BaseUrl,

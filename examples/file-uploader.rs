@@ -1,11 +1,18 @@
+use log::{error, info};
 use minio::s3::args::{BucketExistsArgs, MakeBucketArgs, UploadObjectArgs};
 use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
+use std::path::Path;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let base_url = "https://play.min.io".parse::<BaseUrl>()?;
+    env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
+
+    //let base_url = "https://play.min.io".parse::<BaseUrl>()?;
+    let base_url: BaseUrl = "http://192.168.178.227:9000".parse::<BaseUrl>()?;
+
+    info!("Trying to connect to MinIO at: `{:?}`", base_url);
 
     let static_provider = StaticProvider::new(
         "Q3AM3UQ867SPQQA43P2F",
@@ -21,15 +28,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     )
     .unwrap();
 
-    let bucket_name = "asiatrip";
+    let bucket_name: &str = "asiatrip";
 
-    // Check 'asiatrip' bucket exist or not.
-    let exists = client
+    // Check 'bucket_name' bucket exist or not.
+    let exists: bool = client
         .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
         .await
         .unwrap();
 
-    // Make 'asiatrip' bucket if not exist.
+    // Make 'bucket_name' bucket if not exist.
     if !exists {
         client
             .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
@@ -37,20 +44,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             .unwrap();
     }
 
-    // Upload '/home/user/Photos/asiaphotos.zip' as object name
-    // 'asiaphotos-2015.zip' to bucket 'asiatrip'.
+    // File we are going to upload to the bucket
+    let filename: &Path = Path::new("/home/user/Photos/asiaphotos.zip");
+
+    // Name of the object that will be stored in the bucket
+    let object_name: &str = "asiaphotos-2015.zip";
+
+    info!("filename {}", &filename.to_str().unwrap());
+
+    // Check if the file exists
+    let file_exists: bool = filename.exists();
+    if !file_exists {
+        error!("File `{}` does not exist!", filename.display());
+        ()
+    }
+
+    // Upload 'filename' as 'object_name' to bucket 'bucket_name'.
     client
         .upload_object(
-            &mut UploadObjectArgs::new(
-                &bucket_name,
-                "asiaphotos-2015.zip",
-                "/home/user/Photos/asiaphotos.zip",
-            )
-            .unwrap(),
+            &mut UploadObjectArgs::new(&bucket_name, &object_name, &filename.to_str().unwrap())
+                .unwrap(),
         )
         .await
         .unwrap();
 
-    println!("'/home/user/Photos/asiaphotos.zip' is successfully uploaded as object 'asiaphotos-2015.zip' to bucket 'asiatrip'.");
+    info!(
+        "file `{}` is successfully uploaded as object `{object_name}` to bucket `{bucket_name}`.",
+        filename.display()
+    );
     Ok(())
 }

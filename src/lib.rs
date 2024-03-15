@@ -13,4 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::tabs_in_doc_comments)]
+#![allow(clippy::result_large_err)]
+#![allow(clippy::too_many_arguments)]
 pub mod s3;

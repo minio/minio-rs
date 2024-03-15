@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#Note start this script from minio-rs, not from directory tests
+
 set -x
 set -e
 
