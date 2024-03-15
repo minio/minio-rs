@@ -12,6 +12,7 @@ categories = ["api-bindings", "web-programming::http-client"]
 
 [dependencies]
 async-recursion = "1.0.4"
+async-trait = "0.1.73"
 base64 = "0.21.3"
 byteorder = "1.4.3"
 bytes = "1.4.0"
