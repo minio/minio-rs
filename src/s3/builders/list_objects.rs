@@ -91,7 +91,7 @@ impl ToStream for ListObjectsV1 {
 }
 
 impl ToS3Request for ListObjectsV1 {
-    fn to_s3request<'a>(&'a self) -> Result<S3Request<'a>, Error> {
+    fn to_s3request(&self) -> Result<S3Request<'_>, Error> {
         check_bucket_name(&self.bucket, true)?;
 
         let mut headers = Multimap::new();

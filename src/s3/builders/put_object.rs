@@ -471,7 +471,7 @@ impl ToS3Request for UploadPart {
         .object(Some(&self.object))
         .query_params(query_params)
         .headers(headers)
-        .body(Some(self.data.clone().into()));
+        .body(Some(self.data.clone()));
 
         Ok(req)
     }
@@ -796,17 +796,35 @@ impl PutObjectContent {
             .region(self.region.clone());
 
         let create_mpu_resp = create_mpu.send().await?;
-        let upload_id = create_mpu_resp.upload_id;
 
-        // This ensures that if we fail to complete the upload due to an error,
-        // we abort the upload.
-        let mut droppable_upload_id = DroppableUploadId {
-            client: client.clone(),
-            bucket: self.bucket.clone(),
-            object: self.object.clone(),
-            upload_id: Some(upload_id.clone()),
-        };
+        let res = self
+            .send_mpu(
+                psize,
+                expected_parts,
+                create_mpu_resp.upload_id.clone(),
+                object_size,
+                seg_bytes,
+            )
+            .await;
+        if res.is_err() {
+            // If we failed to complete the multipart upload, we should abort it.
+            let _ =
+                AbortMultipartUpload::new(&self.bucket, &self.object, &create_mpu_resp.upload_id)
+                    .client(&client)
+                    .send()
+                    .await;
+        }
+        res
+    }
 
+    async fn send_mpu(
+        &mut self,
+        psize: u64,
+        expected_parts: Option<u16>,
+        upload_id: String,
+        object_size: Option<u64>,
+        seg_bytes: SegmentedBytes,
+    ) -> Result<PutObjectResponse2, Error> {
         let mut done = false;
         let mut part_number = 0;
         let mut parts: Vec<Part> = if let Some(pc) = expected_parts {
@@ -860,12 +878,7 @@ impl PutObjectContent {
 
         // Complete the multipart upload.
         let complete_mpu = self.to_complete_multipart_upload(&upload_id, parts);
-        complete_mpu.send().await.map(|v| {
-            // We are done with the upload. Clear the upload ID to prevent a
-            // useless abort multipart upload call.
-            droppable_upload_id.upload_id = None;
-            v
-        })
+        complete_mpu.send().await
     }
 }
 
@@ -931,23 +944,6 @@ impl PutObjectContent {
     }
 }
 
-struct DroppableUploadId {
-    client: Client,
-    bucket: String,
-    object: String,
-    upload_id: Option<String>,
-}
-
-impl Drop for DroppableUploadId {
-    fn drop(&mut self) {
-        if let Some(upload_id) = &self.upload_id {
-            let _ = AbortMultipartUpload::new(&self.bucket, &self.object, &upload_id)
-                .client(&self.client)
-                .send();
-        }
-    }
-}
-
 pub const MIN_PART_SIZE: u64 = 5 * 1024 * 1024; // 5 MiB
 pub const MAX_PART_SIZE: u64 = 1024 * MIN_PART_SIZE; // 5 GiB
 pub const MAX_OBJECT_SIZE: u64 = 1024 * MAX_PART_SIZE; // 5 TiB
@@ -977,8 +973,8 @@ fn calc_part_info(
     }
 
     match (object_size, part_size) {
-        (None, None) => return Err(Error::MissingPartSize),
-        (None, Some(part_size)) => return Ok((part_size, None)),
+        (None, None) => Err(Error::MissingPartSize),
+        (None, Some(part_size)) => Ok((part_size, None)),
         (Some(object_size), None) => {
             let mut psize: u64 = (object_size as f64 / MAX_MULTIPART_COUNT as f64).ceil() as u64;
 
@@ -994,7 +990,7 @@ fn calc_part_info(
                 1
             };
 
-            return Ok((psize, Some(part_count)));
+            Ok((psize, Some(part_count)))
         }
         (Some(object_size), Some(part_size)) => {
             let part_count = (object_size as f64 / part_size as f64).ceil() as u16;
@@ -1006,7 +1002,7 @@ fn calc_part_info(
                 ));
             }
 
-            return Ok((part_size, Some(part_count)));
+            Ok((part_size, Some(part_count)))
         }
     }
 }

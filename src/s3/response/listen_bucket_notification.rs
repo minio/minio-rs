@@ -66,7 +66,7 @@ impl FromS3Response
                                 continue;
                             }
                             let records_res: Result<NotificationRecords, Error> =
-                                serde_json::from_str(&s).map_err(|e| e.into());
+                                serde_json::from_str(s).map_err(|e| e.into());
                             return Some((records_res, reader));
                         }
                         Err(e) => return Some((Err(e.into()), reader)),

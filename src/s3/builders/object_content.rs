@@ -172,6 +172,10 @@ impl SegmentedBytes {
         self.total_size
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.total_size == 0
+    }
+
     pub fn append(&mut self, bytes: Bytes) {
         let last_segment = self.segments.last_mut();
         if let Some(last_segment) = last_segment {
@@ -201,7 +205,7 @@ impl SegmentedBytes {
         let mut buf = BytesMut::with_capacity(self.total_size);
         for segment in &self.segments {
             for bytes in segment {
-                buf.extend_from_slice(&bytes);
+                buf.extend_from_slice(bytes);
             }
         }
         buf.freeze()
