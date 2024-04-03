@@ -181,10 +181,8 @@ impl ToS3Request for GetObject {
 
         let client = self.client.clone().ok_or(Error::NoClientProvided)?;
 
-        if let Some(_) = &self.ssec {
-            if !client.is_secure() {
-                return Err(Error::SseTlsRequired(None));
-            }
+        if self.ssec.is_some() && !client.is_secure() {
+            return Err(Error::SseTlsRequired(None));
         }
 
         let mut headers = Multimap::new();

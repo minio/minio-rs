@@ -65,9 +65,10 @@ impl ClientBuilder {
     /// Creates a builder given a base URL for the MinIO service or other AWS S3
     /// compatible object storage service.
     pub fn new(base_url: BaseUrl) -> Self {
-        let mut c = ClientBuilder::default();
-        c.base_url = base_url;
-        c
+        Self {
+            base_url,
+            ..Default::default()
+        }
     }
 
     /// Set the credential provider. If not set anonymous access is used.
@@ -413,7 +414,7 @@ impl Client {
         let url =
             self.base_url
                 .build_url(method, region, query_params, bucket_name, object_name)?;
-        self.build_headers(headers, query_params, region, &url, &method, body);
+        self.build_headers(headers, query_params, region, &url, method, body);
 
         let mut req = self.client.request(method.clone(), url.to_string());
 

@@ -158,7 +158,7 @@ pub mod aws_date_format {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&to_iso8601utc(date.clone()))
+        serializer.serialize_str(&to_iso8601utc(*date))
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<UtcTime, D::Error>
@@ -166,7 +166,7 @@ pub mod aws_date_format {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Ok(from_iso8601utc(&s).map_err(serde::de::Error::custom)?)
+        from_iso8601utc(&s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -501,7 +501,7 @@ pub mod xml {
         fn get_first(&self, tag: &str) -> Option<usize> {
             let tag: String = tag.to_string();
             let is = self.children.get(&tag)?;
-            is.first().map(|v| *v)
+            is.first().copied()
         }
 
         fn get(&self, tag: &str) -> Option<&Vec<usize>> {
@@ -575,7 +575,7 @@ pub mod xml {
             self.child_element_index
                 .get(tag)
                 .unwrap_or(&vec![])
-                .into_iter()
+                .iter()
                 .map(|i| (*i, self.inner.children[*i].as_element().unwrap().into()))
                 .collect()
         }

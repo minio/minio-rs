@@ -91,8 +91,8 @@ fn parse_list_objects_contents(
     } else {
         vec![]
     };
-    let mut merged = MergeXmlElements::new(&children1, &children2);
-    while let Some(content) = merged.next() {
+    let merged = MergeXmlElements::new(&children1, &children2);
+    for content in merged {
         let etype = encoding_type.as_ref().cloned();
         let key = url_decode(&etype, Some(content.get_child_text_or_error("Key")?))?.unwrap();
         let last_modified = Some(from_iso8601utc(
