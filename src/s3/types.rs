@@ -15,6 +15,7 @@
 
 //! Various types for S3 API requests and responses
 
+use super::builders::SegmentedBytes;
 use super::client::Client;
 use crate::s3::error::Error;
 use crate::s3::utils::{
@@ -39,7 +40,7 @@ pub struct S3Request<'a> {
     pub object: Option<&'a str>,
     pub query_params: Multimap,
     pub headers: Multimap,
-    pub body: Option<Vec<u8>>,
+    pub body: Option<SegmentedBytes>,
 
     // Computed region
     inner_region: String,
@@ -85,7 +86,7 @@ impl<'a> S3Request<'a> {
         self
     }
 
-    pub fn body(mut self, body: Option<Vec<u8>>) -> Self {
+    pub fn body(mut self, body: Option<SegmentedBytes>) -> Self {
         self.body = body;
         self
     }
@@ -104,14 +105,14 @@ impl<'a> S3Request<'a> {
 
         // Execute the API request.
         self.client
-            .execute(
+            .execute2(
                 self.method.clone(),
                 &self.inner_region,
                 &mut self.headers,
                 &self.query_params,
                 self.bucket,
                 self.object,
-                self.body.as_ref().map(|x| x.as_slice()),
+                self.body.as_ref(),
             )
             .await
     }

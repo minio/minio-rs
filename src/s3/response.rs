@@ -32,14 +32,21 @@ use crate::s3::utils::{
 };
 
 mod buckets;
+mod get_object;
 mod list_objects;
 mod listen_bucket_notification;
+mod put_object;
 
 pub use buckets::{GetBucketVersioningResponse, ListBucketsResponse};
+pub use get_object::GetObjectResponse2;
 pub use list_objects::{
     ListObjectVersionsResponse, ListObjectsResponse, ListObjectsV1Response, ListObjectsV2Response,
 };
 pub use listen_bucket_notification::ListenBucketNotificationResponse;
+pub use put_object::{
+    AbortMultipartUploadResponse2, CompleteMultipartUploadResponse2,
+    CreateMultipartUploadResponse2, PutObjectResponse as PutObjectResponse2, UploadPartResponse2,
+};
 
 #[derive(Debug)]
 /// Base response for bucket operation

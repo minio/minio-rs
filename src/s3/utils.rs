@@ -34,6 +34,8 @@ use xmltree::Element;
 
 use crate::s3::error::Error;
 
+use super::builders::SegmentedBytes;
+
 /// Date and time with UTC timezone
 pub type UtcTime = DateTime<Utc>;
 
@@ -71,9 +73,25 @@ pub fn sha256_hash(data: &[u8]) -> String {
     format!("{:x}", hasher.finalize())
 }
 
+pub fn sha256_hash_sb(sb: &SegmentedBytes) -> String {
+    let mut hasher = Sha256::new();
+    for data in sb.iter() {
+        hasher.update(data);
+    }
+    format!("{:x}", hasher.finalize())
+}
+
 /// Gets bas64 encoded MD5 hash of given data
 pub fn md5sum_hash(data: &[u8]) -> String {
     b64encode(md5compute(data).as_slice())
+}
+
+pub fn md5sum_hash_sb(sb: &SegmentedBytes) -> String {
+    let mut hasher = md5::Context::new();
+    for data in sb.iter() {
+        hasher.consume(data);
+    }
+    b64encode(hasher.compute().as_slice())
 }
 
 /// Gets current UTC time

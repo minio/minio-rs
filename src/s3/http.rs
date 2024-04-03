@@ -223,7 +223,7 @@ impl FromStr for BaseUrl {
 
     /// Convert a string to a BaseUrl.
     ///
-    /// Enables use of [`str`]'s [`parse`] method to create a [`BaseUrl`].
+    /// Enables use of [`str::parse`] method to create a [`BaseUrl`].
     ///
     /// # Examples
     ///

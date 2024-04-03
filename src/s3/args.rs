@@ -105,17 +105,17 @@ fn calc_part_info(
 ) -> Result<(usize, i16), Error> {
     if let Some(v) = part_size {
         if v < MIN_PART_SIZE {
-            return Err(Error::InvalidMinPartSize(v));
+            return Err(Error::InvalidMinPartSize(v as u64));
         }
 
         if v > MAX_PART_SIZE {
-            return Err(Error::InvalidMaxPartSize(v));
+            return Err(Error::InvalidMaxPartSize(v as u64));
         }
     }
 
     if let Some(v) = object_size {
         if v > MAX_OBJECT_SIZE {
-            return Err(Error::InvalidObjectSize(v));
+            return Err(Error::InvalidObjectSize(v as u64));
         }
     } else {
         if part_size.is_none() {
@@ -142,8 +142,8 @@ fn calc_part_info(
 
     if part_count as u16 > MAX_MULTIPART_COUNT {
         return Err(Error::InvalidPartCount(
-            object_size.unwrap(),
-            psize,
+            object_size.unwrap() as u64,
+            psize as u64,
             MAX_MULTIPART_COUNT,
         ));
     }

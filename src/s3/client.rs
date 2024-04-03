@@ -27,8 +27,8 @@ use crate::s3::types::{
     ReplicationConfig, RetentionMode, SseConfig,
 };
 use crate::s3::utils::{
-    from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash, merge, sha256_hash,
-    to_amz_date, to_iso8601utc, utc_now, Multimap,
+    from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash, md5sum_hash_sb,
+    merge, sha256_hash_sb, to_amz_date, to_iso8601utc, utc_now, Multimap,
 };
 
 use async_recursion::async_recursion;
@@ -36,6 +36,7 @@ use bytes::{Buf, Bytes};
 use dashmap::DashMap;
 use hyper::http::Method;
 use reqwest::header::HeaderMap;
+use reqwest::Body;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
@@ -43,10 +44,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use xmltree::Element;
 
+mod get_object;
 mod list_objects;
 mod listen_bucket_notification;
+mod put_object;
 
-use super::builders::{GetBucketVersioning, ListBuckets};
+use super::builders::{GetBucketVersioning, ListBuckets, SegmentedBytes};
 
 /// Client Builder manufactures a Client using given parameters.
 #[derive(Debug, Default)]
@@ -180,6 +183,10 @@ impl Client {
         self.base_url.is_aws_host()
     }
 
+    pub fn is_secure(&self) -> bool {
+        self.base_url.https
+    }
+
     fn build_headers(
         &self,
         headers: &mut Multimap,
@@ -187,7 +194,7 @@ impl Client {
         region: &str,
         url: &Url,
         method: &Method,
-        data: &[u8],
+        data: Option<&SegmentedBytes>,
     ) {
         headers.insert(String::from("Host"), url.host_header_value());
 
@@ -195,6 +202,8 @@ impl Client {
         let mut sha256 = String::new();
         match *method {
             Method::PUT | Method::POST => {
+                let empty_sb = SegmentedBytes::new();
+                let data = data.unwrap_or(&empty_sb);
                 headers.insert(String::from("Content-Length"), data.len().to_string());
                 if !headers.contains_key("Content-Type") {
                     headers.insert(
@@ -203,9 +212,9 @@ impl Client {
                     );
                 }
                 if self.provider.is_some() {
-                    sha256 = sha256_hash(data);
+                    sha256 = sha256_hash_sb(data);
                 } else if !headers.contains_key("Content-MD5") {
-                    md5sum = md5sum_hash(data);
+                    md5sum = md5sum_hash_sb(data);
                 }
             }
             _ => {
@@ -398,10 +407,9 @@ impl Client {
         query_params: &Multimap,
         bucket_name: Option<&str>,
         object_name: Option<&str>,
-        data: Option<&[u8]>,
+        body: Option<&SegmentedBytes>,
         retry: bool,
     ) -> Result<reqwest::Response, Error> {
-        let body = data.unwrap_or_default();
         let url =
             self.base_url
                 .build_url(method, region, query_params, bucket_name, object_name)?;
@@ -416,7 +424,16 @@ impl Client {
         }
 
         if *method == Method::PUT || *method == Method::POST {
-            req = req.body(body.to_vec());
+            let mut bytes_vec = vec![];
+            if let Some(body) = body {
+                bytes_vec = body.iter().collect();
+            };
+            let stream = futures_util::stream::iter(
+                bytes_vec
+                    .into_iter()
+                    .map(|x| -> Result<_, std::io::Error> { Ok(x.clone()) }),
+            );
+            req = req.body(Body::wrap_stream(stream));
         }
 
         let resp = req.send().await?;
@@ -460,7 +477,30 @@ impl Client {
         query_params: &Multimap,
         bucket_name: Option<&str>,
         object_name: Option<&str>,
-        data: Option<&[u8]>,
+        data: Option<Bytes>,
+    ) -> Result<reqwest::Response, Error> {
+        let sb = data.map(SegmentedBytes::from);
+        self.execute2(
+            method,
+            region,
+            headers,
+            query_params,
+            bucket_name,
+            object_name,
+            sb.as_ref(),
+        )
+        .await
+    }
+
+    pub async fn execute2(
+        &self,
+        method: Method,
+        region: &String,
+        headers: &mut Multimap,
+        query_params: &Multimap,
+        bucket_name: Option<&str>,
+        object_name: Option<&str>,
+        data: Option<&SegmentedBytes>,
     ) -> Result<reqwest::Response, Error> {
         let res = self
             .do_execute(
@@ -557,7 +597,7 @@ impl Client {
     }
 
     /// Executes [AbortMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_AbortMultipartUpload.html) S3 API
-    pub async fn abort_multipart_upload(
+    pub async fn abort_multipart_upload_old(
         &self,
         args: &AbortMultipartUploadArgs<'_>,
     ) -> Result<AbortMultipartUploadResponse, Error> {
@@ -644,7 +684,7 @@ impl Client {
     }
 
     /// Executes [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html) S3 API
-    pub async fn complete_multipart_upload(
+    pub async fn complete_multipart_upload_old(
         &self,
         args: &CompleteMultipartUploadArgs<'_>,
     ) -> Result<CompleteMultipartUploadResponse, Error> {
@@ -659,7 +699,7 @@ impl Client {
             data.push_str(&s);
         }
         data.push_str("</CompleteMultipartUpload>");
-        let b = data.as_bytes();
+        let data: Bytes = data.into();
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -669,7 +709,7 @@ impl Client {
             String::from("Content-Type"),
             String::from("application/xml"),
         );
-        headers.insert(String::from("Content-MD5"), md5sum_hash(b));
+        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
 
         let mut query_params = Multimap::new();
         if let Some(v) = &args.extra_query_params {
@@ -685,7 +725,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 Some(args.object),
-                Some(b),
+                Some(data),
             )
             .await?;
         let header_map = resp.headers().clone();
@@ -762,7 +802,7 @@ impl Client {
 
             object_size += size;
             if object_size > MAX_OBJECT_SIZE {
-                return Err(Error::InvalidObjectSize(object_size));
+                return Err(Error::InvalidObjectSize(object_size as u64));
             }
 
             if size > MAX_PART_SIZE {
@@ -838,7 +878,7 @@ impl Client {
         cmu_args.extra_query_params = args.extra_query_params;
         cmu_args.region = args.region;
         cmu_args.headers = Some(&headers);
-        let resp = self.create_multipart_upload(&cmu_args).await?;
+        let resp = self.create_multipart_upload_old(&cmu_args).await?;
         upload_id.push_str(&resp.upload_id);
 
         let mut part_number = 0_u16;
@@ -932,7 +972,7 @@ impl Client {
         let mut cmu_args =
             CompleteMultipartUploadArgs::new(args.bucket, args.object, upload_id, &parts)?;
         cmu_args.region = args.region;
-        self.complete_multipart_upload(&cmu_args).await
+        self.complete_multipart_upload_old(&cmu_args).await
     }
 
     pub async fn compose_object(
@@ -949,7 +989,7 @@ impl Client {
         let res = self.do_compose_object(args, &mut upload_id).await;
         if res.is_err() && !upload_id.is_empty() {
             let amuargs = &AbortMultipartUploadArgs::new(args.bucket, args.object, &upload_id)?;
-            self.abort_multipart_upload(amuargs).await?;
+            self.abort_multipart_upload_old(amuargs).await?;
         }
 
         res
@@ -1064,7 +1104,7 @@ impl Client {
     }
 
     /// Executes [CreateMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html) S3 API
-    pub async fn create_multipart_upload(
+    pub async fn create_multipart_upload_old(
         &self,
         args: &CreateMultipartUploadArgs<'_>,
     ) -> Result<CreateMultipartUploadResponse, Error> {
@@ -1189,7 +1229,9 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 Some(args.object),
-                Some(b"<LegalHold><Status>OFF</Status></LegalHold>"),
+                Some(Bytes::from(
+                    &b"<LegalHold><Status>OFF</Status></LegalHold>"[..],
+                )),
             )
             .await?;
 
@@ -1456,7 +1498,7 @@ impl Client {
         args: &DownloadObjectArgs<'_>,
     ) -> Result<DownloadObjectResponse, Error> {
         let mut resp = self
-            .get_object(&GetObjectArgs {
+            .get_object_old(&GetObjectArgs {
                 extra_headers: args.extra_headers,
                 extra_query_params: args.extra_query_params,
                 region: args.region,
@@ -1523,7 +1565,9 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 Some(args.object),
-                Some(b"<LegalHold><Status>ON</Status></LegalHold>"),
+                Some(Bytes::from(
+                    &b"<LegalHold><Status>ON</Status></LegalHold>"[..],
+                )),
             )
             .await?;
 
@@ -1852,7 +1896,10 @@ impl Client {
         GetBucketVersioning::new(bucket).client(self)
     }
 
-    pub async fn get_object(&self, args: &GetObjectArgs<'_>) -> Result<reqwest::Response, Error> {
+    pub async fn get_object_old(
+        &self,
+        args: &GetObjectArgs<'_>,
+    ) -> Result<reqwest::Response, Error> {
         if args.ssec.is_some() && !self.base_url.https {
             return Err(Error::SseTlsRequired(None));
         }
@@ -2239,7 +2286,7 @@ impl Client {
 
         let body = match data.is_empty() {
             true => None,
-            false => Some(data.as_bytes()),
+            false => Some(data.into()),
         };
 
         let resp = self
@@ -2364,7 +2411,7 @@ impl Client {
                 cmuargs.region = args.region;
                 cmuargs.headers = Some(&headers);
 
-                let resp = self.create_multipart_upload(&cmuargs).await?;
+                let resp = self.create_multipart_upload_old(&cmuargs).await?;
                 upload_id.push_str(&resp.upload_id);
             }
 
@@ -2386,7 +2433,7 @@ impl Client {
             };
             upargs.headers = Some(&ssec_headers);
 
-            let resp = self.upload_part(&upargs).await?;
+            let resp = self.upload_part_old(&upargs).await?;
             parts.push(Part {
                 number: part_number as u16,
                 etag: resp.etag.clone(),
@@ -2397,10 +2444,10 @@ impl Client {
             CompleteMultipartUploadArgs::new(args.bucket, args.object, upload_id, &parts)?;
         cmuargs.region = args.region;
 
-        self.complete_multipart_upload(&cmuargs).await
+        self.complete_multipart_upload_old(&cmuargs).await
     }
 
-    pub async fn put_object(
+    pub async fn put_object_old(
         &self,
         args: &mut PutObjectArgs<'_>,
     ) -> Result<PutObjectResponse, Error> {
@@ -2423,7 +2470,7 @@ impl Client {
 
         if res.is_err() && !upload_id.is_empty() {
             let amuargs = &AbortMultipartUploadArgs::new(args.bucket, args.object, &upload_id)?;
-            self.abort_multipart_upload(amuargs).await?;
+            self.abort_multipart_upload_old(amuargs).await?;
         }
 
         res
@@ -2454,7 +2501,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 Some(args.object),
-                Some(args.data),
+                Some(Bytes::copy_from_slice(args.data)),
             )
             .await?;
         let header_map = resp.headers();
@@ -2573,7 +2620,7 @@ impl Client {
             data.push_str("</Object>");
         }
         data.push_str("</Delete>");
-        let b = data.as_bytes();
+        let data: Bytes = data.into();
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -2589,7 +2636,7 @@ impl Client {
             String::from("Content-Type"),
             String::from("application/xml"),
         );
-        headers.insert(String::from("Content-MD5"), md5sum_hash(b));
+        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
 
         let mut query_params = Multimap::new();
         if let Some(v) = &args.extra_query_params {
@@ -2605,7 +2652,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 None,
-                Some(b),
+                Some(data),
             )
             .await?;
         let header_map = resp.headers().clone();
@@ -2704,7 +2751,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 None,
-                Some(args.config.to_xml().as_bytes()),
+                Some(args.config.to_xml().into()),
             )
             .await?;
 
@@ -2740,7 +2787,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 None,
-                Some(args.config.to_xml().as_bytes()),
+                Some(args.config.to_xml().into()),
             )
             .await?;
 
@@ -2776,7 +2823,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 None,
-                Some(args.config.to_xml().as_bytes()),
+                Some(args.config.to_xml().into()),
             )
             .await?;
 
@@ -2812,7 +2859,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 None,
-                Some(args.config.as_bytes()),
+                Some(args.config.to_string().into()),
             )
             .await?;
 
@@ -2848,7 +2895,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 None,
-                Some(args.config.to_xml().as_bytes()),
+                Some(args.config.to_xml().into()),
             )
             .await?;
 
@@ -2901,7 +2948,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 None,
-                Some(data.as_bytes()),
+                Some(data.into()),
             )
             .await?;
 
@@ -2954,7 +3001,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 None,
-                Some(data.as_bytes()),
+                Some(data.into()),
             )
             .await?;
 
@@ -2990,7 +3037,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 None,
-                Some(args.config.to_xml().as_bytes()),
+                Some(args.config.to_xml().into()),
             )
             .await?;
 
@@ -3050,7 +3097,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 Some(args.object),
-                Some(data.as_bytes()),
+                Some(data.into()),
             )
             .await?;
 
@@ -3108,7 +3155,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 Some(args.object),
-                Some(data.as_bytes()),
+                Some(data.into()),
             )
             .await?;
 
@@ -3132,13 +3179,13 @@ impl Client {
         let region = self.get_region(args.bucket, args.region).await?;
 
         let data = args.request.to_xml();
-        let b = data.as_bytes();
+        let data: Bytes = data.into();
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
             merge(&mut headers, v);
         }
-        headers.insert(String::from("Content-MD5"), md5sum_hash(b));
+        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
 
         let mut query_params = Multimap::new();
         if let Some(v) = &args.extra_query_params {
@@ -3155,7 +3202,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 Some(args.object),
-                Some(b),
+                Some(data),
             )
             .await?,
             &region,
@@ -3209,7 +3256,7 @@ impl Client {
     ) -> Result<UploadObjectResponse, Error> {
         let mut file = File::open(args.filename)?;
 
-        self.put_object(&mut PutObjectArgs {
+        self.put_object_old(&mut PutObjectArgs {
             extra_headers: args.extra_headers,
             extra_query_params: args.extra_query_params,
             region: args.region,
@@ -3231,7 +3278,7 @@ impl Client {
     }
 
     /// Executes [UploadPart](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html) S3 API
-    pub async fn upload_part(
+    pub async fn upload_part_old(
         &self,
         args: &UploadPartArgs<'_>,
     ) -> Result<UploadPartResponse, Error> {
