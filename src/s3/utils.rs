@@ -15,7 +15,8 @@
 
 //! Various utility and helper functions
 
-use crate::s3::error::Error;
+use std::collections::{BTreeMap, HashMap};
+
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::engine::Engine as _;
 use byteorder::{BigEndian, ReadBytesExt};
@@ -24,12 +25,14 @@ use crc::{Crc, CRC_32_ISO_HDLC};
 use lazy_static::lazy_static;
 use md5::compute as md5compute;
 use multimap::MultiMap;
+use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use regex::Regex;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
 pub use urlencoding::decode as urldecode;
 pub use urlencoding::encode as urlencode;
 use xmltree::Element;
+
+use crate::s3::error::Error;
 
 /// Date and time with UTC timezone
 pub type UtcTime = DateTime<Utc>;
@@ -392,11 +395,86 @@ pub fn copy_slice(dst: &mut [u8], src: &[u8]) -> usize {
     c
 }
 
+// Characters to escape in query strings. Based on RFC 3986 and the golang
+// net/url implementation used in the MinIO server.
+//
+// https://tools.ietf.org/html/rfc3986
+//
+// 1. All non-ascii characters are escaped always.
+// 2. All reserved characters are escaped.
+// 3. Any other characters are not escaped.
+//
+// Unreserved characters in addition to alphanumeric characters are: '-', '_',
+// '.', '~' (§2.3 Unreserved characters (mark))
+//
+// Reserved characters for query strings: '$', '&', '+', ',', '/', ':', ';',
+// '=', '?', '@' (§3.4)
+//
+// NON_ALPHANUMERIC already escapes everything non-alphanumeric (it includes all
+// the reserved characters). So we only remove the unreserved characters from
+// this set.
+const QUERY_ESCAPE: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'_')
+    .remove(b'.')
+    .remove(b'~');
+
+fn unescape(s: &str) -> Result<String, Error> {
+    percent_decode_str(s)
+        .decode_utf8()
+        .map_err(|e| Error::TagDecodingError(s.to_string(), e.to_string()))
+        .map(|s| s.to_string())
+}
+
+fn escape(s: &str) -> String {
+    utf8_percent_encode(s, QUERY_ESCAPE).collect()
+}
+
+// TODO: use this while adding API to set tags.
+//
+// Handles escaping same as MinIO server - needed for ensuring compatibility.
+pub fn encode_tags(h: &HashMap<String, String>) -> String {
+    let mut tags = Vec::new();
+    for (k, v) in h {
+        tags.push(format!("{}={}", escape(k), escape(v)));
+    }
+    tags.join("&")
+}
+
+pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
+    let mut tags = HashMap::new();
+    for tag in s.split('&') {
+        let mut kv = tag.split('=');
+        let k = match kv.next() {
+            Some(v) => unescape(v)?,
+            None => {
+                return Err(Error::TagDecodingError(
+                    s.to_string(),
+                    "tag key was empty".to_string(),
+                ))
+            }
+        };
+        let v = match kv.next() {
+            Some(v) => unescape(v)?,
+            None => "".to_owned(),
+        };
+        if kv.next().is_some() {
+            return Err(Error::TagDecodingError(
+                s.to_string(),
+                "tag had too many values for a key".to_string(),
+            ));
+        }
+        tags.insert(k, v);
+    }
+    Ok(tags)
+}
+
 pub mod xml {
     use std::collections::HashMap;
 
     use crate::s3::error::Error;
 
+    #[derive(Debug, Clone)]
     struct XmlElementIndex {
         children: HashMap<String, Vec<usize>>,
     }
@@ -432,6 +510,7 @@ pub mod xml {
         }
     }
 
+    #[derive(Debug, Clone)]
     pub struct Element<'a> {
         inner: &'a xmltree::Element,
         child_element_index: XmlElementIndex,

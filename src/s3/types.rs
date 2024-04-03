@@ -159,6 +159,7 @@ pub struct ListEntry {
     pub is_latest: bool,            // except ListObjects V1/V2
     pub version_id: Option<String>, // except ListObjects V1/V2
     pub user_metadata: Option<HashMap<String, String>>,
+    pub user_tags: Option<HashMap<String, String>>,
     pub is_prefix: bool,
     pub is_delete_marker: bool,
     pub encoding_type: Option<String>,
