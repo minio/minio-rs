@@ -129,6 +129,26 @@ pub fn from_iso8601utc(s: &str) -> Result<UtcTime, ParseError> {
     ))
 }
 
+pub mod aws_date_format {
+    use super::{from_iso8601utc, to_iso8601utc, UtcTime};
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(date: &UtcTime, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&to_iso8601utc(date.clone()))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<UtcTime, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(from_iso8601utc(&s).map_err(serde::de::Error::custom)?)
+    }
+}
+
 /// Parses HTTP header value to time
 pub fn from_http_header_value(s: &str) -> Result<UtcTime, ParseError> {
     Ok(DateTime::<Utc>::from_naive_utc_and_offset(
