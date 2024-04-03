@@ -386,7 +386,7 @@ impl Client {
 
     pub async fn do_execute(
         &self,
-        method: Method,
+        method: &Method,
         region: &String,
         headers: &mut Multimap,
         query_params: &Multimap,
@@ -398,7 +398,7 @@ impl Client {
         let body = data.unwrap_or_default();
         let url =
             self.base_url
-                .build_url(&method, region, query_params, bucket_name, object_name)?;
+                .build_url(method, region, query_params, bucket_name, object_name)?;
         self.build_headers(headers, query_params, region, &url, &method, body);
 
         let mut req = self.client.request(method.clone(), url.to_string());
@@ -409,7 +409,7 @@ impl Client {
             }
         }
 
-        if method == Method::PUT || method == Method::POST {
+        if *method == Method::PUT || *method == Method::POST {
             req = req.body(body.to_vec());
         }
 
@@ -425,7 +425,7 @@ impl Client {
             &mut body,
             status_code,
             &header_map,
-            &method,
+            method,
             &url.path,
             bucket_name,
             object_name,
@@ -458,7 +458,7 @@ impl Client {
     ) -> Result<reqwest::Response, Error> {
         let res = self
             .do_execute(
-                method.clone(),
+                &method,
                 region,
                 headers,
                 query_params,
@@ -482,7 +482,7 @@ impl Client {
 
         // Retry only once on RetryHead error.
         self.do_execute(
-            method.clone(),
+            &method,
             region,
             headers,
             query_params,
