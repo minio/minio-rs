@@ -15,6 +15,12 @@
 
 //! S3 client to perform bucket and object operations
 
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::prelude::*;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
 use crate::s3::args::*;
 use crate::s3::creds::Provider;
 use crate::s3::error::{Error, ErrorResponse};
@@ -37,11 +43,8 @@ use dashmap::DashMap;
 use hyper::http::Method;
 use reqwest::header::HeaderMap;
 use reqwest::Body;
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use tokio::fs;
+
 use xmltree::Element;
 
 mod get_object;
@@ -1515,10 +1518,10 @@ impl Client {
                 unmodified_since: None,
             })
             .await?;
-	let path = Path::new(&args.filename);
+        let path = Path::new(&args.filename);
         if let Some(parent_dir) = path.parent() {
             if !parent_dir.exists() {
-                fs::create_dir_all(parent_dir)?;
+                fs::create_dir_all(parent_dir).await?;
             }
         }
         let mut file = match args.overwrite {
