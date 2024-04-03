@@ -322,7 +322,7 @@ impl ClientTest {
                 .put_object_content(
                     &self.test_bucket,
                     &object_name,
-                    ObjectContent::new(data_src, Some(*size)),
+                    ObjectContent::new_from_stream(data_src, Some(*size)),
                 )
                 .send()
                 .await

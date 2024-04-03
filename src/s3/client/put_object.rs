@@ -15,8 +15,6 @@
 
 //! S3 APIs for uploading objects.
 
-use std::path::Path;
-
 use super::Client;
 use crate::s3::{
     builders::{
@@ -75,14 +73,5 @@ impl Client {
         content: impl Into<ObjectContent>,
     ) -> PutObjectContent {
         PutObjectContent::new(bucket, object, content).client(self)
-    }
-
-    pub fn put_object_from_file(
-        &self,
-        bucket: &str,
-        object: &str,
-        file_path: &Path,
-    ) -> PutObjectContent {
-        PutObjectContent::from_file(bucket, object, file_path).client(self)
     }
 }

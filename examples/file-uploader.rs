@@ -1,5 +1,6 @@
 use log::info;
 use minio::s3::args::{BucketExistsArgs, MakeBucketArgs};
+use minio::s3::builders::ObjectContent;
 use minio::s3::client::ClientBuilder;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
@@ -47,8 +48,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     info!("filename {}", &filename.to_str().unwrap());
 
+    let content = ObjectContent::from(filename);
     client
-        .put_object_from_file(bucket_name, object_name, filename)
+        .put_object_content(bucket_name, object_name, content)
         .send()
         .await?;
 
