@@ -1515,7 +1515,12 @@ impl Client {
                 unmodified_since: None,
             })
             .await?;
-
+	let path = Path::new(&args.filename);
+        if let Some(parent_dir) = path.parent() {
+            if !parent_dir.exists() {
+                fs::create_dir_all(parent_dir)?;
+            }
+        }
         let mut file = match args.overwrite {
             true => File::create(args.filename)?,
             false => File::options()
