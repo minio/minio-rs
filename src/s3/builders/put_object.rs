@@ -13,17 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use bytes::BytesMut;
 use http::Method;
 
 use crate::s3::{
-    builders::ObjectContent,
+    builders::ContentStream,
     client::Client,
     error::Error,
     response::{
@@ -35,7 +31,7 @@ use crate::s3::{
     utils::{check_bucket_name, md5sum_hash, merge, to_iso8601utc, urlencode, Multimap},
 };
 
-use super::SegmentedBytes;
+use super::{ObjectContent, SegmentedBytes};
 
 /// Argument for
 /// [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload)
@@ -632,12 +628,11 @@ pub struct PutObjectContent {
     content_type: String,
 
     // source data
-    input_reader: Option<ObjectContent>,
-    file_path: Option<PathBuf>,
+    input_content: ObjectContent,
 
     // Computed.
     // expected_parts: Option<u16>,
-    reader: ObjectContent,
+    content_stream: ContentStream,
     part_count: u16,
 }
 
@@ -646,8 +641,7 @@ impl PutObjectContent {
         PutObjectContent {
             bucket: bucket.to_string(),
             object: object.to_string(),
-            input_reader: Some(content.into()),
-            file_path: None,
+            input_content: content.into(),
             client: None,
             extra_headers: None,
             extra_query_params: None,
@@ -659,29 +653,7 @@ impl PutObjectContent {
             legal_hold: false,
             part_size: None,
             content_type: String::from("application/octet-stream"),
-            reader: ObjectContent::empty(),
-            part_count: 0,
-        }
-    }
-
-    pub fn from_file(bucket: &str, object: &str, file_path: &Path) -> Self {
-        PutObjectContent {
-            bucket: bucket.to_string(),
-            object: object.to_string(),
-            input_reader: None,
-            file_path: Some(file_path.to_path_buf()),
-            client: None,
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            user_metadata: None,
-            sse: None,
-            tags: None,
-            retention: None,
-            legal_hold: false,
-            part_size: None,
-            content_type: String::from("application/octet-stream"),
-            reader: ObjectContent::empty(),
+            content_stream: ContentStream::empty(),
             part_count: 0,
         }
     }
@@ -750,18 +722,13 @@ impl PutObjectContent {
             )));
         }
 
-        if self.input_reader.is_none() {
-            // This unwrap is safe as the public API ensures that the file_path
-            // or the reader is always set.
-            let file_path = self.file_path.as_ref().unwrap();
-            let file = tokio::fs::File::open(file_path).await?;
-            let size = file.metadata().await?.len();
-            self.reader = ObjectContent::from_reader(file, Some(size));
-        } else {
-            self.reader = self.input_reader.take().unwrap();
-        }
+        let input_content = std::mem::replace(&mut self.input_content, ObjectContent::default());
+        self.content_stream = input_content
+            .to_content_stream()
+            .await
+            .map_err(|e| Error::IOError(e))?;
 
-        let object_size = self.reader.get_size();
+        let object_size = self.content_stream.get_size();
         let (psize, expected_parts) = calc_part_info(object_size, self.part_size)?;
         assert_ne!(expected_parts, Some(0));
         self.part_size = Some(psize);
@@ -775,7 +742,7 @@ impl PutObjectContent {
         }
 
         // Read the first part.
-        let seg_bytes = self.reader.read_upto(psize as usize).await?;
+        let seg_bytes = self.content_stream.read_upto(psize as usize).await?;
 
         // In the first part read, if:
         //
@@ -839,7 +806,7 @@ impl PutObjectContent {
                 if let Some(v) = first_part.take() {
                     v
                 } else {
-                    self.reader.read_upto(psize as usize).await?
+                    self.content_stream.read_upto(psize as usize).await?
                 }
             };
             part_number += 1;

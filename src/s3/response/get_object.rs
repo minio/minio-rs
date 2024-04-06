@@ -50,7 +50,7 @@ impl FromS3Response for GetObjectResponse2 {
             result.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
         });
 
-        let content = ObjectContent::new(body, Some(content_length));
+        let content = ObjectContent::new_from_stream(body, Some(content_length));
 
         Ok(GetObjectResponse2 {
             headers: header_map,

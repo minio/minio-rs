@@ -26,3 +26,5 @@ pub mod signer;
 pub mod sse;
 pub mod types;
 pub mod utils;
+
+pub use client::{Client, ClientBuilder};
