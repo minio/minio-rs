@@ -19,15 +19,16 @@ use bytes::BytesMut;
 use http::Method;
 
 use crate::s3::{
-    builders::ContentStream,
+    builders::{ContentStream, Size},
     client::Client,
     error::Error,
     response::{
         AbortMultipartUploadResponse2, CompleteMultipartUploadResponse2,
-        CreateMultipartUploadResponse2, PutObjectResponse2, UploadPartResponse2,
+        CreateMultipartUploadResponse2, PutObjectContentResponse, PutObjectResponse,
+        UploadPartResponse2,
     },
     sse::Sse,
-    types::{Part, Retention, S3Api, S3Request, ToS3Request},
+    types::{PartInfo, Retention, S3Api, S3Request, ToS3Request},
     utils::{check_bucket_name, md5sum_hash, merge, to_iso8601utc, urlencode, Multimap},
 };
 
@@ -211,11 +212,11 @@ pub struct CompleteMultipartUpload {
     bucket: String,
     object: String,
     upload_id: String,
-    parts: Vec<Part>,
+    parts: Vec<PartInfo>,
 }
 
 impl CompleteMultipartUpload {
-    pub fn new(bucket: &str, object: &str, upload_id: &str, parts: Vec<Part>) -> Self {
+    pub fn new(bucket: &str, object: &str, upload_id: &str, parts: Vec<PartInfo>) -> Self {
         CompleteMultipartUpload {
             bucket: bucket.to_string(),
             object: object.to_string(),
@@ -544,7 +545,7 @@ impl ToS3Request for PutObject {
 }
 
 impl S3Api for PutObject {
-    type S3Response = PutObjectResponse2;
+    type S3Response = PutObjectResponse;
 }
 
 fn object_write_args_headers(
@@ -624,7 +625,7 @@ pub struct PutObjectContent {
     tags: Option<HashMap<String, String>>,
     retention: Option<Retention>,
     legal_hold: bool,
-    part_size: Option<u64>,
+    part_size: Size,
     content_type: String,
 
     // source data
@@ -633,7 +634,7 @@ pub struct PutObjectContent {
     // Computed.
     // expected_parts: Option<u16>,
     content_stream: ContentStream,
-    part_count: u16,
+    part_count: Option<u16>,
 }
 
 impl PutObjectContent {
@@ -651,10 +652,10 @@ impl PutObjectContent {
             tags: None,
             retention: None,
             legal_hold: false,
-            part_size: None,
+            part_size: Size::Unknown,
             content_type: String::from("application/octet-stream"),
             content_stream: ContentStream::empty(),
-            part_count: 0,
+            part_count: None,
         }
     }
 
@@ -703,8 +704,8 @@ impl PutObjectContent {
         self
     }
 
-    pub fn part_size(mut self, part_size: Option<u64>) -> Self {
-        self.part_size = part_size;
+    pub fn part_size(mut self, part_size: impl Into<Size>) -> Self {
+        self.part_size = part_size.into();
         self
     }
 
@@ -713,7 +714,7 @@ impl PutObjectContent {
         self
     }
 
-    pub async fn send(mut self) -> Result<PutObjectResponse2, Error> {
+    pub async fn send(mut self) -> Result<PutObjectContentResponse, Error> {
         check_bucket_name(&self.bucket, true)?;
 
         if self.object.is_empty() {
@@ -728,10 +729,13 @@ impl PutObjectContent {
             .await
             .map_err(|e| Error::IOError(e))?;
 
+        // object_size may be Size::Unknown.
         let object_size = self.content_stream.get_size();
+
         let (psize, expected_parts) = calc_part_info(object_size, self.part_size)?;
-        assert_ne!(expected_parts, Some(0));
-        self.part_size = Some(psize);
+        // Set the chosen part size and part count.
+        self.part_size = Size::Known(psize);
+        self.part_count = expected_parts;
 
         let client = self.client.clone().ok_or(Error::NoClientProvided)?;
 
@@ -746,13 +750,30 @@ impl PutObjectContent {
 
         // In the first part read, if:
         //
-        //   - we got less than the expected part size, OR
+        //   - object_size is unknown AND we got less than the part size, OR
         //   - we are expecting only one part to be uploaded,
         //
         // we upload it as a simple put object.
-        if (seg_bytes.len() as u64) < psize || expected_parts == Some(1) {
+        if (object_size.is_unknown() && (seg_bytes.len() as u64) < psize)
+            || expected_parts == Some(1)
+        {
+            let size = seg_bytes.len() as u64;
             let po = self.to_put_object(seg_bytes);
-            return po.send().await;
+            let res = po.send().await?;
+            return Ok(PutObjectContentResponse {
+                headers: res.headers,
+                bucket_name: self.bucket,
+                object_name: self.object,
+                location: res.location,
+                object_size: size,
+                etag: res.etag,
+                version_id: res.version_id,
+            });
+        } else if object_size.is_known() && (seg_bytes.len() as u64) < psize {
+            // Not enough data!
+            let expected = object_size.as_u64().unwrap();
+            let got = seg_bytes.len() as u64;
+            return Err(Error::InsufficientData(expected, got));
         }
 
         // Otherwise, we start a multipart upload.
@@ -764,16 +785,15 @@ impl PutObjectContent {
 
         let create_mpu_resp = create_mpu.send().await?;
 
-        let res = self
+        let mpu_res = self
             .send_mpu(
                 psize,
-                expected_parts,
                 create_mpu_resp.upload_id.clone(),
                 object_size,
                 seg_bytes,
             )
             .await;
-        if res.is_err() {
+        if mpu_res.is_err() {
             // If we failed to complete the multipart upload, we should abort it.
             let _ =
                 AbortMultipartUpload::new(&self.bucket, &self.object, &create_mpu_resp.upload_id)
@@ -781,26 +801,26 @@ impl PutObjectContent {
                     .send()
                     .await;
         }
-        res
+        mpu_res
     }
 
     async fn send_mpu(
         &mut self,
         psize: u64,
-        expected_parts: Option<u16>,
         upload_id: String,
-        object_size: Option<u64>,
-        seg_bytes: SegmentedBytes,
-    ) -> Result<PutObjectResponse2, Error> {
+        object_size: Size,
+        first_part: SegmentedBytes,
+    ) -> Result<PutObjectContentResponse, Error> {
         let mut done = false;
         let mut part_number = 0;
-        let mut parts: Vec<Part> = if let Some(pc) = expected_parts {
+        let mut parts: Vec<PartInfo> = if let Some(pc) = self.part_count {
             Vec::with_capacity(pc as usize)
         } else {
             Vec::new()
         };
 
-        let mut first_part = Some(seg_bytes);
+        let mut first_part = Some(first_part);
+        let mut total_read = 0;
         while !done {
             let part_content = {
                 if let Some(v) = first_part.take() {
@@ -811,6 +831,7 @@ impl PutObjectContent {
             };
             part_number += 1;
             let buffer_size = part_content.len() as u64;
+            total_read += buffer_size;
 
             assert!(buffer_size <= psize, "{:?} <= {:?}", buffer_size, psize);
 
@@ -821,20 +842,24 @@ impl PutObjectContent {
             }
 
             // Check if we have too many parts to upload.
-            if expected_parts.is_none() && part_number > MAX_MULTIPART_COUNT {
-                return Err(Error::InvalidPartCount(
-                    object_size.unwrap_or(0),
-                    self.part_size.unwrap(),
-                    self.part_count,
-                ));
+            if self.part_count.is_none() && part_number > MAX_MULTIPART_COUNT {
+                return Err(Error::TooManyParts);
+            }
+
+            if object_size.is_known() {
+                let exp = object_size.as_u64().unwrap();
+                if exp < total_read {
+                    return Err(Error::TooMuchData(exp));
+                }
             }
 
             // Upload the part now.
             let upload_part = self.to_upload_part(part_content, &upload_id, part_number);
             let upload_part_resp = upload_part.send().await?;
-            parts.push(Part {
+            parts.push(PartInfo {
                 number: part_number,
                 etag: upload_part_resp.etag,
+                size: buffer_size,
             });
 
             // Finally check if we are done.
@@ -844,8 +869,26 @@ impl PutObjectContent {
         }
 
         // Complete the multipart upload.
+        let size = parts.iter().map(|p| p.size).sum();
+
+        if object_size.is_known() {
+            let expected = object_size.as_u64().unwrap();
+            if expected != size {
+                return Err(Error::InsufficientData(expected, size));
+            }
+        }
+
         let complete_mpu = self.to_complete_multipart_upload(&upload_id, parts);
-        complete_mpu.send().await
+        let res = complete_mpu.send().await?;
+        Ok(PutObjectContentResponse {
+            headers: res.headers,
+            bucket_name: self.bucket.clone(),
+            object_name: self.object.clone(),
+            location: res.location,
+            object_size: size,
+            etag: res.etag,
+            version_id: res.version_id,
+        })
     }
 }
 
@@ -896,7 +939,7 @@ impl PutObjectContent {
     fn to_complete_multipart_upload(
         &self,
         upload_id: &str,
-        parts: Vec<Part>,
+        parts: Vec<PartInfo>,
     ) -> CompleteMultipartUpload {
         CompleteMultipartUpload {
             client: self.client.clone(),
@@ -918,12 +961,9 @@ pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 
 // Returns the size of each part to upload and the total number of parts. The
 // number of parts is `None` when the object size is unknown.
-fn calc_part_info(
-    object_size: Option<u64>,
-    part_size: Option<u64>,
-) -> Result<(u64, Option<u16>), Error> {
+fn calc_part_info(object_size: Size, part_size: Size) -> Result<(u64, Option<u16>), Error> {
     // Validate arguments against limits.
-    if let Some(v) = part_size {
+    if let Size::Known(v) = part_size {
         if v < MIN_PART_SIZE {
             return Err(Error::InvalidMinPartSize(v));
         }
@@ -933,18 +973,28 @@ fn calc_part_info(
         }
     }
 
-    if let Some(v) = object_size {
+    if let Size::Known(v) = object_size {
         if v > MAX_OBJECT_SIZE {
             return Err(Error::InvalidObjectSize(v));
         }
     }
 
     match (object_size, part_size) {
-        (None, None) => Err(Error::MissingPartSize),
-        (None, Some(part_size)) => Ok((part_size, None)),
-        (Some(object_size), None) => {
+        // If object size is unknown, part size must be provided.
+        (Size::Unknown, Size::Unknown) => Err(Error::MissingPartSize),
+
+        // If object size is unknown, and part size is known, the number of
+        // parts will be unknown, so return None for that.
+        (Size::Unknown, Size::Known(part_size)) => Ok((part_size, None)),
+
+        // If object size is known, and part size is unknown, calculate part
+        // size.
+        (Size::Known(object_size), Size::Unknown) => {
+            // 1. Calculate the minimum part size (i.e. assuming part count is
+            // maximum).
             let mut psize: u64 = (object_size as f64 / MAX_MULTIPART_COUNT as f64).ceil() as u64;
 
+            // 2. Round up to the nearest multiple of MIN_PART_SIZE.
             psize = MIN_PART_SIZE * (psize as f64 / MIN_PART_SIZE as f64).ceil() as u64;
 
             if psize > object_size {
@@ -959,7 +1009,10 @@ fn calc_part_info(
 
             Ok((psize, Some(part_count)))
         }
-        (Some(object_size), Some(part_size)) => {
+
+        // If both object size and part size are known, validate the resulting
+        // part count and return.
+        (Size::Known(object_size), Size::Known(part_size)) => {
             let part_count = (object_size as f64 / part_size as f64).ceil() as u16;
             if part_count == 0 || part_count > MAX_MULTIPART_COUNT {
                 return Err(Error::InvalidPartCount(
@@ -970,6 +1023,83 @@ fn calc_part_info(
             }
 
             Ok((part_size, Some(part_count)))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    quickcheck! {
+        fn test_calc_part_info(object_size: Size, part_size: Size) -> bool {
+            let res = calc_part_info(object_size, part_size);
+
+            // Validate that basic invalid sizes return the expected error.
+            if let Size::Known(v) = part_size {
+                if v < MIN_PART_SIZE {
+                    match res {
+                        Err(Error::InvalidMinPartSize(v_err)) => return v == v_err,
+                        _ => return false,
+                    }
+                }
+                if v > MAX_PART_SIZE {
+                    match res {
+                        Err(Error::InvalidMaxPartSize(v_err)) => return v == v_err,
+                        _ => return false,
+                    }
+                }
+            }
+            if let Size::Known(v) = object_size {
+                if v > MAX_OBJECT_SIZE {
+                    match res {
+                        Err(Error::InvalidObjectSize(v_err)) => return v == v_err,
+                        _ => return false,
+                    }
+                }
+            }
+
+            // Validate the calculation of part size and part count.
+            match (object_size, part_size, res) {
+                (Size::Unknown, Size::Unknown, Err(Error::MissingPartSize)) => true,
+                (Size::Unknown, Size::Unknown, _) => false,
+
+                (Size::Unknown, Size::Known(part_size), Ok((psize, None))) => {
+                    psize == part_size
+                }
+                (Size::Unknown, Size::Known(_), _) => false,
+
+                (Size::Known(object_size), Size::Unknown, Ok((psize, Some(part_count)))) => {
+                    if object_size < MIN_PART_SIZE  {
+                        return psize == object_size && part_count == 1;
+                    }
+                    if psize < MIN_PART_SIZE || psize > MAX_PART_SIZE{
+                        return false;
+                    }
+                    if psize > object_size {
+                        return false;
+                    }
+                    part_count > 0 && part_count <= MAX_MULTIPART_COUNT
+                }
+                (Size::Known(_), Size::Unknown, _) => false,
+
+                (Size::Known(object_size), Size::Known(part_size), res) => {
+                    if part_size > object_size || (part_size * (MAX_MULTIPART_COUNT as u64)) < object_size {
+                        match res {
+                            Err(Error::InvalidPartCount(v1, v2, v3)) => {
+                                return v1 == object_size && v2 == part_size && v3 == MAX_MULTIPART_COUNT;
+                            }
+                            _ => return false,
+                        }
+                    }
+                    match res {
+                        Ok((psize, part_count)) => {
+                            let expected_part_count = (object_size as f64 / part_size as f64).ceil() as u16;
+                            return psize == part_size && part_count == Some(expected_part_count);
+                        }
+                        _ => false,
+                    }
+                }
+            }
         }
     }
 }

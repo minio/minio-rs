@@ -59,10 +59,8 @@ impl FromS3Response for PutObjectResponse {
     }
 }
 
-pub type CreateMultipartUploadResponse2 = UploadIdResponse2;
-
 #[derive(Debug, Clone)]
-pub struct UploadIdResponse2 {
+pub struct CreateMultipartUploadResponse2 {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket_name: String,
@@ -71,7 +69,7 @@ pub struct UploadIdResponse2 {
 }
 
 #[async_trait]
-impl FromS3Response for UploadIdResponse2 {
+impl FromS3Response for CreateMultipartUploadResponse2 {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
         response: reqwest::Response,
@@ -90,8 +88,19 @@ impl FromS3Response for UploadIdResponse2 {
     }
 }
 
-pub type AbortMultipartUploadResponse2 = UploadIdResponse2;
+pub type AbortMultipartUploadResponse2 = CreateMultipartUploadResponse2;
 
 pub type CompleteMultipartUploadResponse2 = PutObjectResponse;
 
 pub type UploadPartResponse2 = PutObjectResponse;
+
+#[derive(Debug, Clone)]
+pub struct PutObjectContentResponse {
+    pub headers: HeaderMap,
+    pub bucket_name: String,
+    pub object_name: String,
+    pub location: String,
+    pub object_size: u64,
+    pub etag: String,
+    pub version_id: Option<String>,
+}

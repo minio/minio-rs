@@ -84,8 +84,10 @@ pub enum Error {
     InvalidObjectSize(u64),
     MissingPartSize,
     InvalidPartCount(u64, u64, u16),
+    TooManyParts,
     SseTlsRequired(Option<String>),
-    InsufficientData(usize, usize),
+    TooMuchData(u64),
+    InsufficientData(u64, u64),
     InvalidLegalHold(String),
     InvalidSelectExpression(String),
     InvalidHeaderValueType(u8),
@@ -157,15 +159,17 @@ impl fmt::Display for Error {
                 "object size {} and part size {} make more than {} parts for upload",
                 os, ps, pc
             ),
+            Error::TooManyParts => write!(f, "too many parts for upload"),
             Error::SseTlsRequired(m) => write!(
                 f,
                 "{}SSE operation must be performed over a secure connection",
                 m.as_ref().map_or(String::new(), |v| v.clone())
             ),
-            Error::InsufficientData(ps, br) => write!(
+            Error::TooMuchData(s) => write!(f, "too much data in the stream - exceeds {} bytes", s),
+            Error::InsufficientData(expected, got) => write!(
                 f,
                 "not enough data in the stream; expected: {}, got: {} bytes",
-                ps, br
+                expected, got
             ),
             Error::InvalidBaseUrl(m) => write!(f, "{}", m),
             Error::UrlBuildError(m) => write!(f, "{}", m),

@@ -45,7 +45,8 @@ pub use list_objects::{
 pub use listen_bucket_notification::ListenBucketNotificationResponse;
 pub use put_object::{
     AbortMultipartUploadResponse2, CompleteMultipartUploadResponse2,
-    CreateMultipartUploadResponse2, PutObjectResponse as PutObjectResponse2, UploadPartResponse2,
+    CreateMultipartUploadResponse2, PutObjectContentResponse, PutObjectResponse,
+    UploadPartResponse2,
 };
 
 #[derive(Debug)]
@@ -112,7 +113,7 @@ pub type PutObjectApiResponse = PutObjectBaseResponse;
 pub type UploadPartResponse = PutObjectApiResponse;
 
 /// Response of [put_object()](crate::s3::client::Client::put_object) API
-pub type PutObjectResponse = PutObjectApiResponse;
+pub type PutObjectResponseOld = PutObjectApiResponse;
 
 /// Response of [upload_part_copy()](crate::s3::client::Client::upload_part_copy) S3 API
 pub type UploadPartCopyResponse = PutObjectApiResponse;
@@ -332,7 +333,10 @@ impl SelectObjectContentResponse {
 
         self.prelude_read = true;
         for i in 0..8 {
-            self.prelude[i] = self.buf.pop_front().ok_or(Error::InsufficientData(8, i))?;
+            self.prelude[i] = self
+                .buf
+                .pop_front()
+                .ok_or(Error::InsufficientData(8 as u64, i as u64))?;
         }
 
         Ok(true)
@@ -345,7 +349,10 @@ impl SelectObjectContentResponse {
 
         self.prelude_crc_read = true;
         for i in 0..4 {
-            self.prelude_crc[i] = self.buf.pop_front().ok_or(Error::InsufficientData(4, i))?;
+            self.prelude_crc[i] = self
+                .buf
+                .pop_front()
+                .ok_or(Error::InsufficientData(4 as u64, i as u64))?;
         }
 
         Ok(true)
@@ -364,7 +371,7 @@ impl SelectObjectContentResponse {
             self.data.push(
                 self.buf
                     .pop_front()
-                    .ok_or(Error::InsufficientData(data_length, i))?,
+                    .ok_or(Error::InsufficientData(data_length as u64, i as u64))?,
             );
         }
 
@@ -378,7 +385,10 @@ impl SelectObjectContentResponse {
 
         self.message_crc_read = true;
         for i in 0..4 {
-            self.message_crc[i] = self.buf.pop_front().ok_or(Error::InsufficientData(4, i))?;
+            self.message_crc[i] = self
+                .buf
+                .pop_front()
+                .ok_or(Error::InsufficientData(4 as u64, i as u64))?;
         }
 
         Ok(true)

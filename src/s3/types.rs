@@ -181,6 +181,14 @@ pub struct Part {
 }
 
 #[derive(Clone, Debug)]
+pub struct PartInfo {
+    pub number: u16,
+    pub etag: String,
+
+    pub size: u64,
+}
+
+#[derive(Clone, Debug)]
 /// Contains retention mode information
 pub enum RetentionMode {
     GOVERNANCE,

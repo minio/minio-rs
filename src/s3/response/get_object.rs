@@ -29,6 +29,8 @@ pub struct GetObjectResponse2 {
     pub object_name: String,
     pub version_id: Option<String>,
     pub content: ObjectContent,
+    pub object_size: u64,
+    pub etag: Option<String>,
 }
 
 #[async_trait]
@@ -38,10 +40,13 @@ impl FromS3Response for GetObjectResponse2 {
         response: reqwest::Response,
     ) -> Result<Self, Error> {
         let header_map = response.headers().clone();
-        let version_id = match header_map.get("x-amz-version-id") {
-            Some(v) => Some(v.to_str()?.to_string()),
-            None => None,
-        };
+        let version_id = header_map
+            .get("x-amz-version-id")
+            .map(|v| v.to_str().unwrap().to_string());
+
+        let etag = header_map
+            .get("etag")
+            .map(|v| v.to_str().unwrap().trim_matches('"').to_string());
 
         let content_length = response
             .content_length()
@@ -59,6 +64,8 @@ impl FromS3Response for GetObjectResponse2 {
             object_name: req.object.unwrap().to_string(),
             version_id,
             content,
+            object_size: content_length,
+            etag,
         })
     }
 }
