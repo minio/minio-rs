@@ -21,7 +21,7 @@ use crate::s3::{
         AbortMultipartUpload, CompleteMultipartUpload, CreateMultipartUpload, ObjectContent,
         PutObject, PutObjectContent, SegmentedBytes, UploadPart,
     },
-    types::Part,
+    types::PartInfo,
 };
 
 impl Client {
@@ -50,7 +50,7 @@ impl Client {
         bucket: &str,
         object: &str,
         upload_id: &str,
-        parts: Vec<Part>,
+        parts: Vec<PartInfo>,
     ) -> CompleteMultipartUpload {
         CompleteMultipartUpload::new(bucket, object, upload_id, parts).client(self)
     }

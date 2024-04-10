@@ -2342,7 +2342,7 @@ impl Client {
         args: &mut PutObjectArgs<'_>,
         buf: &mut [u8],
         upload_id: &mut String,
-    ) -> Result<PutObjectResponse, Error> {
+    ) -> Result<PutObjectResponseOld, Error> {
         let mut headers = args.get_headers();
         if !headers.contains_key("Content-Type") {
             if args.content_type.is_empty() {
@@ -2375,7 +2375,7 @@ impl Client {
 
                 bytes_read = Client::read_part(&mut args.stream, buf, part_size)?;
                 if bytes_read != part_size {
-                    return Err(Error::InsufficientData(part_size, bytes_read));
+                    return Err(Error::InsufficientData(part_size as u64, bytes_read as u64));
                 }
             } else {
                 let mut size = part_size + 1;
@@ -2459,7 +2459,7 @@ impl Client {
     pub async fn put_object_old(
         &self,
         args: &mut PutObjectArgs<'_>,
-    ) -> Result<PutObjectResponse, Error> {
+    ) -> Result<PutObjectResponseOld, Error> {
         if let Some(v) = &args.sse {
             if v.tls_required() && !self.base_url.https {
                 return Err(Error::SseTlsRequired(None));

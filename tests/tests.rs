@@ -315,6 +315,7 @@ impl ClientTest {
     async fn put_object_content(&self) {
         let object_name = rand_object_name();
         let sizes = vec![16_u64, 5 * 1024 * 1024, 16 + 5 * 1024 * 1024];
+
         for size in sizes.iter() {
             let data_src = RandSrc::new(*size);
             let rsp = self
@@ -327,6 +328,7 @@ impl ClientTest {
                 .send()
                 .await
                 .unwrap();
+            assert_eq!(rsp.object_size, *size);
             let etag = rsp.etag;
             let resp = self
                 .client
@@ -340,6 +342,91 @@ impl ClientTest {
                 .await
                 .unwrap();
         }
+
+        // Repeat test with no size specified in ObjectContent
+        for size in sizes.iter() {
+            let data_src = RandSrc::new(*size);
+            let rsp = self
+                .client
+                .put_object_content(
+                    &self.test_bucket,
+                    &object_name,
+                    ObjectContent::new_from_stream(data_src, None),
+                )
+                .part_size(Some(5 * 1024 * 1024)) // Set part size to 5MB
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(rsp.object_size, *size);
+            let etag = rsp.etag;
+            let resp = self
+                .client
+                .stat_object(&StatObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(resp.size, *size as usize);
+            assert_eq!(resp.etag, etag);
+            self.client
+                .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+                .await
+                .unwrap();
+        }
+    }
+
+    // Test sending ObjectContent across async tasks.
+    async fn put_object_content_2(&self) {
+        let object_name = rand_object_name();
+        let sizes = vec![16_u64, 5 * 1024 * 1024, 16 + 5 * 1024 * 1024];
+
+        let (sender, mut receiver): (mpsc::Sender<ObjectContent>, mpsc::Receiver<ObjectContent>) =
+            mpsc::channel(2);
+
+        let sender_handle = {
+            let sizes = sizes.clone();
+            tokio::spawn(async move {
+                for size in sizes.iter() {
+                    let data_src = RandSrc::new(*size);
+                    sender
+                        .send(ObjectContent::new_from_stream(data_src, Some(*size)))
+                        .await
+                        .unwrap();
+                }
+            })
+        };
+
+        let uploader_handler = {
+            let sizes = sizes.clone();
+            let object_name = object_name.clone();
+            let client = self.client.clone();
+            let test_bucket = self.test_bucket.clone();
+            tokio::spawn(async move {
+                let mut idx = 0;
+                while let Some(item) = receiver.recv().await {
+                    let rsp = client
+                        .put_object_content(&test_bucket, &object_name, item)
+                        .send()
+                        .await
+                        .unwrap();
+                    assert_eq!(rsp.object_size, sizes[idx]);
+                    let etag = rsp.etag;
+                    let resp = client
+                        .stat_object(&StatObjectArgs::new(&test_bucket, &object_name).unwrap())
+                        .await
+                        .unwrap();
+                    assert_eq!(resp.size, sizes[idx] as usize);
+                    assert_eq!(resp.etag, etag);
+                    client
+                        .remove_object(&RemoveObjectArgs::new(&test_bucket, &object_name).unwrap())
+                        .await
+                        .unwrap();
+
+                    idx += 1;
+                }
+            })
+        };
+
+        sender_handle.await.unwrap();
+        uploader_handler.await.unwrap();
     }
 
     async fn get_object_old(&self) {
@@ -1322,6 +1409,9 @@ async fn s3_tests() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     println!("put_object_stream()");
     ctest.put_object_content().await;
+
+    println!("put_object_stream_2()");
+    ctest.put_object_content_2().await;
 
     println!("get_object_old()");
     ctest.get_object_old().await;

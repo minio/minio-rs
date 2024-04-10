@@ -50,6 +50,7 @@ features = ["native-tls", "blocking", "rustls-tls", "stream"]
 
 [dev-dependencies]
 async-std = { version = "1.12.0", features = ["attributes", "tokio1"] }
+quickcheck = "1.0.3"
 
 [[example]]
 name = "file-uploader"

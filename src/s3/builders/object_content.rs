@@ -23,14 +23,60 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio_stream::StreamExt;
 
+#[cfg(test)]
+use quickcheck::Arbitrary;
+
 type IoResult<T> = Result<T, std::io::Error>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub enum Size {
+    Known(u64),
+    Unknown,
+}
+
+impl Size {
+    pub fn is_known(&self) -> bool {
+        matches!(self, Size::Known(_))
+    }
+
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Size::Unknown)
+    }
+
+    pub fn as_u64(&self) -> Option<u64> {
+        match self {
+            Size::Known(v) => Some(*v),
+            Size::Unknown => None,
+        }
+    }
+}
+
+impl From<Option<u64>> for Size {
+    fn from(value: Option<u64>) -> Self {
+        match value {
+            Some(v) => Size::Known(v),
+            None => Size::Unknown,
+        }
+    }
+}
+
+#[cfg(test)]
+impl Arbitrary for Size {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        if bool::arbitrary(g) {
+            Size::Known(u64::arbitrary(g))
+        } else {
+            Size::Unknown
+        }
+    }
+}
 
 /// Object content that can be uploaded or downloaded. Can be constructed from a stream of `Bytes`,
 /// a file path, or a `Bytes` object.
 pub struct ObjectContent(ObjectContentInner);
 
 enum ObjectContentInner {
-    Stream(Pin<Box<dyn Stream<Item = IoResult<Bytes>>>>, Option<u64>),
+    Stream(Pin<Box<dyn Stream<Item = IoResult<Bytes>> + Send>>, Size),
     FilePath(PathBuf),
     Bytes(SegmentedBytes),
 }
@@ -72,28 +118,28 @@ impl Default for ObjectContent {
 impl ObjectContent {
     /// Create a new `ObjectContent` from a stream of `Bytes`.
     pub fn new_from_stream(
-        r: impl Stream<Item = IoResult<Bytes>> + 'static,
-        size: Option<u64>,
+        r: impl Stream<Item = IoResult<Bytes>> + Send + 'static,
+        size: impl Into<Size>,
     ) -> Self {
         let r = Box::pin(r);
-        ObjectContent(ObjectContentInner::Stream(r, size))
+        ObjectContent(ObjectContentInner::Stream(r, size.into()))
     }
 
     pub async fn to_stream(
         self,
-    ) -> IoResult<(Pin<Box<dyn Stream<Item = IoResult<Bytes>>>>, Option<u64>)> {
+    ) -> IoResult<(Pin<Box<dyn Stream<Item = IoResult<Bytes>> + Send>>, Size)> {
         match self.0 {
             ObjectContentInner::Stream(r, size) => Ok((r, size)),
             ObjectContentInner::FilePath(path) => {
                 let file = fs::File::open(&path).await?;
                 let size = file.metadata().await?.len();
                 let r = tokio_util::io::ReaderStream::new(file);
-                Ok((Box::pin(r), Some(size)))
+                Ok((Box::pin(r), Some(size).into()))
             }
             ObjectContentInner::Bytes(sb) => {
                 let k = sb.len();
                 let r = Box::pin(tokio_stream::iter(sb.into_iter().map(Ok)));
-                Ok((r, Some(k as u64)))
+                Ok((r, Some(k as u64).into()))
             }
         }
     }
@@ -165,18 +211,21 @@ impl ObjectContent {
 }
 
 pub(crate) struct ContentStream {
-    r: Pin<Box<dyn Stream<Item = IoResult<Bytes>>>>,
+    r: Pin<Box<dyn Stream<Item = IoResult<Bytes>> + Send>>,
     extra: Option<Bytes>,
-    size: Option<u64>,
+    size: Size,
 }
 
 impl ContentStream {
-    pub fn new(r: impl Stream<Item = IoResult<Bytes>> + 'static, size: Option<u64>) -> Self {
+    pub fn new(
+        r: impl Stream<Item = IoResult<Bytes>> + Send + 'static,
+        size: impl Into<Size>,
+    ) -> Self {
         let r = Box::pin(r);
         Self {
             r,
             extra: None,
-            size,
+            size: size.into(),
         }
     }
 
@@ -184,11 +233,11 @@ impl ContentStream {
         Self {
             r: Box::pin(tokio_stream::iter(vec![])),
             extra: None,
-            size: Some(0),
+            size: Some(0).into(),
         }
     }
 
-    pub fn get_size(&self) -> Option<u64> {
+    pub fn get_size(&self) -> Size {
         self.size
     }
 
