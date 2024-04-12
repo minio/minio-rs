@@ -455,8 +455,7 @@ impl BaseUrl {
             if !v.starts_with('/') {
                 path.push('/');
             }
-            // FIXME: urlencode path
-            path.push_str(v);
+            path.push_str(&urlencoding::encode(v).to_owned());
         }
 
         url.host = host;
