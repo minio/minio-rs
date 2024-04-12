@@ -36,6 +36,7 @@ mod get_object;
 mod list_objects;
 mod listen_bucket_notification;
 mod put_object;
+mod remove_objects;
 
 pub use buckets::{GetBucketVersioningResponse, ListBucketsResponse};
 pub use get_object::GetObjectResponse2;
@@ -47,6 +48,9 @@ pub use put_object::{
     AbortMultipartUploadResponse2, CompleteMultipartUploadResponse2,
     CreateMultipartUploadResponse2, PutObjectContentResponse, PutObjectResponse,
     UploadPartResponse2,
+};
+pub use remove_objects::{
+    DeleteError, DeletedObject, RemoveObjectResponse2, RemoveObjectsResponse,
 };
 
 #[derive(Debug)]
@@ -216,37 +220,6 @@ impl StatObjectResponse {
         })
     }
 }
-
-#[derive(Clone, Debug)]
-/// Error defintion of [remove_objects_api()](crate::s3::client::Client::remove_objects_api) S3 API
-pub struct DeleteError {
-    pub code: String,
-    pub message: String,
-    pub object_name: String,
-    pub version_id: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-/// Deleted object defintion of [remove_objects_api()](crate::s3::client::Client::remove_objects_api) S3 API
-pub struct DeletedObject {
-    pub name: String,
-    pub version_id: Option<String>,
-    pub delete_marker: bool,
-    pub delete_marker_version_id: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-/// Response of [remove_objects_api()](crate::s3::client::Client::remove_objects_api) S3 API
-pub struct RemoveObjectsApiResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub objects: Vec<DeletedObject>,
-    pub errors: Vec<DeleteError>,
-}
-
-/// Response of [remove_objects()](crate::s3::client::Client::remove_objects) API
-pub type RemoveObjectsResponse = RemoveObjectsApiResponse;
 
 /// Response of [select_object_content()](crate::s3::client::Client::select_object_content) API
 pub struct SelectObjectContentResponse {

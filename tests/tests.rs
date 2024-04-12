@@ -19,7 +19,7 @@ use chrono::Duration;
 use futures_util::Stream;
 use hyper::http::Method;
 
-use minio::s3::builders::ObjectContent;
+use minio::s3::builders::{ObjectContent, ObjectToDelete};
 use rand::{
     distributions::{Alphanumeric, DistString},
     rngs::SmallRng,
@@ -36,12 +36,13 @@ use tokio_stream::StreamExt;
 use minio::s3::args::*;
 use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
+use minio::s3::error::Error;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::ToStream;
 use minio::s3::types::{
-    CsvInputSerialization, CsvOutputSerialization, DeleteObject, FileHeaderInfo,
-    NotificationConfig, ObjectLockConfig, PrefixFilterRule, QueueConfig, QuoteFields,
-    RetentionMode, SelectRequest, SuffixFilterRule,
+    CsvInputSerialization, CsvOutputSerialization, FileHeaderInfo, NotificationConfig,
+    ObjectLockConfig, PrefixFilterRule, QueueConfig, QuoteFields, RetentionMode, SelectRequest,
+    SuffixFilterRule,
 };
 use minio::s3::types::{NotificationRecords, S3Api};
 use minio::s3::utils::{to_iso8601utc, utc_now};
@@ -277,9 +278,21 @@ impl ClientTest {
         assert_eq!(resp.object_name, object_name);
         assert_eq!(resp.size, size);
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
+        // Validate delete succeeded.
+        let resp = self
+            .client
+            .stat_object(&StatObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .await;
+        match resp.err().unwrap() {
+            Error::S3Error(er) => {
+                assert_eq!(er.code, "NoSuchKey")
+            }
+            _ => assert!(false),
+        }
     }
 
     async fn put_object_multipart(&self) {
@@ -307,7 +320,8 @@ impl ClientTest {
         assert_eq!(resp.object_name, object_name);
         assert_eq!(resp.size, size);
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
     }
@@ -338,7 +352,8 @@ impl ClientTest {
             assert_eq!(resp.size, *size as usize);
             assert_eq!(resp.etag, etag);
             self.client
-                .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+                .remove_object(&self.test_bucket, object_name.as_str())
+                .send()
                 .await
                 .unwrap();
         }
@@ -367,7 +382,8 @@ impl ClientTest {
             assert_eq!(resp.size, *size as usize);
             assert_eq!(resp.etag, etag);
             self.client
-                .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+                .remove_object(&self.test_bucket, object_name.as_str())
+                .send()
                 .await
                 .unwrap();
         }
@@ -416,7 +432,8 @@ impl ClientTest {
                     assert_eq!(resp.size, sizes[idx] as usize);
                     assert_eq!(resp.etag, etag);
                     client
-                        .remove_object(&RemoveObjectArgs::new(&test_bucket, &object_name).unwrap())
+                        .remove_object(&test_bucket, object_name.as_str())
+                        .send()
                         .await
                         .unwrap();
 
@@ -453,7 +470,8 @@ impl ClientTest {
         let got = resp.text().await.unwrap();
         assert_eq!(got, data);
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
     }
@@ -475,7 +493,8 @@ impl ClientTest {
         let got = resp.content.to_segmented_bytes().await.unwrap().to_bytes();
         assert_eq!(got, data);
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
     }
@@ -513,12 +532,13 @@ impl ClientTest {
         fs::remove_file(&filename).unwrap();
 
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
-
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
 
@@ -547,12 +567,13 @@ impl ClientTest {
         fs::remove_file(&filename).unwrap();
 
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
-
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
     }
@@ -583,20 +604,27 @@ impl ClientTest {
                 .unwrap();
             names.push(object_name);
         }
-        let mut objects: Vec<DeleteObject> = Vec::new();
-        for name in names.iter() {
-            objects.push(DeleteObject {
-                name,
-                version_id: None,
-            });
-        }
+        let del_items: Vec<ObjectToDelete> = names
+            .iter()
+            .map(|v| ObjectToDelete::from(v.as_str()))
+            .collect();
 
-        self.client
-            .remove_objects(
-                &mut RemoveObjectsArgs::new(&self.test_bucket, &mut objects.iter()).unwrap(),
-            )
-            .await
-            .unwrap();
+        let mut resp = self
+            .client
+            .remove_objects(&self.test_bucket, del_items.into_iter())
+            .verbose_mode(true)
+            .to_stream()
+            .await;
+
+        let mut del_count = 0;
+        while let Some(item) = resp.next().await {
+            let res = item.unwrap();
+            for obj in res.result.iter() {
+                assert!(obj.is_deleted());
+            }
+            del_count += res.result.len();
+        }
+        assert_eq!(del_count, 3);
 
         self.client
             .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
@@ -647,20 +675,22 @@ impl ClientTest {
         }
         assert!(count == 3);
 
-        let mut objects: Vec<DeleteObject> = Vec::new();
-        for name in names.iter() {
-            objects.push(DeleteObject {
-                name,
-                version_id: None,
-            });
+        let del_items: Vec<ObjectToDelete> = names
+            .iter()
+            .map(|v| ObjectToDelete::from(v.as_str()))
+            .collect();
+        let mut resp = self
+            .client
+            .remove_objects(&self.test_bucket, del_items.into_iter())
+            .verbose_mode(true)
+            .to_stream()
+            .await;
+        while let Some(item) = resp.next().await {
+            let res = item.unwrap();
+            for obj in res.result.iter() {
+                assert!(obj.is_deleted());
+            }
         }
-
-        self.client
-            .remove_objects(
-                &mut RemoveObjectsArgs::new(&self.test_bucket, &mut objects.iter()).unwrap(),
-            )
-            .await
-            .unwrap();
 
         self.client
             .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
@@ -731,7 +761,8 @@ impl ClientTest {
         }
         assert_eq!(got, data);
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
     }
@@ -806,7 +837,8 @@ impl ClientTest {
             .unwrap();
 
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
 
@@ -853,12 +885,13 @@ impl ClientTest {
         assert_eq!(resp.size, size);
 
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
-
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &src_object_name).unwrap())
+            .remove_object(&self.test_bucket, src_object_name.as_str())
+            .send()
             .await
             .unwrap();
     }
@@ -904,12 +937,13 @@ impl ClientTest {
         assert_eq!(resp.size, 5);
 
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
-
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &src_object_name).unwrap())
+            .remove_object(&self.test_bucket, src_object_name.as_str())
+            .send()
             .await
             .unwrap();
     }
@@ -1204,7 +1238,8 @@ impl ClientTest {
         assert!(resp.tags.is_empty());
 
         self.client
-            .remove_object(&RemoveObjectArgs::new(&self.test_bucket, &object_name).unwrap())
+            .remove_object(&self.test_bucket, object_name.as_str())
+            .send()
             .await
             .unwrap();
     }
@@ -1319,10 +1354,14 @@ impl ClientTest {
         assert!(resp.retention_mode.is_none());
         assert!(resp.retain_until_date.is_none());
 
-        let mut args = RemoveObjectArgs::new(&bucket_name, &object_name).unwrap();
-        let version_id = obj_resp.version_id.unwrap().clone();
-        args.version_id = Some(version_id.as_str());
-        self.client.remove_object(&args).await.unwrap();
+        self.client
+            .remove_object(
+                &bucket_name,
+                (object_name.as_str(), obj_resp.version_id.as_deref()),
+            )
+            .send()
+            .await
+            .unwrap();
 
         self.client
             .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
