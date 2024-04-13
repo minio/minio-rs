@@ -19,14 +19,14 @@ use crate::s3::error::Error;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{
-    DeleteObject, Directive, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part,
-    ReplicationConfig, Retention, RetentionMode, SelectRequest, SseConfig,
+    Directive, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part, ReplicationConfig,
+    Retention, RetentionMode, SelectRequest, SseConfig,
 };
 use crate::s3::utils::{
     b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value, to_iso8601utc,
     to_signer_date, urlencode, utc_now, Multimap, UtcTime,
 };
-use derivative::Derivative;
+
 use hyper::http::Method;
 use serde_json::json;
 use serde_json::Value;
@@ -880,90 +880,6 @@ pub type StatObjectArgs<'a> = ObjectConditionalReadArgs<'a>;
 
 /// Source object information for [copy object argument](CopyObjectArgs)
 pub type CopySource<'a> = ObjectConditionalReadArgs<'a>;
-
-#[derive(Derivative, Clone, Debug, Default)]
-/// Argument for [remove_objects_api()](crate::s3::client::Client::remove_objects_api) S3 API
-pub struct RemoveObjectsApiArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub bypass_governance_mode: bool,
-    #[derivative(Default(value = "true"))]
-    pub quiet: bool,
-    pub objects: &'a [DeleteObject<'a>],
-}
-
-impl<'a> RemoveObjectsApiArgs<'a> {
-    /// Returns argument for [remove_objects_api()](crate::s3::client::Client::remove_objects_api) S3 API with given bucket name and list of delete object information
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// use minio::s3::types::DeleteObject;
-    /// let mut objects: Vec<DeleteObject> = Vec::new();
-    /// objects.push(DeleteObject{name: "my-object-1", version_id: None});
-    /// objects.push(DeleteObject{name: "my-object-2", version_id: Some("0e295d23-10e1-4c39-b134-5b08ad146df6")});
-    /// let args = RemoveObjectsApiArgs::new("my-bucket", &objects).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        objects: &'a [DeleteObject],
-    ) -> Result<RemoveObjectsApiArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        Ok(RemoveObjectsApiArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            bypass_governance_mode: false,
-            quiet: true,
-            objects,
-        })
-    }
-}
-
-/// Argument for [remove_objects()](crate::s3::client::Client::remove_objects) API
-pub struct RemoveObjectsArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub bypass_governance_mode: bool,
-    pub objects: &'a mut core::slice::Iter<'a, DeleteObject<'a>>,
-}
-
-impl<'a> RemoveObjectsArgs<'a> {
-    /// Returns argument for [remove_objects()](crate::s3::client::Client::remove_objects) API with given bucket name and iterable delete object information
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// use minio::s3::types::DeleteObject;
-    /// let mut objects: Vec<DeleteObject> = Vec::new();
-    /// objects.push(DeleteObject{name: "my-object-1", version_id: None});
-    /// objects.push(DeleteObject{name: "my-object-2", version_id: Some("0e295d23-10e1-4c39-b134-5b08ad146df6")});
-    /// let args = RemoveObjectsArgs::new("my-bucket", &mut objects.iter()).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        objects: &'a mut core::slice::Iter<'a, DeleteObject<'a>>,
-    ) -> Result<RemoveObjectsArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        Ok(RemoveObjectsArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            bypass_governance_mode: false,
-            objects,
-        })
-    }
-}
 
 /// Argument for [select_object_content()](crate::s3::client::Client::select_object_content) API
 pub struct SelectObjectContentArgs<'a> {

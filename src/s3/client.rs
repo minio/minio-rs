@@ -29,8 +29,8 @@ use crate::s3::response::*;
 use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
 use crate::s3::types::{
-    DeleteObject, Directive, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part,
-    ReplicationConfig, RetentionMode, SseConfig,
+    Directive, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part, ReplicationConfig,
+    RetentionMode, SseConfig,
 };
 use crate::s3::utils::{
     from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash, md5sum_hash_sb,
@@ -51,6 +51,7 @@ mod get_object;
 mod list_objects;
 mod listen_bucket_notification;
 mod put_object;
+mod remove_objects;
 
 use super::builders::{GetBucketVersioning, ListBuckets, SegmentedBytes};
 
@@ -2563,175 +2564,6 @@ impl Client {
             headers: resp.headers().clone(),
             region: region.to_string(),
             bucket_name: args.bucket.to_string(),
-        })
-    }
-
-    pub async fn remove_object(
-        &self,
-        args: &RemoveObjectArgs<'_>,
-    ) -> Result<RemoveObjectResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-
-        let resp = self
-            .execute(
-                Method::DELETE,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                None,
-            )
-            .await?;
-
-        Ok(RemoveObjectResponse {
-            headers: resp.headers().clone(),
-            region: region.to_string(),
-            bucket_name: args.bucket.to_string(),
-            object_name: args.object.to_string(),
-            version_id: args.version_id.map(|v| v.to_string()),
-        })
-    }
-
-    /// Executes [DeleteObjects](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html) S3 API
-    pub async fn remove_objects_api(
-        &self,
-        args: &RemoveObjectsApiArgs<'_>,
-    ) -> Result<RemoveObjectsApiResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut data = String::from("<Delete>");
-        if args.quiet {
-            data.push_str("<Quiet>true</Quiet>");
-        }
-        for object in args.objects.iter() {
-            data.push_str("<Object>");
-            data.push_str("<Key>");
-            data.push_str(object.name);
-            data.push_str("</Key>");
-            if let Some(v) = object.version_id {
-                data.push_str("<VersionId>");
-                data.push_str(v);
-                data.push_str("</VersionId>");
-            }
-            data.push_str("</Object>");
-        }
-        data.push_str("</Delete>");
-        let data: Bytes = data.into();
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        if args.bypass_governance_mode {
-            headers.insert(
-                String::from("x-amz-bypass-governance-retention"),
-                String::from("true"),
-            );
-        }
-        headers.insert(
-            String::from("Content-Type"),
-            String::from("application/xml"),
-        );
-        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("delete"), String::new());
-
-        let resp = self
-            .execute(
-                Method::POST,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                Some(data),
-            )
-            .await?;
-        let header_map = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
-
-        let mut objects: Vec<DeletedObject> = Vec::new();
-        while let Some(v) = root.take_child("Deleted") {
-            let deleted = v;
-            objects.push(DeletedObject {
-                name: get_text(&deleted, "Key")?,
-                version_id: get_option_text(&deleted, "VersionId"),
-                delete_marker: get_text(&deleted, "DeleteMarker")?.to_lowercase() == "true",
-                delete_marker_version_id: get_option_text(&deleted, "DeleteMarkerVersionId"),
-            })
-        }
-
-        let mut errors: Vec<DeleteError> = Vec::new();
-        while let Some(v) = root.take_child("Error") {
-            let error = v;
-            errors.push(DeleteError {
-                code: get_text(&error, "Code")?,
-                message: get_text(&error, "Message")?,
-                object_name: get_text(&error, "Key")?,
-                version_id: get_option_text(&error, "VersionId"),
-            })
-        }
-
-        Ok(RemoveObjectsApiResponse {
-            headers: header_map.clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            objects,
-            errors,
-        })
-    }
-
-    pub async fn remove_objects(
-        &self,
-        args: &mut RemoveObjectsArgs<'_>,
-    ) -> Result<RemoveObjectsResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        loop {
-            let mut objects: Vec<DeleteObject> = Vec::new();
-            for object in args.objects.take(1000) {
-                objects.push(*object);
-            }
-            if objects.is_empty() {
-                break;
-            }
-
-            let mut roa_args = RemoveObjectsApiArgs::new(args.bucket, &objects)?;
-            roa_args.extra_headers = args.extra_headers;
-            roa_args.extra_query_params = args.extra_query_params;
-            roa_args.region = args.region;
-            roa_args.bypass_governance_mode = args.bypass_governance_mode;
-            roa_args.quiet = true;
-            let resp = self.remove_objects_api(&roa_args).await?;
-            if !resp.errors.is_empty() {
-                return Ok(resp);
-            }
-        }
-
-        Ok(RemoveObjectsResponse {
-            headers: HeaderMap::new(),
-            region: region.to_string(),
-            bucket_name: args.bucket.to_string(),
-            objects: vec![],
-            errors: vec![],
         })
     }
 

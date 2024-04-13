@@ -230,13 +230,6 @@ pub fn parse_legal_hold(s: &str) -> Result<bool, Error> {
     }
 }
 
-#[derive(Clone, Debug, Copy)]
-/// Contains delete object name and optional version ID
-pub struct DeleteObject<'a> {
-    pub name: &'a str,
-    pub version_id: Option<&'a str>,
-}
-
 #[derive(Clone, Debug)]
 /// Compression types
 pub enum CompressionType {

@@ -18,6 +18,7 @@ mod list_objects;
 mod listen_bucket_notification;
 mod object_content;
 mod put_object;
+mod remove_objects;
 
 pub use buckets::*;
 pub use get_object::*;
@@ -25,3 +26,4 @@ pub use list_objects::*;
 pub use listen_bucket_notification::*;
 pub use object_content::*;
 pub use put_object::*;
+pub use remove_objects::*;
