@@ -46,7 +46,7 @@ impl ErrorResponse {
             resource: get_default_text(&root, "Resource"),
             request_id: get_default_text(&root, "RequestId"),
             host_id: get_default_text(&root, "HostId"),
-            bucket_name: get_default_text(&root, "bucketName"),
+            bucket_name: get_default_text(&root, "BucketName"),
             object_name: get_default_text(&root, "Key"),
         })
     }
