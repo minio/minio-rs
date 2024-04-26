@@ -150,6 +150,17 @@ pub fn from_iso8601utc(s: &str) -> Result<UtcTime, ParseError> {
     ))
 }
 
+const OBJECT_KEY_ENCODE_SET: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'_')
+    .remove(b'.')
+    .remove(b'~')
+    .remove(b'/');
+
+pub fn urlencode_object_key(key: &str) -> String {
+    utf8_percent_encode(key, OBJECT_KEY_ENCODE_SET).collect()
+}
+
 pub mod aws_date_format {
     use super::{from_iso8601utc, to_iso8601utc, UtcTime};
     use serde::{Deserialize, Deserializer, Serializer};

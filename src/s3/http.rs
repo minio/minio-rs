@@ -26,6 +26,8 @@ use regex::Regex;
 use std::fmt;
 use std::str::FromStr;
 
+use super::utils::urlencode_object_key;
+
 const AWS_S3_PREFIX: &str = r"^(((bucket\.|accesspoint\.)vpce(-[a-z_\d]+)+\.s3\.)|([a-z_\d-]{1,63}\.)s3-control(-[a-z_\d]+)*\.|(s3(-[a-z_\d]+)*\.))";
 
 lazy_static! {
@@ -455,8 +457,7 @@ impl BaseUrl {
             if !v.starts_with('/') {
                 path.push('/');
             }
-            // FIXME: urlencode path
-            path.push_str(v);
+            path.push_str(&urlencode_object_key(v));
         }
 
         url.host = host;
