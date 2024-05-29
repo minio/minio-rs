@@ -941,16 +941,16 @@ impl Client {
                 while size > 0 {
                     part_number += 1;
 
-                    let start_bytes = offset;
-                    let mut end_bytes = start_bytes + MAX_PART_SIZE;
-                    if size < MAX_PART_SIZE {
-                        end_bytes = start_bytes + size;
+                    let mut length = size;
+                    if length > MAX_PART_SIZE {
+                        length = MAX_PART_SIZE;
                     }
+                    let end_bytes = offset + length - 1;
 
                     let mut headers_copy = headers.clone();
                     headers_copy.insert(
                         String::from("x-amz-copy-source-range"),
-                        format!("bytes={}-{}", start_bytes, end_bytes),
+                        format!("bytes={}-{}", offset, end_bytes),
                     );
 
                     let mut upc_args = UploadPartCopyArgs::new(
@@ -968,8 +968,8 @@ impl Client {
                         etag: resp.etag,
                     });
 
-                    offset = start_bytes;
-                    size -= end_bytes - start_bytes;
+                    offset += length;
+                    size -= length;
                 }
             }
         }
