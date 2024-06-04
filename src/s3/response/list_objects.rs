@@ -99,9 +99,9 @@ fn parse_list_objects_contents(
             &content.get_child_text_or_error("LastModified")?,
         )?);
         let etag = content.get_child_text("ETag");
-        let size: Option<usize> = content
+        let size: Option<u64> = content
             .get_child_text("Size")
-            .map(|x| x.parse::<usize>())
+            .map(|x| x.parse::<u64>())
             .transpose()?;
         let storage_class = content.get_child_text("StorageClass");
         let is_latest = content
