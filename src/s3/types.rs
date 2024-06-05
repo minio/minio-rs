@@ -748,7 +748,7 @@ pub struct NotificationRecord {
     #[serde(alias = "userIdentity", default)]
     pub user_identity: UserIdentity,
     #[serde(alias = "requestParameters", default)]
-    pub request_parameters: RequestParameters,
+    pub request_parameters: Option<RequestParameters>,
     #[serde(alias = "responseElements", default)]
     pub response_elements: ResponseElements,
     #[serde(alias = "s3", default)]
