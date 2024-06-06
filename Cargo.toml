@@ -46,7 +46,14 @@ xmltree = "0.10.3"
 
 [dependencies.reqwest]
 version = "0.11.20"
-features = ["native-tls", "blocking", "rustls-tls", "stream"]
+default-features = false
+features = ["blocking", "stream"]
+
+[features]
+default = ["default-tls"]
+default-tls = ["reqwest/default-tls"]
+native-tls = ["reqwest/native-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
 
 [dev-dependencies]
 async-std = { version = "1.12.0", features = ["attributes", "tokio1"] }
