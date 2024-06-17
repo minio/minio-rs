@@ -2213,6 +2213,7 @@ pub struct DownloadObjectArgs<'a> {
     pub ssec: Option<&'a SseCustomerKey>,
     pub filename: &'a str,
     pub overwrite: bool,
+    pub disk_sync: bool,
 }
 
 impl<'a> DownloadObjectArgs<'a> {
@@ -2228,6 +2229,7 @@ impl<'a> DownloadObjectArgs<'a> {
         bucket_name: &'a str,
         object_name: &'a str,
         filename: &'a str,
+        disk_sync: bool,
     ) -> Result<DownloadObjectArgs<'a>, Error> {
         check_bucket_name(bucket_name, true)?;
 
@@ -2247,6 +2249,7 @@ impl<'a> DownloadObjectArgs<'a> {
             ssec: None,
             filename,
             overwrite: false,
+            disk_sync,
         })
     }
 }
