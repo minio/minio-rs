@@ -155,7 +155,7 @@ pub struct ListEntry {
     pub etag: Option<String>, // except DeleteMarker
     pub owner_id: Option<String>,
     pub owner_name: Option<String>,
-    pub size: Option<usize>, // except DeleteMarker
+    pub size: Option<u64>, // except DeleteMarker
     pub storage_class: Option<String>,
     pub is_latest: bool,            // except ListObjects V1/V2
     pub version_id: Option<String>, // except ListObjects V1/V2
