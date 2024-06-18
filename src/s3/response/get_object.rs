@@ -22,7 +22,7 @@ use crate::s3::{
     types::{FromS3Response, S3Request},
 };
 
-pub struct GetObjectResponse2 {
+pub struct GetObjectResponse {
     pub headers: http::HeaderMap,
     pub region: String,
     pub bucket_name: String,
@@ -34,7 +34,7 @@ pub struct GetObjectResponse2 {
 }
 
 #[async_trait]
-impl FromS3Response for GetObjectResponse2 {
+impl FromS3Response for GetObjectResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
         response: reqwest::Response,
@@ -57,7 +57,7 @@ impl FromS3Response for GetObjectResponse2 {
 
         let content = ObjectContent::new_from_stream(body, Some(content_length));
 
-        Ok(GetObjectResponse2 {
+        Ok(GetObjectResponse {
             headers: header_map,
             region: req.region.unwrap_or("").to_string(),
             bucket_name: req.bucket.unwrap().to_string(),
