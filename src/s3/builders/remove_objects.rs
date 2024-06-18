@@ -26,7 +26,7 @@ use tokio_stream::iter as stream_iter;
 use crate::s3::{
     client_core::ClientCore,
     error::Error,
-    response::{RemoveObjectResponse2, RemoveObjectsResponse},
+    response::{RemoveObjectResponse, RemoveObjectsResponse},
     types::{S3Api, S3Request, ToS3Request, ToStream},
     utils::{check_bucket_name, md5sum_hash, merge, Multimap},
     Client,
@@ -127,7 +127,7 @@ impl RemoveObject {
 }
 
 impl S3Api for RemoveObject {
-    type S3Response = RemoveObjectResponse2;
+    type S3Response = RemoveObjectResponse;
 }
 
 impl ToS3Request for RemoveObject {

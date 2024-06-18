@@ -740,7 +740,8 @@ impl ListObjects {
         self
     }
 
-    /// Set this to include versions.
+    /// Set this to include versions. Defaults to false. Has no effect when
+    /// `use_api_v1` is set.
     pub fn include_versions(mut self, include_versions: bool) -> Self {
         self.include_versions = include_versions;
         self

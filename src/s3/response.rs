@@ -39,7 +39,7 @@ mod put_object;
 mod remove_objects;
 
 pub use buckets::{GetBucketVersioningResponse, ListBucketsResponse};
-pub use get_object::GetObjectResponse2;
+pub use get_object::GetObjectResponse;
 pub use list_objects::{
     ListObjectVersionsResponse, ListObjectsResponse, ListObjectsV1Response, ListObjectsV2Response,
 };
@@ -49,9 +49,7 @@ pub use put_object::{
     CreateMultipartUploadResponse2, PutObjectContentResponse, PutObjectResponse,
     UploadPartResponse2,
 };
-pub use remove_objects::{
-    DeleteError, DeletedObject, RemoveObjectResponse2, RemoveObjectsResponse,
-};
+pub use remove_objects::{DeleteError, DeletedObject, RemoveObjectResponse, RemoveObjectsResponse};
 
 #[derive(Debug)]
 /// Base response for bucket operation
@@ -76,9 +74,6 @@ pub struct ObjectResponse {
     pub object_name: String,
     pub version_id: Option<String>,
 }
-
-/// Response of [remove_object()](crate::s3::client::Client::remove_object) API
-pub type RemoveObjectResponse = ObjectResponse;
 
 #[derive(Debug)]
 /// Base Upload ID response

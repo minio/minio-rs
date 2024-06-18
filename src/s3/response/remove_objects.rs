@@ -27,7 +27,7 @@ use crate::s3::{
 };
 
 #[derive(Debug, Clone)]
-pub struct RemoveObjectResponse2 {
+pub struct RemoveObjectResponse {
     pub headers: HeaderMap,
     /// Value of the `x-amz-delete-marker` header.
     pub is_delete_marker: bool,
@@ -37,7 +37,7 @@ pub struct RemoveObjectResponse2 {
 }
 
 #[async_trait]
-impl FromS3Response for RemoveObjectResponse2 {
+impl FromS3Response for RemoveObjectResponse {
     async fn from_s3response<'a>(
         _req: S3Request<'a>,
         resp: reqwest::Response,
@@ -52,7 +52,7 @@ impl FromS3Response for RemoveObjectResponse2 {
             .get("x-amz-version-id")
             .map(|v| v.to_str().unwrap().to_string());
 
-        Ok(RemoveObjectResponse2 {
+        Ok(RemoveObjectResponse {
             headers,
             is_delete_marker,
             version_id,
@@ -79,7 +79,7 @@ pub struct DeletedObject {
 }
 
 /// Response of
-/// [remove_objects_api()](crate::s3::client_core::ClientCore::delete_objects)
+/// [delete_objects()](crate::s3::client_core::ClientCore::delete_objects)
 /// S3 API. It is also returned by the
 /// [remove_objects()](crate::s3::client::Client::remove_objects) API in the
 /// form of a stream.
@@ -89,10 +89,20 @@ pub struct RemoveObjectsResponse {
     pub result: Vec<DeleteResult>,
 }
 
+/// Result of deleting an object.
 #[derive(Clone, Debug)]
 pub enum DeleteResult {
     Deleted(DeletedObject),
     Error(DeleteError),
+}
+
+impl From<DeleteResult> for Result<DeletedObject, DeleteError> {
+    fn from(result: DeleteResult) -> Self {
+        match result {
+            DeleteResult::Deleted(obj) => Ok(obj),
+            DeleteResult::Error(err) => Err(err),
+        }
+    }
 }
 
 impl DeleteResult {

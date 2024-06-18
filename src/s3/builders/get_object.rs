@@ -18,7 +18,7 @@ use http::Method;
 use crate::s3::{
     client::Client,
     error::Error,
-    response::GetObjectResponse2,
+    response::GetObjectResponse,
     sse::{Sse, SseCustomerKey},
     types::{S3Api, S3Request, ToS3Request},
     utils::{check_bucket_name, merge, to_http_header_value, Multimap, UtcTime},
@@ -214,5 +214,5 @@ impl ToS3Request for GetObject {
 }
 
 impl S3Api for GetObject {
-    type S3Response = GetObjectResponse2;
+    type S3Response = GetObjectResponse;
 }

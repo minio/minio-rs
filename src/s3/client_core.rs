@@ -20,6 +20,7 @@ use super::{
     Client,
 };
 
+/// ClientCore exposes lower-level APIs not exposed by the high-level client.
 #[derive(Debug, Clone)]
 pub struct ClientCore(Client);
 
