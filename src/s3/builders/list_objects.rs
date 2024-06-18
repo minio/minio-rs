@@ -79,7 +79,7 @@ impl ToStream for ListObjectsV1 {
                 let resp = args.send().await;
                 match resp {
                     Ok(resp) => {
-                        args.marker = resp.next_marker.clone();
+                        args.marker.clone_from(&resp.next_marker);
                         is_done = !resp.is_truncated;
                         Some((Ok(resp), (args, is_done)))
                     }
@@ -249,7 +249,8 @@ impl ToStream for ListObjectsV2 {
                 let resp = args.send().await;
                 match resp {
                     Ok(resp) => {
-                        args.continuation_token = resp.next_continuation_token.clone();
+                        args.continuation_token
+                            .clone_from(&resp.next_continuation_token);
                         is_done = !resp.is_truncated;
                         Some((Ok(resp), (args, is_done)))
                     }
@@ -432,8 +433,9 @@ impl ToStream for ListObjectVersions {
                 let resp = args.send().await;
                 match resp {
                     Ok(resp) => {
-                        args.key_marker = resp.next_key_marker.clone();
-                        args.version_id_marker = resp.next_version_id_marker.clone();
+                        args.key_marker.clone_from(&resp.next_key_marker);
+                        args.version_id_marker
+                            .clone_from(&resp.next_version_id_marker);
 
                         is_done = !resp.is_truncated;
                         Some((Ok(resp), (args, is_done)))

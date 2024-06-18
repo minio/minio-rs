@@ -309,7 +309,7 @@ impl SelectObjectContentResponse {
             self.prelude[i] = self
                 .buf
                 .pop_front()
-                .ok_or(Error::InsufficientData(8 as u64, i as u64))?;
+                .ok_or(Error::InsufficientData(8, i as u64))?;
         }
 
         Ok(true)
@@ -325,7 +325,7 @@ impl SelectObjectContentResponse {
             self.prelude_crc[i] = self
                 .buf
                 .pop_front()
-                .ok_or(Error::InsufficientData(4 as u64, i as u64))?;
+                .ok_or(Error::InsufficientData(4, i as u64))?;
         }
 
         Ok(true)
@@ -361,7 +361,7 @@ impl SelectObjectContentResponse {
             self.message_crc[i] = self
                 .buf
                 .pop_front()
-                .ok_or(Error::InsufficientData(4 as u64, i as u64))?;
+                .ok_or(Error::InsufficientData(4, i as u64))?;
         }
 
         Ok(true)
@@ -379,7 +379,6 @@ impl SelectObjectContentResponse {
 
             let name = String::from_utf8(self.data[offset..offset + length].to_vec())?;
             offset += length;
-
             if self.data[offset] != 7 {
                 return Err(Error::InvalidHeaderValueType(self.data[offset]));
             }
