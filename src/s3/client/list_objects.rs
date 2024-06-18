@@ -16,21 +16,9 @@
 //! S3 APIs for listing objects.
 
 use super::Client;
-use crate::s3::builders::{ListObjectVersions, ListObjects, ListObjectsV1, ListObjectsV2};
+use crate::s3::builders::ListObjects;
 
 impl Client {
-    pub fn list_objects_v1(&self, bucket: &str) -> ListObjectsV1 {
-        ListObjectsV1::new(bucket).client(self)
-    }
-
-    pub fn list_objects_v2(&self, bucket: &str) -> ListObjectsV2 {
-        ListObjectsV2::new(bucket).client(self)
-    }
-
-    pub fn list_object_versions(&self, bucket: &str) -> ListObjectVersions {
-        ListObjectVersions::new(bucket).client(self)
-    }
-
     /// List objects with version information optionally. This function handles
     /// pagination and returns a stream of results. Each result corresponds to
     /// the response of a single listing API call.

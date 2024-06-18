@@ -19,10 +19,10 @@ use http::Method;
 use crate::s3::{
     client::Client,
     error::Error,
-    response::{
-        ListObjectVersionsResponse, ListObjectsResponse, ListObjectsV1Response,
-        ListObjectsV2Response,
+    response::list_objects::{
+        ListObjectVersionsResponse, ListObjectsV1Response, ListObjectsV2Response,
     },
+    response::ListObjectsResponse,
     types::{S3Api, S3Request, ToS3Request, ToStream},
     utils::{check_bucket_name, merge, Multimap},
 };
@@ -48,10 +48,9 @@ fn add_common_list_objects_query_params(
     }
 }
 
-/// Argument builder for ListObjectsV1 S3 API, created by
-/// [list_objects_v1()](crate::s3::client::Client::list_objects_v1).
+/// Argument for ListObjectsV1 S3 API.
 #[derive(Clone, Debug, Default)]
-pub struct ListObjectsV1 {
+struct ListObjectsV1 {
     client: Option<Client>,
 
     extra_headers: Option<Multimap>,
@@ -161,64 +160,9 @@ impl From<ListObjects> for ListObjectsV1 {
     }
 }
 
-impl ListObjectsV1 {
-    pub fn new(bucket: &str) -> Self {
-        Self {
-            bucket: bucket.to_owned(),
-            ..Default::default()
-        }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
-    }
-
-    pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
-        self.extra_headers = extra_headers;
-        self
-    }
-
-    pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
-        self.extra_query_params = extra_query_params;
-        self
-    }
-
-    pub fn region(mut self, region: Option<String>) -> Self {
-        self.region = region;
-        self
-    }
-
-    pub fn delimiter(mut self, delimiter: Option<String>) -> Self {
-        self.delimiter = delimiter;
-        self
-    }
-
-    pub fn disable_url_encoding(mut self, disable_url_encoding: bool) -> Self {
-        self.disable_url_encoding = disable_url_encoding;
-        self
-    }
-
-    pub fn max_keys(mut self, max_keys: Option<u16>) -> Self {
-        self.max_keys = max_keys;
-        self
-    }
-
-    pub fn prefix(mut self, prefix: Option<String>) -> Self {
-        self.prefix = prefix;
-        self
-    }
-
-    pub fn marker(mut self, marker: Option<String>) -> Self {
-        self.marker = marker;
-        self
-    }
-}
-
-/// Argument builder for ListObjectsV2 S3 API, created by
-/// [list_objects_v2()](crate::s3::client::Client::list_objects_v2).
+/// Argument for ListObjectsV2 S3 API.
 #[derive(Clone, Debug, Default)]
-pub struct ListObjectsV2 {
+struct ListObjectsV2 {
     client: Option<Client>,
 
     extra_headers: Option<Multimap>,
@@ -331,79 +275,9 @@ impl From<ListObjects> for ListObjectsV2 {
     }
 }
 
-impl ListObjectsV2 {
-    pub fn new(bucket: &str) -> Self {
-        Self {
-            bucket: bucket.to_owned(),
-            ..Default::default()
-        }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
-    }
-
-    pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
-        self.extra_headers = extra_headers;
-        self
-    }
-
-    pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
-        self.extra_query_params = extra_query_params;
-        self
-    }
-
-    pub fn region(mut self, region: Option<String>) -> Self {
-        self.region = region;
-        self
-    }
-
-    pub fn delimiter(mut self, delimiter: Option<String>) -> Self {
-        self.delimiter = delimiter;
-        self
-    }
-
-    pub fn disable_url_encoding(mut self, disable_url_encoding: bool) -> Self {
-        self.disable_url_encoding = disable_url_encoding;
-        self
-    }
-
-    pub fn max_keys(mut self, max_keys: Option<u16>) -> Self {
-        self.max_keys = max_keys;
-        self
-    }
-
-    pub fn prefix(mut self, prefix: Option<String>) -> Self {
-        self.prefix = prefix;
-        self
-    }
-
-    pub fn start_after(mut self, start_after: Option<String>) -> Self {
-        self.start_after = start_after;
-        self
-    }
-
-    pub fn continuation_token(mut self, continuation_token: Option<String>) -> Self {
-        self.continuation_token = continuation_token;
-        self
-    }
-
-    pub fn fetch_owner(mut self, fetch_owner: bool) -> Self {
-        self.fetch_owner = fetch_owner;
-        self
-    }
-
-    pub fn include_user_metadata(mut self, include_user_metadata: bool) -> Self {
-        self.include_user_metadata = include_user_metadata;
-        self
-    }
-}
-
-/// Argument builder for ListObjectVerions S3 API created by
-/// [list_object_versions()](crate::s3::client::Client::list_object_versions).
+/// Argument for ListObjectVerions S3 API
 #[derive(Clone, Debug, Default)]
-pub struct ListObjectVersions {
+struct ListObjectVersions {
     client: Option<Client>,
 
     extra_headers: Option<Multimap>,
@@ -510,70 +384,6 @@ impl From<ListObjects> for ListObjectVersions {
             version_id_marker: value.version_id_marker,
             include_user_metadata: value.include_user_metadata,
         }
-    }
-}
-
-impl ListObjectVersions {
-    pub fn new(bucket: &str) -> Self {
-        Self {
-            bucket: bucket.to_owned(),
-            ..Default::default()
-        }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
-    }
-
-    pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
-        self.extra_headers = extra_headers;
-        self
-    }
-
-    pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
-        self.extra_query_params = extra_query_params;
-        self
-    }
-
-    pub fn region(mut self, region: Option<String>) -> Self {
-        self.region = region;
-        self
-    }
-
-    pub fn delimiter(mut self, delimiter: Option<String>) -> Self {
-        self.delimiter = delimiter;
-        self
-    }
-
-    pub fn disable_url_encoding(mut self, disable_url_encoding: bool) -> Self {
-        self.disable_url_encoding = disable_url_encoding;
-        self
-    }
-
-    pub fn max_keys(mut self, max_keys: Option<u16>) -> Self {
-        self.max_keys = max_keys;
-        self
-    }
-
-    pub fn prefix(mut self, prefix: Option<String>) -> Self {
-        self.prefix = prefix;
-        self
-    }
-
-    pub fn key_marker(mut self, key_marker: Option<String>) -> Self {
-        self.key_marker = key_marker;
-        self
-    }
-
-    pub fn version_id_marker(mut self, version_id_marker: Option<String>) -> Self {
-        self.version_id_marker = version_id_marker;
-        self
-    }
-
-    pub fn include_user_metadata(mut self, include_user_metadata: bool) -> Self {
-        self.include_user_metadata = include_user_metadata;
-        self
     }
 }
 
