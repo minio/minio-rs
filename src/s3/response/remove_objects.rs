@@ -123,19 +123,19 @@ impl FromS3Response for RemoveObjectsResponse {
             .map(|elem| {
                 if elem.name == "Deleted" {
                     Ok(DeleteResult::Deleted(DeletedObject {
-                        name: get_text(&elem, "Key")?,
-                        version_id: get_option_text(&elem, "VersionId"),
-                        delete_marker: get_default_text(&elem, "DeleteMarker").to_lowercase()
+                        name: get_text(elem, "Key")?,
+                        version_id: get_option_text(elem, "VersionId"),
+                        delete_marker: get_default_text(elem, "DeleteMarker").to_lowercase()
                             == "true",
-                        delete_marker_version_id: get_option_text(&elem, "DeleteMarkerVersionId"),
+                        delete_marker_version_id: get_option_text(elem, "DeleteMarkerVersionId"),
                     }))
                 } else {
                     assert_eq!(elem.name, "Error");
                     Ok(DeleteResult::Error(DeleteError {
-                        code: get_text(&elem, "Code")?,
-                        message: get_text(&elem, "Message")?,
-                        object_name: get_text(&elem, "Key")?,
-                        version_id: get_option_text(&elem, "VersionId"),
+                        code: get_text(elem, "Code")?,
+                        message: get_text(elem, "Message")?,
+                        object_name: get_text(elem, "Key")?,
+                        version_id: get_option_text(elem, "VersionId"),
                     }))
                 }
             })

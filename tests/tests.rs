@@ -291,7 +291,7 @@ impl ClientTest {
             Error::S3Error(er) => {
                 assert_eq!(er.code, "NoSuchKey")
             }
-            _ => assert!(false),
+            e => panic!("Unexpected error {:?}", e),
         }
     }
 
@@ -328,7 +328,7 @@ impl ClientTest {
 
     async fn put_object_content(&self) {
         let object_name = rand_object_name();
-        let sizes = vec![16_u64, 5 * 1024 * 1024, 16 + 5 * 1024 * 1024];
+        let sizes = [16_u64, 5 * 1024 * 1024, 16 + 5 * 1024 * 1024];
 
         for size in sizes.iter() {
             let data_src = RandSrc::new(*size);
@@ -793,7 +793,7 @@ impl ClientTest {
             .unwrap();
 
             let event_fn = |event: NotificationRecords| {
-                let record = event.records.iter().next();
+                let record = event.records.first();
                 if let Some(record) = record {
                     let key = &record.s3.object.key;
                     if name == *key {

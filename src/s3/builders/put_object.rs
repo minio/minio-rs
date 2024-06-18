@@ -783,11 +783,11 @@ impl PutObjectContent {
             )));
         }
 
-        let input_content = std::mem::replace(&mut self.input_content, ObjectContent::default());
+        let input_content = std::mem::take(&mut self.input_content);
         self.content_stream = input_content
             .to_content_stream()
             .await
-            .map_err(|e| Error::IOError(e))?;
+            .map_err(Error::IOError)?;
 
         // object_size may be Size::Unknown.
         let object_size = self.content_stream.get_size();
@@ -1145,7 +1145,7 @@ mod tests {
                     if object_size < MIN_PART_SIZE  {
                         return psize == object_size && part_count == 1;
                     }
-                    if psize < MIN_PART_SIZE || psize > MAX_PART_SIZE{
+                    if !(MIN_PART_SIZE..=MAX_PART_SIZE).contains(&psize){
                         return false;
                     }
                     if psize > object_size {

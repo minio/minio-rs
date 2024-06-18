@@ -241,7 +241,7 @@ impl ToS3Request for RemoveObjectsApi {
             data.push_str("</Key>");
             if let Some(v) = object.version_id.as_ref() {
                 data.push_str("<VersionId>");
-                data.push_str(&v);
+                data.push_str(v);
                 data.push_str("</VersionId>");
             }
             data.push_str("</Object>");
