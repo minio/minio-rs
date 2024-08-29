@@ -52,6 +52,7 @@ pub struct CreateMultipartUpload {
     tags: Option<HashMap<String, String>>,
     retention: Option<Retention>,
     legal_hold: bool,
+    content_type: Option<String>,
 }
 
 impl CreateMultipartUpload {
@@ -116,6 +117,7 @@ impl CreateMultipartUpload {
             self.tags.as_ref(),
             self.retention.as_ref(),
             self.legal_hold,
+            self.content_type.as_ref(),
         )
     }
 
@@ -376,6 +378,7 @@ pub struct UploadPart {
     retention: Option<Retention>,
     legal_hold: bool,
     data: SegmentedBytes,
+    content_type: Option<String>,
 
     // This is used only when this struct is used for PutObject.
     user_metadata: Option<Multimap>,
@@ -452,6 +455,7 @@ impl UploadPart {
             self.tags.as_ref(),
             self.retention.as_ref(),
             self.legal_hold,
+            self.content_type.as_ref(),
         )
     }
 
@@ -597,6 +601,7 @@ fn object_write_args_headers(
     tags: Option<&HashMap<String, String>>,
     retention: Option<&Retention>,
     legal_hold: bool,
+    content_type: Option<&String>,
 ) -> Result<Multimap, Error> {
     let mut map = Multimap::new();
 
@@ -662,7 +667,10 @@ fn object_write_args_headers(
     if !map.contains_key("Content-Type") {
         map.insert(
             String::from("Content-Type"),
-            String::from("application/octet-stream"),
+            match content_type {
+                Some(content_type) => content_type.clone(),
+                None => String::from("application/octet-stream"),
+            },
         );
     }
 
@@ -686,7 +694,7 @@ pub struct PutObjectContent {
     retention: Option<Retention>,
     legal_hold: bool,
     part_size: Size,
-    content_type: String,
+    content_type: Option<String>,
 
     // source data
     input_content: ObjectContent,
@@ -713,7 +721,7 @@ impl PutObjectContent {
             retention: None,
             legal_hold: false,
             part_size: Size::Unknown,
-            content_type: String::from("application/octet-stream"),
+            content_type: None,
             content_stream: ContentStream::empty(),
             part_count: None,
         }
@@ -770,7 +778,7 @@ impl PutObjectContent {
     }
 
     pub fn content_type(mut self, content_type: String) -> Self {
-        self.content_type = content_type;
+        self.content_type = Some(content_type);
         self
     }
 
@@ -965,6 +973,7 @@ impl PutObjectContent {
             part_number: None,
             upload_id: None,
             data,
+            content_type: self.content_type.clone(),
         })
     }
 
@@ -990,6 +999,7 @@ impl PutObjectContent {
             part_number: Some(part_number),
             upload_id: Some(upload_id.to_string()),
             data,
+            content_type: self.content_type.clone(),
         }
     }
 
@@ -1023,6 +1033,7 @@ impl PutObjectContent {
             tags: self.tags.clone(),
             retention: self.retention.clone(),
             legal_hold: self.legal_hold,
+            content_type: self.content_type.clone(),
         }
     }
 }
