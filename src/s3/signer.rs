@@ -66,7 +66,7 @@ pub fn get_canonical_request_hash(
         "{}\n{}\n{}\n{}\n\n{}\n{}",
         method, uri, query_string, headers, signed_headers, content_sha256
     );
-    return sha256_hash(canonical_request.as_bytes());
+    sha256_hash(canonical_request.as_bytes())
 }
 
 /// Returns string-to-sign value of given date, scope and canonical request hash
@@ -92,7 +92,7 @@ pub fn get_signing_key(
     let date_key = hmac_hash(key.as_slice(), to_signer_date(date).as_bytes());
     let date_region_key = hmac_hash(date_key.as_slice(), region.as_bytes());
     let date_region_service_key = hmac_hash(date_region_key.as_slice(), service_name.as_bytes());
-    return hmac_hash(date_region_service_key.as_slice(), b"aws4_request");
+    hmac_hash(date_region_service_key.as_slice(), b"aws4_request")
 }
 
 /// Returns signature value for given signing key and string-to-sign
@@ -252,5 +252,5 @@ pub fn post_presign_v4(
     region: &str,
 ) -> String {
     let signing_key = get_signing_key(secret_key, date, region, "s3");
-    return get_signature(signing_key.as_slice(), string_to_sign.as_bytes());
+    get_signature(signing_key.as_slice(), string_to_sign.as_bytes())
 }

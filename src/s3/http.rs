@@ -371,7 +371,7 @@ impl BaseUrl {
         Ok(())
     }
 
-    fn build_list_buckets_url(&self, url: &mut Url, region: &String) {
+    fn build_list_buckets_url(&self, url: &mut Url, region: &str) {
         if self.aws_domain_suffix.is_empty() {
             return;
         }
@@ -402,13 +402,12 @@ impl BaseUrl {
     pub fn build_url(
         &self,
         method: &Method,
-        region: &String,
+        region: &str,
         query: &Multimap,
         bucket_name: Option<&str>,
         object_name: Option<&str>,
     ) -> Result<Url, Error> {
-        if !object_name.map_or(true, |v| v.is_empty()) && bucket_name.map_or(true, |v| v.is_empty())
-        {
+        if !object_name.is_none_or(|v| v.is_empty()) && bucket_name.is_none_or(|v| v.is_empty()) {
             return Err(Error::UrlBuildError(String::from(
                 "empty bucket name provided for object name",
             )));

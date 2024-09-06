@@ -421,7 +421,7 @@ impl Client {
     pub async fn do_execute(
         &self,
         method: &Method,
-        region: &String,
+        region: &str,
         headers: &mut Multimap,
         query_params: &Multimap,
         bucket_name: Option<&str>,
@@ -491,7 +491,7 @@ impl Client {
     pub async fn execute(
         &self,
         method: Method,
-        region: &String,
+        region: &str,
         headers: &mut Multimap,
         query_params: &Multimap,
         bucket_name: Option<&str>,
@@ -514,7 +514,7 @@ impl Client {
     pub async fn execute2(
         &self,
         method: Method,
-        region: &String,
+        region: &str,
         headers: &mut Multimap,
         query_params: &Multimap,
         bucket_name: Option<&str>,
@@ -564,7 +564,7 @@ impl Client {
         bucket_name: &str,
         region: Option<&str>,
     ) -> Result<String, Error> {
-        if !region.map_or(true, |v| v.is_empty()) {
+        if !region.is_none_or(|v| v.is_empty()) {
             if !self.base_url.region.is_empty() && self.base_url.region != *region.unwrap() {
                 return Err(Error::RegionMismatch(
                     self.base_url.region.clone(),
@@ -764,10 +764,7 @@ impl Client {
         })
     }
 
-    async fn calculate_part_count<'a>(
-        &self,
-        sources: &'a mut [ComposeSource<'_>],
-    ) -> Result<u16, Error> {
+    async fn calculate_part_count(&self, sources: &mut [ComposeSource<'_>]) -> Result<u16, Error> {
         let mut object_size = 0_usize;
         let mut i = 0;
         let mut part_count = 0_u16;
@@ -1784,14 +1781,12 @@ impl Client {
             )
             .await
         {
-            Ok(resp) => {
-                return Ok(GetBucketPolicyResponse {
-                    headers: resp.headers().clone(),
-                    region: region.clone(),
-                    bucket_name: args.bucket.to_string(),
-                    config: resp.text().await?,
-                })
-            }
+            Ok(resp) => Ok(GetBucketPolicyResponse {
+                headers: resp.headers().clone(),
+                region: region.clone(),
+                bucket_name: args.bucket.to_string(),
+                config: resp.text().await?,
+            }),
             Err(e) => match e {
                 Error::S3Error(ref err) => {
                     if err.code == "NoSuchBucketPolicy" {
@@ -2034,7 +2029,7 @@ impl Client {
                 let body = resp.bytes().await?;
                 let root = Element::parse(body.reader())?;
 
-                return Ok(GetObjectRetentionResponse {
+                Ok(GetObjectRetentionResponse {
                     headers: header_map.clone(),
                     region: region.clone(),
                     bucket_name: args.bucket.to_string(),
@@ -2048,7 +2043,7 @@ impl Client {
                         Some(v) => Some(from_iso8601utc(&v)?),
                         _ => None,
                     },
-                });
+                })
             }
             Err(e) => match e {
                 Error::S3Error(ref err) => {
@@ -2114,14 +2109,14 @@ impl Client {
             tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
         }
 
-        return Ok(GetObjectTagsResponse {
+        Ok(GetObjectTagsResponse {
             headers: header_map.clone(),
             region: region.clone(),
             bucket_name: args.bucket.to_string(),
             object_name: args.object.to_string(),
             version_id: args.version_id.as_ref().map(|v| v.to_string()),
             tags,
-        });
+        })
     }
 
     pub async fn get_presigned_object_url(
@@ -2172,13 +2167,13 @@ impl Client {
             url.query = query_params;
         }
 
-        return Ok(GetPresignedObjectUrlResponse {
+        Ok(GetPresignedObjectUrlResponse {
             region: region.clone(),
             bucket_name: args.bucket.to_string(),
             object_name: args.object.to_string(),
             version_id: args.version_id.as_ref().map(|v| v.to_string()),
             url: url.to_string(),
-        });
+        })
     }
 
     pub async fn get_presigned_post_form_data(
@@ -2316,7 +2311,7 @@ impl Client {
         let resp = self
             .execute(
                 Method::PUT,
-                &region.to_string(),
+                region,
                 &mut headers,
                 query_params,
                 Some(args.bucket),

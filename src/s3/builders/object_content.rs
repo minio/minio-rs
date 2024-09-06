@@ -103,6 +103,14 @@ impl From<Vec<u8>> for ObjectContent {
     }
 }
 
+impl From<&'static [u8]> for ObjectContent {
+    fn from(value: &'static [u8]) -> Self {
+        ObjectContent(ObjectContentInner::Bytes(SegmentedBytes::from(
+            Bytes::from(value),
+        )))
+    }
+}
+
 impl From<&Path> for ObjectContent {
     fn from(value: &Path) -> Self {
         ObjectContent(ObjectContentInner::FilePath(value.to_path_buf()))
@@ -144,6 +152,7 @@ impl ObjectContent {
         }
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub(crate) async fn to_content_stream(self) -> IoResult<ContentStream> {
         let (r, size) = self.to_stream().await?;
         Ok(ContentStream::new(r, size))
@@ -333,14 +342,6 @@ impl SegmentedBytes {
         }
     }
 
-    pub fn into_iter(self) -> SegmentedBytesIntoIterator {
-        SegmentedBytesIntoIterator {
-            sb: self,
-            current_segment: 0,
-            current_segment_index: 0,
-        }
-    }
-
     // Copy all the content into a single `Bytes` object.
     pub fn to_bytes(&self) -> Bytes {
         let mut buf = BytesMut::with_capacity(self.total_size);
@@ -398,7 +399,7 @@ pub struct SegmentedBytesIterator<'a> {
     current_segment_index: usize,
 }
 
-impl<'a> Iterator for SegmentedBytesIterator<'a> {
+impl Iterator for SegmentedBytesIterator<'_> {
     type Item = Bytes;
 
     fn next(&mut self) -> Option<Self::Item> {
