@@ -269,7 +269,7 @@ pub fn get_canonical_headers(map: &Multimap) -> (String, String) {
             if !value.is_empty() {
                 value.push(',');
             }
-            let s: String = MULTI_SPACE_REGEX.replace_all(&v, " ").to_string();
+            let s: String = MULTI_SPACE_REGEX.replace_all(&v, " ").trim().to_string();
             value.push_str(&s);
         }
         btmap.insert(key.clone(), value.clone());
