@@ -109,6 +109,11 @@ impl CreateMultipartUpload {
         self
     }
 
+    pub fn content_type(mut self, content_type: Option<String>) -> Self {
+        self.content_type = content_type;
+        self
+    }
+
     fn get_headers(&self) -> Result<Multimap, Error> {
         object_write_args_headers(
             self.extra_headers.as_ref(),
