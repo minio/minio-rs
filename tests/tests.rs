@@ -17,6 +17,7 @@ use async_std::task;
 use bytes::Bytes;
 use chrono::Duration;
 use futures_util::Stream;
+use http::header;
 use hyper::http::Method;
 
 use minio::s3::builders::{ObjectContent, ObjectToDelete};
@@ -339,6 +340,7 @@ impl ClientTest {
                     &object_name,
                     ObjectContent::new_from_stream(data_src, Some(*size)),
                 )
+                .content_type(String::from("image/jpeg"))
                 .send()
                 .await
                 .unwrap();
@@ -351,6 +353,10 @@ impl ClientTest {
                 .unwrap();
             assert_eq!(resp.size, *size as usize);
             assert_eq!(resp.etag, etag);
+            assert_eq!(
+                resp.headers.get(header::CONTENT_TYPE).unwrap(),
+                "image/jpeg"
+            );
             self.client
                 .remove_object(&self.test_bucket, object_name.as_str())
                 .send()
