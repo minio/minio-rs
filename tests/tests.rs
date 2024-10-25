@@ -353,7 +353,10 @@ impl ClientTest {
                 .unwrap();
             assert_eq!(resp.size, *size as usize);
             assert_eq!(resp.etag, etag);
-            assert_eq!(resp.headers.get(header::CONTENT_TYPE).unwrap(), "image/jpeg");
+            assert_eq!(
+                resp.headers.get(header::CONTENT_TYPE).unwrap(),
+                "image/jpeg"
+            );
             self.client
                 .remove_object(&self.test_bucket, object_name.as_str())
                 .send()
