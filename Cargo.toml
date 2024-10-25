@@ -11,7 +11,7 @@ keywords = ["object-storage", "minio", "s3"]
 categories = ["api-bindings", "web-programming::http-client"]
 
 [dependencies.reqwest]
-version = "0.12.5"
+version = "0.12.8"
 default-features = false
 features = ["stream"]
 

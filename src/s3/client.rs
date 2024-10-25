@@ -91,13 +91,15 @@ impl ClientBuilder {
         self
     }
 
-    /// Set file for loading a trust certificate.
+    /// Set file for loading CAs certs to trust. This is in addition to the system
+    /// trust store. The file must contain PEM encoded certificates.
     pub fn ssl_cert_file(mut self, ssl_cert_file: Option<&Path>) -> Self {
         self.ssl_cert_file = ssl_cert_file.map(PathBuf::from);
         self
     }
 
-    /// Set flag to ignore certificate check.
+    /// Set flag to ignore certificate check. This is insecure and should only
+    /// be used for testing.
     pub fn ignore_cert_check(mut self, ignore_cert_check: Option<bool>) -> Self {
         self.ignore_cert_check = ignore_cert_check;
         self
@@ -137,8 +139,10 @@ impl ClientBuilder {
         if let Some(v) = self.ssl_cert_file {
             let mut buf = Vec::new();
             File::open(v)?.read_to_end(&mut buf)?;
-            let cert = reqwest::Certificate::from_pem(&buf)?;
-            builder = builder.add_root_certificate(cert);
+            let certs = reqwest::Certificate::from_pem_bundle(&buf)?;
+            for cert in certs {
+                builder = builder.add_root_certificate(cert);
+            }
         }
 
         let client = builder.build()?;
