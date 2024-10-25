@@ -120,10 +120,20 @@ impl ClientBuilder {
         }
         builder = builder.user_agent(user_agent);
 
+        #[cfg(any(
+            feature = "default-tls",
+            feature = "native-tls",
+            feature = "rustls-tls"
+        ))]
         if let Some(v) = self.ignore_cert_check {
             builder = builder.danger_accept_invalid_certs(v);
         }
 
+        #[cfg(any(
+            feature = "default-tls",
+            feature = "native-tls",
+            feature = "rustls-tls"
+        ))]
         if let Some(v) = self.ssl_cert_file {
             let mut buf = Vec::new();
             File::open(v)?.read_to_end(&mut buf)?;
