@@ -528,7 +528,7 @@ impl ClientTest {
         let filename = rand_object_name();
         self.client
             .download_object(
-                &DownloadObjectArgs::new(&self.test_bucket, &object_name, &filename).unwrap(),
+                &DownloadObjectArgs::new(&self.test_bucket, &object_name, &filename, true).unwrap(),
             )
             .await
             .unwrap();
@@ -563,7 +563,7 @@ impl ClientTest {
         let filename = rand_object_name();
         self.client
             .download_object(
-                &DownloadObjectArgs::new(&self.test_bucket, &object_name, &filename).unwrap(),
+                &DownloadObjectArgs::new(&self.test_bucket, &object_name, &filename, true).unwrap(),
             )
             .await
             .unwrap();

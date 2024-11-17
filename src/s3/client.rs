@@ -1550,7 +1550,9 @@ impl Client {
         while let Some(v) = resp.chunk().await? {
             file.write_all(&v)?;
         }
-        file.sync_all()?;
+        if args.disk_sync {
+            file.sync_all()?;
+        }
 
         Ok(DownloadObjectResponse {
             headers: resp.headers().clone(),
