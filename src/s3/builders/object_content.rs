@@ -201,19 +201,21 @@ impl ObjectContent {
             .join(Path::new(tmp_file_name.as_os_str()));
 
         let mut total = 0;
-        {
-            let mut fp = fs::File::open(&tmp_file_path).await?;
-            let (mut r, _) = self.to_stream().await?;
-            while let Some(bytes) = r.next().await {
-                let bytes = bytes?;
-                if bytes.is_empty() {
-                    break;
-                }
-                total += bytes.len() as u64;
-                fp.write_all(&bytes).await?;
+        let mut fp = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&tmp_file_path)
+            .await?;
+        let (mut r, _) = self.to_stream().await?;
+        while let Some(bytes) = r.next().await {
+            let bytes = bytes?;
+            if bytes.is_empty() {
+                break;
             }
-            fp.flush().await?;
+            total += bytes.len() as u64;
+            fp.write_all(&bytes).await?;
         }
+        fp.flush().await?;
         fs::rename(&tmp_file_path, file_path).await?;
         Ok(total)
     }
