@@ -15,6 +15,10 @@ Run the examples from the command line with:
 * [Upload a file to MinIO](examples/file_uploader)
 * [Upload a file to MinIO with CLI](examples/put_object)
 
+### file_downloader.rs
+
+* [Download af file from MinIO](examples/file_downloader.rs)
+
 ### object_prompt.rs 
 
 * [Prompt a file on MinIO](examples/object_prompt)

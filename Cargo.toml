@@ -64,4 +64,8 @@ quickcheck = "1.0.3"
 name = "file_uploader"
 
 [[example]]
+name = "file_downloader"
+
+[[example]]
 name = "object_prompt"
+
