@@ -62,3 +62,6 @@ quickcheck = "1.0.3"
 
 [[example]]
 name = "file-uploader"
+
+[[example]]
+name = "file-downloader"
