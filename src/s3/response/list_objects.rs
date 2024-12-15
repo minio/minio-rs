@@ -46,6 +46,7 @@ fn url_decode(
     Ok(None)
 }
 
+#[allow(clippy::type_complexity)]
 fn parse_common_list_objects_response(
     root: &Element,
 ) -> Result<

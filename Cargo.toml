@@ -24,10 +24,10 @@ rustls-tls = ["reqwest/rustls-tls"]
 [dependencies]
 async-recursion = "1.1.1"
 async-trait = "0.1.83"
-base64 = "0.22"
+base64 = "0.22.1"
 byteorder = "1.5.0"
 bytes = "1.8.0"
-chrono = "0.4.38"
+chrono = "0.4.39"
 crc = "3.2.1"
 dashmap = "6.1.0"
 derivative = "2.2.0"
@@ -37,27 +37,27 @@ hex = "0.4.3"
 hmac = "0.12.1"
 home = "0.5.9"
 http = "1.1.0"
-hyper = { version = "1.5", features = ["full"] }
+hyper = { version = "1.5.1", features = ["full"] }
 lazy_static = "1.5.0"
 log = "0.4.22"
 md5 = "0.7.0"
 multimap = "0.10.0"
-os_info = "3.8.2"
+os_info = "3.9.0"
 percent-encoding = "2.3.1"
 rand = { version = "0.8.5", features = ["small_rng"] }
 regex = "1.11.1"
-serde = { version = "1.0.214", features = ["derive"] }
-serde_json = "1.0.132"
+serde = { version = "1.0.216", features = ["derive"] }
+serde_json = "1.0.133"
 sha2 = "0.10.8"
-tokio = { version = "1.41.0", features = ["full"] }
-tokio-stream = "0.1.16"
-tokio-util = { version = "0.7.12", features = ["io"] }
+tokio = { version = "1.42.0", features = ["full"] }
+tokio-stream = "0.1.17"
+tokio-util = { version = "0.7.13", features = ["io"] }
 urlencoding = "2.1.3"
 xmltree = "0.11.0"
 
 [dev-dependencies]
 async-std = { version = "1.13.0", features = ["attributes", "tokio1"] }
-clap = { version = "4.5.20", features = ["derive"] }
+clap = { version = "4.5.23", features = ["derive"] }
 quickcheck = "1.0.3"
 
 [[example]]

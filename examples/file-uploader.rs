@@ -28,14 +28,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Check 'bucket_name' bucket exist or not.
     let exists: bool = client
-        .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+        .bucket_exists(&BucketExistsArgs::new(bucket_name).unwrap())
         .await
         .unwrap();
 
     // Make 'bucket_name' bucket if not exist.
     if !exists {
         client
-            .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
+            .make_bucket(&MakeBucketArgs::new(bucket_name).unwrap())
             .await
             .unwrap();
     }

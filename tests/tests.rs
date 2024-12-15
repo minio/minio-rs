@@ -763,7 +763,7 @@ impl ClientTest {
             if size == 0 {
                 break;
             }
-            got += &String::from_utf8(buf[..size].to_vec()).unwrap();
+            got += core::str::from_utf8(&buf[..size]).unwrap();
         }
         assert_eq!(got, data);
         self.client
@@ -1269,10 +1269,7 @@ impl ClientTest {
             .send()
             .await
             .unwrap();
-        assert!(match resp.status {
-            Some(v) => v,
-            _ => false,
-        });
+        assert!(resp.status.unwrap_or_default());
 
         self.client
             .set_bucket_versioning(&SetBucketVersioningArgs::new(&bucket_name, false).unwrap())
@@ -1285,12 +1282,7 @@ impl ClientTest {
             .send()
             .await
             .unwrap();
-        assert!(
-            !(match resp.status {
-                Some(v) => v,
-                _ => false,
-            })
-        );
+        assert!(!resp.status.unwrap_or_default());
 
         self.client
             .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())

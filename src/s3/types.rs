@@ -354,7 +354,7 @@ pub struct SelectRequest<'a> {
 
 impl<'a> SelectRequest<'a> {
     pub fn new_csv_input_output(
-        expr: &'a str,
+        expr: &str,
         csv_input: CsvInputSerialization,
         csv_output: CsvOutputSerialization,
     ) -> Result<SelectRequest, Error> {
@@ -381,7 +381,7 @@ impl<'a> SelectRequest<'a> {
         expr: &'a str,
         csv_input: CsvInputSerialization,
         json_output: JsonOutputSerialization,
-    ) -> Result<SelectRequest, Error> {
+    ) -> Result<SelectRequest<'a>, Error> {
         if expr.is_empty() {
             return Err(Error::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
@@ -405,7 +405,7 @@ impl<'a> SelectRequest<'a> {
         expr: &'a str,
         json_input: JsonInputSerialization,
         json_output: JsonOutputSerialization,
-    ) -> Result<SelectRequest, Error> {
+    ) -> Result<SelectRequest<'a>, Error> {
         if expr.is_empty() {
             return Err(Error::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
@@ -429,7 +429,7 @@ impl<'a> SelectRequest<'a> {
         expr: &'a str,
         parquet_input: ParquetInputSerialization,
         csv_output: CsvOutputSerialization,
-    ) -> Result<SelectRequest, Error> {
+    ) -> Result<SelectRequest<'a>, Error> {
         if expr.is_empty() {
             return Err(Error::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
@@ -453,7 +453,7 @@ impl<'a> SelectRequest<'a> {
         expr: &'a str,
         parquet_input: ParquetInputSerialization,
         json_output: JsonOutputSerialization,
-    ) -> Result<SelectRequest, Error> {
+    ) -> Result<SelectRequest<'a>, Error> {
         if expr.is_empty() {
             return Err(Error::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
@@ -495,12 +495,12 @@ impl<'a> SelectRequest<'a> {
             }
             if let Some(v) = c.comments {
                 data.push_str("<Comments>");
-                data.push_str(&v.to_string());
+                data.push(v);
                 data.push_str("</Comments>");
             }
             if let Some(v) = c.field_delimiter {
                 data.push_str("<FieldDelimiter>");
-                data.push_str(&v.to_string());
+                data.push(v);
                 data.push_str("</FieldDelimiter>");
             }
             if let Some(v) = &c.file_header_info {
@@ -510,12 +510,12 @@ impl<'a> SelectRequest<'a> {
             }
             if let Some(v) = c.quote_character {
                 data.push_str("<QuoteCharacter>");
-                data.push_str(&v.to_string());
+                data.push(v);
                 data.push_str("</QuoteCharacter>");
             }
             if let Some(v) = c.record_delimiter {
                 data.push_str("<RecordDelimiter>");
-                data.push_str(&v.to_string());
+                data.push(v);
                 data.push_str("</RecordDelimiter>");
             }
             data.push_str("</CSV>");
@@ -542,17 +542,17 @@ impl<'a> SelectRequest<'a> {
             data.push_str("<CSV>");
             if let Some(v) = c.field_delimiter {
                 data.push_str("<FieldDelimiter>");
-                data.push_str(&v.to_string());
+                data.push(v);
                 data.push_str("</FieldDelimiter>");
             }
             if let Some(v) = c.quote_character {
                 data.push_str("<QuoteCharacter>");
-                data.push_str(&v.to_string());
+                data.push(v);
                 data.push_str("</QuoteCharacter>");
             }
             if let Some(v) = c.quote_escape_character {
                 data.push_str("<QuoteEscapeCharacter>");
-                data.push_str(&v.to_string());
+                data.push(v);
                 data.push_str("</QuoteEscapeCharacter>");
             }
             if let Some(v) = &c.quote_fields {
@@ -562,7 +562,7 @@ impl<'a> SelectRequest<'a> {
             }
             if let Some(v) = c.record_delimiter {
                 data.push_str("<RecordDelimiter>");
-                data.push_str(&v.to_string());
+                data.push(v);
                 data.push_str("</RecordDelimiter>");
             }
             data.push_str("</CSV>");
@@ -570,7 +570,7 @@ impl<'a> SelectRequest<'a> {
             data.push_str("<JSON>");
             if let Some(v) = j.record_delimiter {
                 data.push_str("<RecordDelimiter>");
-                data.push_str(&v.to_string());
+                data.push(v);
                 data.push_str("</RecordDelimiter>");
             }
             data.push_str("</JSON>");
@@ -1263,6 +1263,7 @@ impl LifecycleConfig {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn parse_common_notification_config(
     element: &mut Element,
 ) -> Result<

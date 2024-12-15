@@ -1154,7 +1154,7 @@ impl<'a> ComposeSource<'a> {
     }
 
     pub fn get_headers(&self) -> Multimap {
-        return self.headers.as_ref().expect("ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This shoud not happen.").clone();
+        self.headers.as_ref().expect("ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This shoud not happen.").clone()
     }
 
     pub fn build_headers(&mut self, object_size: usize, etag: String) -> Result<(), Error> {
