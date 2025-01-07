@@ -36,7 +36,7 @@ futures-util = "0.3.31"
 hex = "0.4.3"
 hmac = "0.12.1"
 home = "0.5.9"
-http = "1.1.0"
+http = "1.2.0"
 hyper = { version = "1.5.1", features = ["full"] }
 lazy_static = "1.5.0"
 log = "0.4.22"
@@ -61,4 +61,7 @@ clap = { version = "4.5.23", features = ["derive"] }
 quickcheck = "1.0.3"
 
 [[example]]
-name = "file-uploader"
+name = "file_uploader"
+
+[[example]]
+name = "object_prompt"

@@ -13,22 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Argument builders for [minio::s3::client::Client](crate::s3::client::Client) APIs
+//! S3 APIs for downloading objects.
 
-mod buckets;
-mod get_object;
-mod list_objects;
-mod listen_bucket_notification;
-mod object_content;
-mod object_prompt;
-mod put_object;
-mod remove_objects;
+use crate::s3::builders::ObjectPrompt;
 
-pub use buckets::*;
-pub use get_object::*;
-pub use list_objects::*;
-pub use listen_bucket_notification::*;
-pub use object_content::*;
-pub use object_prompt::*;
-pub use put_object::*;
-pub use remove_objects::*;
+use super::Client;
+
+impl Client {
+    /// Create a ObjectPrompt request builder. Prompt an object using natural language.
+    pub fn object_prompt(&self, bucket: &str, object: &str, prompt: &str) -> ObjectPrompt {
+        ObjectPrompt::new(bucket, object, prompt).client(self)
+    }
+}

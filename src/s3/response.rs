@@ -35,6 +35,7 @@ mod buckets;
 mod get_object;
 pub(crate) mod list_objects;
 mod listen_bucket_notification;
+mod object_prompt;
 mod put_object;
 mod remove_objects;
 
@@ -42,6 +43,7 @@ pub use buckets::{GetBucketVersioningResponse, ListBucketsResponse};
 pub use get_object::GetObjectResponse;
 pub use list_objects::ListObjectsResponse;
 pub use listen_bucket_notification::ListenBucketNotificationResponse;
+pub use object_prompt::ObjectPromptResponse;
 pub use put_object::{
     AbortMultipartUploadResponse2, CompleteMultipartUploadResponse2,
     CreateMultipartUploadResponse2, PutObjectContentResponse, PutObjectResponse,
@@ -381,7 +383,7 @@ impl SelectObjectContentResponse {
             offset += 1;
             let b1 = self.data[offset] as u16;
             offset += 1;
-            length = (b0 << 8 | b1) as usize;
+            length = ((b0 << 8) | b1) as usize;
 
             let value = String::from_utf8(self.data[offset..offset + length].to_vec())?;
             offset += length;

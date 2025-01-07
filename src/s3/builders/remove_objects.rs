@@ -126,10 +126,6 @@ impl RemoveObject {
     }
 }
 
-impl S3Api for RemoveObject {
-    type S3Response = RemoveObjectResponse;
-}
-
 impl ToS3Request for RemoveObject {
     fn to_s3request(&self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
@@ -158,6 +154,10 @@ impl ToS3Request for RemoveObject {
         .headers(headers);
         Ok(req)
     }
+}
+
+impl S3Api for RemoveObject {
+    type S3Response = RemoveObjectResponse;
 }
 
 #[derive(Debug, Clone)]
@@ -302,7 +302,10 @@ impl From<ObjectToDelete> for DeleteObjects {
     }
 }
 
-impl<I: Iterator<Item = ObjectToDelete> + Send + Sync + 'static> From<I> for DeleteObjects {
+impl<I> From<I> for DeleteObjects
+where
+    I: Iterator<Item = ObjectToDelete> + Send + Sync + 'static,
+{
     fn from(keys: I) -> Self {
         DeleteObjects::from_stream(stream_iter(keys))
     }

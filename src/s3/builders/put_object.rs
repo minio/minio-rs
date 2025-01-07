@@ -682,9 +682,9 @@ fn object_write_args_headers(
     Ok(map)
 }
 
-// PutObjectContent takes a `ObjectContent` stream and uploads it to MinIO/S3.
-//
-// It is a higher level API and handles multipart uploads transparently.
+/// PutObjectContent takes a `ObjectContent` stream and uploads it to MinIO/S3.
+///
+/// It is a higher level API and handles multipart uploads transparently.
 pub struct PutObjectContent {
     client: Option<Client>,
 
@@ -1048,8 +1048,8 @@ pub const MAX_PART_SIZE: u64 = 1024 * MIN_PART_SIZE; // 5 GiB
 pub const MAX_OBJECT_SIZE: u64 = 1024 * MAX_PART_SIZE; // 5 TiB
 pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 
-// Returns the size of each part to upload and the total number of parts. The
-// number of parts is `None` when the object size is unknown.
+/// Returns the size of each part to upload and the total number of parts. The
+/// number of parts is `None` when the object size is unknown.
 fn calc_part_info(object_size: Size, part_size: Size) -> Result<(u64, Option<u16>), Error> {
     // Validate arguments against limits.
     if let Size::Known(v) = part_size {
