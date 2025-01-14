@@ -20,12 +20,11 @@ jobs:
     - name: Build
       run: |
         cargo fmt --all -- --check
-        cargo clippy --all-targets --all-features -- -A clippy::result_large_err -A clippy::type_complexity -A clippy::too_many_arguments
+        cargo clippy --all-targets --all-features
         cargo build --bins --examples --tests --benches --verbose
 
     - name: Run tests
       run: |
-        truncate --size=6M asiaphotos-2015.zip
         ./tests/start-server.sh
         export SERVER_ENDPOINT=localhost:9000
         export ACCESS_KEY=minioadmin

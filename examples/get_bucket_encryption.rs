@@ -1,5 +1,5 @@
 // MinIO Rust Library for Amazon S3 Compatible Cloud Storage
-// Copyright 2024 MinIO, Inc.
+// Copyright 2025 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,43 +12,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-mod common;
 
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
-use minio::s3::builders::ObjectContent;
+use minio::s3::builders::GetBucketEncryption;
 use minio::s3::Client;
-use std::path::Path;
+
+mod common;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
     let client: Client = create_client_on_play()?;
 
-    let bucket_name: &str = "file-upload-rust-bucket";
+    let bucket_name: &str = "encryption-rust-bucket";
     create_bucket_if_not_exists(bucket_name, &client).await?;
 
-    // File we are going to upload to the bucket
-    let filename: &Path = Path::new("./examples/cat.png");
+    let be: GetBucketEncryption = client.get_bucket_encryption(bucket_name)?;
 
-    // Name of the object that will be stored in the bucket
-    let object_name: &str = "cat.png";
+    log::info!("{:?}", be);
 
-    if filename.exists() {
-        log::info!("File '{}' exists.", &filename.to_str().unwrap());
-    } else {
-        log::error!("File '{}' does not exist.", &filename.to_str().unwrap());
-        return Ok(());
-    }
-
-    let content = ObjectContent::from(filename);
-    client
-        .put_object_content(bucket_name, object_name, content)
-        .send()
-        .await?;
-
-    log::info!(
-        "file '{}' is successfully uploaded as object '{object_name}' to bucket '{bucket_name}'.",
-        filename.display()
-    );
     Ok(())
 }
