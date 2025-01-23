@@ -50,6 +50,7 @@ use xmltree::Element;
 mod get_object;
 mod list_objects;
 mod listen_bucket_notification;
+mod object_prompt;
 mod put_object;
 mod remove_objects;
 

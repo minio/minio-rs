@@ -4,10 +4,20 @@ MinIO Rust SDK is Simple Storage Service (aka S3) client to perform bucket and o
 
 For a complete list of APIs and examples, please take a look at the [MinIO Rust Client API Reference](https://minio-rs.min.io/)
 
-## Example:: file-uploader.rs
+## Examples
 
-[Upload a file to MinIO](examples/file-uploader.rs)
+Run the examples from the command line with:
 
+`cargo run --example <example_name>`
+
+### file_uploader.rs
+
+* [Upload a file to MinIO](examples/file_uploader)
+* [Upload a file to MinIO with CLI](examples/put_object)
+
+### object_prompt.rs 
+
+* [Prompt a file on MinIO](examples/object_prompt)
 
 ## License
 This SDK is distributed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0), see [LICENSE](https://github.com/minio/minio-rs/blob/master/LICENSE) for more information.

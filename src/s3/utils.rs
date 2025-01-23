@@ -335,7 +335,9 @@ pub fn match_region(value: &str) -> bool {
 
 /// Validates given bucket name
 pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
-    if bucket_name.trim().is_empty() {
+    let bucket_name: &str = bucket_name.trim();
+
+    if bucket_name.is_empty() {
         return Err(Error::InvalidBucketName(String::from(
             "bucket name cannot be empty",
         )));
@@ -368,20 +370,23 @@ pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
     }
 
     if bucket_name.contains("..") || bucket_name.contains(".-") || bucket_name.contains("-.") {
-        return Err(Error::InvalidBucketName(String::from(
-            "bucket name contains invalid successive characters '..', '.-' or '-.'",
+        return Err(Error::InvalidBucketName(format!(
+            "bucket name ('{}') contains invalid successive characters '..', '.-' or '-.'",
+            bucket_name
         )));
     }
 
     if strict {
         if !VALID_BUCKET_NAME_STRICT_REGEX.is_match(bucket_name) {
-            return Err(Error::InvalidBucketName(String::from(
-                "bucket name does not follow S3 standards strictly",
+            return Err(Error::InvalidBucketName(format!(
+                "bucket name ('{}') does not follow S3 standards strictly",
+                bucket_name
             )));
         }
     } else if !VALID_BUCKET_NAME_REGEX.is_match(bucket_name) {
-        return Err(Error::InvalidBucketName(String::from(
-            "bucket name does not follow S3 standards",
+        return Err(Error::InvalidBucketName(format!(
+            "bucket name ('{}') does not follow S3 standards",
+            bucket_name
         )));
     }
 

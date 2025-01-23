@@ -74,16 +74,34 @@ impl FromS3Response for CreateMultipartUploadResponse2 {
         req: S3Request<'a>,
         response: reqwest::Response,
     ) -> Result<Self, Error> {
-        let header_map = response.headers().clone();
+        let headers = response.headers().clone();
         let body = response.bytes().await?;
         let root = Element::parse(body.reader())?;
 
+        let region: String = req.region.unwrap_or("").to_string(); // Keep this since it defaults to an empty string
+
+        let bucket_name: String = req
+            .bucket
+            .ok_or_else(|| {
+                Error::InvalidBucketName(String::from("Missing bucket name in request"))
+            })?
+            .to_string();
+
+        let object_name: String = req
+            .object
+            .ok_or_else(|| {
+                Error::InvalidObjectName(String::from("Missing object name in request"))
+            })?
+            .to_string();
+
+        let upload_id: String = get_text(&root, "UploadId")?;
+
         Ok(CreateMultipartUploadResponse2 {
-            headers: header_map.clone(),
-            region: req.region.unwrap_or("").to_string(),
-            bucket_name: req.bucket.unwrap().to_string(),
-            object_name: req.object.unwrap().to_string(),
-            upload_id: get_text(&root, "UploadId")?,
+            headers,
+            region,
+            bucket_name,
+            object_name,
+            upload_id,
         })
     }
 }
