@@ -1,0 +1,13 @@
+# Generate release notes using a standard format
+
+changelog:
+  categories:
+    - title: Highlighted Changes
+      labels:
+        - highlight
+    - title: Breaking Changes
+      labels:
+        - breaking-change
+    - title: Security Fixes
+      labels:
+        - security-fix

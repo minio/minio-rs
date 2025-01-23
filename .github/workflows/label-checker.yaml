@@ -1,0 +1,19 @@
+name: Label Checker
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - labeled
+      - unlabeled
+
+jobs:
+
+  check_labels:
+    name: Check for  labels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://agilepathway/pull-request-label-checker:latest
+        with:
+          one_of: highlight,breaking-change,security-fix,enhancement,bug
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
