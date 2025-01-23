@@ -1,10 +1,10 @@
+use minio::s3::args::{BucketExistsArgs, MakeBucketArgs};
+use minio::s3::builders::ObjectContent;
 use minio::s3::client::ClientBuilder;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::S3Api;
 use std::path::Path;
-use minio::s3::args::{BucketExistsArgs, MakeBucketArgs};
-use minio::s3::builders::ObjectContent;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
