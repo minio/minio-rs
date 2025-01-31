@@ -1265,7 +1265,6 @@ impl ClientTest {
         let resp: GetBucketVersioningResponse = self
             .client
             .get_bucket_versioning(&bucket_name)
-            .unwrap()
             .send()
             .await
             .unwrap();
@@ -1279,7 +1278,6 @@ impl ClientTest {
         let resp: GetBucketVersioningResponse = self
             .client
             .get_bucket_versioning(&bucket_name)
-            .unwrap()
             .send()
             .await
             .unwrap();

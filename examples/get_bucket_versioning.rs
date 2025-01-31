@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let bucket_name: &str = "versioning-rust-bucket";
     create_bucket_if_not_exists(bucket_name, &client).await?;
 
-    let bv: GetBucketVersioning = client.get_bucket_versioning(bucket_name)?;
+    let bv: GetBucketVersioning = client.get_bucket_versioning(bucket_name);
 
     log::info!("{:?}", bv);
 

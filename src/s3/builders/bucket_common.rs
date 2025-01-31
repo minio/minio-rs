@@ -15,11 +15,7 @@
 
 use std::marker::PhantomData;
 
-use crate::s3::{
-    client::Client,
-    error::Error,
-    utils::{check_bucket_name, Multimap},
-};
+use crate::s3::{client::Client, utils::Multimap};
 
 #[derive(Clone, Debug, Default)]
 pub struct BucketCommon<A> {
@@ -34,12 +30,11 @@ pub struct BucketCommon<A> {
 }
 
 impl<A: Default> BucketCommon<A> {
-    pub fn new(bucket: &str) -> Result<BucketCommon<A>, Error> {
-        check_bucket_name(bucket, true)?;
-        Ok(BucketCommon {
+    pub fn new(bucket: &str) -> BucketCommon<A> {
+        BucketCommon {
             bucket: bucket.to_owned(),
             ..Default::default()
-        })
+        }
     }
 
     pub fn client(mut self, client: &Client) -> Self {

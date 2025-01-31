@@ -17,11 +17,10 @@
 
 use super::Client;
 use crate::s3::builders::GetBucketEncryption;
-use crate::s3::error::Error;
 
 impl Client {
     /// Create a GetBucketEncryption request builder.
-    pub fn get_bucket_encryption(&self, bucket: &str) -> Result<GetBucketEncryption, Error> {
-        Ok(GetBucketEncryption::new(bucket)?.client(self))
+    pub fn get_bucket_encryption(&self, bucket: &str) -> GetBucketEncryption {
+        GetBucketEncryption::new(bucket).client(self)
     }
 }

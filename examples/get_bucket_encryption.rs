@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let bucket_name: &str = "encryption-rust-bucket";
     create_bucket_if_not_exists(bucket_name, &client).await?;
 
-    let be: GetBucketEncryption = client.get_bucket_encryption(bucket_name)?;
+    let be: GetBucketEncryption = client.get_bucket_encryption(bucket_name);
 
     log::info!("{:?}", be);
 

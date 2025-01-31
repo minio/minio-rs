@@ -17,11 +17,10 @@
 
 use super::Client;
 use crate::s3::builders::GetBucketVersioning;
-use crate::s3::error::Error;
 
 impl Client {
     /// Create a GetBucketVersioning request builder.
-    pub fn get_bucket_versioning(&self, bucket: &str) -> Result<GetBucketVersioning, Error> {
-        Ok(GetBucketVersioning::new(bucket)?.client(self))
+    pub fn get_bucket_versioning(&self, bucket: &str) -> GetBucketVersioning {
+        GetBucketVersioning::new(bucket).client(self)
     }
 }

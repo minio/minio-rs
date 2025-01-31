@@ -17,7 +17,7 @@ use crate::s3::builders::BucketCommon;
 use crate::s3::error::Error;
 use crate::s3::response::GetBucketVersioningResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{merge, Multimap};
+use crate::s3::utils::{check_bucket_name, merge, Multimap};
 use http::Method;
 
 /// Argument builder for [get_bucket_versioning()](Client::get_bucket_versioning) API
@@ -32,6 +32,7 @@ impl S3Api for GetBucketVersioning {
 
 impl ToS3Request for GetBucketVersioning {
     fn to_s3request(&self) -> Result<S3Request, Error> {
+        check_bucket_name(&self.bucket, true)?;
         let mut headers = Multimap::new();
         if let Some(v) = &self.extra_headers {
             merge(&mut headers, v);
