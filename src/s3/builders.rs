@@ -27,6 +27,7 @@ mod object_prompt;
 mod put_object;
 mod remove_objects;
 mod set_bucket_encryption;
+mod set_bucket_versioning;
 
 pub use bucket_common::*;
 pub use get_bucket_encryption::*;
@@ -40,3 +41,4 @@ pub use object_prompt::*;
 pub use put_object::*;
 pub use remove_objects::*;
 pub use set_bucket_encryption::*;
+pub use set_bucket_versioning::*;

@@ -1258,7 +1258,9 @@ impl ClientTest {
             .unwrap();
 
         self.client
-            .set_bucket_versioning(&SetBucketVersioningArgs::new(&bucket_name, true).unwrap())
+            .set_bucket_versioning(&bucket_name)
+            .status(true)
+            .send()
             .await
             .unwrap();
 
@@ -1271,7 +1273,9 @@ impl ClientTest {
         assert_eq!(resp.status, Some(true));
 
         self.client
-            .set_bucket_versioning(&SetBucketVersioningArgs::new(&bucket_name, false).unwrap())
+            .set_bucket_versioning(&bucket_name)
+            .status(false)
+            .send()
             .await
             .unwrap();
 

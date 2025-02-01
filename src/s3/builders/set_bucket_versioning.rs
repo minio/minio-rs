@@ -15,8 +15,8 @@
 
 use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
-use crate::s3::response::SetBucketEncryptionResponse;
-use crate::s3::types::{S3Api, S3Request, SseConfig, ToS3Request};
+use crate::s3::response::SetBucketVersioningResponse;
+use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, Multimap};
 use crate::s3::Client;
 use bytes::Bytes;
@@ -24,25 +24,25 @@ use http::Method;
 
 /// Argument builder for [set_bucket_encryption()](Client::set_bucket_encryption) API
 #[derive(Clone, Debug, Default)]
-pub struct SetBucketEncryption {
-    client: Option<Client>,
+pub struct SetBucketVersioning {
+    pub(crate) client: Option<Client>,
 
-    extra_headers: Option<Multimap>,
-    extra_query_params: Option<Multimap>,
-    region: Option<String>,
-    bucket: String,
+    pub(crate) extra_headers: Option<Multimap>,
+    pub(crate) extra_query_params: Option<Multimap>,
+    pub(crate) region: Option<String>,
+    pub(crate) bucket: String,
 
-    config: SseConfig,
+    pub(crate) status: bool,
+    pub(crate) mfa_delete: Option<bool>,
 }
 
-impl SetBucketEncryption {
+impl SetBucketVersioning {
     pub fn new(bucket: &str) -> Self {
         Self {
             bucket: bucket.to_owned(),
             ..Default::default()
         }
     }
-
     pub fn client(mut self, client: &Client) -> Self {
         self.client = Some(client.clone());
         self
@@ -63,17 +63,22 @@ impl SetBucketEncryption {
         self
     }
 
-    pub fn config(mut self, config: SseConfig) -> Self {
-        self.config = config;
+    pub fn status(mut self, status: bool) -> Self {
+        self.status = status;
+        self
+    }
+
+    pub fn mfa_delete(mut self, mfa_delete: Option<bool>) -> Self {
+        self.mfa_delete = mfa_delete;
         self
     }
 }
 
-impl S3Api for SetBucketEncryption {
-    type S3Response = SetBucketEncryptionResponse;
+impl S3Api for SetBucketVersioning {
+    type S3Response = SetBucketVersioningResponse;
 }
 
-impl ToS3Request for SetBucketEncryption {
+impl ToS3Request for SetBucketVersioning {
     fn to_s3request(&self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
@@ -90,13 +95,28 @@ impl ToS3Request for SetBucketEncryption {
             .cloned()
             .unwrap_or_default();
 
-        query_params.insert("encryption".into(), String::new());
+        query_params.insert("versioning".into(), String::new());
 
-        let bytes: Bytes = self.config.to_xml().into();
-        let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
+        let mfa_delete = self
+            .mfa_delete
+            .map(|v| {
+                format!(
+                    "<MFADelete>{}</MFADelete>",
+                    if v { "Enabled" } else { "Disabled" }
+                )
+            })
+            .unwrap_or_default();
+
+        let data: String = format!(
+            "<VersioningConfiguration><Status>{}</Status>{}</VersioningConfiguration>",
+            if self.status { "Enabled" } else { "Suspended" },
+            mfa_delete
+        );
+
+        let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(data)));
         let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::GET)
+        let req = S3Request::new(client, Method::PUT)
             .region(self.region.as_deref())
             .bucket(Some(&self.bucket))
             .query_params(query_params)
