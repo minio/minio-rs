@@ -12,8 +12,8 @@ Run the examples from the command line with:
 
 ### file_uploader.rs
 
-* [Upload a file to MinIO](examples/file_uploader)
-* [Upload a file to MinIO with CLI](examples/put_object)
+* [Upload a file to MinIO](examples/file_uploader.rs)
+* [Upload a file to MinIO with CLI](examples/put_object.rs)
 
 ### file_downloader.rs
 
@@ -21,7 +21,7 @@ Run the examples from the command line with:
 
 ### object_prompt.rs 
 
-* [Prompt a file on MinIO](examples/object_prompt)
+* [Prompt a file on MinIO](examples/object_prompt.rs)
 
 ## License
 This SDK is distributed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0), see [LICENSE](https://github.com/minio/minio-rs/blob/master/LICENSE) for more information.
