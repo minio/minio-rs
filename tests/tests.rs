@@ -39,13 +39,12 @@ use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
 use minio::s3::error::Error;
 use minio::s3::http::BaseUrl;
-use minio::s3::types::ToStream;
+use minio::s3::response::GetBucketVersioningResponse;
 use minio::s3::types::{
     CsvInputSerialization, CsvOutputSerialization, FileHeaderInfo, NotificationConfig,
-    ObjectLockConfig, PrefixFilterRule, QueueConfig, QuoteFields, RetentionMode, SelectRequest,
-    SuffixFilterRule,
+    NotificationRecords, ObjectLockConfig, PrefixFilterRule, QueueConfig, QuoteFields,
+    RetentionMode, S3Api, SelectRequest, SuffixFilterRule, ToStream,
 };
-use minio::s3::types::{NotificationRecords, S3Api};
 use minio::s3::utils::{to_iso8601utc, utc_now};
 
 struct RandReader {
@@ -1263,7 +1262,7 @@ impl ClientTest {
             .await
             .unwrap();
 
-        let resp = self
+        let resp: GetBucketVersioningResponse = self
             .client
             .get_bucket_versioning(&bucket_name)
             .send()
@@ -1276,7 +1275,7 @@ impl ClientTest {
             .await
             .unwrap();
 
-        let resp = self
+        let resp: GetBucketVersioningResponse = self
             .client
             .get_bucket_versioning(&bucket_name)
             .send()

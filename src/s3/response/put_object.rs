@@ -24,6 +24,7 @@ use crate::s3::{
     utils::get_text,
 };
 
+/// Response of [put_object_api()](crate::s3::client::Client::put_object) API
 #[derive(Debug, Clone)]
 pub struct PutObjectResponse {
     pub headers: HeaderMap,

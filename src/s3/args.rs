@@ -1318,9 +1318,6 @@ impl<'a> ComposeObjectArgs<'a> {
 /// Argument for [delete_bucket_encryption()](crate::s3::client::Client::delete_bucket_encryption) API
 pub type DeleteBucketEncryptionArgs<'a> = BucketArgs<'a>;
 
-/// Argument for [get_bucket_encryption()](crate::s3::client::Client::get_bucket_encryption) API
-pub type GetBucketEncryptionArgs<'a> = BucketArgs<'a>;
-
 #[derive(Clone, Debug)]
 /// Argument for [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption) API
 pub struct SetBucketEncryptionArgs<'a> {

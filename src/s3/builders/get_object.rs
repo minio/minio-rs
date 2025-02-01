@@ -24,6 +24,7 @@ use crate::s3::{
     utils::{check_bucket_name, merge, to_http_header_value, Multimap, UtcTime},
 };
 
+/// Argument builder for [list_objects()](Client::get_object) API.
 #[derive(Debug, Clone, Default)]
 pub struct GetObject {
     client: Option<Client>,

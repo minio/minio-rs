@@ -30,7 +30,7 @@ use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
 use crate::s3::types::{
     Directive, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part, ReplicationConfig,
-    RetentionMode, SseConfig,
+    RetentionMode,
 };
 use crate::s3::utils::{
     from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash, md5sum_hash_sb,
@@ -47,6 +47,8 @@ use tokio::fs;
 
 use xmltree::Element;
 
+mod get_bucket_encryption;
+mod get_bucket_versioning;
 mod get_object;
 mod list_objects;
 mod listen_bucket_notification;
@@ -54,7 +56,7 @@ mod object_prompt;
 mod put_object;
 mod remove_objects;
 
-use super::builders::{GetBucketVersioning, ListBuckets, SegmentedBytes};
+use super::builders::{ListBuckets, SegmentedBytes};
 
 /// Client Builder manufactures a Client using given parameters.
 #[derive(Debug, Default)]
@@ -1602,58 +1604,6 @@ impl Client {
         })
     }
 
-    pub async fn get_bucket_encryption(
-        &self,
-        args: &GetBucketEncryptionArgs<'_>,
-    ) -> Result<GetBucketEncryptionResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("encryption"), String::new());
-
-        let resp = self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await?;
-
-        let header_map = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
-        let rule = root
-            .get_mut_child("Rule")
-            .ok_or(Error::XmlError(String::from("<Rule> tag not found")))?;
-        let sse_by_default = rule
-            .get_mut_child("ApplyServerSideEncryptionByDefault")
-            .ok_or(Error::XmlError(String::from(
-                "<ApplyServerSideEncryptionByDefault> tag not found",
-            )))?;
-
-        Ok(GetBucketEncryptionResponse {
-            headers: header_map.clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            config: SseConfig {
-                sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
-                kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID"),
-            },
-        })
-    }
-
     pub async fn get_bucket_lifecycle(
         &self,
         args: &GetBucketLifecycleArgs<'_>,
@@ -1910,10 +1860,6 @@ impl Client {
                 _ => Err(e),
             },
         }
-    }
-
-    pub fn get_bucket_versioning(&self, bucket: &str) -> GetBucketVersioning {
-        GetBucketVersioning::new(bucket).client(self)
     }
 
     pub async fn get_object_old(
