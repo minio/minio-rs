@@ -39,16 +39,23 @@ impl FromS3Response for GetBucketVersioningResponse {
         req: S3Request<'a>,
         resp: reqwest::Response,
     ) -> Result<Self, Error> {
+        let bucket: String = match req.bucket {
+            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
+            Some(v) => v.to_string(),
+        };
+
         let headers = resp.headers().clone();
         let body = resp.bytes().await?;
         let root = Element::parse(body.reader())?;
+        let status: Option<bool> = get_option_text(&root, "Status").map(|v| v == "Enabled");
+        let mfa_delete: Option<bool> = get_option_text(&root, "MFADelete").map(|v| v == "Enabled");
 
         Ok(GetBucketVersioningResponse {
             headers,
             region: req.get_computed_region(),
-            bucket: req.bucket.unwrap().to_string(), // TODO remove unwrap
-            status: get_option_text(&root, "Status").map(|v| v == "Enabled"),
-            mfa_delete: get_option_text(&root, "MFADelete").map(|v| v == "Enabled"),
+            bucket,
+            status,
+            mfa_delete,
         })
     }
 }

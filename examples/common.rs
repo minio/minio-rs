@@ -27,8 +27,7 @@ pub async fn create_bucket_if_not_exists(
     // Check 'bucket_name' bucket exist or not.
     let exists: bool = client
         .bucket_exists(&BucketExistsArgs::new(bucket_name).unwrap())
-        .await
-        .unwrap();
+        .await?;
 
     // Make 'bucket_name' bucket if not exist.
     if !exists {

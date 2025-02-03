@@ -20,7 +20,7 @@ use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{
     Directive, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part, ReplicationConfig,
-    Retention, RetentionMode, SelectRequest, SseConfig,
+    Retention, RetentionMode, SelectRequest,
 };
 use crate::s3::utils::{
     b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value, to_iso8601utc,
@@ -1317,42 +1317,6 @@ impl<'a> ComposeObjectArgs<'a> {
 
 /// Argument for [delete_bucket_encryption()](crate::s3::client::Client::delete_bucket_encryption) API
 pub type DeleteBucketEncryptionArgs<'a> = BucketArgs<'a>;
-
-#[derive(Clone, Debug)]
-/// Argument for [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption) API
-pub struct SetBucketEncryptionArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub config: &'a SseConfig,
-}
-
-impl<'a> SetBucketEncryptionArgs<'a> {
-    /// Returns argument for [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption) API with given bucket name and configuration
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// use minio::s3::types::SseConfig;
-    /// let args = SetBucketEncryptionArgs::new("my-bucket", &SseConfig::s3()).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        config: &'a SseConfig,
-    ) -> Result<SetBucketEncryptionArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        Ok(SetBucketEncryptionArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            config,
-        })
-    }
-}
 
 /// Argument for [enable_object_legal_hold()](crate::s3::client::Client::enable_object_legal_hold) API
 pub type EnableObjectLegalHoldArgs<'a> = ObjectVersionArgs<'a>;
