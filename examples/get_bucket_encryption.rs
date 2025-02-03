@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common::{create_bucket_if_not_exists, create_client_on_play};
-use minio::s3::builders::GetBucketEncryption;
-use minio::s3::Client;
-
 mod common;
+
+use crate::common::{create_bucket_if_not_exists, create_client_on_play};
+use minio::s3::response::{GetBucketEncryptionResponse, SetBucketEncryptionResponse};
+use minio::s3::types::{S3Api, SseConfig};
+use minio::s3::Client;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -27,9 +28,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let bucket_name: &str = "encryption-rust-bucket";
     create_bucket_if_not_exists(bucket_name, &client).await?;
 
-    let be: GetBucketEncryption = client.get_bucket_encryption(bucket_name);
+    let resp: GetBucketEncryptionResponse =
+        client.get_bucket_encryption(bucket_name).send().await?;
+    log::info!("encryption before: config={:?}", resp.config,);
 
-    log::info!("{:?}", be);
+    let _resp: SetBucketEncryptionResponse = client
+        .set_bucket_encryption(bucket_name)
+        .config(SseConfig::default())
+        .send()
+        .await?;
+
+    let resp: GetBucketEncryptionResponse =
+        client.get_bucket_encryption(bucket_name).send().await?;
+    log::info!("encryption after: config={:?}", resp.config,);
 
     Ok(())
 }

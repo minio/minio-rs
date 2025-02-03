@@ -40,6 +40,7 @@ mod listen_bucket_notification;
 mod object_prompt;
 mod put_object;
 mod remove_objects;
+mod set_bucket_encryption;
 
 pub use get_bucket_encryption::GetBucketEncryptionResponse;
 pub use get_bucket_versioning::GetBucketVersioningResponse;
@@ -54,6 +55,7 @@ pub use put_object::{
     UploadPartResponse2,
 };
 pub use remove_objects::{DeleteError, DeletedObject, RemoveObjectResponse, RemoveObjectsResponse};
+pub use set_bucket_encryption::SetBucketEncryptionResponse;
 
 #[derive(Debug)]
 /// Base response for bucket operation
@@ -84,7 +86,7 @@ pub struct ObjectResponse {
 pub struct UploadIdResponse {
     pub headers: HeaderMap,
     pub region: String,
-    pub bucket_name: String,
+    pub bucket: String,
     pub object_name: String,
     pub upload_id: String,
 }
@@ -553,9 +555,6 @@ impl SelectObjectContentResponse {
 
 /// Response of [delete_bucket_encryption()](crate::s3::client::Client::delete_bucket_encryption) API
 pub type DeleteBucketEncryptionResponse = BucketResponse;
-
-/// Response of [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption) API
-pub type SetBucketEncryptionResponse = BucketResponse;
 
 /// Response of [enable_object_legal_hold()](crate::s3::client::Client::enable_object_legal_hold) API
 pub type EnableObjectLegalHoldResponse = ObjectResponse;
