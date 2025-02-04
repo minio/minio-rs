@@ -16,7 +16,9 @@
 mod common;
 
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
-use minio::s3::builders::GetBucketVersioning;
+use minio::s3::args::SetBucketVersioningArgs;
+use minio::s3::response::{GetBucketVersioningResponse, SetBucketVersioningResponse};
+use minio::s3::types::S3Api;
 use minio::s3::Client;
 
 #[tokio::main]
@@ -27,9 +29,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let bucket_name: &str = "versioning-rust-bucket";
     create_bucket_if_not_exists(bucket_name, &client).await?;
 
-    let bv: GetBucketVersioning = client.get_bucket_versioning(bucket_name);
+    let resp: GetBucketVersioningResponse =
+        client.get_bucket_versioning(bucket_name).send().await?;
+    log::info!(
+        "versioning before: status={:?}, mfa_delete={:?}",
+        resp.status,
+        resp.mfa_delete
+    );
 
-    log::info!("{:?}", bv);
+    let _resp: SetBucketVersioningResponse = client
+        .set_bucket_versioning(&SetBucketVersioningArgs::new(bucket_name, true).unwrap())
+        .await?;
+
+    let resp: GetBucketVersioningResponse =
+        client.get_bucket_versioning(bucket_name).send().await?;
+
+    log::info!(
+        "versioning after setting to true: status={:?}, mfa_delete={:?}",
+        resp.status,
+        resp.mfa_delete
+    );
+
+    let _resp: SetBucketVersioningResponse = client
+        .set_bucket_versioning(&SetBucketVersioningArgs::new(bucket_name, false).unwrap())
+        .await?;
+
+    let resp: GetBucketVersioningResponse =
+        client.get_bucket_versioning(bucket_name).send().await?;
+
+    log::info!(
+        "versioning after setting to false: status={:?}, mfa_delete={:?}",
+        resp.status,
+        resp.mfa_delete
+    );
 
     Ok(())
 }

@@ -55,6 +55,7 @@ mod listen_bucket_notification;
 mod object_prompt;
 mod put_object;
 mod remove_objects;
+mod set_bucket_encryption;
 
 use super::builders::{ListBuckets, SegmentedBytes};
 
@@ -650,7 +651,7 @@ impl Client {
         Ok(AbortMultipartUploadResponse {
             headers: resp.headers().clone(),
             region: region.clone(),
-            bucket_name: args.bucket.to_string(),
+            bucket: args.bucket.to_string(),
             object_name: args.object.to_string(),
             upload_id: args.upload_id.to_string(),
         })
@@ -1164,7 +1165,7 @@ impl Client {
         Ok(CreateMultipartUploadResponse {
             headers: header_map.clone(),
             region: region.clone(),
-            bucket_name: args.bucket.to_string(),
+            bucket: args.bucket.to_string(),
             object_name: args.object.to_string(),
             upload_id: get_text(&root, "UploadId")?,
         })
@@ -2519,42 +2520,6 @@ impl Client {
         Ok(RemoveBucketResponse {
             headers: resp.headers().clone(),
             region: region.to_string(),
-            bucket_name: args.bucket.to_string(),
-        })
-    }
-
-    pub async fn set_bucket_encryption(
-        &self,
-        args: &SetBucketEncryptionArgs<'_>,
-    ) -> Result<SetBucketEncryptionResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("encryption"), String::new());
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                Some(args.config.to_xml().into()),
-            )
-            .await?;
-
-        Ok(SetBucketEncryptionResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
             bucket_name: args.bucket.to_string(),
         })
     }

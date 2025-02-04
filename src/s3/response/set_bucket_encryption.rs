@@ -22,10 +22,10 @@ use http::HeaderMap;
 use xmltree::Element;
 
 /// Response of
-/// [get_bucket_encryption()](crate::s3::client::Client::get_bucket_encryption)
+/// [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption)
 /// API
 #[derive(Clone, Debug)]
-pub struct GetBucketEncryptionResponse {
+pub struct SetBucketEncryptionResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -33,7 +33,7 @@ pub struct GetBucketEncryptionResponse {
 }
 
 #[async_trait]
-impl FromS3Response for GetBucketEncryptionResponse {
+impl FromS3Response for SetBucketEncryptionResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
         resp: reqwest::Response,
@@ -57,7 +57,7 @@ impl FromS3Response for GetBucketEncryptionResponse {
                 "<ApplyServerSideEncryptionByDefault> tag not found",
             )))?;
 
-        Ok(GetBucketEncryptionResponse {
+        Ok(SetBucketEncryptionResponse {
             headers,
             region: req.get_computed_region(),
             bucket,
