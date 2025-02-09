@@ -19,8 +19,8 @@ use crate::s3::error::Error;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{
-    Directive, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part, ReplicationConfig,
-    Retention, RetentionMode, SelectRequest,
+    Directive, NotificationConfig, ObjectLockConfig, Part, ReplicationConfig, Retention,
+    RetentionMode, SelectRequest,
 };
 use crate::s3::utils::{
     b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value, to_iso8601utc,
@@ -1332,58 +1332,6 @@ pub type DeleteBucketLifecycleArgs<'a> = BucketArgs<'a>;
 
 /// Argument for [get_bucket_lifecycle()](crate::s3::client::Client::get_bucket_lifecycle) API
 pub type GetBucketLifecycleArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API
-pub struct SetBucketLifecycleArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub config: &'a LifecycleConfig,
-}
-
-impl<'a> SetBucketLifecycleArgs<'a> {
-    /// Returns argument for [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API with given bucket name and configuration
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// use minio::s3::types::*;
-    /// let mut rules: Vec<LifecycleRule> = Vec::new();
-    /// rules.push(LifecycleRule {
-    ///     abort_incomplete_multipart_upload_days_after_initiation: None,
-    ///     expiration_date: None,
-    ///     expiration_days: Some(365),
-    ///     expiration_expired_object_delete_marker: None,
-    ///     filter: Filter {and_operator: None, prefix: Some(String::from("logs/")), tag: None},
-    ///     id: String::from("rule1"),
-    ///     noncurrent_version_expiration_noncurrent_days: None,
-    ///     noncurrent_version_transition_noncurrent_days: None,
-    ///     noncurrent_version_transition_storage_class: None,
-    ///     status: true,
-    ///     transition_date: None,
-    ///     transition_days: None,
-    ///     transition_storage_class: None,
-    /// });
-    /// let mut config = LifecycleConfig {rules};
-    /// let args = SetBucketLifecycleArgs::new("my-bucket", &config).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        config: &'a LifecycleConfig,
-    ) -> Result<SetBucketLifecycleArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        Ok(SetBucketLifecycleArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            config,
-        })
-    }
-}
 
 /// Argument for [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API
 pub type DeleteBucketNotificationArgs<'a> = BucketArgs<'a>;

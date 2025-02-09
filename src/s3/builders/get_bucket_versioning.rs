@@ -20,7 +20,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, merge, Multimap};
 use http::Method;
 
-/// Argument builder for [get_bucket_versioning()](Client::get_bucket_versioning) API
+/// Argument builder for [get_bucket_versioning()](crate::s3::client::Client::get_bucket_versioning) API
 pub type GetBucketVersioning = BucketCommon<GetBucketVersioningPhantomData>;
 
 #[derive(Default, Debug)]

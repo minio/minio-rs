@@ -16,11 +16,11 @@
 mod common;
 
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
-use minio::s3::args::{DeleteBucketLifecycleArgs, GetBucketLifecycleArgs, SetBucketLifecycleArgs};
+use minio::s3::args::DeleteBucketLifecycleArgs;
 use minio::s3::response::{
     DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, SetBucketLifecycleResponse,
 };
-use minio::s3::types::{Filter, LifecycleConfig, LifecycleRule};
+use minio::s3::types::{Filter, LifecycleConfig, LifecycleRule, S3Api};
 use minio::s3::Client;
 
 #[tokio::main]
@@ -33,19 +33,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if false {
         // TODO
-        let resp: GetBucketLifecycleResponse = client
-            .get_bucket_lifecycle(&GetBucketLifecycleArgs {
-                bucket: bucket_name,
-                extra_headers: None,
-                extra_query_params: None,
-                region: None,
-            })
-            .await?;
-        log::info!("lifecycle settings before setting: resp={:?}", resp);
+        let resp: GetBucketLifecycleResponse =
+            client.get_bucket_lifecycle(bucket_name).send().await?;
+        log::info!("life cycle settings before setting: resp={:?}", resp);
     }
 
-    let mut rules: Vec<LifecycleRule> = Vec::new();
-    rules.push(LifecycleRule {
+    let rules: Vec<LifecycleRule> = vec![LifecycleRule {
         abort_incomplete_multipart_upload_days_after_initiation: None,
         expiration_date: None,
         expiration_days: Some(365),
@@ -63,30 +56,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         transition_date: None,
         transition_days: None,
         transition_storage_class: None,
-    });
+    }];
 
     let resp: SetBucketLifecycleResponse = client
-        .set_bucket_lifecycle(&SetBucketLifecycleArgs {
-            bucket: bucket_name,
-            config: &LifecycleConfig { rules },
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-        })
+        .set_bucket_lifecycle(bucket_name)
+        .life_cycle_config(LifecycleConfig { rules })
+        .send()
         .await?;
-    log::info!("response of setting lifecycle config: resp={:?}", resp);
+    log::info!("response of setting life cycle config: resp={:?}", resp);
 
     if false {
         // TODO
-        let resp: GetBucketLifecycleResponse = client
-            .get_bucket_lifecycle(&GetBucketLifecycleArgs {
-                bucket: bucket_name,
-                extra_headers: None,
-                extra_query_params: None,
-                region: None,
-            })
-            .await?;
-        log::info!("lifecycle settings after setting: resp={:?}", resp);
+        let resp: GetBucketLifecycleResponse =
+            client.get_bucket_lifecycle(bucket_name).send().await?;
+        log::info!("life cycle settings after setting: resp={:?}", resp);
     }
 
     if false {
