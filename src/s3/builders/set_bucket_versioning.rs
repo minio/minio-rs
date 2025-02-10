@@ -21,6 +21,27 @@ use crate::s3::utils::{check_bucket_name, Multimap};
 use crate::s3::Client;
 use bytes::Bytes;
 use http::Method;
+use std::fmt;
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum VersioningStatus {
+    /// **Enable** object versioning in given bucket.
+    Enabled,
+    /// **Suspend** object versioning in given bucket.
+    Suspended,
+    #[default]
+    None,
+}
+
+impl fmt::Display for VersioningStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            VersioningStatus::Enabled => write!(f, "Enabled"),
+            VersioningStatus::Suspended => write!(f, "Suspended"),
+            VersioningStatus::None => write!(f, "None"),
+        }
+    }
+}
 
 /// Argument builder for [set_bucket_encryption()](Client::set_bucket_encryption) API
 #[derive(Clone, Debug, Default)]
@@ -32,7 +53,7 @@ pub struct SetBucketVersioning {
     pub(crate) region: Option<String>,
     pub(crate) bucket: String,
 
-    pub(crate) status: bool,
+    pub(crate) status: VersioningStatus,
     pub(crate) mfa_delete: Option<bool>,
 }
 
@@ -63,7 +84,7 @@ impl SetBucketVersioning {
         self
     }
 
-    pub fn status(mut self, status: bool) -> Self {
+    pub fn versioning_status(mut self, status: VersioningStatus) -> Self {
         self.status = status;
         self
     }
@@ -97,21 +118,21 @@ impl ToS3Request for SetBucketVersioning {
 
         query_params.insert("versioning".into(), String::new());
 
-        let mfa_delete = self
-            .mfa_delete
-            .map(|v| {
-                format!(
-                    "<MFADelete>{}</MFADelete>",
-                    if v { "Enabled" } else { "Disabled" }
-                )
-            })
-            .unwrap_or_default();
+        let mut data = "<VersioningConfiguration>".to_string();
 
-        let data: String = format!(
-            "<VersioningConfiguration><Status>{}</Status>{}</VersioningConfiguration>",
-            if self.status { "Enabled" } else { "Suspended" },
-            mfa_delete
-        );
+        if let Some(v) = self.mfa_delete {
+            data.push_str("<MFADelete>");
+            data.push_str(if v { "Enabled" } else { "Disabled" });
+            data.push_str("</MFADelete>");
+        }
+
+        match self.status {
+            VersioningStatus::Enabled => data.push_str("<Status>Enabled</Status>"),
+            VersioningStatus::Suspended => data.push_str("<Status>Suspended</Status>"),
+            VersioningStatus::None => {}
+        }
+
+        data.push_str("</VersioningConfiguration>");
 
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(data)));
         let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;

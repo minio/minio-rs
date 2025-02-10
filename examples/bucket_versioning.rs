@@ -16,6 +16,7 @@
 mod common;
 
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
+use minio::s3::builders::VersioningStatus;
 use minio::s3::response::{GetBucketVersioningResponse, SetBucketVersioningResponse};
 use minio::s3::types::S3Api;
 use minio::s3::Client;
@@ -38,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let _resp: SetBucketVersioningResponse = client
         .set_bucket_versioning(bucket_name)
-        .status(true)
+        .versioning_status(VersioningStatus::Enabled)
         .send()
         .await?;
 
@@ -53,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let _resp: SetBucketVersioningResponse = client
         .set_bucket_versioning(bucket_name)
-        .status(false)
+        .versioning_status(VersioningStatus::Suspended)
         .send()
         .await?;
 

@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::s3::builders::VersioningStatus;
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
 use crate::s3::utils::get_option_text;
@@ -29,7 +30,7 @@ pub struct GetBucketVersioningResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
-    pub status: Option<bool>,
+    pub status: Option<VersioningStatus>,
     pub mfa_delete: Option<bool>,
 }
 
@@ -47,7 +48,11 @@ impl FromS3Response for GetBucketVersioningResponse {
         let headers = resp.headers().clone();
         let body = resp.bytes().await?;
         let root = Element::parse(body.reader())?;
-        let status: Option<bool> = get_option_text(&root, "Status").map(|v| v == "Enabled");
+        let status: Option<VersioningStatus> =
+            get_option_text(&root, "Status").map(|v| match v.as_str() {
+                "Enabled" => VersioningStatus::Enabled,
+                _ => VersioningStatus::Suspended, // Default case
+            });
         let mfa_delete: Option<bool> = get_option_text(&root, "MFADelete").map(|v| v == "Enabled");
 
         Ok(GetBucketVersioningResponse {
