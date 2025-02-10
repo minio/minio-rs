@@ -2542,6 +2542,9 @@ impl Client {
         }
         query_params.insert(String::from("lifecycle"), String::new());
 
+        let bytes: Bytes = args.config.to_xml().into();
+        headers.insert(String::from("Content-MD5"), md5sum_hash(&bytes));
+
         let resp = self
             .execute(
                 Method::PUT,
@@ -2550,7 +2553,7 @@ impl Client {
                 &query_params,
                 Some(args.bucket),
                 None,
-                Some(args.config.to_xml().into()),
+                Some(bytes),
             )
             .await?;
 
