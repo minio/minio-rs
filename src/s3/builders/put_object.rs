@@ -35,7 +35,7 @@ use crate::s3::{
 use super::{ObjectContent, SegmentedBytes};
 
 /// Argument for
-/// [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload)
+/// [create_multipart_upload()](Client::create_multipart_upload)
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct CreateMultipartUpload {
@@ -170,7 +170,7 @@ impl S3Api for CreateMultipartUpload {
 }
 
 /// Argument for
-/// [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload)
+/// [abort_multipart_upload()](Client::abort_multipart_upload)
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct AbortMultipartUpload {
@@ -252,7 +252,7 @@ impl S3Api for AbortMultipartUpload {
 }
 
 /// Argument for
-/// [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload)
+/// [complete_multipart_upload()](Client::complete_multipart_upload)
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct CompleteMultipartUpload {
@@ -368,7 +368,7 @@ impl S3Api for CompleteMultipartUpload {
     type S3Response = CompleteMultipartUploadResponse2;
 }
 
-/// Argument for [upload_part()](crate::s3::client::Client::upload_part) S3 API
+/// Argument for [upload_part()](Client::upload_part) S3 API
 #[derive(Debug, Clone, Default)]
 pub struct UploadPart {
     client: Option<Client>,
@@ -1126,23 +1126,23 @@ mod tests {
             // Validate that basic invalid sizes return the expected error.
             if let Size::Known(v) = part_size {
                 if v < MIN_PART_SIZE {
-                    match res {
-                        Err(Error::InvalidMinPartSize(v_err)) => return v == v_err,
-                        _ => return false,
+                    return match res {
+                        Err(Error::InvalidMinPartSize(v_err)) => v == v_err,
+                        _ => false,
                     }
                 }
                 if v > MAX_PART_SIZE {
-                    match res {
-                        Err(Error::InvalidMaxPartSize(v_err)) => return v == v_err,
-                        _ => return false,
+                    return match res {
+                        Err(Error::InvalidMaxPartSize(v_err)) => v == v_err,
+                        _ => false,
                     }
                 }
             }
             if let Size::Known(v) = object_size {
                 if v > MAX_OBJECT_SIZE {
-                    match res {
-                        Err(Error::InvalidObjectSize(v_err)) => return v == v_err,
-                        _ => return false,
+                    return match res {
+                        Err(Error::InvalidObjectSize(v_err)) => v == v_err,
+                        _ => false,
                     }
                 }
             }
@@ -1167,23 +1167,23 @@ mod tests {
                     if psize > object_size {
                         return false;
                     }
-                    part_count > 0 && part_count <= MAX_MULTIPART_COUNT
+                    (part_count > 0) && (part_count <= MAX_MULTIPART_COUNT)
                 }
                 (Size::Known(_), Size::Unknown, _) => false,
 
                 (Size::Known(object_size), Size::Known(part_size), res) => {
-                    if part_size > object_size || (part_size * (MAX_MULTIPART_COUNT as u64)) < object_size {
-                        match res {
+                    if (part_size > object_size) || ((part_size * (MAX_MULTIPART_COUNT as u64)) < object_size) {
+                        return match res {
                             Err(Error::InvalidPartCount(v1, v2, v3)) => {
-                                return v1 == object_size && v2 == part_size && v3 == MAX_MULTIPART_COUNT;
+                                (v1 == object_size) && (v2 == part_size) && (v3 == MAX_MULTIPART_COUNT)
                             }
-                            _ => return false,
+                            _ => false,
                         }
                     }
                     match res {
                         Ok((psize, part_count)) => {
                             let expected_part_count = (object_size as f64 / part_size as f64).ceil() as u16;
-                            return psize == part_size && part_count == Some(expected_part_count);
+                            (psize == part_size) && (part_count == Some(expected_part_count))
                         }
                         _ => false,
                     }
