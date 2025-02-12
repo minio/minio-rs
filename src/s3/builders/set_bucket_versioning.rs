@@ -23,14 +23,12 @@ use bytes::Bytes;
 use http::Method;
 use std::fmt;
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum VersioningStatus {
     /// **Enable** object versioning in given bucket.
     Enabled,
     /// **Suspend** object versioning in given bucket.
     Suspended,
-    #[default]
-    None,
 }
 
 impl fmt::Display for VersioningStatus {
@@ -38,7 +36,6 @@ impl fmt::Display for VersioningStatus {
         match self {
             VersioningStatus::Enabled => write!(f, "Enabled"),
             VersioningStatus::Suspended => write!(f, "Suspended"),
-            VersioningStatus::None => write!(f, "None"),
         }
     }
 }
@@ -53,7 +50,7 @@ pub struct SetBucketVersioning {
     pub(crate) region: Option<String>,
     pub(crate) bucket: String,
 
-    pub(crate) status: VersioningStatus,
+    pub(crate) status: Option<VersioningStatus>,
     pub(crate) mfa_delete: Option<bool>,
 }
 
@@ -64,6 +61,7 @@ impl SetBucketVersioning {
             ..Default::default()
         }
     }
+
     pub fn client(mut self, client: &Client) -> Self {
         self.client = Some(client.clone());
         self
@@ -85,7 +83,7 @@ impl SetBucketVersioning {
     }
 
     pub fn versioning_status(mut self, status: VersioningStatus) -> Self {
-        self.status = status;
+        self.status = Some(status);
         self
     }
 
@@ -127,10 +125,14 @@ impl ToS3Request for SetBucketVersioning {
         }
 
         match self.status {
-            VersioningStatus::Enabled => data.push_str("<Status>Enabled</Status>"),
-            VersioningStatus::Suspended => data.push_str("<Status>Suspended</Status>"),
-            VersioningStatus::None => {}
-        }
+            Some(VersioningStatus::Enabled) => data.push_str("<Status>Enabled</Status>"),
+            Some(VersioningStatus::Suspended) => data.push_str("<Status>Suspended</Status>"),
+            None => {
+                return Err(Error::InvalidVersioningStatus(
+                    "Missing VersioningStatus".into(),
+                ))
+            }
+        };
 
         data.push_str("</VersioningConfiguration>");
 

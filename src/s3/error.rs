@@ -110,6 +110,7 @@ pub enum Error {
     InvalidDateAndDays(String),
     InvalidLifecycleRuleId,
     InvalidFilter,
+    InvalidVersioningStatus(String),
     PostPolicyError(String),
     InvalidObjectLockConfig(String),
     NoClientProvided,
@@ -219,6 +220,7 @@ impl fmt::Display for Error {
             }
             Error::InvalidLifecycleRuleId => write!(f, "id must be exceed 255 characters"),
             Error::InvalidFilter => write!(f, "only one of And, Prefix or Tag must be provided"),
+            Error::InvalidVersioningStatus(m) => write!(f, "{}", m),
             Error::PostPolicyError(m) => write!(f, "{}", m),
             Error::InvalidObjectLockConfig(m) => write!(f, "{}", m),
             Error::NoClientProvided => write!(f, "no client provided"),

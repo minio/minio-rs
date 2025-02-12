@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         client.get_bucket_versioning(bucket_name).send().await?;
 
     log::info!(
-        "versioning after setting to true: status={:?}, mfa_delete={:?}",
+        "versioning after setting to Enabled: status={:?}, mfa_delete={:?}",
         resp.status,
         resp.mfa_delete
     );
@@ -62,7 +62,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         client.get_bucket_versioning(bucket_name).send().await?;
 
     log::info!(
-        "versioning after setting to false: status={:?}, mfa_delete={:?}",
+        "versioning after setting to Suspended: status={:?}, mfa_delete={:?}",
+        resp.status,
+        resp.mfa_delete
+    );
+
+    let _resp: SetBucketVersioningResponse = client
+        .set_bucket_versioning(bucket_name)
+        //.versioning_status(VersioningStatus::Suspended)
+        .send()
+        .await?;
+
+    let resp: GetBucketVersioningResponse =
+        client.get_bucket_versioning(bucket_name).send().await?;
+
+    log::info!(
+        "versioning after setting to None: status={:?}, mfa_delete={:?}",
         resp.status,
         resp.mfa_delete
     );
