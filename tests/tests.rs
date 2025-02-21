@@ -20,7 +20,7 @@ use futures_util::Stream;
 use http::header;
 use hyper::http::Method;
 
-use minio::s3::builders::{ObjectContent, ObjectToDelete};
+use minio::s3::builders::{ObjectContent, ObjectToDelete, VersioningStatus};
 use rand::{
     distributions::{Alphanumeric, DistString},
     rngs::SmallRng,
@@ -1258,7 +1258,9 @@ impl ClientTest {
             .unwrap();
 
         self.client
-            .set_bucket_versioning(&SetBucketVersioningArgs::new(&bucket_name, true).unwrap())
+            .set_bucket_versioning(&bucket_name)
+            .versioning_status(VersioningStatus::Enabled)
+            .send()
             .await
             .unwrap();
 
@@ -1268,10 +1270,12 @@ impl ClientTest {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.status, Some(true));
+        assert_eq!(resp.status, Some(VersioningStatus::Enabled));
 
         self.client
-            .set_bucket_versioning(&SetBucketVersioningArgs::new(&bucket_name, false).unwrap())
+            .set_bucket_versioning(&bucket_name)
+            .versioning_status(VersioningStatus::Suspended)
+            .send()
             .await
             .unwrap();
 
@@ -1281,7 +1285,7 @@ impl ClientTest {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.status, Some(false));
+        assert_eq!(resp.status, Some(VersioningStatus::Suspended));
 
         self.client
             .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())

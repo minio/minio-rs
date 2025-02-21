@@ -41,6 +41,7 @@ mod object_prompt;
 mod put_object;
 mod remove_objects;
 mod set_bucket_encryption;
+mod set_bucket_versioning;
 
 pub use get_bucket_encryption::GetBucketEncryptionResponse;
 pub use get_bucket_versioning::GetBucketVersioningResponse;
@@ -56,6 +57,7 @@ pub use put_object::{
 };
 pub use remove_objects::{DeleteError, DeletedObject, RemoveObjectResponse, RemoveObjectsResponse};
 pub use set_bucket_encryption::SetBucketEncryptionResponse;
+pub use set_bucket_versioning::SetBucketVersioningResponse;
 
 #[derive(Debug)]
 /// Base response for bucket operation
@@ -555,7 +557,6 @@ impl SelectObjectContentResponse {
 
 /// Response of [delete_bucket_encryption()](crate::s3::client::Client::delete_bucket_encryption) API
 pub type DeleteBucketEncryptionResponse = BucketResponse;
-
 /// Response of [enable_object_legal_hold()](crate::s3::client::Client::enable_object_legal_hold) API
 pub type EnableObjectLegalHoldResponse = ObjectResponse;
 
@@ -647,9 +648,6 @@ pub struct GetBucketTagsResponse {
 
 /// Response of [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags) API
 pub type SetBucketTagsResponse = BucketResponse;
-
-/// Response of [set_bucket_versioning()](crate::s3::client::Client::set_bucket_versioning) API
-pub type SetBucketVersioningResponse = BucketResponse;
 
 /// Response of [delete_object_lock_config()](crate::s3::client::Client::delete_object_lock_config) API
 pub type DeleteObjectLockConfigResponse = BucketResponse;

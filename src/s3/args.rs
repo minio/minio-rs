@@ -1623,39 +1623,6 @@ impl<'a> SetBucketTagsArgs<'a> {
     }
 }
 
-/// Argument for [set_bucket_versioning()](crate::s3::client::Client::set_bucket_versioning) API
-pub struct SetBucketVersioningArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub status: bool,
-    pub mfa_delete: Option<bool>,
-}
-
-impl<'a> SetBucketVersioningArgs<'a> {
-    /// Returns argument for [set_bucket_versioning()](crate::s3::client::Client::set_bucket_versioning) API with given bucket name and status
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// let args = SetBucketVersioningArgs::new("my-bucket", true).unwrap();
-    /// ```
-    pub fn new(bucket_name: &'a str, status: bool) -> Result<SetBucketVersioningArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        Ok(SetBucketVersioningArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            status,
-            mfa_delete: None,
-        })
-    }
-}
-
 /// Argument for [delete_object_lock_config()](crate::s3::client::Client::delete_object_lock_config) API
 pub type DeleteObjectLockConfigArgs<'a> = BucketArgs<'a>;
 

@@ -56,6 +56,7 @@ mod object_prompt;
 mod put_object;
 mod remove_objects;
 mod set_bucket_encryption;
+mod set_bucket_versioning;
 
 use super::builders::{ListBuckets, SegmentedBytes};
 
@@ -2715,59 +2716,6 @@ impl Client {
             .await?;
 
         Ok(SetBucketTagsResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-        })
-    }
-
-    pub async fn set_bucket_versioning(
-        &self,
-        args: &SetBucketVersioningArgs<'_>,
-    ) -> Result<SetBucketVersioningResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("versioning"), String::new());
-
-        let mut data = String::from("<VersioningConfiguration>");
-        data.push_str("<Status>");
-        data.push_str(match args.status {
-            true => "Enabled",
-            false => "Suspended",
-        });
-        data.push_str("</Status>");
-        if let Some(v) = args.mfa_delete {
-            data.push_str("<MFADelete>");
-            data.push_str(match v {
-                true => "Enabled",
-                false => "Disabled",
-            });
-            data.push_str("</MFADelete>");
-        }
-        data.push_str("</VersioningConfiguration>");
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                Some(data.into()),
-            )
-            .await?;
-
-        Ok(SetBucketVersioningResponse {
             headers: resp.headers().clone(),
             region: region.clone(),
             bucket_name: args.bucket.to_string(),
