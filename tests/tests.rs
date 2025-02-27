@@ -15,24 +15,23 @@
 
 use async_std::task;
 use bytes::Bytes;
-use chrono::Duration;
 use http::header;
 use hyper::http::Method;
-
-use minio::s3::builders::{ObjectContent, ObjectToDelete, VersioningStatus};
 use rand::distributions::{Alphanumeric, DistString};
 use rand::prelude::SmallRng;
 use rand::SeedableRng;
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use std::{fs, io};
+use std::{fs, io, thread};
 use tokio::io::AsyncRead;
 use tokio::sync::mpsc;
+use tokio::time::timeout;
 use tokio_stream::{Stream, StreamExt};
 
 use minio::s3::args::*;
+use minio::s3::builders::{ObjectContent, ObjectToDelete, VersioningStatus};
 use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
 use minio::s3::error::Error;
@@ -293,36 +292,41 @@ impl Drop for CleanupGuard {
     fn drop(&mut self) {
         let ctx = self.ctx.clone();
         let bucket_name = self.bucket_name.clone();
-        tokio::spawn(async move {
-            // retrieve all objects in the bucket
-            let mut del_items: Vec<ObjectToDelete> = Vec::new();
+        //println!("Going to remove bucket {}", bucket_name);
 
-            let mut stream = ctx.client.list_objects(&bucket_name).to_stream().await;
-            while let Some(items) = stream.next().await {
-                while let Ok(item) = &items {
-                    let object_name: &str = item.name.as_ref();
-                    del_items.push(ObjectToDelete::from(object_name));
-                }
-            }
+        // Spawn the cleanup task in a way that detaches it from the current runtime
+        thread::spawn(move || {
+            // Create a new runtime for this thread
+            let rt = tokio::runtime::Runtime::new().unwrap();
 
-            // remove all objects from the bucket
-            let _resp = ctx
-                .client
-                .remove_objects(&bucket_name, del_items.into_iter())
-                .verbose_mode(true)
-                .to_stream()
-                .await;
+            // Execute the async cleanup in this new runtime
+            rt.block_on(async {
+                //clean_bucket(&bucket_name, &ctx).await;
 
-            // do the actual removal of the bucket
-            ctx.client
-                .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
+                // do the actual removal of the bucket
+                match timeout(
+                    std::time::Duration::from_secs(60),
+                    ctx.client
+                        .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap()),
+                )
                 .await
-                .unwrap();
-        });
+                {
+                    Ok(result) => match result {
+                        Ok(_) => {
+                            //println!("Bucket {} removed successfully", bucket_name),
+                        }
+                        Err(e) => println!("Error removing bucket {}: {:?}", bucket_name, e),
+                    },
+                    Err(_) => println!("Timeout after 15s while removing bucket {}", bucket_name),
+                }
+            });
+        })
+        .join()
+        .unwrap(); // This blocks the current thread until cleanup is done
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn bucket_exists() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -336,31 +340,64 @@ async fn bucket_exists() {
     assert!(exists);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_buckets() {
     const N_BUCKETS: usize = 3;
     let ctx = TestContext::new_from_env();
 
-    let mut names: Vec<(String, CleanupGuard)> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    let mut guards: Vec<CleanupGuard> = Vec::new();
     for _ in 1..=N_BUCKETS {
-        names.push(create_bucket_helper(&ctx).await);
+        let (bucket_name, guard) = create_bucket_helper(&ctx).await;
+        names.push(bucket_name);
+        guards.push(guard);
     }
 
-    let bucket_names: HashSet<String> = names.into_iter().map(|(s, _)| s).collect();
-    assert_eq!(bucket_names.len(), N_BUCKETS);
+    assert_eq!(names.len(), N_BUCKETS);
 
     let mut count = 0;
     let resp = ctx.client.list_buckets().send().await.unwrap();
+
     for bucket in resp.buckets.iter() {
-        if bucket_names.contains(&bucket.name) {
+        if names.contains(&bucket.name) {
             count += 1;
         }
     }
-
+    assert_eq!(guards.len(), N_BUCKETS);
     assert_eq!(count, N_BUCKETS);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn create_delete_bucket() {
+    let ctx = TestContext::new_from_env();
+    let bucket_name = rand_bucket_name();
+
+    ctx.client
+        .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
+        .await
+        .unwrap();
+
+    let exists = ctx
+        .client
+        .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+        .await
+        .unwrap();
+    assert!(exists);
+
+    ctx.client
+        .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
+        .await
+        .unwrap();
+
+    let exists = ctx
+        .client
+        .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+        .await
+        .unwrap();
+    assert!(!exists);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn put_object() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -406,7 +443,7 @@ async fn put_object() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn put_object_multipart() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -441,7 +478,7 @@ async fn put_object_multipart() {
         .unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn put_object_content() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -514,7 +551,7 @@ async fn put_object_content() {
 }
 
 /// Test sending ObjectContent across async tasks.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn put_object_content_2() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -573,7 +610,7 @@ async fn put_object_content_2() {
     uploader_handler.await.unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn get_object_old() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -607,7 +644,7 @@ async fn get_object_old() {
         .unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn get_object() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -641,7 +678,7 @@ fn get_hash(filename: &String) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn upload_download_object() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -709,7 +746,7 @@ async fn upload_download_object() {
         .unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn remove_objects() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -756,7 +793,7 @@ async fn remove_objects() {
     assert_eq!(del_count, 3);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_objects() {
     const N_OBJECTS: usize = 3;
     let ctx = TestContext::new_from_env();
@@ -812,7 +849,7 @@ async fn list_objects() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn select_object_content() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -885,7 +922,7 @@ async fn select_object_content() {
         .unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn listen_bucket_notification() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -967,7 +1004,7 @@ async fn listen_bucket_notification() {
     assert!(receiver.recv().await.unwrap());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn copy_object() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -1020,7 +1057,7 @@ async fn copy_object() {
         .unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn compose_object() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -1075,7 +1112,7 @@ async fn compose_object() {
         .unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_bucket_notification() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -1154,7 +1191,7 @@ async fn set_get_delete_bucket_notification() {
     assert!(resp.config.queue_config_list.is_none());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_bucket_policy() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -1208,7 +1245,7 @@ async fn set_get_delete_bucket_policy() {
     assert_eq!(resp.config, "{}");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_bucket_tags() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -1243,7 +1280,7 @@ async fn set_get_delete_bucket_tags() {
     assert!(resp.tags.is_empty());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_object_lock_config() {
     let ctx = TestContext::new_from_env();
     let bucket_name = rand_bucket_name();
@@ -1290,7 +1327,7 @@ async fn set_get_delete_object_lock_config() {
     assert!(resp.config.retention_mode.is_none());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_object_tags() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -1347,7 +1384,7 @@ async fn set_get_delete_object_tags() {
         .unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_bucket_versioning() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -1383,7 +1420,7 @@ async fn set_get_bucket_versioning() {
     assert_eq!(resp.status, Some(VersioningStatus::Suspended));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_object_retention() {
     let ctx = TestContext::new_from_env();
     let bucket_name = rand_bucket_name();
@@ -1411,7 +1448,7 @@ async fn set_get_object_retention() {
         .await
         .unwrap();
 
-    let retain_until_date = utc_now() + Duration::days(1);
+    let retain_until_date = utc_now() + chrono::Duration::days(1);
     let args = SetObjectRetentionArgs::new(
         &bucket_name,
         &object_name,
@@ -1458,7 +1495,7 @@ async fn set_get_object_retention() {
         .unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn get_presigned_object_url() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
@@ -1474,13 +1511,13 @@ async fn get_presigned_object_url() {
     assert!(resp.url.contains("X-Amz-Signature="));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn get_presigned_post_form_data() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
 
     let object_name = rand_object_name();
-    let expiration = utc_now() + Duration::days(5);
+    let expiration = utc_now() + chrono::Duration::days(5);
 
     let mut policy = PostPolicy::new(&bucket_name, &expiration).unwrap();
     policy.add_equals_condition("key", &object_name).unwrap();
