@@ -163,87 +163,103 @@ impl TestContext {
     const SQS_ARN: &'static str = "arn:minio:sqs::miniojavatest:webhook";
 
     pub fn new_from_env() -> Self {
-        let host = std::env::var("SERVER_ENDPOINT").unwrap();
-        let access_key = std::env::var("ACCESS_KEY").unwrap();
-        let secret_key = std::env::var("SECRET_KEY").unwrap();
-        let secure = std::env::var("ENABLE_HTTPS").is_ok();
-        let value = std::env::var("SSL_CERT_FILE").unwrap();
-        let mut ssl_cert_file = None;
-        if !value.is_empty() {
-            ssl_cert_file = Some(Path::new(&value));
-        }
-        let ignore_cert_check = std::env::var("IGNORE_CERT_CHECK").is_ok();
-        let region = std::env::var("SERVER_REGION").ok();
+        let run_on_ci: bool = std::env::var("CI")
+            .unwrap_or("false".into())
+            .parse()
+            .unwrap_or(false);
+        if run_on_ci {
+            let host = std::env::var("SERVER_ENDPOINT").unwrap();
+            let access_key = std::env::var("ACCESS_KEY").unwrap();
+            let secret_key = std::env::var("SECRET_KEY").unwrap();
+            let secure = std::env::var("ENABLE_HTTPS").is_ok();
+            let value = std::env::var("SSL_CERT_FILE").unwrap();
+            let mut ssl_cert_file = None;
+            if !value.is_empty() {
+                ssl_cert_file = Some(Path::new(&value));
+            }
+            let ignore_cert_check = std::env::var("IGNORE_CERT_CHECK").is_ok();
+            let region = std::env::var("SERVER_REGION").ok();
 
-        let mut base_url: BaseUrl = host.parse().unwrap();
-        base_url.https = secure;
-        if let Some(v) = region {
-            base_url.region = v;
-        }
+            let mut base_url: BaseUrl = host.parse().unwrap();
+            base_url.https = secure;
+            if let Some(v) = region {
+                base_url.region = v;
+            }
 
-        let static_provider = StaticProvider::new(&access_key, &secret_key, None);
-        let client = Client::new(
-            base_url.clone(),
-            Some(Box::new(static_provider)),
-            ssl_cert_file,
-            Some(ignore_cert_check),
-        )
-        .unwrap();
+            let static_provider = StaticProvider::new(&access_key, &secret_key, None);
+            let client = Client::new(
+                base_url.clone(),
+                Some(Box::new(static_provider)),
+                ssl_cert_file,
+                Some(ignore_cert_check),
+            )
+            .unwrap();
 
-        Self {
-            base_url,
-            access_key,
-            secret_key,
-            ignore_cert_check: Some(ignore_cert_check),
-            ssl_cert_file: ssl_cert_file.map(PathBuf::from),
-            client,
-        }
-    }
+            Self {
+                base_url,
+                access_key,
+                secret_key,
+                ignore_cert_check: Some(ignore_cert_check),
+                ssl_cert_file: ssl_cert_file.map(PathBuf::from),
+                client,
+            }
+        } else {
+            const DEFAULT_SERVER_ENDPOINT: &str = "https://play.min.io/";
+            const DEFAULT_ACCESS_KEY: &str = "minioadmin";
+            const DEFAULT_SECRET_KEY: &str = "minioadmin";
+            const DEFAULT_ENABLE_HTTPS: &str = "true";
+            const DEFAULT_SSL_CERT_FILE: &str = "./tests/public.crt";
+            const DEFAULT_IGNORE_CERT_CHECK: &str = "false";
+            const DEFAULT_SERVER_REGION: &str = "";
 
-    #[allow(dead_code)]
-    pub fn new_from_env_new() -> Self {
-        let host = std::env::var("SERVER_ENDPOINT").unwrap();
-        log::info!("SERVER_ENDPOINT={}", host);
-        let access_key = std::env::var("ACCESS_KEY").unwrap();
-        println!("ACCESS_KEY={}", access_key);
-        let secret_key = std::env::var("SECRET_KEY").unwrap();
-        println!("SECRET_KEY=*****");
-        let secure = std::env::var("ENABLE_HTTPS").unwrap().to_lowercase() == "true";
-        println!("ENABLE_HTTPS={}", secure);
-        let ssl_cert_file: Option<PathBuf> = match std::env::var("SSL_CERT_FILE").clone() {
-            Ok(v) => Some(v.into()),
-            Err(_) => None,
-        };
-        println!("SSL_CERT_FILE={}", secure);
-        let ignore_cert_check =
-            std::env::var("IGNORE_CERT_CHECK").unwrap().to_lowercase() == "true";
-        println!("IGNORE_CERT_CHECK={}", ignore_cert_check);
+            let host: String =
+                std::env::var("SERVER_ENDPOINT").unwrap_or(DEFAULT_SERVER_ENDPOINT.to_string());
+            log::info!("SERVER_ENDPOINT={}", host);
+            let access_key: String =
+                std::env::var("ACCESS_KEY").unwrap_or(DEFAULT_ACCESS_KEY.to_string());
+            log::info!("ACCESS_KEY={}", access_key);
+            let secret_key: String =
+                std::env::var("SECRET_KEY").unwrap_or(DEFAULT_SECRET_KEY.to_string());
+            log::info!("SECRET_KEY=*****");
+            let secure: bool = std::env::var("ENABLE_HTTPS")
+                .unwrap_or(DEFAULT_ENABLE_HTTPS.to_string())
+                .parse()
+                .unwrap_or(false);
+            log::info!("ENABLE_HTTPS={}", secure);
+            let ssl_cert: String =
+                std::env::var("SSL_CERT_FILE").unwrap_or(DEFAULT_SSL_CERT_FILE.to_string());
+            log::info!("SSL_CERT_FILE={}", ssl_cert);
+            let ssl_cert_file: PathBuf = ssl_cert.into();
+            let ignore_cert_check: bool = std::env::var("IGNORE_CERT_CHECK")
+                .unwrap_or(DEFAULT_IGNORE_CERT_CHECK.to_string())
+                .parse()
+                .unwrap_or(true);
+            log::info!("IGNORE_CERT_CHECK={}", ignore_cert_check);
+            let region: String =
+                std::env::var("SERVER_REGION").unwrap_or(DEFAULT_SERVER_REGION.to_string());
+            log::info!("SERVER_REGION={:?}", region);
 
-        let region = std::env::var("SERVER_REGION").ok();
-        println!("SERVER_REGION={:?}", region);
+            let mut base_url: BaseUrl = host.parse().unwrap();
+            base_url.https = secure;
+            base_url.region = region;
 
-        let mut base_url: BaseUrl = host.parse().unwrap();
-        base_url.https = secure;
-        if let Some(v) = region {
-            base_url.region = v;
-        }
+            let static_provider = StaticProvider::new(&access_key, &secret_key, None);
+            let client = Client::new(
+                base_url.clone(),
+                Some(Box::new(static_provider)),
+                Some(&*ssl_cert_file),
+                Some(ignore_cert_check),
+            )
+            .unwrap();
 
-        let static_provider = StaticProvider::new(&access_key, &secret_key, None);
-        let client = Client::new(
-            base_url.clone(),
-            Some(Box::new(static_provider)),
-            ssl_cert_file.as_deref(),
-            Some(ignore_cert_check),
-        )
-        .unwrap();
-
-        Self {
-            base_url,
-            access_key,
-            secret_key,
-            ignore_cert_check: Some(ignore_cert_check),
-            ssl_cert_file,
-            client,
+            Self {
+                base_url,
+                access_key,
+                secret_key,
+                ignore_cert_check: Some(ignore_cert_check),
+                ssl_cert_file: Some(ssl_cert_file),
+                client,
+            }
         }
     }
 }
