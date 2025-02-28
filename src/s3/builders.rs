@@ -17,6 +17,7 @@
 
 mod bucket_common;
 mod get_bucket_encryption;
+mod get_bucket_lifecycle;
 mod get_bucket_versioning;
 mod get_object;
 mod list_buckets;
@@ -27,10 +28,12 @@ mod object_prompt;
 mod put_object;
 mod remove_objects;
 mod set_bucket_encryption;
+mod set_bucket_lifecycle;
 mod set_bucket_versioning;
 
 pub use bucket_common::*;
 pub use get_bucket_encryption::*;
+pub use get_bucket_lifecycle::*;
 pub use get_bucket_versioning::*;
 pub use get_object::*;
 pub use list_buckets::*;
@@ -41,4 +44,5 @@ pub use object_prompt::*;
 pub use put_object::*;
 pub use remove_objects::*;
 pub use set_bucket_encryption::*;
+pub use set_bucket_lifecycle::*;
 pub use set_bucket_versioning::*;

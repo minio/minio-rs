@@ -1099,7 +1099,7 @@ impl LifecycleRule {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 /// Lifecycle configuration
 pub struct LifecycleConfig {
     pub rules: Vec<LifecycleRule>,

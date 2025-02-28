@@ -15,34 +15,33 @@
 
 use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
-use crate::s3::response::SetBucketEncryptionResponse;
-use crate::s3::types::{S3Api, S3Request, SseConfig, ToS3Request};
-use crate::s3::utils::{check_bucket_name, Multimap};
+use crate::s3::response::SetBucketLifecycleResponse;
+use crate::s3::types::{LifecycleConfig, S3Api, S3Request, ToS3Request};
+use crate::s3::utils::{check_bucket_name, md5sum_hash, Multimap};
 use crate::s3::Client;
 use bytes::Bytes;
 use http::Method;
 
-/// Argument builder for [set_bucket_encryption()](Client::set_bucket_encryption) API
+/// Argument builder for [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API
 #[derive(Clone, Debug, Default)]
-pub struct SetBucketEncryption {
-    client: Option<Client>,
+pub struct SetBucketLifecycle {
+    pub(crate) client: Option<Client>,
 
-    extra_headers: Option<Multimap>,
-    extra_query_params: Option<Multimap>,
-    region: Option<String>,
-    bucket: String,
+    pub(crate) extra_headers: Option<Multimap>,
+    pub(crate) extra_query_params: Option<Multimap>,
+    pub(crate) region: Option<String>,
+    pub(crate) bucket: String,
 
-    config: SseConfig,
+    pub(crate) config: LifecycleConfig,
 }
 
-impl SetBucketEncryption {
+impl SetBucketLifecycle {
     pub fn new(bucket: &str) -> Self {
         Self {
             bucket: bucket.to_owned(),
             ..Default::default()
         }
     }
-
     pub fn client(mut self, client: &Client) -> Self {
         self.client = Some(client.clone());
         self
@@ -63,21 +62,21 @@ impl SetBucketEncryption {
         self
     }
 
-    pub fn sse_config(mut self, config: SseConfig) -> Self {
+    pub fn life_cycle_config(mut self, config: LifecycleConfig) -> Self {
         self.config = config;
         self
     }
 }
 
-impl S3Api for SetBucketEncryption {
-    type S3Response = SetBucketEncryptionResponse;
+impl S3Api for SetBucketLifecycle {
+    type S3Response = SetBucketLifecycleResponse;
 }
 
-impl ToS3Request for SetBucketEncryption {
+impl ToS3Request for SetBucketLifecycle {
     fn to_s3request(&self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let headers = self
+        let mut headers = self
             .extra_headers
             .as_ref()
             .filter(|v| !v.is_empty())
@@ -90,13 +89,15 @@ impl ToS3Request for SetBucketEncryption {
             .cloned()
             .unwrap_or_default();
 
-        query_params.insert("encryption".into(), String::new());
+        query_params.insert("lifecycle".into(), String::new());
 
         let bytes: Bytes = self.config.to_xml().into();
+        headers.insert(String::from("Content-MD5"), md5sum_hash(&bytes));
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
+
         let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::GET)
+        let req = S3Request::new(client, Method::PUT)
             .region(self.region.as_deref())
             .bucket(Some(&self.bucket))
             .query_params(query_params)

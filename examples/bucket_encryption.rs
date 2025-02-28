@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let _resp: SetBucketEncryptionResponse = client
         .set_bucket_encryption(bucket_name)
-        .config(SseConfig::default())
+        .sse_config(SseConfig::default())
         .send()
         .await?;
 
