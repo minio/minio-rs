@@ -35,12 +35,13 @@ pub struct GetBucketLifecycleResponse {
 impl FromS3Response for GetBucketLifecycleResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
-        resp: reqwest::Response,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
             None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
             Some(v) => v.to_string(),
         };
+        let resp = resp?;
         let headers = resp.headers().clone();
         let body = resp.bytes().await?;
         let root = Element::parse(body.reader())?;

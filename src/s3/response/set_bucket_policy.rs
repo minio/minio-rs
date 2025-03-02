@@ -13,29 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::builders::VersioningStatus;
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::get_option_text;
 use async_trait::async_trait;
-use bytes::Buf;
 use http::HeaderMap;
-use xmltree::Element;
 
-/// Response of
-/// [get_bucket_versioning()](crate::s3::client::Client::get_bucket_versioning)
-/// API
-#[derive(Clone, Debug)]
-pub struct GetBucketVersioningResponse {
+/// Response of [set_bucket_policy()](crate::s3::client::Client::set_bucket_policy) API
+#[derive(Debug)]
+/// TODO is identical ot BucketResponse
+pub struct SetBucketPolicyResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
-    pub status: Option<VersioningStatus>,
-    pub mfa_delete: Option<bool>,
 }
 
 #[async_trait]
-impl FromS3Response for GetBucketVersioningResponse {
+impl FromS3Response for SetBucketPolicyResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
         resp: Result<reqwest::Response, Error>,
@@ -45,22 +38,10 @@ impl FromS3Response for GetBucketVersioningResponse {
             Some(v) => v.to_string(),
         };
         let resp = resp?;
-        let headers = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let root = Element::parse(body.reader())?;
-        let status: Option<VersioningStatus> =
-            get_option_text(&root, "Status").map(|v| match v.as_str() {
-                "Enabled" => VersioningStatus::Enabled,
-                _ => VersioningStatus::Suspended, // Default case
-            });
-        let mfa_delete: Option<bool> = get_option_text(&root, "MFADelete").map(|v| v == "Enabled");
-
-        Ok(GetBucketVersioningResponse {
-            headers,
+        Ok(SetBucketPolicyResponse {
+            headers: resp.headers().clone(),
             region: req.get_computed_region(),
             bucket,
-            status,
-            mfa_delete,
         })
     }
 }
