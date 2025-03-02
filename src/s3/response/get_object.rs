@@ -37,8 +37,9 @@ pub struct GetObjectResponse {
 impl FromS3Response for GetObjectResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
-        response: reqwest::Response,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let response = response?;
         let header_map = response.headers().clone();
         let version_id = header_map
             .get("x-amz-version-id")

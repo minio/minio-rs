@@ -32,8 +32,9 @@ pub struct ListBucketsResponse {
 impl FromS3Response for ListBucketsResponse {
     async fn from_s3response<'a>(
         _req: S3Request<'a>,
-        resp: reqwest::Response,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let resp = resp?;
         let header_map = resp.headers().clone();
         let body = resp.bytes().await?;
         let mut root = Element::parse(body.reader())?;

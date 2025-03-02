@@ -301,8 +301,6 @@ impl Drop for CleanupGuard {
 
             // Execute the async cleanup in this new runtime
             rt.block_on(async {
-                //clean_bucket(&bucket_name, &ctx).await;
-
                 // do the actual removal of the bucket
                 match timeout(
                     std::time::Duration::from_secs(60),
@@ -1221,25 +1219,31 @@ async fn set_get_delete_bucket_policy() {
     .replace("<BUCKET>", &bucket_name);
 
     ctx.client
-        .set_bucket_policy(&SetBucketPolicyArgs::new(&bucket_name, &config).unwrap())
+        .set_bucket_policy(&bucket_name)
+        .config(config)
+        .send()
         .await
         .unwrap();
 
     let resp = ctx
         .client
-        .get_bucket_policy(&GetBucketPolicyArgs::new(&bucket_name).unwrap())
+        .get_bucket_policy(&bucket_name)
+        .send()
         .await
         .unwrap();
+
     assert!(!resp.config.is_empty());
 
     ctx.client
-        .delete_bucket_policy(&DeleteBucketPolicyArgs::new(&bucket_name).unwrap())
+        .delete_bucket_policy(&bucket_name)
+        .send()
         .await
         .unwrap();
 
     let resp = ctx
         .client
-        .get_bucket_policy(&GetBucketPolicyArgs::new(&bucket_name).unwrap())
+        .get_bucket_policy(&bucket_name)
+        .send()
         .await
         .unwrap();
     assert_eq!(resp.config, "{}");

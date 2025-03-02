@@ -31,13 +31,13 @@ pub struct SetBucketVersioningResponse {
 impl FromS3Response for SetBucketVersioningResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
-        resp: reqwest::Response,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
             None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
             Some(v) => v.to_string(),
         };
-
+        let resp = resp?;
         Ok(SetBucketVersioningResponse {
             headers: resp.headers().clone(),
             region: req.get_computed_region(),

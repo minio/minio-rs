@@ -204,8 +204,9 @@ pub struct ListObjectsV1Response {
 impl FromS3Response for ListObjectsV1Response {
     async fn from_s3response<'a>(
         _req: S3Request<'a>,
-        resp: reqwest::Response,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let resp = resp?;
         let headers = resp.headers().clone();
         let body = resp.bytes().await?;
         let xmltree_root = xmltree::Element::parse(body.reader())?;
@@ -258,8 +259,9 @@ pub struct ListObjectsV2Response {
 impl FromS3Response for ListObjectsV2Response {
     async fn from_s3response<'a>(
         _req: S3Request<'a>,
-        resp: reqwest::Response,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let resp = resp?;
         let headers = resp.headers().clone();
         let body = resp.bytes().await?;
         let xmltree_root = xmltree::Element::parse(body.reader())?;
@@ -316,8 +318,9 @@ pub struct ListObjectVersionsResponse {
 impl FromS3Response for ListObjectVersionsResponse {
     async fn from_s3response<'a>(
         _req: S3Request<'a>,
-        resp: reqwest::Response,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let resp = resp?;
         let headers = resp.headers().clone();
         let body = resp.bytes().await?;
         let xmltree_root = xmltree::Element::parse(body.reader())?;

@@ -39,8 +39,9 @@ pub struct PutObjectResponse {
 impl FromS3Response for PutObjectResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
-        response: reqwest::Response,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let response = response?;
         let header_map = response.headers();
 
         Ok(PutObjectResponse {
@@ -73,8 +74,9 @@ pub struct CreateMultipartUploadResponse2 {
 impl FromS3Response for CreateMultipartUploadResponse2 {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
-        response: reqwest::Response,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let response = response?;
         let headers = response.headers().clone();
         let body = response.bytes().await?;
         let root = Element::parse(body.reader())?;
