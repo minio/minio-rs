@@ -24,14 +24,15 @@ use xmltree::Element;
 
 use crate::s3::error::Error;
 use crate::s3::types::{
-    parse_legal_hold, LifecycleConfig, NotificationConfig, ObjectLockConfig, ReplicationConfig,
-    RetentionMode, SelectProgress,
+    parse_legal_hold, NotificationConfig, ObjectLockConfig, ReplicationConfig, RetentionMode,
+    SelectProgress,
 };
 use crate::s3::utils::{
     copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32, UtcTime,
 };
 
 mod get_bucket_encryption;
+mod get_bucket_lifecycle;
 mod get_bucket_versioning;
 mod get_object;
 mod list_buckets;
@@ -41,9 +42,11 @@ mod object_prompt;
 mod put_object;
 mod remove_objects;
 mod set_bucket_encryption;
+mod set_bucket_lifecycle;
 mod set_bucket_versioning;
 
 pub use get_bucket_encryption::GetBucketEncryptionResponse;
+pub use get_bucket_lifecycle::GetBucketLifecycleResponse;
 pub use get_bucket_versioning::GetBucketVersioningResponse;
 pub use get_object::GetObjectResponse;
 pub use list_buckets::ListBucketsResponse;
@@ -57,6 +60,7 @@ pub use put_object::{
 };
 pub use remove_objects::{DeleteError, DeletedObject, RemoveObjectResponse, RemoveObjectsResponse};
 pub use set_bucket_encryption::SetBucketEncryptionResponse;
+pub use set_bucket_lifecycle::SetBucketLifecycleResponse;
 pub use set_bucket_versioning::SetBucketVersioningResponse;
 
 #[derive(Debug)]
@@ -64,7 +68,7 @@ pub use set_bucket_versioning::SetBucketVersioningResponse;
 pub struct BucketResponse {
     pub headers: HeaderMap,
     pub region: String,
-    pub bucket_name: String,
+    pub bucket: String,
 }
 
 /// Response of [make_bucket()](crate::s3::client::Client::make_bucket) API
@@ -576,18 +580,6 @@ pub struct IsObjectLegalHoldEnabledResponse {
 
 /// Response of [delete_bucket_lifecycle()](crate::s3::client::Client::delete_bucket_lifecycle) API
 pub type DeleteBucketLifecycleResponse = BucketResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [get_bucket_lifecycle()](crate::s3::client::Client::get_bucket_lifecycle) API
-pub struct GetBucketLifecycleResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub config: LifecycleConfig,
-}
-
-/// Response of [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API
-pub type SetBucketLifecycleResponse = BucketResponse;
 
 /// Response of [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API
 pub type DeleteBucketNotificationResponse = BucketResponse;

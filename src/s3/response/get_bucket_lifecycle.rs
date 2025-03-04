@@ -14,27 +14,25 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
-use crate::s3::types::{FromS3Response, S3Request, SseConfig};
-use crate::s3::utils::{get_option_text, get_text};
+use crate::s3::types::{FromS3Response, LifecycleConfig, S3Request};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
 use xmltree::Element;
 
 /// Response of
-/// [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption)
+/// [get_bucket_lifecycle()](crate::s3::client::Client::get_bucket_lifecycle)
 /// API
-/// TODO equal to GetBucketEncryptionResponse
 #[derive(Clone, Debug)]
-pub struct SetBucketEncryptionResponse {
+pub struct GetBucketLifecycleResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
-    pub config: SseConfig,
+    pub config: LifecycleConfig,
 }
 
 #[async_trait]
-impl FromS3Response for SetBucketEncryptionResponse {
+impl FromS3Response for GetBucketLifecycleResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
         resp: reqwest::Response,
@@ -43,29 +41,16 @@ impl FromS3Response for SetBucketEncryptionResponse {
             None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
             Some(v) => v.to_string(),
         };
-
         let headers = resp.headers().clone();
         let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
+        let root = Element::parse(body.reader())?;
+        let config = LifecycleConfig::from_xml(&root)?;
 
-        let rule = root
-            .get_mut_child("Rule")
-            .ok_or(Error::XmlError(String::from("<Rule> tag not found")))?;
-
-        let sse_by_default = rule
-            .get_mut_child("ApplyServerSideEncryptionByDefault")
-            .ok_or(Error::XmlError(String::from(
-                "<ApplyServerSideEncryptionByDefault> tag not found",
-            )))?;
-
-        Ok(SetBucketEncryptionResponse {
+        Ok(GetBucketLifecycleResponse {
             headers,
             region: req.get_computed_region(),
             bucket,
-            config: SseConfig {
-                sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
-                kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID"),
-            },
+            config,
         })
     }
 }

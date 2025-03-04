@@ -20,7 +20,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, merge, Multimap};
 use http::Method;
 
-/// Argument builder for [get_bucket_encryption()](Client::get_bucket_encryption) API
+/// Argument builder for [get_bucket_encryption()](crate::s3::client::Client::get_bucket_encryption) API
 pub type GetBucketEncryption = BucketCommon<GetBucketEncryptionPhantomData>;
 
 #[derive(Default, Debug)]

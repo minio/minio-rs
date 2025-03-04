@@ -29,8 +29,7 @@ use crate::s3::response::*;
 use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
 use crate::s3::types::{
-    Directive, LifecycleConfig, NotificationConfig, ObjectLockConfig, Part, ReplicationConfig,
-    RetentionMode,
+    Directive, NotificationConfig, ObjectLockConfig, Part, ReplicationConfig, RetentionMode,
 };
 use crate::s3::utils::{
     from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash, md5sum_hash_sb,
@@ -48,6 +47,7 @@ use tokio::fs;
 use xmltree::Element;
 
 mod get_bucket_encryption;
+mod get_bucket_lifecycle;
 mod get_bucket_versioning;
 mod get_object;
 mod list_objects;
@@ -56,6 +56,7 @@ mod object_prompt;
 mod put_object;
 mod remove_objects;
 mod set_bucket_encryption;
+mod set_bucket_lifecycle;
 mod set_bucket_versioning;
 
 use super::builders::{ListBuckets, SegmentedBytes};
@@ -1204,7 +1205,7 @@ impl Client {
             Ok(resp) => Ok(DeleteBucketEncryptionResponse {
                 headers: resp.headers().clone(),
                 region: region.clone(),
-                bucket_name: args.bucket.to_string(),
+                bucket: args.bucket.to_string(),
             }),
             Err(e) => match e {
                 Error::S3Error(ref err) => {
@@ -1212,7 +1213,7 @@ impl Client {
                         return Ok(DeleteBucketEncryptionResponse {
                             headers: HeaderMap::new(),
                             region: region.clone(),
-                            bucket_name: args.bucket.to_string(),
+                            bucket: args.bucket.to_string(),
                         });
                     }
                     Err(e)
@@ -1297,7 +1298,7 @@ impl Client {
         Ok(DeleteBucketLifecycleResponse {
             headers: resp.headers().clone(),
             region: region.clone(),
-            bucket_name: args.bucket.to_string(),
+            bucket: args.bucket.to_string(),
         })
     }
 
@@ -1351,7 +1352,7 @@ impl Client {
             Ok(resp) => Ok(DeleteBucketPolicyResponse {
                 headers: resp.headers().clone(),
                 region: region.clone(),
-                bucket_name: args.bucket.to_string(),
+                bucket: args.bucket.to_string(),
             }),
             Err(e) => match e {
                 Error::S3Error(ref err) => {
@@ -1359,7 +1360,7 @@ impl Client {
                         return Ok(DeleteBucketPolicyResponse {
                             headers: HeaderMap::new(),
                             region: region.clone(),
-                            bucket_name: args.bucket.to_string(),
+                            bucket: args.bucket.to_string(),
                         });
                     }
                     Err(e)
@@ -1401,7 +1402,7 @@ impl Client {
             Ok(resp) => Ok(DeleteBucketReplicationResponse {
                 headers: resp.headers().clone(),
                 region: region.clone(),
-                bucket_name: args.bucket.to_string(),
+                bucket: args.bucket.to_string(),
             }),
             Err(e) => match e {
                 Error::S3Error(ref err) => {
@@ -1409,7 +1410,7 @@ impl Client {
                         return Ok(DeleteBucketReplicationResponse {
                             headers: HeaderMap::new(),
                             region: region.clone(),
-                            bucket_name: args.bucket.to_string(),
+                            bucket: args.bucket.to_string(),
                         });
                     }
                     Err(e)
@@ -1451,7 +1452,7 @@ impl Client {
         Ok(DeleteBucketTagsResponse {
             headers: resp.headers().clone(),
             region: region.clone(),
-            bucket_name: args.bucket.to_string(),
+            bucket: args.bucket.to_string(),
         })
     }
 
@@ -1604,64 +1605,6 @@ impl Client {
             object_name: args.object.to_string(),
             version_id: args.version_id.as_ref().map(|v| v.to_string()),
         })
-    }
-
-    pub async fn get_bucket_lifecycle(
-        &self,
-        args: &GetBucketLifecycleArgs<'_>,
-    ) -> Result<GetBucketLifecycleResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("lifecycle"), String::new());
-
-        match self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await
-        {
-            Ok(resp) => {
-                let header_map = resp.headers().clone();
-                let body = resp.bytes().await?;
-                let root = Element::parse(body.reader())?;
-
-                Ok(GetBucketLifecycleResponse {
-                    headers: header_map.clone(),
-                    region: region.clone(),
-                    bucket_name: args.bucket.to_string(),
-                    config: LifecycleConfig::from_xml(&root)?,
-                })
-            }
-            Err(e) => match e {
-                Error::S3Error(ref err) => {
-                    if err.code == "NoSuchLifecycleConfiguration" {
-                        return Ok(GetBucketLifecycleResponse {
-                            headers: HeaderMap::new(),
-                            region: region.clone(),
-                            bucket_name: args.bucket.to_string(),
-                            config: LifecycleConfig { rules: Vec::new() },
-                        });
-                    }
-                    Err(e)
-                }
-                _ => Err(e),
-            },
-        }
     }
 
     pub async fn get_bucket_notification(
@@ -2274,7 +2217,7 @@ impl Client {
         Ok(MakeBucketResponse {
             headers: resp.headers().clone(),
             region: region.to_string(),
-            bucket_name: args.bucket.to_string(),
+            bucket: args.bucket.to_string(),
         })
     }
 
@@ -2521,43 +2464,7 @@ impl Client {
         Ok(RemoveBucketResponse {
             headers: resp.headers().clone(),
             region: region.to_string(),
-            bucket_name: args.bucket.to_string(),
-        })
-    }
-
-    pub async fn set_bucket_lifecycle(
-        &self,
-        args: &SetBucketLifecycleArgs<'_>,
-    ) -> Result<SetBucketLifecycleResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("lifecycle"), String::new());
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                Some(args.config.to_xml().into()),
-            )
-            .await?;
-
-        Ok(SetBucketLifecycleResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
+            bucket: args.bucket.to_string(),
         })
     }
 
@@ -2593,7 +2500,7 @@ impl Client {
         Ok(SetBucketNotificationResponse {
             headers: resp.headers().clone(),
             region: region.clone(),
-            bucket_name: args.bucket.to_string(),
+            bucket: args.bucket.to_string(),
         })
     }
 
@@ -2629,7 +2536,7 @@ impl Client {
         Ok(SetBucketPolicyResponse {
             headers: resp.headers().clone(),
             region: region.clone(),
-            bucket_name: args.bucket.to_string(),
+            bucket: args.bucket.to_string(),
         })
     }
 
@@ -2665,7 +2572,7 @@ impl Client {
         Ok(SetBucketReplicationResponse {
             headers: resp.headers().clone(),
             region: region.clone(),
-            bucket_name: args.bucket.to_string(),
+            bucket: args.bucket.to_string(),
         })
     }
 
@@ -2718,7 +2625,7 @@ impl Client {
         Ok(SetBucketTagsResponse {
             headers: resp.headers().clone(),
             region: region.clone(),
-            bucket_name: args.bucket.to_string(),
+            bucket: args.bucket.to_string(),
         })
     }
 
@@ -2754,7 +2661,7 @@ impl Client {
         Ok(SetObjectLockConfigResponse {
             headers: resp.headers().clone(),
             region: region.clone(),
-            bucket_name: args.bucket.to_string(),
+            bucket: args.bucket.to_string(),
         })
     }
 
@@ -2797,7 +2704,7 @@ impl Client {
         }
         data.push_str("</Retention>");
 
-        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_bytes()));
+        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
 
         let resp = self
             .execute(
