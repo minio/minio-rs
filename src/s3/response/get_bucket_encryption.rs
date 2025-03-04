@@ -42,29 +42,43 @@ impl FromS3Response for GetBucketEncryptionResponse {
             None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
             Some(v) => v.to_string(),
         };
-        let resp = resp?;
-        let headers = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
+        match resp {
+            Ok(r) => {
+                let headers = r.headers().clone();
+                let body = r.bytes().await?;
+                let mut root = Element::parse(body.reader())?;
 
-        let rule = root
-            .get_mut_child("Rule")
-            .ok_or(Error::XmlError(String::from("<Rule> tag not found")))?;
+                let rule = root
+                    .get_mut_child("Rule")
+                    .ok_or(Error::XmlError(String::from("<Rule> tag not found")))?;
 
-        let sse_by_default = rule
-            .get_mut_child("ApplyServerSideEncryptionByDefault")
-            .ok_or(Error::XmlError(String::from(
-                "<ApplyServerSideEncryptionByDefault> tag not found",
-            )))?;
+                let sse_by_default = rule
+                    .get_mut_child("ApplyServerSideEncryptionByDefault")
+                    .ok_or(Error::XmlError(String::from(
+                        "<ApplyServerSideEncryptionByDefault> tag not found",
+                    )))?;
 
-        Ok(GetBucketEncryptionResponse {
-            headers,
-            region: req.get_computed_region(),
-            bucket,
-            config: SseConfig {
-                sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
-                kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID"),
-            },
-        })
+                Ok(GetBucketEncryptionResponse {
+                    headers,
+                    region: req.get_computed_region(),
+                    bucket,
+                    config: SseConfig {
+                        sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
+                        kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID"),
+                    },
+                })
+            }
+            Err(Error::S3Error(ref err))
+                if err.code == "ServerSideEncryptionConfigurationNotFoundError" =>
+            {
+                Ok(GetBucketEncryptionResponse {
+                    headers: HeaderMap::new(),
+                    region: req.get_computed_region(),
+                    bucket,
+                    config: Default::default(),
+                })
+            }
+            Err(e) => Err(e),
+        }
     }
 }

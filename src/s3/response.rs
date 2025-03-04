@@ -31,6 +31,8 @@ use crate::s3::utils::{
     copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32, UtcTime,
 };
 
+mod delete_bucket_encryption;
+mod delete_bucket_lifecycle;
 mod delete_bucket_policy;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
@@ -48,6 +50,8 @@ mod set_bucket_lifecycle;
 mod set_bucket_policy;
 mod set_bucket_versioning;
 
+pub use delete_bucket_encryption::DeleteBucketEncryptionResponse;
+pub use delete_bucket_lifecycle::DeleteBucketLifecycleResponse;
 pub use delete_bucket_policy::DeleteBucketPolicyResponse;
 pub use get_bucket_encryption::GetBucketEncryptionResponse;
 pub use get_bucket_lifecycle::GetBucketLifecycleResponse;
@@ -565,8 +569,6 @@ impl SelectObjectContentResponse {
     }
 }
 
-/// Response of [delete_bucket_encryption()](crate::s3::client::Client::delete_bucket_encryption) API
-pub type DeleteBucketEncryptionResponse = BucketResponse;
 /// Response of [enable_object_legal_hold()](crate::s3::client::Client::enable_object_legal_hold) API
 pub type EnableObjectLegalHoldResponse = ObjectResponse;
 
@@ -583,9 +585,6 @@ pub struct IsObjectLegalHoldEnabledResponse {
     pub version_id: Option<String>,
     pub enabled: bool,
 }
-
-/// Response of [delete_bucket_lifecycle()](crate::s3::client::Client::delete_bucket_lifecycle) API
-pub type DeleteBucketLifecycleResponse = BucketResponse;
 
 /// Response of [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API
 pub type DeleteBucketNotificationResponse = BucketResponse;

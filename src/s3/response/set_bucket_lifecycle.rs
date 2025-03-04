@@ -20,7 +20,6 @@ use http::HeaderMap;
 
 /// Response of [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API
 #[derive(Debug)]
-/// TODO is identical ot BucketResponse
 pub struct SetBucketLifecycleResponse {
     pub headers: HeaderMap,
     pub region: String,

@@ -16,7 +16,6 @@
 mod common;
 
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
-use minio::s3::args::DeleteBucketLifecycleArgs;
 use minio::s3::response::{
     DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, SetBucketLifecycleResponse,
 };
@@ -74,14 +73,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if false {
         // TODO
-        let resp: DeleteBucketLifecycleResponse = client
-            .delete_bucket_lifecycle(&DeleteBucketLifecycleArgs {
-                extra_headers: None,
-                extra_query_params: None,
-                region: None,
-                bucket: "",
-            })
-            .await?;
+        let resp: DeleteBucketLifecycleResponse =
+            client.delete_bucket_lifecycle(bucket_name).send().await?;
         log::info!("response of deleting lifecycle config: resp={:?}", resp);
     }
     Ok(())

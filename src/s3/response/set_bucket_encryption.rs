@@ -24,7 +24,6 @@ use xmltree::Element;
 /// Response of
 /// [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption)
 /// API
-/// TODO equal to GetBucketEncryptionResponse
 #[derive(Clone, Debug)]
 pub struct SetBucketEncryptionResponse {
     pub headers: HeaderMap,

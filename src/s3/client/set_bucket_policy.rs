@@ -52,14 +52,15 @@ impl Client {
     ///         "AWS": "*"
     ///       },
     ///       "Action": "s3:GetObject",
-    ///       "Resource": "arn:aws:s3:::my-bucket/*"
+    ///       "Resource": "arn:aws:s3:::my-bucket-name/*"
     ///     }
     ///   ]
     /// }"#;
     ///     let client = Client::default();
     ///     let _resp = client
-    ///          .set_bucket_lifecycle("my-bucket-name")
-    ///          .send().await;
+    ///          .set_bucket_policy("my-bucket-name")
+    ///          .config(config).
+    ///          .send().await.unwrap();
     /// }
     /// ```
     pub fn set_bucket_policy(&self, bucket: &str) -> SetBucketPolicy {

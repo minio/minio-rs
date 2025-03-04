@@ -44,19 +44,14 @@ impl FromS3Response for DeleteBucketPolicyResponse {
                 region: req.get_computed_region(),
                 bucket,
             }),
-            Err(e) => match e {
-                Error::S3Error(ref err) => {
-                    if err.code == "NoSuchBucketPolicy" {
-                        return Ok(DeleteBucketPolicyResponse {
-                            headers: HeaderMap::new(),
-                            region: req.get_computed_region(),
-                            bucket,
-                        });
-                    }
-                    Err(e)
-                }
-                _ => Err(e),
-            },
+            Err(Error::S3Error(ref err)) if err.code == Error::NoSuchBucketPolicy.as_str() => {
+                Ok(DeleteBucketPolicyResponse {
+                    headers: HeaderMap::new(),
+                    region: req.get_computed_region(),
+                    bucket,
+                })
+            }
+            Err(e) => Err(e),
         }
     }
 }

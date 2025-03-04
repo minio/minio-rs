@@ -20,7 +20,6 @@ use http::HeaderMap;
 
 /// Response of [set_bucket_policy()](crate::s3::client::Client::set_bucket_policy) API
 #[derive(Debug)]
-/// TODO is identical ot BucketResponse
 pub struct SetBucketPolicyResponse {
     pub headers: HeaderMap,
     pub region: String,

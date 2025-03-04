@@ -790,7 +790,7 @@ impl fmt::Display for Directive {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 /// Server-side information configuration
 pub struct SseConfig {
     pub sse_algorithm: String,

@@ -46,6 +46,8 @@ use tokio::fs;
 
 use xmltree::Element;
 
+mod delete_bucket_encryption;
+mod delete_bucket_lifecycle;
 mod delete_bucket_policy;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
@@ -1176,56 +1178,6 @@ impl Client {
         })
     }
 
-    pub async fn delete_bucket_encryption(
-        &self,
-        args: &DeleteBucketEncryptionArgs<'_>,
-    ) -> Result<DeleteBucketEncryptionResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("encryption"), String::new());
-
-        match self
-            .execute(
-                Method::DELETE,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await
-        {
-            Ok(resp) => Ok(DeleteBucketEncryptionResponse {
-                headers: resp.headers().clone(),
-                region: region.clone(),
-                bucket: args.bucket.to_string(),
-            }),
-            Err(e) => match e {
-                Error::S3Error(ref err) => {
-                    if err.code == "ServerSideEncryptionConfigurationNotFoundError" {
-                        return Ok(DeleteBucketEncryptionResponse {
-                            headers: HeaderMap::new(),
-                            region: region.clone(),
-                            bucket: args.bucket.to_string(),
-                        });
-                    }
-                    Err(e)
-                }
-                _ => Err(e),
-            },
-        }
-    }
-
     pub async fn disable_object_legal_hold(
         &self,
         args: &DisableObjectLegalHoldArgs<'_>,
@@ -1269,42 +1221,6 @@ impl Client {
         })
     }
 
-    pub async fn delete_bucket_lifecycle(
-        &self,
-        args: &DeleteBucketLifecycleArgs<'_>,
-    ) -> Result<DeleteBucketLifecycleResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("lifecycle"), String::new());
-
-        let resp = self
-            .execute(
-                Method::DELETE,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await?;
-
-        Ok(DeleteBucketLifecycleResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket: args.bucket.to_string(),
-        })
-    }
-
     pub async fn delete_bucket_notification(
         &self,
         args: &DeleteBucketNotificationArgs<'_>,
@@ -1340,7 +1256,7 @@ impl Client {
         }
         query_params.insert(String::from("replication"), String::new());
 
-        match self
+        let resp = self
             .execute(
                 Method::DELETE,
                 &region,
@@ -1350,26 +1266,23 @@ impl Client {
                 None,
                 None,
             )
-            .await
-        {
+            .await;
+        match resp {
             Ok(resp) => Ok(DeleteBucketReplicationResponse {
                 headers: resp.headers().clone(),
                 region: region.clone(),
                 bucket: args.bucket.to_string(),
             }),
-            Err(e) => match e {
-                Error::S3Error(ref err) => {
-                    if err.code == "ReplicationConfigurationNotFoundError" {
-                        return Ok(DeleteBucketReplicationResponse {
-                            headers: HeaderMap::new(),
-                            region: region.clone(),
-                            bucket: args.bucket.to_string(),
-                        });
-                    }
-                    Err(e)
-                }
-                _ => Err(e),
-            },
+            Err(Error::S3Error(ref err))
+                if err.code == Error::ReplicationConfigurationNotFoundError.as_str() =>
+            {
+                Ok(DeleteBucketReplicationResponse {
+                    headers: HeaderMap::new(),
+                    region: region.clone(),
+                    bucket: args.bucket.to_string(),
+                })
+            }
+            Err(e) => Err(e),
         }
     }
 
@@ -1691,20 +1604,15 @@ impl Client {
                     tags,
                 })
             }
-            Err(e) => match e {
-                Error::S3Error(ref err) => {
-                    if err.code == "NoSuchTagSet" {
-                        return Ok(GetBucketTagsResponse {
-                            headers: HeaderMap::new(),
-                            region: region.clone(),
-                            bucket_name: args.bucket.to_string(),
-                            tags: HashMap::new(),
-                        });
-                    }
-                    Err(e)
-                }
-                _ => Err(e),
-            },
+            Err(Error::S3Error(ref err)) if err.code == Error::NoSuchTagSet.as_str() => {
+                Ok(GetBucketTagsResponse {
+                    headers: HeaderMap::new(),
+                    region: region.clone(),
+                    bucket_name: args.bucket.to_string(),
+                    tags: HashMap::new(),
+                })
+            }
+            Err(e) => Err(e),
         }
     }
 
@@ -1838,23 +1746,20 @@ impl Client {
                     },
                 })
             }
-            Err(e) => match e {
-                Error::S3Error(ref err) => {
-                    if err.code == "NoSuchObjectLockConfiguration" {
-                        return Ok(GetObjectRetentionResponse {
-                            headers: HeaderMap::new(),
-                            region: region.clone(),
-                            bucket_name: args.bucket.to_string(),
-                            object_name: args.object.to_string(),
-                            version_id: args.version_id.as_ref().map(|v| v.to_string()),
-                            retention_mode: None,
-                            retain_until_date: None,
-                        });
-                    }
-                    Err(e)
-                }
-                _ => Err(e),
-            },
+            Err(Error::S3Error(ref err))
+                if err.code == Error::NoSuchObjectLockConfiguration.as_str() =>
+            {
+                Ok(GetObjectRetentionResponse {
+                    headers: HeaderMap::new(),
+                    region: region.clone(),
+                    bucket_name: args.bucket.to_string(),
+                    object_name: args.object.to_string(),
+                    version_id: args.version_id.as_ref().map(|v| v.to_string()),
+                    retention_mode: None,
+                    retain_until_date: None,
+                })
+            }
+            Err(e) => Err(e),
         }
     }
 
@@ -2034,22 +1939,19 @@ impl Client {
                     enabled: get_default_text(&root, "Status") == "ON",
                 })
             }
-            Err(e) => match e {
-                Error::S3Error(ref err) => {
-                    if err.code == "NoSuchObjectLockConfiguration" {
-                        return Ok(IsObjectLegalHoldEnabledResponse {
-                            headers: HeaderMap::new(),
-                            region: region.clone(),
-                            bucket_name: args.bucket.to_string(),
-                            object_name: args.object.to_string(),
-                            version_id: args.version_id.as_ref().map(|v| v.to_string()),
-                            enabled: false,
-                        });
-                    }
-                    Err(e)
-                }
-                _ => Err(e),
-            },
+            Err(Error::S3Error(ref err))
+                if err.code == Error::NoSuchObjectLockConfiguration.as_str() =>
+            {
+                Ok(IsObjectLegalHoldEnabledResponse {
+                    headers: HeaderMap::new(),
+                    region: region.clone(),
+                    bucket_name: args.bucket.to_string(),
+                    object_name: args.object.to_string(),
+                    version_id: args.version_id.as_ref().map(|v| v.to_string()),
+                    enabled: false,
+                })
+            }
+            Err(e) => Err(e),
         }
     }
 

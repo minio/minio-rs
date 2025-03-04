@@ -46,20 +46,15 @@ impl FromS3Response for GetBucketPolicyResponse {
                 bucket,
                 config: r.text().await?,
             }),
-            Err(e) => match e {
-                Error::S3Error(ref err) => {
-                    if err.code == "NoSuchBucketPolicy" {
-                        return Ok(GetBucketPolicyResponse {
-                            headers: HeaderMap::new(),
-                            region: req.get_computed_region(),
-                            bucket,
-                            config: String::from("{}"),
-                        });
-                    }
-                    Err(e)
-                }
-                _ => Err(e),
-            },
+            Err(Error::S3Error(ref err)) if err.code == Error::NoSuchBucketPolicy.as_str() => {
+                Ok(GetBucketPolicyResponse {
+                    headers: HeaderMap::new(),
+                    region: req.get_computed_region(),
+                    bucket,
+                    config: String::from("{}"),
+                })
+            }
+            Err(e) => Err(e),
         }
     }
 }
