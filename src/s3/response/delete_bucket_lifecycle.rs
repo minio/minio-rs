@@ -18,16 +18,18 @@ use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
 use http::HeaderMap;
 
-/// Response of [set_bucket_versioning()](crate::s3::client::Client::set_bucket_versioning) API
-#[derive(Debug)]
-pub struct SetBucketVersioningResponse {
+/// Response of
+/// [delete_bucket_lifecycle()](crate::s3::client::Client::delete_bucket_lifecycle)
+/// API
+#[derive(Clone, Debug)]
+pub struct DeleteBucketLifecycleResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
 }
 
 #[async_trait]
-impl FromS3Response for SetBucketVersioningResponse {
+impl FromS3Response for DeleteBucketLifecycleResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
         resp: Result<reqwest::Response, Error>,
@@ -37,8 +39,10 @@ impl FromS3Response for SetBucketVersioningResponse {
             Some(v) => v.to_string(),
         };
         let resp = resp?;
-        Ok(SetBucketVersioningResponse {
-            headers: resp.headers().clone(),
+        let headers = resp.headers().clone();
+
+        Ok(DeleteBucketLifecycleResponse {
+            headers,
             region: req.get_computed_region(),
             bucket,
         })

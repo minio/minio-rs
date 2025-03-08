@@ -126,7 +126,7 @@ pub trait ToS3Request {
 pub trait FromS3Response: Sized {
     async fn from_s3response<'a>(
         s3req: S3Request<'a>,
-        resp: reqwest::Response,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error>;
 }
 
@@ -136,7 +136,7 @@ pub trait S3Api: ToS3Request {
 
     async fn send(&self) -> Result<Self::S3Response, Error> {
         let mut req = self.to_s3request()?;
-        let resp = req.execute().await?;
+        let resp: Result<reqwest::Response, Error> = req.execute().await;
         Self::S3Response::from_s3response(req, resp).await
     }
 }
@@ -790,7 +790,7 @@ impl fmt::Display for Directive {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 /// Server-side information configuration
 pub struct SseConfig {
     pub sse_algorithm: String,

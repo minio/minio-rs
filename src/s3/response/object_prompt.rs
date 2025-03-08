@@ -29,8 +29,9 @@ pub struct ObjectPromptResponse {
 impl FromS3Response for ObjectPromptResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
-        response: reqwest::Response,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let response = response?;
         let headers = response.headers().clone();
         let body = response.bytes().await?;
         let prompt_response: String = String::from_utf8(body.to_vec())?;

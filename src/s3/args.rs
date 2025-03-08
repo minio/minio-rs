@@ -1315,9 +1315,6 @@ impl<'a> ComposeObjectArgs<'a> {
     }
 }
 
-/// Argument for [delete_bucket_encryption()](crate::s3::client::Client::delete_bucket_encryption) API
-pub type DeleteBucketEncryptionArgs<'a> = BucketArgs<'a>;
-
 /// Argument for [enable_object_legal_hold()](crate::s3::client::Client::enable_object_legal_hold) API
 pub type EnableObjectLegalHoldArgs<'a> = ObjectVersionArgs<'a>;
 
@@ -1326,12 +1323,6 @@ pub type DisableObjectLegalHoldArgs<'a> = ObjectVersionArgs<'a>;
 
 /// Argument for [is_object_legal_hold_enabled()](crate::s3::client::Client::is_object_legal_hold_enabled) API
 pub type IsObjectLegalHoldEnabledArgs<'a> = ObjectVersionArgs<'a>;
-
-/// Argument for [delete_bucket_lifecycle()](crate::s3::client::Client::delete_bucket_lifecycle) API
-pub type DeleteBucketLifecycleArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [get_bucket_lifecycle()](crate::s3::client::Client::get_bucket_lifecycle) API
-pub type GetBucketLifecycleArgs<'a> = BucketArgs<'a>;
 
 /// Argument for [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API
 pub type DeleteBucketNotificationArgs<'a> = BucketArgs<'a>;
@@ -1383,67 +1374,6 @@ impl<'a> SetBucketNotificationArgs<'a> {
         check_bucket_name(bucket_name, true)?;
 
         Ok(SetBucketNotificationArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            config,
-        })
-    }
-}
-
-/// Argument for [delete_bucket_policy()](crate::s3::client::Client::delete_bucket_policy) API
-pub type DeleteBucketPolicyArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [get_bucket_policy()](crate::s3::client::Client::get_bucket_policy) API
-pub type GetBucketPolicyArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [set_bucket_policy()](crate::s3::client::Client::set_bucket_policy) API
-pub struct SetBucketPolicyArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub config: &'a str,
-}
-
-impl<'a> SetBucketPolicyArgs<'a> {
-    /// Returns argument for [set_bucket_policy()](crate::s3::client::Client::set_bucket_policy) API with given bucket name and configuration
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// let config = r#"{
-    ///   "Version": "2012-10-17",
-    ///   "Statement": [
-    ///     {
-    ///       "Effect": "Allow",
-    ///       "Principal": {
-    ///         "AWS": "*"
-    ///       },
-    ///       "Action": [
-    ///         "s3:GetBucketLocation",
-    ///         "s3:ListBucket"
-    ///       ],
-    ///       "Resource": "arn:aws:s3:::my-bucket"
-    ///     },
-    ///     {
-    ///       "Effect": "Allow",
-    ///       "Principal": {
-    ///         "AWS": "*"
-    ///       },
-    ///       "Action": "s3:GetObject",
-    ///       "Resource": "arn:aws:s3:::my-bucket/*"
-    ///     }
-    ///   ]
-    /// }"#;
-    /// let args = SetBucketPolicyArgs::new("my-bucket", config).unwrap();
-    /// ```
-    pub fn new(bucket_name: &'a str, config: &'a str) -> Result<SetBucketPolicyArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        Ok(SetBucketPolicyArgs {
             extra_headers: None,
             extra_query_params: None,
             region: None,

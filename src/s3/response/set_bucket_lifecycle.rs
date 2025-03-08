@@ -20,7 +20,6 @@ use http::HeaderMap;
 
 /// Response of [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API
 #[derive(Debug)]
-/// TODO is identical ot BucketResponse
 pub struct SetBucketLifecycleResponse {
     pub headers: HeaderMap,
     pub region: String,
@@ -31,13 +30,13 @@ pub struct SetBucketLifecycleResponse {
 impl FromS3Response for SetBucketLifecycleResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
-        resp: reqwest::Response,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
             None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
             Some(v) => v.to_string(),
         };
-
+        let resp = resp?;
         Ok(SetBucketLifecycleResponse {
             headers: resp.headers().clone(),
             region: req.get_computed_region(),

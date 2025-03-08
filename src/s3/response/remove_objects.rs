@@ -40,8 +40,9 @@ pub struct RemoveObjectResponse {
 impl FromS3Response for RemoveObjectResponse {
     async fn from_s3response<'a>(
         _req: S3Request<'a>,
-        resp: reqwest::Response,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let resp = resp?;
         let headers = resp.headers().clone();
         let is_delete_marker = headers
             .get("x-amz-delete-marker")
@@ -119,8 +120,9 @@ impl DeleteResult {
 impl FromS3Response for RemoveObjectsResponse {
     async fn from_s3response<'a>(
         _req: S3Request<'a>,
-        resp: reqwest::Response,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let resp = resp?;
         let headers = resp.headers().clone();
 
         let body = resp.bytes().await?;

@@ -30,17 +30,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let resp: GetBucketEncryptionResponse =
         client.get_bucket_encryption(bucket_name).send().await?;
-    log::info!("encryption before: config={:?}", resp.config,);
+    log::info!("encryption before: config={:?}", resp.config);
+
+    let config = SseConfig::default();
+    log::info!("going to set encryption config={:?}", config);
 
     let _resp: SetBucketEncryptionResponse = client
         .set_bucket_encryption(bucket_name)
-        .sse_config(SseConfig::default())
+        .sse_config(config.clone())
         .send()
         .await?;
 
     let resp: GetBucketEncryptionResponse =
         client.get_bucket_encryption(bucket_name).send().await?;
-    log::info!("encryption after: config={:?}", resp.config,);
+    log::info!("encryption after: config={:?}", resp.config);
 
     Ok(())
 }

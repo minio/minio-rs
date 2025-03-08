@@ -42,8 +42,9 @@ impl FromS3Response
 {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
-        resp: reqwest::Response,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let resp = resp?;
         let headers = resp.headers().clone();
 
         let body_stream = resp.bytes_stream();
