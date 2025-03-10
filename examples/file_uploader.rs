@@ -15,8 +15,8 @@
 mod common;
 
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
-use minio::s3::builders::ObjectContent;
 use minio::s3::Client;
+use minio::s3::builders::ObjectContent;
 use std::path::Path;
 
 #[tokio::main]

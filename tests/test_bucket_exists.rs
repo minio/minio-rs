@@ -15,7 +15,7 @@
 
 mod common;
 
-use crate::common::{create_bucket_helper, TestContext};
+use crate::common::{TestContext, create_bucket_helper};
 use minio::s3::args::BucketExistsArgs;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]

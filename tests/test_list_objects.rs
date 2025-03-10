@@ -15,7 +15,7 @@
 
 mod common;
 
-use crate::common::{create_bucket_helper, rand_object_name, RandReader, TestContext};
+use crate::common::{RandReader, TestContext, create_bucket_helper, rand_object_name};
 use minio::s3::args::PutObjectArgs;
 use minio::s3::builders::ObjectToDelete;
 use minio::s3::types::ToStream;

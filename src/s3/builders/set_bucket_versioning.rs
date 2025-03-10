@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::s3::Client;
 use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
 use crate::s3::response::SetBucketVersioningResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, Multimap};
-use crate::s3::Client;
+use crate::s3::utils::{Multimap, check_bucket_name};
 use bytes::Bytes;
 use http::Method;
 use std::fmt;
@@ -130,7 +130,7 @@ impl ToS3Request for SetBucketVersioning {
             None => {
                 return Err(Error::InvalidVersioningStatus(
                     "Missing VersioningStatus".into(),
-                ))
+                ));
             }
         };
 

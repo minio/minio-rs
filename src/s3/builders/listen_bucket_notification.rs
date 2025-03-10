@@ -22,7 +22,7 @@ use crate::s3::{
     error::Error,
     response::ListenBucketNotificationResponse,
     types::{NotificationRecords, S3Api, S3Request, ToS3Request},
-    utils::{check_bucket_name, merge, Multimap},
+    utils::{Multimap, check_bucket_name, merge},
 };
 
 /// Argument builder for

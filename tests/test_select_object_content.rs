@@ -15,7 +15,7 @@
 
 mod common;
 
-use crate::common::{create_bucket_helper, rand_object_name, TestContext};
+use crate::common::{TestContext, create_bucket_helper, rand_object_name};
 use minio::s3::args::{PutObjectArgs, SelectObjectContentArgs};
 use minio::s3::types::{
     CsvInputSerialization, CsvOutputSerialization, FileHeaderInfo, QuoteFields, S3Api,

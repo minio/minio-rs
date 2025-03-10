@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use futures_util::{stream, Stream, StreamExt};
+use futures_util::{Stream, StreamExt, stream};
 use http::HeaderMap;
 use tokio::io::AsyncBufReadExt;
 use tokio_util::io::StreamReader;

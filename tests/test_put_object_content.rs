@@ -15,7 +15,7 @@
 
 mod common;
 
-use crate::common::{create_bucket_helper, rand_object_name, RandReader, RandSrc, TestContext};
+use crate::common::{RandReader, RandSrc, TestContext, create_bucket_helper, rand_object_name};
 use http::header;
 use minio::s3::args::{PutObjectArgs, StatObjectArgs};
 use minio::s3::builders::ObjectContent;

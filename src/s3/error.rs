@@ -186,7 +186,13 @@ impl fmt::Display for Error {
             Error::S3Error(er) => write!(
                 f,
                 "s3 operation failed; code: {}, message: {}, resource: {}, request_id: {}, host_id: {}, bucket_name: {}, object_name: {}",
-                er.code, er.message, er.resource, er.request_id, er.host_id, er.bucket_name, er.object_name,
+                er.code,
+                er.message,
+                er.resource,
+                er.request_id,
+                er.host_id,
+                er.bucket_name,
+                er.object_name,
             ),
             Error::InvalidResponse(sc, ct) => write!(
                 f,
@@ -203,19 +209,68 @@ impl fmt::Display for Error {
             Error::SelectError(ec, em) => write!(f, "error code: {}, error message: {}", ec, em),
             Error::UnsupportedApi(a) => write!(f, "{} API is not supported in Amazon AWS S3", a),
             Error::InvalidComposeSource(m) => write!(f, "{}", m),
-            Error::InvalidComposeSourceOffset(b, o, v, of, os) => write!(f, "source {}/{}{}: offset {} is beyond object size {}", b, o, v.as_ref().map_or(String::new(), |v| String::from("?versionId=") + v), of, os),
-            Error::InvalidComposeSourceLength(b, o, v, l, os) => write!(f, "source {}/{}{}: length {} is beyond object size {}", b, o, v.as_ref().map_or(String::new(), |v| String::from("?versionId=") + v), l, os),
-            Error::InvalidComposeSourceSize(b, o, v, cs, os) => write!(f, "source {}/{}{}: compose size {} is beyond object size {}", b, o, v.as_ref().map_or(String::new(), |v| String::from("?versionId=") + v), cs, os),
+            Error::InvalidComposeSourceOffset(b, o, v, of, os) => write!(
+                f,
+                "source {}/{}{}: offset {} is beyond object size {}",
+                b,
+                o,
+                v.as_ref()
+                    .map_or(String::new(), |v| String::from("?versionId=") + v),
+                of,
+                os
+            ),
+            Error::InvalidComposeSourceLength(b, o, v, l, os) => write!(
+                f,
+                "source {}/{}{}: length {} is beyond object size {}",
+                b,
+                o,
+                v.as_ref()
+                    .map_or(String::new(), |v| String::from("?versionId=") + v),
+                l,
+                os
+            ),
+            Error::InvalidComposeSourceSize(b, o, v, cs, os) => write!(
+                f,
+                "source {}/{}{}: compose size {} is beyond object size {}",
+                b,
+                o,
+                v.as_ref()
+                    .map_or(String::new(), |v| String::from("?versionId=") + v),
+                cs,
+                os
+            ),
             Error::InvalidDirective(m) => write!(f, "{}", m),
             Error::InvalidCopyDirective(m) => write!(f, "{}", m),
-            Error::InvalidComposeSourcePartSize(b, o, v, s, es) => write!(f, "source {}/{}{}: size {} must be greater than {}", b, o, v.as_ref().map_or(String::new(), |v| String::from("?versionId=") + v), s, es),
-            Error::InvalidComposeSourceMultipart(b, o, v, s, es) => write!(f, "source {}/{}{}: size {} for multipart split upload of {}, last part size is less than {}", b, o, v.as_ref().map_or(String::new(), |v| String::from("?versionId=") + v), s, s, es),
+            Error::InvalidComposeSourcePartSize(b, o, v, s, es) => write!(
+                f,
+                "source {}/{}{}: size {} must be greater than {}",
+                b,
+                o,
+                v.as_ref()
+                    .map_or(String::new(), |v| String::from("?versionId=") + v),
+                s,
+                es
+            ),
+            Error::InvalidComposeSourceMultipart(b, o, v, s, es) => write!(
+                f,
+                "source {}/{}{}: size {} for multipart split upload of {}, last part size is less than {}",
+                b,
+                o,
+                v.as_ref()
+                    .map_or(String::new(), |v| String::from("?versionId=") + v),
+                s,
+                s,
+                es
+            ),
             Error::InvalidMultipartCount(c) => write!(
                 f,
                 "Compose sources create more than allowed multipart count {}",
                 c
             ),
-            Error::MissingLifecycleAction => write!(f, "at least one of action (AbortIncompleteMultipartUpload, Expiration, NoncurrentVersionExpiration, NoncurrentVersionTransition or Transition) must be specified in a rule"),
+            Error::MissingLifecycleAction => write!(
+                f,
+                "at least one of action (AbortIncompleteMultipartUpload, Expiration, NoncurrentVersionExpiration, NoncurrentVersionTransition or Transition) must be specified in a rule"
+            ),
             Error::InvalidExpiredObjectDeleteMarker => write!(
                 f,
                 "ExpiredObjectDeleteMarker must not be provided along with Date and Days"
@@ -229,10 +284,16 @@ impl fmt::Display for Error {
             Error::PostPolicyError(m) => write!(f, "{}", m),
             Error::InvalidObjectLockConfig(m) => write!(f, "{}", m),
             Error::NoClientProvided => write!(f, "no client provided"),
-            Error::TagDecodingError(input, error_message) => write!(f, "tag decoding failed: {} on input '{}'", error_message, input),
+            Error::TagDecodingError(input, error_message) => write!(
+                f,
+                "tag decoding failed: {} on input '{}'",
+                error_message, input
+            ),
             Error::ContentLengthUnknown => write!(f, "content length is unknown"),
             Error::NoSuchTagSet => write!(f, "no such tag set"),
-            Error::ReplicationConfigurationNotFoundError => write!(f, "Replication configuration not found"),
+            Error::ReplicationConfigurationNotFoundError => {
+                write!(f, "Replication configuration not found")
+            }
             Error::NoSuchObjectLockConfiguration => write!(f, "no such object lock"),
             Error::NoSuchBucketPolicy => write!(f, "no such bucket policy"),
         }

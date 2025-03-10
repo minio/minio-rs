@@ -24,11 +24,11 @@ use xmltree::Element;
 
 use crate::s3::error::Error;
 use crate::s3::types::{
-    parse_legal_hold, NotificationConfig, ObjectLockConfig, ReplicationConfig, RetentionMode,
-    SelectProgress,
+    NotificationConfig, ObjectLockConfig, ReplicationConfig, RetentionMode, SelectProgress,
+    parse_legal_hold,
 };
 use crate::s3::utils::{
-    copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32, UtcTime,
+    UtcTime, copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32,
 };
 
 mod delete_bucket_encryption;

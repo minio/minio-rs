@@ -1,6 +1,6 @@
 mod common;
 
-use crate::common::{create_bucket_helper, TestContext};
+use crate::common::{TestContext, create_bucket_helper};
 use minio::s3::args::{
     DeleteBucketNotificationArgs, GetBucketNotificationArgs, SetBucketNotificationArgs,
 };
@@ -47,12 +47,16 @@ async fn set_get_delete_bucket_notification() {
         .await
         .unwrap();
     assert_eq!(resp.config.queue_config_list.as_ref().unwrap().len(), 1);
-    assert!(resp.config.queue_config_list.as_ref().unwrap()[0]
-        .events
-        .contains(&String::from("s3:ObjectCreated:Put")));
-    assert!(resp.config.queue_config_list.as_ref().unwrap()[0]
-        .events
-        .contains(&String::from("s3:ObjectCreated:Copy")));
+    assert!(
+        resp.config.queue_config_list.as_ref().unwrap()[0]
+            .events
+            .contains(&String::from("s3:ObjectCreated:Put"))
+    );
+    assert!(
+        resp.config.queue_config_list.as_ref().unwrap()[0]
+            .events
+            .contains(&String::from("s3:ObjectCreated:Copy"))
+    );
     assert_eq!(
         resp.config.queue_config_list.as_ref().unwrap()[0]
             .prefix_filter_rule

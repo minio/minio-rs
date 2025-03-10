@@ -15,7 +15,7 @@
 
 mod common;
 
-use crate::common::{rand_bucket_name, CleanupGuard, TestContext};
+use crate::common::{CleanupGuard, TestContext, rand_bucket_name};
 use minio::s3::args::{
     DeleteObjectLockConfigArgs, GetObjectLockConfigArgs, MakeBucketArgs, SetObjectLockConfigArgs,
 };

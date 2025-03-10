@@ -15,7 +15,7 @@
 
 use crate::s3::builders::SegmentedBytes;
 use crate::s3::sse::{Sse, SseCustomerKey};
-use crate::s3::utils::{check_bucket_name, merge, Multimap};
+use crate::s3::utils::{Multimap, check_bucket_name, merge};
 use crate::s3::{
     client::Client,
     error::Error,
