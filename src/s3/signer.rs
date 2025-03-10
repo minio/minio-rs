@@ -16,8 +16,8 @@
 //! Signature V4 for S3 API
 
 use crate::s3::utils::{
-    get_canonical_headers, get_canonical_query_string, sha256_hash, to_amz_date, to_signer_date,
-    Multimap, UtcTime,
+    Multimap, UtcTime, get_canonical_headers, get_canonical_query_string, sha256_hash, to_amz_date,
+    to_signer_date,
 };
 use hex::encode as hexencode;
 use hmac::{Hmac, Mac};

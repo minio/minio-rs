@@ -13,18 +13,18 @@
 //! Argument builders for ListObject APIs.
 
 use async_trait::async_trait;
-use futures_util::{stream as futures_stream, Stream, StreamExt};
+use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
 
 use crate::s3::{
     client::Client,
     error::Error,
+    response::ListObjectsResponse,
     response::list_objects::{
         ListObjectVersionsResponse, ListObjectsV1Response, ListObjectsV2Response,
     },
-    response::ListObjectsResponse,
     types::{S3Api, S3Request, ToS3Request, ToStream},
-    utils::{check_bucket_name, merge, Multimap},
+    utils::{Multimap, check_bucket_name, merge},
 };
 
 fn add_common_list_objects_query_params(

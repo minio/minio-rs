@@ -23,13 +23,13 @@ use crate::s3::types::{
     RetentionMode, SelectRequest,
 };
 use crate::s3::utils::{
-    b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value, to_iso8601utc,
-    to_signer_date, urlencode, utc_now, Multimap, UtcTime,
+    Multimap, UtcTime, b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value,
+    to_iso8601utc, to_signer_date, urlencode, utc_now,
 };
 
 use hyper::http::Method;
-use serde_json::json;
 use serde_json::Value;
+use serde_json::json;
 use std::collections::HashMap;
 
 pub const MIN_PART_SIZE: usize = 5_242_880; // 5 MiB

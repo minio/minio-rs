@@ -1,4 +1,4 @@
-use crate::common::{create_bucket_helper, TestContext};
+use crate::common::{TestContext, create_bucket_helper};
 use minio::s3::types::S3Api;
 
 mod common;

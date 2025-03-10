@@ -29,7 +29,7 @@ use crate::s3::{
     },
     sse::Sse,
     types::{PartInfo, Retention, S3Api, S3Request, ToS3Request},
-    utils::{check_bucket_name, md5sum_hash, merge, to_iso8601utc, urlencode, Multimap},
+    utils::{Multimap, check_bucket_name, md5sum_hash, merge, to_iso8601utc, urlencode},
 };
 
 use super::{ObjectContent, SegmentedBytes};

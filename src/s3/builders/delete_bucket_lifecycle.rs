@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::s3::Client;
 use crate::s3::builders::BucketCommon;
 use crate::s3::error::Error;
 use crate::s3::response::DeleteBucketLifecycleResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::check_bucket_name;
-use crate::s3::Client;
 use http::Method;
 
 /// Argument builder for [delete_bucket_lifecycle()](Client::delete_bucket_lifecycle) API

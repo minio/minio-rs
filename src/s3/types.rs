@@ -19,7 +19,7 @@ use super::builders::SegmentedBytes;
 use super::client::Client;
 use crate::s3::error::Error;
 use crate::s3::utils::{
-    from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc, Multimap, UtcTime,
+    Multimap, UtcTime, from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc,
 };
 
 use async_trait::async_trait;

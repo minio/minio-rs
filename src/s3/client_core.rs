@@ -16,8 +16,8 @@
 //! Module containing lower level APIs.
 
 use super::{
-    builders::{ObjectToDelete, RemoveObjectsApi},
     Client,
+    builders::{ObjectToDelete, RemoveObjectsApi},
 };
 
 /// ClientCore exposes lower-level APIs not exposed by the high-level client.

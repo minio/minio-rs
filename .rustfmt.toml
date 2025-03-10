@@ -1,1 +1,9 @@
-edition = "2021"
+# rustfmt doc - https://rust-lang.github.io/rustfmt/
+
+hard_tabs = false
+edition = "2024"
+
+max_width = 100
+array_width = 60  # default is 60
+attr_fn_like_width = 70  # default is 70
+chain_width = 60  # default is 60

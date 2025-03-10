@@ -17,15 +17,15 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::engine::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use byteorder::{BigEndian, ReadBytesExt};
 use chrono::{DateTime, Datelike, NaiveDateTime, ParseError, Utc};
-use crc::{Crc, CRC_32_ISO_HDLC};
+use crc::{CRC_32_ISO_HDLC, Crc};
 use lazy_static::lazy_static;
 use md5::compute as md5compute;
 use multimap::MultiMap;
-use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use regex::Regex;
 use sha2::{Digest, Sha256};
 pub use urlencoding::decode as urldecode;
@@ -162,7 +162,7 @@ pub fn urlencode_object_key(key: &str) -> String {
 }
 
 pub mod aws_date_format {
-    use super::{from_iso8601utc, to_iso8601utc, UtcTime};
+    use super::{UtcTime, from_iso8601utc, to_iso8601utc};
     use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(date: &UtcTime, serializer: S) -> Result<S::Ok, S::Error>
@@ -485,7 +485,7 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
                 return Err(Error::TagDecodingError(
                     s.to_string(),
                     "tag key was empty".to_string(),
-                ))
+                ));
             }
         };
         let v = match kv.next() {

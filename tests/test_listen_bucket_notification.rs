@@ -15,12 +15,12 @@
 
 mod common;
 
-use crate::common::{create_bucket_helper, rand_object_name, RandReader, TestContext};
+use crate::common::{RandReader, TestContext, create_bucket_helper, rand_object_name};
 use async_std::task;
+use minio::s3::Client;
 use minio::s3::args::PutObjectArgs;
 use minio::s3::creds::StaticProvider;
 use minio::s3::types::{NotificationRecords, S3Api};
-use minio::s3::Client;
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 

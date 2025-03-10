@@ -21,7 +21,7 @@ use crate::s3::{
     response::GetObjectResponse,
     sse::{Sse, SseCustomerKey},
     types::{S3Api, S3Request, ToS3Request},
-    utils::{check_bucket_name, merge, to_http_header_value, Multimap, UtcTime},
+    utils::{Multimap, UtcTime, check_bucket_name, merge, to_http_header_value},
 };
 
 /// Argument builder for [list_objects()](Client::get_object) API.

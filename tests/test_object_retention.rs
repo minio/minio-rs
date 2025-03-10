@@ -15,7 +15,7 @@
 
 mod common;
 
-use crate::common::{rand_bucket_name, rand_object_name, CleanupGuard, RandReader, TestContext};
+use crate::common::{CleanupGuard, RandReader, TestContext, rand_bucket_name, rand_object_name};
 use minio::s3::args::{
     GetObjectRetentionArgs, MakeBucketArgs, PutObjectArgs, SetObjectRetentionArgs,
 };
