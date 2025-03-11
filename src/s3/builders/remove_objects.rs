@@ -19,17 +19,17 @@ use std::pin::Pin;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures_util::{stream as futures_stream, Stream, StreamExt};
+use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
 use tokio_stream::iter as stream_iter;
 
 use crate::s3::{
+    Client,
     client_core::ClientCore,
     error::Error,
     response::{RemoveObjectResponse, RemoveObjectsResponse},
     types::{S3Api, S3Request, ToS3Request, ToStream},
-    utils::{check_bucket_name, md5sum_hash, merge, Multimap},
-    Client,
+    utils::{Multimap, check_bucket_name, md5sum_hash, merge},
 };
 
 /// Specify an object to be deleted. The object can be specified by key or by

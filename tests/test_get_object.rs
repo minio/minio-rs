@@ -15,7 +15,7 @@
 
 mod common;
 
-use crate::common::{create_bucket_helper, rand_object_name, TestContext};
+use crate::common::{TestContext, create_bucket_helper, rand_object_name};
 use bytes::Bytes;
 use minio::s3::args::{GetObjectArgs, PutObjectArgs};
 use minio::s3::types::S3Api;

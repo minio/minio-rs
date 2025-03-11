@@ -16,9 +16,9 @@
 mod common;
 
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
+use minio::s3::Client;
 use minio::s3::response::{GetBucketEncryptionResponse, SetBucketEncryptionResponse};
 use minio::s3::types::{S3Api, SseConfig};
-use minio::s3::Client;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

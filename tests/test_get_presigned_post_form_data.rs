@@ -15,7 +15,7 @@
 
 mod common;
 
-use crate::common::{create_bucket_helper, rand_object_name, TestContext};
+use crate::common::{TestContext, create_bucket_helper, rand_object_name};
 use minio::s3::args::PostPolicy;
 use minio::s3::utils::utc_now;
 

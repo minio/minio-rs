@@ -17,10 +17,10 @@
 
 use crate::s3::error::Error;
 use crate::s3::utils::match_hostname;
-use crate::s3::utils::{to_query_string, Multimap};
+use crate::s3::utils::{Multimap, to_query_string};
 use derivative::Derivative;
-use hyper::http::Method;
 use hyper::Uri;
+use hyper::http::Method;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::fmt;
@@ -254,7 +254,7 @@ impl FromStr for BaseUrl {
                 _ => {
                     return Err(Error::InvalidBaseUrl(String::from(
                         "scheme must be http or https",
-                    )))
+                    )));
                 }
             },
         };
@@ -264,7 +264,7 @@ impl FromStr for BaseUrl {
             _ => {
                 return Err(Error::InvalidBaseUrl(String::from(
                     "valid host must be provided",
-                )))
+                )));
             }
         };
 

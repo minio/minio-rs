@@ -16,11 +16,11 @@
 mod common;
 
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
+use minio::s3::Client;
 use minio::s3::response::{
     DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, SetBucketLifecycleResponse,
 };
 use minio::s3::types::{Filter, LifecycleConfig, LifecycleRule, S3Api};
-use minio::s3::Client;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

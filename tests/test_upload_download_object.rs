@@ -15,7 +15,7 @@
 
 mod common;
 
-use crate::common::{create_bucket_helper, rand_object_name, RandReader, TestContext};
+use crate::common::{RandReader, TestContext, create_bucket_helper, rand_object_name};
 use minio::s3::args::{DownloadObjectArgs, UploadObjectArgs};
 use minio::s3::types::S3Api;
 use sha2::{Digest, Sha256};

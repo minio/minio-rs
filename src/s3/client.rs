@@ -32,16 +32,16 @@ use crate::s3::types::{
     Directive, NotificationConfig, ObjectLockConfig, Part, ReplicationConfig, RetentionMode,
 };
 use crate::s3::utils::{
-    from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash, md5sum_hash_sb,
-    merge, sha256_hash_sb, to_amz_date, to_iso8601utc, utc_now, Multimap,
+    Multimap, from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash,
+    md5sum_hash_sb, merge, sha256_hash_sb, to_amz_date, to_iso8601utc, utc_now,
 };
 
 use async_recursion::async_recursion;
 use bytes::{Buf, Bytes};
 use dashmap::DashMap;
 use hyper::http::Method;
-use reqwest::header::HeaderMap;
 use reqwest::Body;
+use reqwest::header::HeaderMap;
 use tokio::fs;
 
 use xmltree::Element;
@@ -1044,16 +1044,24 @@ impl Client {
         {
             if let Some(v) = &args.metadata_directive {
                 match v {
-		    Directive::Copy => return Err(Error::InvalidCopyDirective(String::from("COPY metadata directive is not applicable to source object size greater than 5 GiB"))),
-		    _ => todo!(), // Nothing to do.
-		}
+                    Directive::Copy => {
+                        return Err(Error::InvalidCopyDirective(String::from(
+                            "COPY metadata directive is not applicable to source object size greater than 5 GiB",
+                        )));
+                    }
+                    _ => todo!(), // Nothing to do.
+                }
             }
 
             if let Some(v) = &args.tagging_directive {
                 match v {
-		    Directive::Copy => return Err(Error::InvalidCopyDirective(String::from("COPY tagging directive is not applicable to source object size greater than 5 GiB"))),
-		    _ => todo!(), // Nothing to do.
-		}
+                    Directive::Copy => {
+                        return Err(Error::InvalidCopyDirective(String::from(
+                            "COPY tagging directive is not applicable to source object size greater than 5 GiB",
+                        )));
+                    }
+                    _ => todo!(), // Nothing to do.
+                }
             }
 
             let mut src = ComposeSource::new(args.source.bucket, args.source.object)?;
@@ -1994,9 +2002,12 @@ impl Client {
         }
 
         let data = match region {
-	    "us-east-1" => String::new(),
-	    _ => format!("<CreateBucketConfiguration><LocationConstraint>{}</LocationConstraint></CreateBucketConfiguration>", region),
-	};
+            "us-east-1" => String::new(),
+            _ => format!(
+                "<CreateBucketConfiguration><LocationConstraint>{}</LocationConstraint></CreateBucketConfiguration>",
+                region
+            ),
+        };
 
         let body = match data.is_empty() {
             true => None,

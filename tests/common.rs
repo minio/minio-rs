@@ -15,9 +15,9 @@
 
 use async_std::task;
 use bytes::Bytes;
+use rand::SeedableRng;
 use rand::distributions::{Alphanumeric, DistString};
 use rand::prelude::SmallRng;
-use rand::SeedableRng;
 use std::path::{Path, PathBuf};
 use std::{io, thread};
 use tokio::io::AsyncRead;
