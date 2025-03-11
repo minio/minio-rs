@@ -19,8 +19,7 @@ use crate::s3::error::Error;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{
-    Directive, NotificationConfig, ObjectLockConfig, Part, ReplicationConfig, Retention,
-    RetentionMode, SelectRequest,
+    Directive, ObjectLockConfig, Part, ReplicationConfig, Retention, RetentionMode, SelectRequest,
 };
 use crate::s3::utils::{
     Multimap, UtcTime, b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value,
@@ -1323,65 +1322,6 @@ pub type DisableObjectLegalHoldArgs<'a> = ObjectVersionArgs<'a>;
 
 /// Argument for [is_object_legal_hold_enabled()](crate::s3::client::Client::is_object_legal_hold_enabled) API
 pub type IsObjectLegalHoldEnabledArgs<'a> = ObjectVersionArgs<'a>;
-
-/// Argument for [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API
-pub type DeleteBucketNotificationArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API
-pub type GetBucketNotificationArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [set_bucket_notification()](crate::s3::client::Client::set_bucket_notification) API
-pub struct SetBucketNotificationArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub config: &'a NotificationConfig,
-}
-
-impl<'a> SetBucketNotificationArgs<'a> {
-    /// Returns argument for [set_bucket_notification()](crate::s3::client::Client::set_bucket_notification) API with given bucket name and configuration
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// use minio::s3::types::*;
-    /// let config = NotificationConfig {
-    ///     cloud_func_config_list: None,
-    ///     queue_config_list: Some(vec![QueueConfig {
-    ///         events: vec![
-    ///             String::from("s3:ObjectCreated:Put"),
-    ///             String::from("s3:ObjectCreated:Copy"),
-    ///         ],
-    ///         id: None,
-    ///         prefix_filter_rule: Some(PrefixFilterRule {
-    ///             value: String::from("images"),
-    ///         }),
-    ///         suffix_filter_rule: Some(SuffixFilterRule {
-    ///             value: String::from("pg"),
-    ///         }),
-    ///         queue: String::from("arn:minio:sqs::miniojavatest:webhook"),
-    ///     }]),
-    ///     topic_config_list: None,
-    /// };
-    /// let args = SetBucketNotificationArgs::new("my-bucket", &config).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        config: &'a NotificationConfig,
-    ) -> Result<SetBucketNotificationArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        Ok(SetBucketNotificationArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            config,
-        })
-    }
-}
 
 /// Argument for [delete_bucket_replication()](crate::s3::client::Client::delete_bucket_replication) API
 pub type DeleteBucketReplicationArgs<'a> = BucketArgs<'a>;
