@@ -24,8 +24,7 @@ use xmltree::Element;
 
 use crate::s3::error::Error;
 use crate::s3::types::{
-    NotificationConfig, ObjectLockConfig, ReplicationConfig, RetentionMode, SelectProgress,
-    parse_legal_hold,
+    ObjectLockConfig, ReplicationConfig, RetentionMode, SelectProgress, parse_legal_hold,
 };
 use crate::s3::utils::{
     UtcTime, copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32,
@@ -33,9 +32,11 @@ use crate::s3::utils::{
 
 mod delete_bucket_encryption;
 mod delete_bucket_lifecycle;
+mod delete_bucket_notification;
 mod delete_bucket_policy;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
+mod get_bucket_notification;
 mod get_bucket_policy;
 mod get_bucket_versioning;
 mod get_object;
@@ -47,14 +48,17 @@ mod put_object;
 mod remove_objects;
 mod set_bucket_encryption;
 mod set_bucket_lifecycle;
+mod set_bucket_notification;
 mod set_bucket_policy;
 mod set_bucket_versioning;
 
 pub use delete_bucket_encryption::DeleteBucketEncryptionResponse;
 pub use delete_bucket_lifecycle::DeleteBucketLifecycleResponse;
+pub use delete_bucket_notification::DeleteBucketNotificationResponse;
 pub use delete_bucket_policy::DeleteBucketPolicyResponse;
 pub use get_bucket_encryption::GetBucketEncryptionResponse;
 pub use get_bucket_lifecycle::GetBucketLifecycleResponse;
+pub use get_bucket_notification::GetBucketNotificationResponse;
 pub use get_bucket_policy::GetBucketPolicyResponse;
 pub use get_bucket_versioning::GetBucketVersioningResponse;
 pub use get_object::GetObjectResponse;
@@ -70,6 +74,7 @@ pub use put_object::{
 pub use remove_objects::{DeleteError, DeletedObject, RemoveObjectResponse, RemoveObjectsResponse};
 pub use set_bucket_encryption::SetBucketEncryptionResponse;
 pub use set_bucket_lifecycle::SetBucketLifecycleResponse;
+pub use set_bucket_notification::SetBucketNotificationResponse;
 pub use set_bucket_policy::SetBucketPolicyResponse;
 pub use set_bucket_versioning::SetBucketVersioningResponse;
 
@@ -585,21 +590,6 @@ pub struct IsObjectLegalHoldEnabledResponse {
     pub version_id: Option<String>,
     pub enabled: bool,
 }
-
-/// Response of [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API
-pub type DeleteBucketNotificationResponse = BucketResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [get_bucket_notification()](crate::s3::client::Client::get_bucket_notification) API
-pub struct GetBucketNotificationResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub config: NotificationConfig,
-}
-
-/// Response of [set_bucket_notification()](crate::s3::client::Client::set_bucket_notification) API
-pub type SetBucketNotificationResponse = BucketResponse;
 
 /// Response of [delete_bucket_replication()](crate::s3::client::Client::delete_bucket_replication) API
 pub type DeleteBucketReplicationResponse = BucketResponse;
