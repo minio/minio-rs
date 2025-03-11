@@ -50,6 +50,7 @@ mod get_object;
 mod get_object_lock_config;
 mod get_object_retention;
 mod get_object_tags;
+mod get_region;
 mod is_object_legal_hold_enabled;
 mod list_buckets;
 pub(crate) mod list_objects;
@@ -92,6 +93,7 @@ pub use get_object::GetObjectResponse;
 pub use get_object_lock_config::GetObjectLockConfigResponse;
 pub use get_object_retention::GetObjectRetentionResponse;
 pub use get_object_tags::GetObjectTagsResponse;
+pub use get_region::GetRegionResponse;
 pub use is_object_legal_hold_enabled::IsObjectLegalHoldEnabledResponse;
 pub use list_buckets::ListBucketsResponse;
 pub use list_objects::ListObjectsResponse;
@@ -119,40 +121,6 @@ pub use set_object_retention::SetObjectRetentionResponse;
 pub use set_object_tags::SetObjectTagsResponse;
 
 #[derive(Debug)]
-/// Base response for bucket operation
-pub struct BucketResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket: String,
-}
-
-#[derive(Debug)]
-/// Base response for object operation
-pub struct ObjectResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket: String,
-    pub object: String,
-    pub version_id: Option<String>,
-}
-
-#[derive(Debug)]
-/// Base Upload ID response
-pub struct UploadIdResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket: String,
-    pub object_name: String,
-    pub upload_id: String,
-}
-
-/// Response of [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload) API
-pub type AbortMultipartUploadResponse = UploadIdResponse;
-
-/// Response of [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload) API
-pub type CreateMultipartUploadResponse = UploadIdResponse;
-
-#[derive(Debug)]
 /// Base response for put object
 pub struct PutObjectBaseResponse {
     pub headers: HeaderMap,
@@ -176,17 +144,11 @@ impl From<PutObjectResponse> for PutObjectBaseResponse {
     }
 }
 
-/// Response of [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload) API
-pub type CompleteMultipartUploadResponse = PutObjectBaseResponse;
-
 /// Response of [put_object_api()](crate::s3::client::Client::put_object_api) S3 API
 pub type PutObjectApiResponse = PutObjectBaseResponse;
 
 /// Response of [upload_part()](crate::s3::client::Client::upload_part) S3 API
 pub type UploadPartResponse = PutObjectApiResponse;
-
-/// Response of [put_object()](crate::s3::client::Client::put_object) API
-pub type PutObjectResponseOld = PutObjectApiResponse;
 
 /// Response of [upload_part_copy()](crate::s3::client::Client::upload_part_copy) S3 API
 pub type UploadPartCopyResponse = PutObjectApiResponse;
@@ -196,9 +158,6 @@ pub type CopyObjectResponse = PutObjectApiResponse;
 
 /// Response of [compose_object()](crate::s3::client::Client::compose_object) API
 pub type ComposeObjectResponse = PutObjectApiResponse;
-
-/// Response of [upload_object()](crate::s3::client::Client::upload_object) API
-pub type UploadObjectResponse = PutObjectApiResponse;
 
 #[derive(Debug)]
 /// Response of [stat_object()](crate::s3::client::Client::stat_object) API
@@ -625,14 +584,4 @@ pub struct GetPresignedObjectUrlResponse {
     pub object: String,
     pub version_id: Option<String>,
     pub url: String,
-}
-
-#[derive(Clone, Debug)]
-/// Response of [download_object()](crate::s3::client::Client::download_object) API
-pub struct DownloadObjectResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
-    pub version_id: Option<String>,
 }

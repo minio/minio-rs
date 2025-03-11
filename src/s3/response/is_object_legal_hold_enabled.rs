@@ -19,6 +19,7 @@ use crate::s3::utils::get_default_text;
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
+use std::mem;
 use xmltree::Element;
 
 /// Response of
@@ -36,8 +37,8 @@ pub struct IsObjectLegalHoldEnabledResponse {
 
 #[async_trait]
 impl FromS3Response for IsObjectLegalHoldEnabledResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
@@ -45,21 +46,20 @@ impl FromS3Response for IsObjectLegalHoldEnabledResponse {
             Some(v) => v.to_string(),
         };
 
-        let region: String = req.get_computed_region();
-        let object_name: String = req.object.unwrap().into();
+        let object: String = req.object.unwrap();
         let version_id: Option<String> = req.query_params.get("versionId").cloned();
 
         match resp {
-            Ok(r) => {
-                let headers = r.headers().clone();
+            Ok(mut r) => {
+                let headers: HeaderMap = mem::take(r.headers_mut());
                 let body = r.bytes().await?;
                 let root = Element::parse(body.reader())?;
 
                 Ok(IsObjectLegalHoldEnabledResponse {
                     headers,
-                    region,
+                    region: req.inner_region,
                     bucket,
-                    object: object_name,
+                    object,
                     version_id,
                     enabled: get_default_text(&root, "Status") == "ON",
                 })
@@ -69,9 +69,9 @@ impl FromS3Response for IsObjectLegalHoldEnabledResponse {
             {
                 Ok(IsObjectLegalHoldEnabledResponse {
                     headers: HeaderMap::new(),
-                    region,
+                    region: req.inner_region,
                     bucket,
-                    object: object_name,
+                    object,
                     version_id,
                     enabled: false,
                 })

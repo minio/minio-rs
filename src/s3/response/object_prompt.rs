@@ -16,6 +16,7 @@
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
+use std::mem;
 
 pub struct ObjectPromptResponse {
     pub headers: http::HeaderMap,
@@ -27,15 +28,15 @@ pub struct ObjectPromptResponse {
 
 #[async_trait]
 impl FromS3Response for ObjectPromptResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
-        response: Result<reqwest::Response, Error>,
+    async fn from_s3response(
+        req: S3Request,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let response = response?;
-        let headers = response.headers().clone();
-        let body = response.bytes().await?;
+        let mut resp = resp?;
+        let headers = mem::take(resp.headers_mut());
+        let body = resp.bytes().await?;
         let prompt_response: String = String::from_utf8(body.to_vec())?;
-        let region: String = req.region.unwrap_or("").to_string(); // Keep this since it defaults to an empty string
+        let region: String = req.region.unwrap_or("".to_string()); // Keep this since it defaults to an empty string
 
         let bucket_name: String = req
             .bucket

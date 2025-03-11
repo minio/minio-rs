@@ -15,39 +15,37 @@
 
 use crate::s3::Client;
 use crate::s3::builders::BucketCommon;
+use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::Error;
-use crate::s3::response::GetBucketLifecycleResponse;
+use crate::s3::response::GetRegionResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{Multimap, check_bucket_name};
 use async_trait::async_trait;
 use http::Method;
 
-/// Argument builder for [get_bucket_lifecycle()](Client::get_bucket_lifecycle) API
-pub type GetBucketLifecycle = BucketCommon<GetBucketLifecyclePhantomData>;
+/// Argument builder for [get_region()](Client::get_region) API
+pub type GetRegion = BucketCommon<GetRegionPhantomData>;
 
 #[derive(Default, Debug)]
-pub struct GetBucketLifecyclePhantomData;
+pub struct GetRegionPhantomData;
 
-impl S3Api for GetBucketLifecycle {
-    type S3Response = GetBucketLifecycleResponse;
+impl S3Api for GetRegion {
+    type S3Response = GetRegionResponse;
 }
 
 #[async_trait]
-impl ToS3Request for GetBucketLifecycle {
+impl ToS3Request for GetRegion {
     async fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
-        let region: String = client
-            .get_region_cached(&self.bucket, self.region.as_deref())
-            .await?;
-
         let headers: Multimap = self.extra_headers.unwrap_or_default();
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
-        query_params.insert("lifecycle".into(), String::new());
+        query_params.insert(String::from("location"), String::new());
+
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         Ok(S3Request::new(client, Method::GET)
-            .region(Some(region))
+            .region(Some(DEFAULT_REGION.to_string()))
             .bucket(Some(self.bucket))
             .query_params(query_params)
             .headers(headers))

@@ -30,8 +30,8 @@ pub struct MakeBucketResponse {
 
 #[async_trait]
 impl FromS3Response for MakeBucketResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
@@ -39,7 +39,7 @@ impl FromS3Response for MakeBucketResponse {
             Some(v) => v.to_string(),
         };
         let resp = resp?;
-        let region: String = req.get_computed_region();
+        let region: String = req.inner_region;
         if !req.client.region_map.contains_key(&bucket) {
             req.client.region_map.insert(bucket.clone(), region.clone());
         }

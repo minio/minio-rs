@@ -17,10 +17,10 @@ use crate::s3::Client;
 use crate::s3::builders::SegmentedBytes;
 use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::Error;
-use crate::s3::http::BaseUrl;
 use crate::s3::response::MakeBucketResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{Multimap, check_bucket_name};
+use async_trait::async_trait;
 use http::Method;
 
 /// Argument builder for [make_bucket()](Client::make_bucket) API
@@ -77,37 +77,31 @@ impl S3Api for MakeBucket {
     type S3Response = MakeBucketResponse;
 }
 
+#[async_trait]
 impl ToS3Request for MakeBucket {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let base_url: &BaseUrl = match &self.client {
-            None => return Err(Error::NoClientProvided),
-            Some(c) => &c.base_url,
-        };
-
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
         let region1: Option<&str> = self.region.as_deref();
-        let region2: Option<&str> = if base_url.region.is_empty() {
+        let region2: Option<&str> = if client.base_url.region.is_empty() {
             None
         } else {
-            Some(base_url.region.as_str())
+            Some(&*client.base_url.region)
         };
 
-        let region: &str = match (region1, region2) {
-            (None, None) => DEFAULT_REGION,
-            (Some(r), None) | (None, Some(r)) => r, // Take the non-None value
-            (Some(r1), Some(r2)) if r1 == r2 => r1, // Both are Some and equal
+        let region_str: String = match (region1, region2) {
+            (None, None) => DEFAULT_REGION.to_string(),
+            (Some(_), None) => self.region.unwrap(),
+            (None, Some(_)) => client.base_url.region.clone(),
+            (Some(r1), Some(r2)) if r1 == r2 => self.region.unwrap(), // Both are Some and equal
             (Some(r1), Some(r2)) => {
                 return Err(Error::RegionMismatch(r1.to_string(), r2.to_string()));
             }
         };
 
-        let mut headers: Multimap = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
+        let query_params: Multimap = self.extra_query_params.unwrap_or_default();
 
         if self.object_lock {
             headers.insert(
@@ -116,18 +110,11 @@ impl ToS3Request for MakeBucket {
             );
         }
 
-        let query_params: Multimap = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
-        let data: String = match region {
+        let data: String = match region_str.as_str() {
             DEFAULT_REGION => String::new(),
             _ => format!(
                 "<CreateBucketConfiguration><LocationConstraint>{}</LocationConstraint></CreateBucketConfiguration>",
-                region
+                region_str
             ),
         };
 
@@ -136,15 +123,11 @@ impl ToS3Request for MakeBucket {
             false => Some(SegmentedBytes::from(data)),
         };
 
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
-
-        let req = S3Request::new(client, Method::PUT)
-            .region(Some(region))
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(client, Method::PUT)
+            .region(Some(region_str))
+            .bucket(Some(self.bucket))
             .query_params(query_params)
             .headers(headers)
-            .body(body);
-
-        Ok(req)
+            .body(body))
     }
 }

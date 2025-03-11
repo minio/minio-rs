@@ -63,6 +63,7 @@ mod get_object;
 mod get_object_lock_config;
 mod get_object_retention;
 mod get_object_tags;
+mod get_region;
 mod is_object_legal_hold_enabled;
 mod list_objects;
 mod listen_bucket_notification;
@@ -535,8 +536,8 @@ impl Client {
             region,
             headers,
             query_params,
-            bucket_name,
-            object_name,
+            &bucket_name,
+            &object_name,
             sb.as_ref(),
         )
         .await
@@ -548,8 +549,8 @@ impl Client {
         region: &str,
         headers: &mut Multimap,
         query_params: &Multimap,
-        bucket_name: Option<&str>,
-        object_name: Option<&str>,
+        bucket_name: &Option<&str>,
+        object_name: &Option<&str>,
         data: Option<&SegmentedBytes>,
     ) -> Result<reqwest::Response, Error> {
         let res = self
@@ -558,8 +559,8 @@ impl Client {
                 region,
                 headers,
                 query_params,
-                bucket_name,
-                object_name,
+                bucket_name.as_deref(),
+                object_name.as_deref(),
                 data,
                 true,
             )
@@ -582,68 +583,12 @@ impl Client {
             region,
             headers,
             query_params,
-            bucket_name,
-            object_name,
+            bucket_name.as_deref(),
+            object_name.as_deref(),
             data,
             false,
         )
         .await
-    }
-
-    pub async fn get_region(
-        &self,
-        bucket_name: &str,
-        region: Option<&str>,
-    ) -> Result<String, Error> {
-        if !region.is_none_or(|v| v.is_empty()) {
-            if !self.base_url.region.is_empty() && self.base_url.region != *region.unwrap() {
-                return Err(Error::RegionMismatch(
-                    self.base_url.region.clone(),
-                    region.unwrap().to_string(),
-                ));
-            }
-
-            return Ok(region.unwrap().to_string());
-        }
-
-        if !self.base_url.region.is_empty() {
-            return Ok(self.base_url.region.clone());
-        }
-
-        if bucket_name.is_empty() || self.provider.is_none() {
-            return Ok(String::from(DEFAULT_REGION));
-        }
-
-        if let Some(v) = self.region_map.get(bucket_name) {
-            return Ok((*v).to_string());
-        }
-
-        let mut headers = Multimap::new();
-        let mut query_params = Multimap::new();
-        query_params.insert(String::from("location"), String::new());
-
-        let resp = self
-            .execute(
-                Method::GET,
-                &String::from(DEFAULT_REGION),
-                &mut headers,
-                &query_params,
-                Some(bucket_name),
-                None,
-                None,
-            )
-            .await?;
-        let body = resp.bytes().await?;
-        let root = Element::parse(body.reader())?;
-
-        let mut location = root.get_text().unwrap_or_default().to_string();
-        if location.is_empty() {
-            location = String::from(DEFAULT_REGION);
-        }
-
-        self.region_map
-            .insert(bucket_name.to_string(), location.clone());
-        Ok(location)
     }
 
     async fn calculate_part_count(&self, sources: &mut [ComposeSource<'_>]) -> Result<u16, Error> {
@@ -985,7 +930,7 @@ impl Client {
             merge(&mut query_params, v);
         }
 
-        let region = self.get_region(args.bucket, args.region).await?;
+        let region: String = self.get_region_cached(args.bucket, args.region).await?;
 
         let resp = self
             .execute(
@@ -1007,7 +952,7 @@ impl Client {
             headers: header_map.clone(),
             bucket_name: args.bucket.to_string(),
             object_name: args.object.to_string(),
-            location: region.clone(),
+            location: region,
             etag: get_text(&root, "ETag")?.trim_matches('"').to_string(),
             version_id: match header_map.get("x-amz-version-id") {
                 Some(v) => Some(v.to_str()?.to_string()),
@@ -1020,7 +965,7 @@ impl Client {
         &self,
         args: &GetPresignedObjectUrlArgs<'_>,
     ) -> Result<GetPresignedObjectUrlResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
+        let region: String = self.get_region_cached(args.bucket, args.region).await?;
 
         let mut query_params = Multimap::new();
         if let Some(v) = &args.extra_query_params {
@@ -1083,9 +1028,8 @@ impl Client {
             ));
         }
 
-        let region = self
-            .get_region(&policy.bucket, policy.region.as_deref())
-            .await?;
+        let region: String = self.get_region_cached(&policy.bucket, policy.region.as_deref()).await?;
+
         let creds = self.provider.as_ref().unwrap().fetch();
         policy.form_data(
             creds.access_key,
@@ -1104,7 +1048,7 @@ impl Client {
         &self,
         args: &PutObjectApiArgs<'_>,
     ) -> Result<PutObjectApiResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
+        let region: String = self.get_region_cached(args.bucket, args.region).await?;
 
         let mut headers = args.get_headers();
 
@@ -1153,8 +1097,7 @@ impl Client {
             return Err(Error::SseTlsRequired(None));
         }
 
-        let region = self.get_region(args.bucket, args.region).await?;
-
+        let region: String = self.get_region_cached(args.bucket, args.region).await?;
         let data = args.request.to_xml();
         let data: Bytes = data.into();
 
@@ -1196,7 +1139,7 @@ impl Client {
             return Err(Error::SseTlsRequired(None));
         }
 
-        let region = self.get_region(args.bucket, args.region).await?;
+        let region: String = self.get_region_cached(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {
@@ -1257,7 +1200,7 @@ impl Client {
         &self,
         args: &UploadPartCopyArgs<'_>,
     ) -> Result<UploadPartCopyResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
+        let region: String = self.get_region_cached(args.bucket, args.region).await?;
 
         let mut headers = Multimap::new();
         if let Some(v) = &args.extra_headers {

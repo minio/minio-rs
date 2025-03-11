@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_trait::async_trait;
 use http::Method;
 
 use crate::s3::response::ListBucketsResponse;
@@ -54,27 +55,19 @@ impl ListBuckets {
     }
 }
 
-impl ToS3Request for ListBuckets {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            headers = v.clone();
-        }
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            query_params = v.clone();
-        }
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::GET,
-        )
-        .query_params(query_params)
-        .headers(headers);
-        Ok(req)
-    }
-}
-
 impl S3Api for ListBuckets {
     type S3Response = ListBucketsResponse;
+}
+
+#[async_trait]
+impl ToS3Request for ListBuckets {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
+        let headers: Multimap = self.extra_headers.unwrap_or_default();
+        let query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
+
+        Ok(S3Request::new(client, Method::GET)
+            .query_params(query_params)
+            .headers(headers))
+    }
 }

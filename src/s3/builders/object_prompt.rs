@@ -14,14 +14,15 @@
 // limitations under the License.
 
 use crate::s3::builders::SegmentedBytes;
-use crate::s3::sse::{Sse, SseCustomerKey};
-use crate::s3::utils::{Multimap, check_bucket_name, merge};
+use crate::s3::sse::SseCustomerKey;
+use crate::s3::utils::{Multimap, check_bucket_name};
 use crate::s3::{
     client::Client,
     error::Error,
     response::ObjectPromptResponse,
     types::{S3Api, S3Request, ToS3Request},
 };
+use async_trait::async_trait;
 use bytes::Bytes;
 use http::Method;
 use serde_json::json;
@@ -89,42 +90,32 @@ impl ObjectPrompt {
     }
 }
 
-// internal helpers
-impl ObjectPrompt {
-    fn get_headers(&self) -> Multimap {
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.ssec {
-            merge(&mut headers, &v.headers());
-        }
-        headers
-    }
+impl S3Api for ObjectPrompt {
+    type S3Response = ObjectPromptResponse;
 }
 
+#[async_trait]
 impl ToS3Request for ObjectPrompt {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
+        if client.is_aws_host() {
+            return Err(Error::UnsupportedApi(String::from("ObjectPrompt")));
+        }
 
         if self.object.is_empty() {
             return Err(Error::InvalidObjectName(String::from(
                 "object name cannot be empty",
             )));
         }
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
 
         if self.ssec.is_some() && !client.is_secure() {
             return Err(Error::SseTlsRequired(None));
         }
 
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
-        }
-        merge(&mut headers, &self.get_headers());
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
+        let headers: Multimap = self.extra_headers.unwrap_or_default();
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         if let Some(v) = &self.version_id {
             query_params.insert(String::from("versionId"), v.to_string());
         }
@@ -139,18 +130,12 @@ impl ToS3Request for ObjectPrompt {
         let prompt_body = json!({ "prompt": self.prompt });
         let body: SegmentedBytes = SegmentedBytes::from(Bytes::from(prompt_body.to_string()));
 
-        let req = S3Request::new(client, Method::POST)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
-            .object(Some(&self.object))
+        Ok(S3Request::new(client, Method::POST)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .object(Some(self.object))
             .query_params(query_params)
             .headers(headers)
-            .body(Some(body));
-
-        Ok(req)
+            .body(Some(body)))
     }
-}
-
-impl S3Api for ObjectPrompt {
-    type S3Response = ObjectPromptResponse;
 }

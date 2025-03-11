@@ -13,24 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
+use bytes::Buf;
 use http::HeaderMap;
 use std::mem;
+use xmltree::Element;
 
 /// Response of
-/// [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification)
+/// [get_region()](crate::s3::client::Client::get_region)
 /// API
 #[derive(Clone, Debug)]
-pub struct DeleteBucketNotificationResponse {
+pub struct GetRegionResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
+    pub region_response: String,
 }
 
 #[async_trait]
-impl FromS3Response for DeleteBucketNotificationResponse {
+impl FromS3Response for GetRegionResponse {
     async fn from_s3response(
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
@@ -41,10 +45,20 @@ impl FromS3Response for DeleteBucketNotificationResponse {
         };
         let mut resp = resp?;
 
-        Ok(DeleteBucketNotificationResponse {
-            headers: mem::take(resp.headers_mut()),
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+        let body = resp.bytes().await?;
+        let root = Element::parse(body.reader())?;
+
+        let mut location = root.get_text().unwrap_or_default().to_string();
+        if location.is_empty() {
+            location = String::from(DEFAULT_REGION);
+        }
+
+        Ok(GetRegionResponse {
+            headers,
             region: req.inner_region,
             bucket,
+            region_response: location,
         })
     }
 }

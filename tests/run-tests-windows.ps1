@@ -8,4 +8,4 @@ $Env:IGNORE_CERT_CHECK = "false"
 $Env:SERVER_REGION = ""
 
 # Run tests
-cargo test
+cargo test --features ring

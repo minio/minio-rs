@@ -19,6 +19,7 @@ use crate::s3::error::Error;
 use crate::s3::response::SetBucketVersioningResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{Multimap, check_bucket_name};
+use async_trait::async_trait;
 use bytes::Bytes;
 use http::Method;
 use std::fmt;
@@ -97,23 +98,13 @@ impl S3Api for SetBucketVersioning {
     type S3Response = SetBucketVersioningResponse;
 }
 
+#[async_trait]
 impl ToS3Request for SetBucketVersioning {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
+        let headers: Multimap = self.extra_headers.unwrap_or_default();
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.insert("versioning".into(), String::new());
 
         let mut data = "<VersioningConfiguration>".to_string();
@@ -137,15 +128,13 @@ impl ToS3Request for SetBucketVersioning {
         data.push_str("</VersioningConfiguration>");
 
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(data)));
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::PUT)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(client, Method::PUT)
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
             .headers(headers)
-            .body(body);
-
-        Ok(req)
+            .body(body))
     }
 }

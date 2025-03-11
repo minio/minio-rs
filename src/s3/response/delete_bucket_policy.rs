@@ -17,6 +17,7 @@ use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
 use http::HeaderMap;
+use std::mem;
 
 /// Response of
 /// [delete_bucket_policy()](crate::s3::client::Client::delete_bucket_policy)
@@ -30,8 +31,8 @@ pub struct DeleteBucketPolicyResponse {
 
 #[async_trait]
 impl FromS3Response for DeleteBucketPolicyResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
@@ -39,15 +40,15 @@ impl FromS3Response for DeleteBucketPolicyResponse {
             Some(v) => v.to_string(),
         };
         match resp {
-            Ok(r) => Ok(DeleteBucketPolicyResponse {
-                headers: r.headers().clone(),
-                region: req.get_computed_region(),
+            Ok(mut r) => Ok(DeleteBucketPolicyResponse {
+                headers: mem::take(r.headers_mut()),
+                region: req.inner_region,
                 bucket,
             }),
             Err(Error::S3Error(ref err)) if err.code == Error::NoSuchBucketPolicy.as_str() => {
                 Ok(DeleteBucketPolicyResponse {
                     headers: HeaderMap::new(),
-                    region: req.get_computed_region(),
+                    region: req.inner_region,
                     bucket,
                 })
             }

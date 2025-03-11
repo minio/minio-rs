@@ -18,6 +18,7 @@ use crate::s3::types::{FromS3Response, LifecycleConfig, S3Request};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
+use std::mem;
 use xmltree::Element;
 
 /// Response of
@@ -33,23 +34,24 @@ pub struct GetBucketLifecycleResponse {
 
 #[async_trait]
 impl FromS3Response for GetBucketLifecycleResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
             None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
             Some(v) => v.to_string(),
         };
-        let resp = resp?;
-        let headers = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
-        let config = LifecycleConfig::from_xml(&mut root)?;
-
+        let mut resp = resp?;
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+        let config: LifecycleConfig = {
+            let body = resp.bytes().await?;
+            let mut root = Element::parse(body.reader())?;
+            LifecycleConfig::from_xml(&mut root)?
+        };
         Ok(GetBucketLifecycleResponse {
             headers,
-            region: req.get_computed_region(),
+            region: req.inner_region,
             bucket,
             config,
         })

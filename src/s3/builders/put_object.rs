@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashMap, sync::Arc};
-
+use async_trait::async_trait;
 use bytes::BytesMut;
 use http::Method;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::s3::{
     builders::{ContentStream, Size},
@@ -33,6 +33,8 @@ use crate::s3::{
 };
 
 use super::{ObjectContent, SegmentedBytes};
+
+// region: multipart-upload
 
 /// Argument for
 /// [create_multipart_upload()](Client::create_multipart_upload)
@@ -139,35 +141,33 @@ impl CreateMultipartUpload {
     }
 }
 
-impl ToS3Request for CreateMultipartUpload {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        self.validate()?;
-
-        let headers = self.get_headers()?;
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("uploads"), String::new());
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::POST,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .object(Some(&self.object))
-        .query_params(query_params)
-        .headers(headers);
-
-        Ok(req)
-    }
-}
-
 impl S3Api for CreateMultipartUpload {
     type S3Response = CreateMultipartUploadResponse2;
 }
+
+#[async_trait]
+impl ToS3Request for CreateMultipartUpload {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
+        self.validate()?;
+
+        let headers = self.get_headers()?;
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        query_params.insert(String::from("uploads"), String::new());
+
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
+
+        Ok(S3Request::new(client, Method::POST)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .object(Some(self.object))
+            .query_params(query_params)
+            .headers(headers))
+    }
+}
+
+// endregion: multipart-upload
+
+// region: abort-multipart-upload
 
 /// Argument for
 /// [abort_multipart_upload()](Client::abort_multipart_upload)
@@ -215,41 +215,36 @@ impl AbortMultipartUpload {
     }
 }
 
+impl S3Api for AbortMultipartUpload {
+    type S3Response = AbortMultipartUploadResponse2;
+}
+
+#[async_trait]
 impl ToS3Request for AbortMultipartUpload {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
+        let headers: Multimap = self.extra_headers.unwrap_or_default();
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.insert(
             String::from("uploadId"),
             urlencode(&self.upload_id).to_string(),
         );
 
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::DELETE,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .object(Some(&self.object))
-        .query_params(query_params)
-        .headers(headers);
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        Ok(req)
+        Ok(S3Request::new(client, Method::DELETE)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .object(Some(self.object))
+            .query_params(query_params)
+            .headers(headers))
     }
 }
 
-impl S3Api for AbortMultipartUpload {
-    type S3Response = AbortMultipartUploadResponse2;
-}
+// endregion: abort-multipart-upload
+
+// region: complete-multipart-upload
 
 /// Argument for
 /// [complete_multipart_upload()](Client::complete_multipart_upload)
@@ -299,8 +294,9 @@ impl CompleteMultipartUpload {
     }
 }
 
+#[async_trait]
 impl ToS3Request for CompleteMultipartUpload {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
         if self.object.is_empty() {
@@ -333,40 +329,34 @@ impl ToS3Request for CompleteMultipartUpload {
         data.extend_from_slice(b"</CompleteMultipartUpload>");
         let data = data.freeze();
 
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
-        }
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         headers.insert(
             String::from("Content-Type"),
             String::from("application/xml"),
         );
         headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
 
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.insert(String::from("uploadId"), self.upload_id.to_string());
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::POST,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .object(Some(&self.object))
-        .query_params(query_params)
-        .headers(headers)
-        .body(Some(data.into()));
-
-        Ok(req)
+        Ok(S3Request::new(client, Method::POST)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .object(Some(self.object))
+            .query_params(query_params)
+            .headers(headers)
+            .body(Some(data.into())))
     }
 }
 
 impl S3Api for CompleteMultipartUpload {
     type S3Response = CompleteMultipartUploadResponse2;
 }
+
+// endregion: complete-multipart-upload
+
+// region: upload-part
 
 /// Argument for [upload_part()](Client::upload_part) S3 API
 #[derive(Debug, Clone, Default)]
@@ -493,41 +483,39 @@ impl UploadPart {
     }
 }
 
+impl S3Api for UploadPart {
+    type S3Response = UploadPartResponse2;
+}
+
+#[async_trait]
 impl ToS3Request for UploadPart {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
         self.validate()?;
 
         let headers = self.get_headers()?;
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
 
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
         if let Some(upload_id) = &self.upload_id {
             query_params.insert(String::from("uploadId"), upload_id.to_string());
         }
         if let Some(part_number) = self.part_number {
             query_params.insert(String::from("partNumber"), part_number.to_string());
         }
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::PUT,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .object(Some(&self.object))
-        .query_params(query_params)
-        .headers(headers)
-        .body(Some(self.data.clone()));
-
-        Ok(req)
+        Ok(S3Request::new(client, Method::PUT)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .object(Some(self.object))
+            .query_params(query_params)
+            .headers(headers)
+            .body(Some(self.data)))
     }
 }
 
-impl S3Api for UploadPart {
-    type S3Response = UploadPartResponse2;
-}
+// endregion: upload-part
+
+// region: put-object
 
 /// Argument builder for PutObject S3 API. This is a lower-level API.
 #[derive(Debug, Clone, Default)]
@@ -589,9 +577,10 @@ impl PutObject {
     }
 }
 
+#[async_trait]
 impl ToS3Request for PutObject {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        self.0.to_s3request()
+    async fn to_s3request(self) -> Result<S3Request, Error> {
+        self.0.to_s3request().await
     }
 }
 
@@ -599,88 +588,9 @@ impl S3Api for PutObject {
     type S3Response = PutObjectResponse;
 }
 
-fn object_write_args_headers(
-    extra_headers: Option<&Multimap>,
-    user_metadata: Option<&Multimap>,
-    sse: &Option<Arc<dyn Sse>>,
-    tags: Option<&HashMap<String, String>>,
-    retention: Option<&Retention>,
-    legal_hold: bool,
-    content_type: Option<&String>,
-) -> Result<Multimap, Error> {
-    let mut map = Multimap::new();
+// endregion: put-object
 
-    if let Some(v) = extra_headers {
-        merge(&mut map, v);
-    }
-
-    if let Some(v) = user_metadata {
-        // Validate it.
-        for (k, _) in v.iter() {
-            if k.is_empty() {
-                return Err(Error::InvalidUserMetadata(String::from(
-                    "user metadata key cannot be empty",
-                )));
-            }
-            if !k.starts_with("x-amz-meta-") {
-                return Err(Error::InvalidUserMetadata(format!(
-                    "user metadata key '{}' does not start with 'x-amz-meta-'",
-                    k
-                )));
-            }
-        }
-
-        merge(&mut map, v);
-    }
-
-    if let Some(v) = sse {
-        merge(&mut map, &v.headers());
-    }
-
-    if let Some(v) = tags {
-        let mut tagging = String::new();
-        for (key, value) in v.iter() {
-            if !tagging.is_empty() {
-                tagging.push('&');
-            }
-            tagging.push_str(&urlencode(key));
-            tagging.push('=');
-            tagging.push_str(&urlencode(value));
-        }
-
-        if !tagging.is_empty() {
-            map.insert(String::from("x-amz-tagging"), tagging);
-        }
-    }
-
-    if let Some(v) = retention {
-        map.insert(String::from("x-amz-object-lock-mode"), v.mode.to_string());
-        map.insert(
-            String::from("x-amz-object-lock-retain-until-date"),
-            to_iso8601utc(v.retain_until_date),
-        );
-    }
-
-    if legal_hold {
-        map.insert(
-            String::from("x-amz-object-lock-legal-hold"),
-            String::from("ON"),
-        );
-    }
-
-    // Set the Content-Type header if not already set.
-    if !map.contains_key("Content-Type") {
-        map.insert(
-            String::from("Content-Type"),
-            match content_type {
-                Some(content_type) => content_type.clone(),
-                None => String::from("application/octet-stream"),
-            },
-        );
-    }
-
-    Ok(map)
-}
+// region: put-object-content
 
 /// PutObjectContent takes a `ObjectContent` stream and uploads it to MinIO/S3.
 ///
@@ -1041,6 +951,91 @@ impl PutObjectContent {
             content_type: self.content_type.clone(),
         }
     }
+}
+
+// endregion: put-object-content
+
+fn object_write_args_headers(
+    extra_headers: Option<&Multimap>,
+    user_metadata: Option<&Multimap>,
+    sse: &Option<Arc<dyn Sse>>,
+    tags: Option<&HashMap<String, String>>,
+    retention: Option<&Retention>,
+    legal_hold: bool,
+    content_type: Option<&String>,
+) -> Result<Multimap, Error> {
+    let mut map = Multimap::new();
+
+    if let Some(v) = extra_headers {
+        merge(&mut map, v);
+    }
+
+    if let Some(v) = user_metadata {
+        // Validate it.
+        for (k, _) in v.iter() {
+            if k.is_empty() {
+                return Err(Error::InvalidUserMetadata(String::from(
+                    "user metadata key cannot be empty",
+                )));
+            }
+            if !k.starts_with("x-amz-meta-") {
+                return Err(Error::InvalidUserMetadata(format!(
+                    "user metadata key '{}' does not start with 'x-amz-meta-'",
+                    k
+                )));
+            }
+        }
+
+        merge(&mut map, v);
+    }
+
+    if let Some(v) = sse {
+        merge(&mut map, &v.headers());
+    }
+
+    if let Some(v) = tags {
+        let mut tagging = String::new();
+        for (key, value) in v.iter() {
+            if !tagging.is_empty() {
+                tagging.push('&');
+            }
+            tagging.push_str(&urlencode(key));
+            tagging.push('=');
+            tagging.push_str(&urlencode(value));
+        }
+
+        if !tagging.is_empty() {
+            map.insert(String::from("x-amz-tagging"), tagging);
+        }
+    }
+
+    if let Some(v) = retention {
+        map.insert(String::from("x-amz-object-lock-mode"), v.mode.to_string());
+        map.insert(
+            String::from("x-amz-object-lock-retain-until-date"),
+            to_iso8601utc(v.retain_until_date),
+        );
+    }
+
+    if legal_hold {
+        map.insert(
+            String::from("x-amz-object-lock-legal-hold"),
+            String::from("ON"),
+        );
+    }
+
+    // Set the Content-Type header if not already set.
+    if !map.contains_key("Content-Type") {
+        map.insert(
+            String::from("Content-Type"),
+            match content_type {
+                Some(content_type) => content_type.clone(),
+                None => String::from("application/octet-stream"),
+            },
+        );
+    }
+
+    Ok(map)
 }
 
 pub const MIN_PART_SIZE: u64 = 5 * 1024 * 1024; // 5 MiB

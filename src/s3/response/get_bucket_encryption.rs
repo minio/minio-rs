@@ -19,6 +19,7 @@ use crate::s3::utils::{get_option_text, get_text};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
+use std::mem;
 use xmltree::Element;
 
 /// Response of
@@ -34,8 +35,8 @@ pub struct GetBucketEncryptionResponse {
 
 #[async_trait]
 impl FromS3Response for GetBucketEncryptionResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
@@ -43,8 +44,8 @@ impl FromS3Response for GetBucketEncryptionResponse {
             Some(v) => v.to_string(),
         };
         match resp {
-            Ok(r) => {
-                let headers = r.headers().clone();
+            Ok(mut r) => {
+                let headers: HeaderMap = mem::take(r.headers_mut());
                 let body = r.bytes().await?;
                 let mut root = Element::parse(body.reader())?;
 
@@ -60,7 +61,7 @@ impl FromS3Response for GetBucketEncryptionResponse {
 
                 Ok(GetBucketEncryptionResponse {
                     headers,
-                    region: req.get_computed_region(),
+                    region: req.inner_region,
                     bucket,
                     config: SseConfig {
                         sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
@@ -73,7 +74,7 @@ impl FromS3Response for GetBucketEncryptionResponse {
             {
                 Ok(GetBucketEncryptionResponse {
                     headers: HeaderMap::new(),
-                    region: req.get_computed_region(),
+                    region: req.inner_region,
                     bucket,
                     config: Default::default(),
                 })
