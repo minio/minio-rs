@@ -16,7 +16,7 @@
 //! Various types for S3 API requests and responses
 
 use super::builders::SegmentedBytes;
-use super::client::Client;
+use super::client::{Client, DEFAULT_REGION};
 use crate::s3::error::Error;
 use crate::s3::utils::{
     Multimap, UtcTime, from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc,
@@ -92,6 +92,7 @@ impl<'a> S3Request<'a> {
     }
 
     pub fn get_computed_region(&self) -> String {
+        //TODO return ref
         self.inner_region.clone()
     }
 
@@ -100,7 +101,7 @@ impl<'a> S3Request<'a> {
         self.inner_region = if let Some(bucket) = self.bucket {
             self.client.get_region(bucket, self.region).await?
         } else {
-            "us-east-1".to_string()
+            DEFAULT_REGION.to_string()
         };
 
         // Execute the API request.

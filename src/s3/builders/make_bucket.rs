@@ -15,6 +15,7 @@
 
 use crate::s3::Client;
 use crate::s3::builders::SegmentedBytes;
+use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::Error;
 use crate::s3::http::BaseUrl;
 use crate::s3::response::MakeBucketResponse;
@@ -80,25 +81,28 @@ impl ToS3Request for MakeBucket {
     fn to_s3request(&self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let base_url: BaseUrl = match &self.client {
+        let base_url: &BaseUrl = match &self.client {
             None => return Err(Error::NoClientProvided),
-            Some(c) => c.base_url.clone(),
+            Some(c) => &c.base_url,
         };
 
-        let mut region = "us-east-1";
-        if let Some(r) = &self.region {
-            if !base_url.region.is_empty() {
-                if base_url.region != *r {
-                    return Err(Error::RegionMismatch(
-                        base_url.region.clone(),
-                        r.to_string(),
-                    ));
-                }
-                region = r;
-            }
-        }
+        let region1: Option<&str> = self.region.as_deref();
+        let region2: Option<&str> = if base_url.region.is_empty() {
+            None
+        } else {
+            Some(base_url.region.as_str())
+        };
 
-        let mut headers = self
+        let region: &str = match (region1, region2) {
+            (None, None) => DEFAULT_REGION,
+            (Some(r), None) | (None, Some(r)) => r, // Take the non-None value
+            (Some(r1), Some(r2)) if r1 == r2 => r1, // Both are Some and equal
+            (Some(r1), Some(r2)) => {
+                return Err(Error::RegionMismatch(r1.to_string(), r2.to_string()));
+            }
+        };
+
+        let mut headers: Multimap = self
             .extra_headers
             .as_ref()
             .filter(|v| !v.is_empty())
@@ -112,15 +116,15 @@ impl ToS3Request for MakeBucket {
             );
         }
 
-        let query_params = self
+        let query_params: Multimap = self
             .extra_query_params
             .as_ref()
             .filter(|v| !v.is_empty())
             .cloned()
             .unwrap_or_default();
 
-        let data = match region {
-            "us-east-1" => String::new(),
+        let data: String = match region {
+            DEFAULT_REGION => String::new(),
             _ => format!(
                 "<CreateBucketConfiguration><LocationConstraint>{}</LocationConstraint></CreateBucketConfiguration>",
                 region
@@ -141,7 +145,7 @@ impl ToS3Request for MakeBucket {
             .headers(headers)
             .body(body);
 
-        //TODO insert into region_map used to be execution after creating the bucket...
+        //TODO insert into region_map used to be executed after creating the bucket...
         client
             .region_map
             .insert(self.bucket.clone(), region.to_string());

@@ -225,6 +225,7 @@ pub struct ObjectVersionArgs<'a> {
     pub extra_query_params: Option<&'a Multimap>,
     pub region: Option<&'a str>,
     pub bucket: &'a str,
+
     pub object: &'a str,
     pub version_id: Option<&'a str>,
 }
@@ -1275,15 +1276,6 @@ impl<'a> ComposeObjectArgs<'a> {
         )
     }
 }
-
-/// Argument for [enable_object_legal_hold()](crate::s3::client::Client::enable_object_legal_hold) API
-pub type EnableObjectLegalHoldArgs<'a> = ObjectVersionArgs<'a>;
-
-/// Argument for [disable_object_legal_hold()](crate::s3::client::Client::disable_object_legal_hold) API
-pub type DisableObjectLegalHoldArgs<'a> = ObjectVersionArgs<'a>;
-
-/// Argument for [is_object_legal_hold_enabled()](crate::s3::client::Client::is_object_legal_hold_enabled) API
-pub type IsObjectLegalHoldEnabledArgs<'a> = ObjectVersionArgs<'a>;
 
 /// Argument for [delete_object_lock_config()](crate::s3::client::Client::delete_object_lock_config) API
 pub type DeleteObjectLockConfigArgs<'a> = BucketArgs<'a>;

@@ -19,6 +19,7 @@ use crate::common::{CleanupGuard, TestContext, rand_bucket_name};
 use minio::s3::args::{
     DeleteObjectLockConfigArgs, GetObjectLockConfigArgs, SetObjectLockConfigArgs,
 };
+use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
     DeleteObjectLockConfigResponse, GetObjectLockConfigResponse, SetObjectLockConfigResponse,
 };
@@ -36,17 +37,22 @@ async fn set_get_delete_object_lock_config() {
         .unwrap();
     let _cleanup = CleanupGuard::new(&ctx, &bucket_name);
 
-    let _resp: SetObjectLockConfigResponse = ctx
+    const DURATION_DAYS: i32 = 7;
+
+    let resp: SetObjectLockConfigResponse = ctx
         .client
         .set_object_lock_config(
             &SetObjectLockConfigArgs::new(
                 &bucket_name,
-                &ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(7), None).unwrap(),
+                &ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None)
+                    .unwrap(),
             )
             .unwrap(),
         )
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
     let resp: GetObjectLockConfigResponse = ctx
         .client
@@ -57,15 +63,18 @@ async fn set_get_delete_object_lock_config() {
         Some(r) => matches!(r, RetentionMode::GOVERNANCE),
         _ => false,
     });
-
-    assert_eq!(resp.config.retention_duration_days, Some(7));
+    assert_eq!(resp.config.retention_duration_days, Some(DURATION_DAYS));
     assert!(resp.config.retention_duration_years.is_none());
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    let _resp: DeleteObjectLockConfigResponse = ctx
+    let resp: DeleteObjectLockConfigResponse = ctx
         .client
         .delete_object_lock_config(&DeleteObjectLockConfigArgs::new(&bucket_name).unwrap())
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
     let resp: GetObjectLockConfigResponse = ctx
         .client
@@ -73,4 +82,6 @@ async fn set_get_delete_object_lock_config() {
         .await
         .unwrap();
     assert!(resp.config.retention_mode.is_none());
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 }

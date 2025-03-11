@@ -30,8 +30,8 @@ use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
 use crate::s3::types::{Directive, ObjectLockConfig, RetentionMode};
 use crate::s3::utils::{
-    Multimap, from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash,
-    md5sum_hash_sb, merge, sha256_hash_sb, to_amz_date, to_iso8601utc, utc_now,
+    Multimap, from_iso8601utc, get_option_text, get_text, md5sum_hash, md5sum_hash_sb, merge,
+    sha256_hash_sb, to_amz_date, to_iso8601utc, utc_now,
 };
 
 use async_recursion::async_recursion;
@@ -50,6 +50,8 @@ mod delete_bucket_notification;
 mod delete_bucket_policy;
 mod delete_bucket_replication;
 mod delete_bucket_tags;
+mod disable_object_legal_hold;
+mod enable_object_legal_hold;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
 mod get_bucket_notification;
@@ -58,6 +60,7 @@ mod get_bucket_replication;
 mod get_bucket_tags;
 mod get_bucket_versioning;
 mod get_object;
+mod is_object_legal_hold_enabled;
 mod list_objects;
 mod listen_bucket_notification;
 mod make_bucket;
@@ -75,6 +78,8 @@ mod set_bucket_versioning;
 
 use super::builders::{ListBuckets, SegmentedBytes};
 use super::types::{PartInfo, S3Api};
+
+pub const DEFAULT_REGION: &str = "us-east-1";
 
 /// Client Builder manufactures a Client using given parameters.
 #[derive(Debug, Default)]
@@ -183,9 +188,9 @@ impl ClientBuilder {
 #[derive(Clone, Debug, Default)]
 pub struct Client {
     client: reqwest::Client,
-    pub base_url: BaseUrl,
+    pub(crate) base_url: BaseUrl,
     provider: Option<Arc<Box<(dyn Provider + Send + Sync + 'static)>>>,
-    pub region_map: Arc<DashMap<String, String>>,
+    pub(crate) region_map: Arc<DashMap<String, String>>,
 }
 
 impl Client {
@@ -600,7 +605,7 @@ impl Client {
         }
 
         if bucket_name.is_empty() || self.provider.is_none() {
-            return Ok(String::from("us-east-1"));
+            return Ok(String::from(DEFAULT_REGION));
         }
 
         if let Some(v) = self.region_map.get(bucket_name) {
@@ -614,7 +619,7 @@ impl Client {
         let resp = self
             .execute(
                 Method::GET,
-                &String::from("us-east-1"),
+                &String::from(DEFAULT_REGION),
                 &mut headers,
                 &query_params,
                 Some(bucket_name),
@@ -627,7 +632,7 @@ impl Client {
 
         let mut location = root.get_text().unwrap_or_default().to_string();
         if location.is_empty() {
-            location = String::from("us-east-1");
+            location = String::from(DEFAULT_REGION);
         }
 
         self.region_map
@@ -1005,49 +1010,6 @@ impl Client {
         })
     }
 
-    pub async fn disable_object_legal_hold(
-        &self,
-        args: &DisableObjectLegalHoldArgs<'_>,
-    ) -> Result<DisableObjectLegalHoldResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("legal-hold"), String::new());
-        let bytes = Bytes::from(&b"<LegalHold><Status>OFF</Status></LegalHold>"[..]);
-        headers.insert(String::from("Content-MD5"), md5sum_hash(&bytes));
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                Some(bytes),
-            )
-            .await?;
-
-        Ok(DisableObjectLegalHoldResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            object_name: args.object.to_string(),
-            version_id: args.version_id.as_ref().map(|v| v.to_string()),
-        })
-    }
-
     pub async fn delete_object_lock_config(
         &self,
         args: &DeleteObjectLockConfigArgs<'_>,
@@ -1107,49 +1069,6 @@ impl Client {
         })
     }
 
-    pub async fn enable_object_legal_hold(
-        &self,
-        args: &EnableObjectLegalHoldArgs<'_>,
-    ) -> Result<EnableObjectLegalHoldResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        let bytes = Bytes::from(&b"<LegalHold><Status>ON</Status></LegalHold>"[..]);
-        headers.insert(String::from("Content-MD5"), md5sum_hash(&bytes));
-        query_params.insert(String::from("legal-hold"), String::new());
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                Some(bytes),
-            )
-            .await?;
-
-        Ok(EnableObjectLegalHoldResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            object_name: args.object.to_string(),
-            version_id: args.version_id.as_ref().map(|v| v.to_string()),
-        })
-    }
-
     pub async fn get_object_lock_config(
         &self,
         args: &GetObjectLockConfigArgs<'_>,
@@ -1186,7 +1105,7 @@ impl Client {
         Ok(GetObjectLockConfigResponse {
             headers: header_map.clone(),
             region: region.clone(),
-            bucket_name: args.bucket.to_string(),
+            bucket: args.bucket.to_string(),
             config: ObjectLockConfig::from_xml(&root)?,
         })
     }
@@ -1390,67 +1309,6 @@ impl Client {
             creds.session_token,
             region,
         )
-    }
-
-    pub async fn is_object_legal_hold_enabled(
-        &self,
-        args: &IsObjectLegalHoldEnabledArgs<'_>,
-    ) -> Result<IsObjectLegalHoldEnabledResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("legal-hold"), String::new());
-
-        match self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                None,
-            )
-            .await
-        {
-            Ok(resp) => {
-                let header_map = resp.headers().clone();
-                let body = resp.bytes().await?;
-                let root = Element::parse(body.reader())?;
-                Ok(IsObjectLegalHoldEnabledResponse {
-                    headers: header_map.clone(),
-                    region: region.clone(),
-                    bucket_name: args.bucket.to_string(),
-                    object_name: args.object.to_string(),
-                    version_id: args.version_id.as_ref().map(|v| v.to_string()),
-                    enabled: get_default_text(&root, "Status") == "ON",
-                })
-            }
-            Err(Error::S3Error(ref err))
-                if err.code == Error::NoSuchObjectLockConfiguration.as_str() =>
-            {
-                Ok(IsObjectLegalHoldEnabledResponse {
-                    headers: HeaderMap::new(),
-                    region: region.clone(),
-                    bucket_name: args.bucket.to_string(),
-                    object_name: args.object.to_string(),
-                    version_id: args.version_id.as_ref().map(|v| v.to_string()),
-                    enabled: false,
-                })
-            }
-            Err(e) => Err(e),
-        }
     }
 
     pub fn list_buckets(&self) -> ListBuckets {

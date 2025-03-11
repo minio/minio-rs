@@ -13,21 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
+//! S3 APIs for bucket objects.
 
-use crate::common::{TestContext, create_bucket_helper};
-use minio::s3::client::DEFAULT_REGION;
-use minio::s3::response::BucketExistsResponse;
-use minio::s3::types::S3Api;
+use super::Client;
+use crate::s3::builders::EnableObjectLegalHold;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn bucket_exists() {
-    let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
-
-    let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
-
-    assert!(resp.exists);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+impl Client {
+    /// Create a EnableObjectLegalHold request builder.
+    pub fn enable_object_legal_hold(&self, bucket: &str) -> EnableObjectLegalHold {
+        EnableObjectLegalHold::new(bucket).client(self)
+    }
 }

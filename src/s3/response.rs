@@ -35,6 +35,8 @@ mod delete_bucket_notification;
 mod delete_bucket_policy;
 mod delete_bucket_replication;
 mod delete_bucket_tags;
+mod disable_object_legal_hold;
+mod enable_object_legal_hold;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
 mod get_bucket_notification;
@@ -43,6 +45,7 @@ mod get_bucket_replication;
 mod get_bucket_tags;
 mod get_bucket_versioning;
 mod get_object;
+mod is_object_legal_hold_enabled;
 mod list_buckets;
 pub(crate) mod list_objects;
 mod listen_bucket_notification;
@@ -66,6 +69,8 @@ pub use delete_bucket_notification::DeleteBucketNotificationResponse;
 pub use delete_bucket_policy::DeleteBucketPolicyResponse;
 pub use delete_bucket_replication::DeleteBucketReplicationResponse;
 pub use delete_bucket_tags::DeleteBucketTagsResponse;
+pub use disable_object_legal_hold::DisableObjectLegalHoldResponse;
+pub use enable_object_legal_hold::EnableObjectLegalHoldResponse;
 pub use get_bucket_encryption::GetBucketEncryptionResponse;
 pub use get_bucket_lifecycle::GetBucketLifecycleResponse;
 pub use get_bucket_notification::GetBucketNotificationResponse;
@@ -74,6 +79,7 @@ pub use get_bucket_replication::GetBucketReplicationResponse;
 pub use get_bucket_tags::GetBucketTagsResponse;
 pub use get_bucket_versioning::GetBucketVersioningResponse;
 pub use get_object::GetObjectResponse;
+pub use is_object_legal_hold_enabled::IsObjectLegalHoldEnabledResponse;
 pub use list_buckets::ListBucketsResponse;
 pub use list_objects::ListObjectsResponse;
 pub use listen_bucket_notification::ListenBucketNotificationResponse;
@@ -597,23 +603,6 @@ impl SelectObjectContentResponse {
     }
 }
 
-/// Response of [enable_object_legal_hold()](crate::s3::client::Client::enable_object_legal_hold) API
-pub type EnableObjectLegalHoldResponse = ObjectResponse;
-
-/// Response of [disable_object_legal_hold()](crate::s3::client::Client::disable_object_legal_hold) API
-pub type DisableObjectLegalHoldResponse = ObjectResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [is_object_legal_hold_enabled()](crate::s3::client::Client::is_object_legal_hold_enabled) API
-pub struct IsObjectLegalHoldEnabledResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
-    pub version_id: Option<String>,
-    pub enabled: bool,
-}
-
 /// Response of [delete_object_lock_config()](crate::s3::client::Client::delete_object_lock_config) API
 pub type DeleteObjectLockConfigResponse = BucketResponse;
 
@@ -622,7 +611,7 @@ pub type DeleteObjectLockConfigResponse = BucketResponse;
 pub struct GetObjectLockConfigResponse {
     pub headers: HeaderMap,
     pub region: String,
-    pub bucket_name: String,
+    pub bucket: String,
     pub config: ObjectLockConfig,
 }
 
