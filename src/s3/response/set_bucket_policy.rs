@@ -28,8 +28,8 @@ pub struct SetBucketPolicyResponse {
 
 #[async_trait]
 impl FromS3Response for SetBucketPolicyResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
@@ -39,7 +39,7 @@ impl FromS3Response for SetBucketPolicyResponse {
         let resp = resp?;
         Ok(SetBucketPolicyResponse {
             headers: resp.headers().clone(),
-            region: req.get_computed_region(),
+            region: req.inner_region,
             bucket,
         })
     }

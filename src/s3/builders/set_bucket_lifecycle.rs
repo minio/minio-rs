@@ -19,6 +19,7 @@ use crate::s3::error::Error;
 use crate::s3::response::SetBucketLifecycleResponse;
 use crate::s3::types::{LifecycleConfig, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{Multimap, check_bucket_name, md5sum_hash};
+use async_trait::async_trait;
 use bytes::Bytes;
 use http::Method;
 
@@ -72,38 +73,26 @@ impl S3Api for SetBucketLifecycle {
     type S3Response = SetBucketLifecycleResponse;
 }
 
+#[async_trait]
 impl ToS3Request for SetBucketLifecycle {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let mut headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.insert("lifecycle".into(), String::new());
 
         let bytes: Bytes = self.config.to_xml().into();
         headers.insert(String::from("Content-MD5"), md5sum_hash(&bytes));
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
 
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::PUT)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(client, Method::PUT)
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
             .headers(headers)
-            .body(body);
-
-        Ok(req)
+            .body(body))
     }
 }

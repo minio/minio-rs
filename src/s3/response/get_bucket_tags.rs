@@ -20,6 +20,7 @@ use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
 use std::collections::HashMap;
+use std::mem;
 use xmltree::Element;
 
 /// Response of
@@ -35,8 +36,8 @@ pub struct GetBucketTagsResponse {
 
 #[async_trait]
 impl FromS3Response for GetBucketTagsResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
@@ -44,8 +45,8 @@ impl FromS3Response for GetBucketTagsResponse {
             Some(v) => v.to_string(),
         };
         match resp {
-            Ok(r) => {
-                let headers = r.headers().clone();
+            Ok(mut r) => {
+                let headers: HeaderMap = mem::take(r.headers_mut());
                 let body = r.bytes().await?;
                 let mut root = Element::parse(body.reader())?;
 
@@ -59,7 +60,7 @@ impl FromS3Response for GetBucketTagsResponse {
 
                 Ok(GetBucketTagsResponse {
                     headers,
-                    region: req.get_computed_region(),
+                    region: req.inner_region,
                     bucket,
                     tags,
                 })
@@ -67,7 +68,7 @@ impl FromS3Response for GetBucketTagsResponse {
             Err(Error::S3Error(ref err)) if err.code == Error::NoSuchTagSet.as_str() => {
                 Ok(GetBucketTagsResponse {
                     headers: HeaderMap::new(),
-                    region: req.get_computed_region(),
+                    region: req.inner_region,
                     bucket,
                     tags: HashMap::new(),
                 })

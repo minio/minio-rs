@@ -18,7 +18,8 @@ use crate::s3::builders::BucketCommon;
 use crate::s3::error::Error;
 use crate::s3::response::RemoveBucketResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::check_bucket_name;
+use crate::s3::utils::{Multimap, check_bucket_name};
+use async_trait::async_trait;
 use http::Method;
 
 /// Argument builder for [remove_bucket()](Client::remove_bucket) API
@@ -31,31 +32,19 @@ impl S3Api for RemoveBucket {
     type S3Response = RemoveBucketResponse;
 }
 
+#[async_trait]
 impl ToS3Request for RemoveBucket {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
+        let headers: Multimap = self.extra_headers.unwrap_or_default();
+        let query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
-
-        let req = S3Request::new(client, Method::DELETE)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(client, Method::DELETE)
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
-            .headers(headers);
-
-        Ok(req)
+            .headers(headers))
     }
 }

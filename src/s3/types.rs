@@ -26,28 +26,27 @@ use async_trait::async_trait;
 use futures_util::Stream;
 use http::Method;
 use serde::{Deserialize, Serialize};
-use xmltree::Element;
-
 use std::collections::HashMap;
 use std::fmt;
+use xmltree::Element;
 
-pub struct S3Request<'a> {
-    pub(crate) client: &'a Client,
+pub struct S3Request {
+    pub(crate) client: Client,
 
     pub method: Method,
-    pub region: Option<&'a str>,
-    pub bucket: Option<&'a str>,
-    pub object: Option<&'a str>,
+    pub region: Option<String>,
+    pub bucket: Option<String>,
+    pub object: Option<String>,
     pub query_params: Multimap,
     pub headers: Multimap,
     pub body: Option<SegmentedBytes>,
 
     // Computed region
-    inner_region: String,
+    pub(crate) inner_region: String,
 }
 
-impl<'a> S3Request<'a> {
-    pub fn new(client: &'a Client, method: Method) -> S3Request<'a> {
+impl S3Request {
+    pub fn new(client: Client, method: Method) -> S3Request {
         S3Request {
             client,
             method,
@@ -61,17 +60,17 @@ impl<'a> S3Request<'a> {
         }
     }
 
-    pub fn region(mut self, region: Option<&'a str>) -> Self {
+    pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
     }
 
-    pub fn bucket(mut self, bucket: Option<&'a str>) -> Self {
+    pub fn bucket(mut self, bucket: Option<String>) -> Self {
         self.bucket = bucket;
         self
     }
 
-    pub fn object(mut self, object: Option<&'a str>) -> Self {
+    pub fn object(mut self, object: Option<String>) -> Self {
         self.object = object;
         self
     }
@@ -91,14 +90,12 @@ impl<'a> S3Request<'a> {
         self
     }
 
-    pub fn get_computed_region(&self) -> String {
-        self.inner_region.clone()
-    }
-
     pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
         // Lookup the region of the bucket if provided.
-        self.inner_region = if let Some(bucket) = self.bucket {
-            self.client.get_region(bucket, self.region).await?
+        self.inner_region = if let Some(bucket) = &self.bucket {
+            self.client
+                .get_region_cached(bucket, self.region.as_deref())
+                .await?
         } else {
             DEFAULT_REGION.to_string()
         };
@@ -110,22 +107,24 @@ impl<'a> S3Request<'a> {
                 &self.inner_region,
                 &mut self.headers,
                 &self.query_params,
-                self.bucket,
-                self.object,
+                &self.bucket.as_deref(),
+                &self.object.as_deref(),
                 self.body.as_ref(),
             )
             .await
     }
 }
 
-pub trait ToS3Request {
-    fn to_s3request(&self) -> Result<S3Request, Error>;
+#[async_trait]
+pub trait ToS3Request: Sized {
+    /// Consumes this builder and returns a `S3Request`.
+    async fn to_s3request(self) -> Result<S3Request, Error>;
 }
 
 #[async_trait]
 pub trait FromS3Response: Sized {
-    async fn from_s3response<'a>(
-        s3req: S3Request<'a>,
+    async fn from_s3response(
+        s3req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error>;
 }
@@ -133,9 +132,9 @@ pub trait FromS3Response: Sized {
 #[async_trait]
 pub trait S3Api: ToS3Request {
     type S3Response: FromS3Response;
-
-    async fn send(&self) -> Result<Self::S3Response, Error> {
-        let mut req = self.to_s3request()?;
+    /// Sends S3API request. Consumes this builder and returns a `S3Request`.
+    async fn send(self) -> Result<Self::S3Response, Error> {
+        let mut req = self.to_s3request().await?;
         let resp: Result<reqwest::Response, Error> = req.execute().await;
         Self::S3Response::from_s3response(req, resp).await
     }
@@ -223,7 +222,7 @@ pub struct Retention {
 
 /// Parses legal hold string value
 pub fn parse_legal_hold(s: &str) -> Result<bool, Error> {
-    match s {
+    match s.to_uppercase().as_str() {
         "ON" => Ok(true),
         "OFF" => Ok(false),
         _ => Err(Error::InvalidLegalHold(s.to_string())),

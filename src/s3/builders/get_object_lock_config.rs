@@ -18,7 +18,8 @@ use crate::s3::builders::BucketCommon;
 use crate::s3::error::Error;
 use crate::s3::response::GetObjectLockConfigResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::check_bucket_name;
+use crate::s3::utils::{Multimap, check_bucket_name};
+use async_trait::async_trait;
 use http::Method;
 
 /// Argument builder for [get_object_lock_config()](Client::get_object_lock_config) API
@@ -31,33 +32,21 @@ impl S3Api for GetObjectLockConfig {
     type S3Response = GetObjectLockConfigResponse;
 }
 
+#[async_trait]
 impl ToS3Request for GetObjectLockConfig {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
+        let headers: Multimap = self.extra_headers.unwrap_or_default();
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.insert(String::from("object-lock"), String::new());
 
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::GET)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(client, Method::GET)
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
-            .headers(headers);
-
-        Ok(req)
+            .headers(headers))
     }
 }

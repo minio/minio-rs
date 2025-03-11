@@ -37,8 +37,8 @@ pub struct PutObjectResponse {
 
 #[async_trait]
 impl FromS3Response for PutObjectResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let response = response?;
@@ -48,7 +48,7 @@ impl FromS3Response for PutObjectResponse {
             headers: header_map.clone(),
             bucket_name: req.bucket.unwrap().to_string(),
             object_name: req.object.unwrap().to_string(),
-            location: req.region.unwrap_or("").to_string(),
+            location: req.region.unwrap_or("".to_string()),
             etag: match header_map.get("etag") {
                 Some(v) => v.to_str()?.to_string().trim_matches('"').to_string(),
                 _ => String::new(),
@@ -72,8 +72,8 @@ pub struct CreateMultipartUploadResponse2 {
 
 #[async_trait]
 impl FromS3Response for CreateMultipartUploadResponse2 {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let response = response?;
@@ -81,7 +81,7 @@ impl FromS3Response for CreateMultipartUploadResponse2 {
         let body = response.bytes().await?;
         let root = Element::parse(body.reader())?;
 
-        let region: String = req.region.unwrap_or("").to_string(); // Keep this since it defaults to an empty string
+        let region: String = req.region.unwrap_or("".to_string()); // Keep this since it defaults to an empty string
 
         let bucket_name: String = req
             .bucket
