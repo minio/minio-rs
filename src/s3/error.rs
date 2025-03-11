@@ -121,6 +121,7 @@ pub enum Error {
     ReplicationConfigurationNotFoundError,
     NoSuchObjectLockConfiguration,
     NoSuchBucketPolicy,
+    NoSuchBucket,
 }
 
 impl std::error::Error for Error {}
@@ -296,6 +297,7 @@ impl fmt::Display for Error {
             }
             Error::NoSuchObjectLockConfiguration => write!(f, "no such object lock"),
             Error::NoSuchBucketPolicy => write!(f, "no such bucket policy"),
+            Error::NoSuchBucket => write!(f, "no such bucket"),
         }
     }
 }
@@ -307,6 +309,7 @@ impl Error {
             Error::ReplicationConfigurationNotFoundError => "ReplicationConfigurationNotFoundError",
             Error::NoSuchObjectLockConfiguration => "NoSuchObjectLockConfiguration",
             Error::NoSuchBucketPolicy => "NoSuchBucketPolicy",
+            Error::NoSuchBucket => "NoSuchBucket",
             _ => "TODO",
         }
     }

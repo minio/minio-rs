@@ -13,16 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::PathBuf;
-
 use clap::Parser;
 use log::info;
-use minio::s3::{
-    args::{BucketExistsArgs, MakeBucketArgs},
-    builders::ObjectContent,
-    client::ClientBuilder,
-    creds::StaticProvider,
-};
+use minio::s3::response::BucketExistsResponse;
+use minio::s3::types::S3Api;
+use minio::s3::{builders::ObjectContent, client::ClientBuilder, creds::StaticProvider};
+use std::path::PathBuf;
 
 /// Upload a file to the given bucket and object path on the MinIO Play server.
 #[derive(Parser)]
@@ -49,16 +45,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .provider(Some(Box::new(static_provider)))
         .build()?;
 
-    let exists: bool = client
-        .bucket_exists(&BucketExistsArgs::new(&args.bucket).unwrap())
-        .await
-        .unwrap();
+    let resp: BucketExistsResponse = client.bucket_exists(&args.bucket).send().await.unwrap();
 
-    if !exists {
-        client
-            .make_bucket(&MakeBucketArgs::new(&args.bucket).unwrap())
-            .await
-            .unwrap();
+    if !resp.exists {
+        client.make_bucket(&args.bucket).send().await.unwrap();
     }
 
     let content = ObjectContent::from(args.file.as_path());

@@ -43,6 +43,7 @@ use reqwest::header::HeaderMap;
 
 use xmltree::Element;
 
+mod bucket_exists;
 mod delete_bucket_encryption;
 mod delete_bucket_lifecycle;
 mod delete_bucket_notification;
@@ -59,8 +60,10 @@ mod get_bucket_versioning;
 mod get_object;
 mod list_objects;
 mod listen_bucket_notification;
+mod make_bucket;
 mod object_prompt;
 mod put_object;
+mod remove_bucket;
 mod remove_objects;
 mod set_bucket_encryption;
 mod set_bucket_lifecycle;
@@ -180,9 +183,9 @@ impl ClientBuilder {
 #[derive(Clone, Debug, Default)]
 pub struct Client {
     client: reqwest::Client,
-    base_url: BaseUrl,
+    pub base_url: BaseUrl,
     provider: Option<Arc<Box<(dyn Provider + Send + Sync + 'static)>>>,
-    region_map: DashMap<String, String>,
+    pub region_map: DashMap<String, String>,
 }
 
 impl Client {
@@ -630,55 +633,6 @@ impl Client {
         self.region_map
             .insert(bucket_name.to_string(), location.clone());
         Ok(location)
-    }
-
-    pub async fn bucket_exists(&self, args: &BucketExistsArgs<'_>) -> Result<bool, Error> {
-        let region;
-        match self.get_region(args.bucket, args.region).await {
-            Ok(r) => region = r,
-            Err(e) => match e {
-                Error::S3Error(ref er) => {
-                    if er.code == "NoSuchBucket" {
-                        return Ok(false);
-                    }
-                    return Err(e);
-                }
-                _ => return Err(e),
-            },
-        };
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        let mut query_params = &Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            query_params = v;
-        }
-
-        match self
-            .execute(
-                Method::HEAD,
-                &region,
-                &mut headers,
-                query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await
-        {
-            Ok(_) => Ok(true),
-            Err(e) => match e {
-                Error::S3Error(ref er) => {
-                    if er.code == "NoSuchBucket" {
-                        return Ok(false);
-                    }
-                    Err(e)
-                }
-                _ => Err(e),
-            },
-        }
     }
 
     async fn calculate_part_count(&self, sources: &mut [ComposeSource<'_>]) -> Result<u16, Error> {
@@ -1503,74 +1457,6 @@ impl Client {
         ListBuckets::new().client(self)
     }
 
-    pub async fn make_bucket(
-        &self,
-        args: &MakeBucketArgs<'_>,
-    ) -> Result<MakeBucketResponse, Error> {
-        let mut region = "us-east-1";
-        if let Some(r) = &args.region {
-            if !self.base_url.region.is_empty() {
-                if self.base_url.region != *r {
-                    return Err(Error::RegionMismatch(
-                        self.base_url.region.clone(),
-                        r.to_string(),
-                    ));
-                }
-                region = r;
-            }
-        }
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        };
-
-        if args.object_lock {
-            headers.insert(
-                String::from("x-amz-bucket-object-lock-enabled"),
-                String::from("true"),
-            );
-        }
-
-        let mut query_params = &Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            query_params = v;
-        }
-
-        let data = match region {
-            "us-east-1" => String::new(),
-            _ => format!(
-                "<CreateBucketConfiguration><LocationConstraint>{}</LocationConstraint></CreateBucketConfiguration>",
-                region
-            ),
-        };
-
-        let body = match data.is_empty() {
-            true => None,
-            false => Some(data.into()),
-        };
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                region,
-                &mut headers,
-                query_params,
-                Some(args.bucket),
-                None,
-                body,
-            )
-            .await?;
-        self.region_map
-            .insert(args.bucket.to_string(), region.to_string());
-
-        Ok(MakeBucketResponse {
-            headers: resp.headers().clone(),
-            region: region.to_string(),
-            bucket: args.bucket.to_string(),
-        })
-    }
-
     /// Executes [PutObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html) S3 API
     pub async fn put_object_api(
         &self,
@@ -1614,41 +1500,6 @@ impl Client {
                 Some(v) => Some(v.to_str()?.to_string()),
                 None => None,
             },
-        })
-    }
-
-    pub async fn remove_bucket(
-        &self,
-        args: &RemoveBucketArgs<'_>,
-    ) -> Result<RemoveBucketResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        let mut query_params = &Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            query_params = v;
-        }
-
-        let resp = self
-            .execute(
-                Method::DELETE,
-                &region,
-                &mut headers,
-                query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await?;
-        self.region_map.remove(&args.bucket.to_string());
-
-        Ok(RemoveBucketResponse {
-            headers: resp.headers().clone(),
-            region: region.to_string(),
-            bucket: args.bucket.to_string(),
         })
     }
 
