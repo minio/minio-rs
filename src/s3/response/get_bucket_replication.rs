@@ -14,22 +14,25 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
-use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::types::{FromS3Response, ReplicationConfig, S3Request};
 use async_trait::async_trait;
+use bytes::Buf;
 use http::HeaderMap;
+use xmltree::Element;
 
 /// Response of
-/// [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification)
+/// [get_bucket_replication()](crate::s3::client::Client::get_bucket_replication)
 /// API
 #[derive(Clone, Debug)]
-pub struct DeleteBucketNotificationResponse {
+pub struct GetBucketReplicationResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
+    pub config: ReplicationConfig,
 }
 
 #[async_trait]
-impl FromS3Response for DeleteBucketNotificationResponse {
+impl FromS3Response for GetBucketReplicationResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
         resp: Result<reqwest::Response, Error>,
@@ -39,11 +42,16 @@ impl FromS3Response for DeleteBucketNotificationResponse {
             Some(v) => v.to_string(),
         };
         let resp = resp?;
+        let headers = resp.headers().clone();
+        let body = resp.bytes().await?;
+        let root = Element::parse(body.reader())?;
+        let config = ReplicationConfig::from_xml(&root)?;
 
-        Ok(DeleteBucketNotificationResponse {
-            headers: resp.headers().clone(),
+        Ok(GetBucketReplicationResponse {
+            headers,
             region: req.get_computed_region(),
             bucket,
+            config,
         })
     }
 }

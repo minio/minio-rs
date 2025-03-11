@@ -1965,7 +1965,7 @@ impl ReplicationRule {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 /// Replication configuration information
 pub struct ReplicationConfig {
     pub role: Option<String>,

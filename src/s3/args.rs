@@ -19,7 +19,7 @@ use crate::s3::error::Error;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{
-    Directive, ObjectLockConfig, Part, ReplicationConfig, Retention, RetentionMode, SelectRequest,
+    Directive, ObjectLockConfig, Part, Retention, RetentionMode, SelectRequest,
 };
 use crate::s3::utils::{
     Multimap, UtcTime, b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value,
@@ -1322,80 +1322,6 @@ pub type DisableObjectLegalHoldArgs<'a> = ObjectVersionArgs<'a>;
 
 /// Argument for [is_object_legal_hold_enabled()](crate::s3::client::Client::is_object_legal_hold_enabled) API
 pub type IsObjectLegalHoldEnabledArgs<'a> = ObjectVersionArgs<'a>;
-
-/// Argument for [delete_bucket_replication()](crate::s3::client::Client::delete_bucket_replication) API
-pub type DeleteBucketReplicationArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [get_bucket_replication()](crate::s3::client::Client::get_bucket_replication) API
-pub type GetBucketReplicationArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [set_bucket_replication()](crate::s3::client::Client::set_bucket_replication) API
-pub struct SetBucketReplicationArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub config: &'a ReplicationConfig,
-}
-
-impl<'a> SetBucketReplicationArgs<'a> {
-    /// Returns argument for [set_bucket_replication()](crate::s3::client::Client::set_bucket_replication) API with given bucket name and configuration
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// use minio::s3::types::*;
-    /// use std::collections::HashMap;
-    /// let mut tags: HashMap<String, String> = HashMap::new();
-    /// tags.insert(String::from("key1"), String::from("value1"));
-    /// tags.insert(String::from("key2"), String::from("value2"));
-    /// let mut rules: Vec<ReplicationRule> = Vec::new();
-    /// rules.push(ReplicationRule {
-    ///     destination: Destination {
-    ///         bucket_arn: String::from("REPLACE-WITH-ACTUAL-DESTINATION-BUCKET-ARN"),
-    ///         access_control_translation: None,
-    ///         account: None,
-    ///         encryption_config: None,
-    ///         metrics: None,
-    ///         replication_time: None,
-    ///         storage_class: None,
-    ///     },
-    ///     delete_marker_replication_status: None,
-    ///     existing_object_replication_status: None,
-    ///     filter: Some(Filter {
-    ///         and_operator: Some(AndOperator {
-    ///     	    prefix: Some(String::from("TaxDocs")),
-    ///     	    tags: Some(tags),
-    ///         }),
-    ///         prefix: None,
-    ///         tag: None,
-    ///     }),
-    ///     id: Some(String::from("rule1")),
-    ///     prefix: None,
-    ///     priority: Some(1),
-    ///     source_selection_criteria: None,
-    ///     delete_replication_status: Some(false),
-    ///     status: true,
-    /// });
-    /// let config = ReplicationConfig {role: None, rules: rules};
-    /// let args = SetBucketReplicationArgs::new("my-bucket", &config).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        config: &'a ReplicationConfig,
-    ) -> Result<SetBucketReplicationArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        Ok(SetBucketReplicationArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            config,
-        })
-    }
-}
 
 /// Argument for [delete_bucket_tags()](crate::s3::client::Client::delete_bucket_tags) API
 pub type DeleteBucketTagsArgs<'a> = BucketArgs<'a>;
