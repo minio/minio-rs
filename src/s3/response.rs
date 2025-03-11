@@ -23,9 +23,7 @@ use std::io::BufReader;
 use xmltree::Element;
 
 use crate::s3::error::Error;
-use crate::s3::types::{
-    ObjectLockConfig, ReplicationConfig, RetentionMode, SelectProgress, parse_legal_hold,
-};
+use crate::s3::types::{ObjectLockConfig, RetentionMode, SelectProgress, parse_legal_hold};
 use crate::s3::utils::{
     UtcTime, copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32,
 };
@@ -34,10 +32,12 @@ mod delete_bucket_encryption;
 mod delete_bucket_lifecycle;
 mod delete_bucket_notification;
 mod delete_bucket_policy;
+mod delete_bucket_replication;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
 mod get_bucket_notification;
 mod get_bucket_policy;
+mod get_bucket_replication;
 mod get_bucket_versioning;
 mod get_object;
 mod list_buckets;
@@ -50,16 +50,19 @@ mod set_bucket_encryption;
 mod set_bucket_lifecycle;
 mod set_bucket_notification;
 mod set_bucket_policy;
+mod set_bucket_replication;
 mod set_bucket_versioning;
 
 pub use delete_bucket_encryption::DeleteBucketEncryptionResponse;
 pub use delete_bucket_lifecycle::DeleteBucketLifecycleResponse;
 pub use delete_bucket_notification::DeleteBucketNotificationResponse;
 pub use delete_bucket_policy::DeleteBucketPolicyResponse;
+pub use delete_bucket_replication::DeleteBucketReplicationResponse;
 pub use get_bucket_encryption::GetBucketEncryptionResponse;
 pub use get_bucket_lifecycle::GetBucketLifecycleResponse;
 pub use get_bucket_notification::GetBucketNotificationResponse;
 pub use get_bucket_policy::GetBucketPolicyResponse;
+pub use get_bucket_replication::GetBucketReplicationResponse;
 pub use get_bucket_versioning::GetBucketVersioningResponse;
 pub use get_object::GetObjectResponse;
 pub use list_buckets::ListBucketsResponse;
@@ -76,6 +79,7 @@ pub use set_bucket_encryption::SetBucketEncryptionResponse;
 pub use set_bucket_lifecycle::SetBucketLifecycleResponse;
 pub use set_bucket_notification::SetBucketNotificationResponse;
 pub use set_bucket_policy::SetBucketPolicyResponse;
+pub use set_bucket_replication::SetBucketReplicationResponse;
 pub use set_bucket_versioning::SetBucketVersioningResponse;
 
 #[derive(Debug)]
@@ -590,21 +594,6 @@ pub struct IsObjectLegalHoldEnabledResponse {
     pub version_id: Option<String>,
     pub enabled: bool,
 }
-
-/// Response of [delete_bucket_replication()](crate::s3::client::Client::delete_bucket_replication) API
-pub type DeleteBucketReplicationResponse = BucketResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [get_bucket_replication()](crate::s3::client::Client::get_bucket_replication) API
-pub struct GetBucketReplicationResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub config: ReplicationConfig,
-}
-
-/// Response of [set_bucket_replication()](crate::s3::client::Client::set_bucket_replication) API
-pub type SetBucketReplicationResponse = BucketResponse;
 
 /// Response of [delete_bucket_tags()](crate::s3::client::Client::delete_bucket_tags) API
 pub type DeleteBucketTagsResponse = BucketResponse;

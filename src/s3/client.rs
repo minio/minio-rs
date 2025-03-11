@@ -28,7 +28,7 @@ use crate::s3::http::{BaseUrl, Url};
 use crate::s3::response::*;
 use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
-use crate::s3::types::{Directive, ObjectLockConfig, Part, ReplicationConfig, RetentionMode};
+use crate::s3::types::{Directive, ObjectLockConfig, Part, RetentionMode};
 use crate::s3::utils::{
     Multimap, from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash,
     md5sum_hash_sb, merge, sha256_hash_sb, to_amz_date, to_iso8601utc, utc_now,
@@ -48,10 +48,12 @@ mod delete_bucket_encryption;
 mod delete_bucket_lifecycle;
 mod delete_bucket_notification;
 mod delete_bucket_policy;
+mod delete_bucket_replication;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
 mod get_bucket_notification;
 mod get_bucket_policy;
+mod get_bucket_replication;
 mod get_bucket_versioning;
 mod get_object;
 mod list_objects;
@@ -63,6 +65,7 @@ mod set_bucket_encryption;
 mod set_bucket_lifecycle;
 mod set_bucket_notification;
 mod set_bucket_policy;
+mod set_bucket_replication;
 mod set_bucket_versioning;
 
 use super::builders::{ListBuckets, SegmentedBytes};
@@ -1230,53 +1233,6 @@ impl Client {
         })
     }
 
-    pub async fn delete_bucket_replication(
-        &self,
-        args: &DeleteBucketReplicationArgs<'_>,
-    ) -> Result<DeleteBucketReplicationResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("replication"), String::new());
-
-        let resp = self
-            .execute(
-                Method::DELETE,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await;
-        match resp {
-            Ok(resp) => Ok(DeleteBucketReplicationResponse {
-                headers: resp.headers().clone(),
-                region: region.clone(),
-                bucket: args.bucket.to_string(),
-            }),
-            Err(Error::S3Error(ref err))
-                if err.code == Error::ReplicationConfigurationNotFoundError.as_str() =>
-            {
-                Ok(DeleteBucketReplicationResponse {
-                    headers: HeaderMap::new(),
-                    region: region.clone(),
-                    bucket: args.bucket.to_string(),
-                })
-            }
-            Err(e) => Err(e),
-        }
-    }
-
     pub async fn delete_bucket_tags(
         &self,
         args: &DeleteBucketTagsArgs<'_>,
@@ -1461,47 +1417,6 @@ impl Client {
             bucket_name: args.bucket.to_string(),
             object_name: args.object.to_string(),
             version_id: args.version_id.as_ref().map(|v| v.to_string()),
-        })
-    }
-
-    pub async fn get_bucket_replication(
-        &self,
-        args: &GetBucketReplicationArgs<'_>,
-    ) -> Result<GetBucketReplicationResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("replication"), String::new());
-
-        let resp = self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await?;
-
-        let header_map = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let root = Element::parse(body.reader())?;
-
-        Ok(GetBucketReplicationResponse {
-            headers: header_map.clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            config: ReplicationConfig::from_xml(&root)?,
         })
     }
 
@@ -2220,42 +2135,6 @@ impl Client {
         Ok(RemoveBucketResponse {
             headers: resp.headers().clone(),
             region: region.to_string(),
-            bucket: args.bucket.to_string(),
-        })
-    }
-
-    pub async fn set_bucket_replication(
-        &self,
-        args: &SetBucketReplicationArgs<'_>,
-    ) -> Result<SetBucketReplicationResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("replication"), String::new());
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                Some(args.config.to_xml().into()),
-            )
-            .await?;
-
-        Ok(SetBucketReplicationResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
             bucket: args.bucket.to_string(),
         })
     }

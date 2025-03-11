@@ -19,17 +19,17 @@ use async_trait::async_trait;
 use http::HeaderMap;
 
 /// Response of
-/// [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification)
+/// [delete_bucket_replication()](crate::s3::client::Client::delete_bucket_replication)
 /// API
 #[derive(Clone, Debug)]
-pub struct DeleteBucketNotificationResponse {
+pub struct DeleteBucketReplicationResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
 }
 
 #[async_trait]
-impl FromS3Response for DeleteBucketNotificationResponse {
+impl FromS3Response for DeleteBucketReplicationResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
         resp: Result<reqwest::Response, Error>,
@@ -38,12 +38,22 @@ impl FromS3Response for DeleteBucketNotificationResponse {
             None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
             Some(v) => v.to_string(),
         };
-        let resp = resp?;
-
-        Ok(DeleteBucketNotificationResponse {
-            headers: resp.headers().clone(),
-            region: req.get_computed_region(),
-            bucket,
-        })
+        match resp {
+            Ok(r) => Ok(DeleteBucketReplicationResponse {
+                headers: r.headers().clone(),
+                region: req.get_computed_region(),
+                bucket,
+            }),
+            Err(Error::S3Error(ref err))
+                if err.code == Error::ReplicationConfigurationNotFoundError.as_str() =>
+            {
+                Ok(DeleteBucketReplicationResponse {
+                    headers: HeaderMap::new(),
+                    region: req.get_computed_region(),
+                    bucket,
+                })
+            }
+            Err(e) => Err(e),
+        }
     }
 }

@@ -18,18 +18,16 @@ use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
 use http::HeaderMap;
 
-/// Response of
-/// [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification)
-/// API
-#[derive(Clone, Debug)]
-pub struct DeleteBucketNotificationResponse {
+/// Response of [set_bucket_replication()](crate::s3::client::Client::set_bucket_replication) API
+#[derive(Debug)]
+pub struct SetBucketReplicationResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
 }
 
 #[async_trait]
-impl FromS3Response for DeleteBucketNotificationResponse {
+impl FromS3Response for SetBucketReplicationResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
         resp: Result<reqwest::Response, Error>,
@@ -39,8 +37,7 @@ impl FromS3Response for DeleteBucketNotificationResponse {
             Some(v) => v.to_string(),
         };
         let resp = resp?;
-
-        Ok(DeleteBucketNotificationResponse {
+        Ok(SetBucketReplicationResponse {
             headers: resp.headers().clone(),
             region: req.get_computed_region(),
             bucket,
