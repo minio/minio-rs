@@ -353,7 +353,7 @@ impl SegmentedBytes {
         }
     }
 
-    // Copy all the content into a single `Bytes` object.
+    /// Copy all the content into a single `Bytes` object.
     pub fn to_bytes(&self) -> Bytes {
         let mut buf = BytesMut::with_capacity(self.total_size);
         for segment in &self.segments {
@@ -447,5 +447,11 @@ impl From<Bytes> for SegmentedBytes {
         let mut sb = SegmentedBytes::new();
         sb.append(bytes);
         sb
+    }
+}
+
+impl From<String> for SegmentedBytes {
+    fn from(s: String) -> Self {
+        SegmentedBytes::from(Bytes::from(s))
     }
 }

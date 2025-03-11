@@ -17,7 +17,7 @@ mod common;
 
 use crate::common::{CleanupGuard, TestContext, rand_bucket_name, rand_object_name};
 use common::RandSrc;
-use minio::s3::args::{GetObjectRetentionArgs, MakeBucketArgs, SetObjectRetentionArgs};
+use minio::s3::args::{GetObjectRetentionArgs, SetObjectRetentionArgs};
 use minio::s3::builders::ObjectContent;
 use minio::s3::types::{RetentionMode, S3Api};
 use minio::s3::utils::{to_iso8601utc, utc_now};
@@ -25,11 +25,13 @@ use minio::s3::utils::{to_iso8601utc, utc_now};
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn object_retention() {
     let ctx = TestContext::new_from_env();
-    let bucket_name = rand_bucket_name();
-
-    let mut args = MakeBucketArgs::new(&bucket_name).unwrap();
-    args.object_lock = true;
-    ctx.client.make_bucket(&args).await.unwrap();
+    let bucket_name: String = rand_bucket_name();
+    ctx.client
+        .make_bucket(&bucket_name)
+        .object_lock(true)
+        .send()
+        .await
+        .unwrap();
     let _cleanup = CleanupGuard::new(&ctx, &bucket_name);
 
     let object_name = rand_object_name();

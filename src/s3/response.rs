@@ -28,6 +28,7 @@ use crate::s3::utils::{
     UtcTime, copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32,
 };
 
+mod bucket_exists;
 mod delete_bucket_encryption;
 mod delete_bucket_lifecycle;
 mod delete_bucket_notification;
@@ -45,8 +46,10 @@ mod get_object;
 mod list_buckets;
 pub(crate) mod list_objects;
 mod listen_bucket_notification;
+mod make_bucket;
 mod object_prompt;
 mod put_object;
+mod remove_bucket;
 mod remove_objects;
 mod set_bucket_encryption;
 mod set_bucket_lifecycle;
@@ -56,6 +59,7 @@ mod set_bucket_replication;
 mod set_bucket_tags;
 mod set_bucket_versioning;
 
+pub use bucket_exists::BucketExistsResponse;
 pub use delete_bucket_encryption::DeleteBucketEncryptionResponse;
 pub use delete_bucket_lifecycle::DeleteBucketLifecycleResponse;
 pub use delete_bucket_notification::DeleteBucketNotificationResponse;
@@ -73,12 +77,14 @@ pub use get_object::GetObjectResponse;
 pub use list_buckets::ListBucketsResponse;
 pub use list_objects::ListObjectsResponse;
 pub use listen_bucket_notification::ListenBucketNotificationResponse;
+pub use make_bucket::MakeBucketResponse;
 pub use object_prompt::ObjectPromptResponse;
 pub use put_object::{
     AbortMultipartUploadResponse2, CompleteMultipartUploadResponse2,
     CreateMultipartUploadResponse2, PutObjectContentResponse, PutObjectResponse,
     UploadPartResponse2,
 };
+pub use remove_bucket::RemoveBucketResponse;
 pub use remove_objects::{DeleteError, DeletedObject, RemoveObjectResponse, RemoveObjectsResponse};
 pub use set_bucket_encryption::SetBucketEncryptionResponse;
 pub use set_bucket_lifecycle::SetBucketLifecycleResponse;
@@ -95,12 +101,6 @@ pub struct BucketResponse {
     pub region: String,
     pub bucket: String,
 }
-
-/// Response of [make_bucket()](crate::s3::client::Client::make_bucket) API
-pub type MakeBucketResponse = BucketResponse;
-
-/// Response of [remove_bucket()](crate::s3::client::Client::remove_bucket) API
-pub type RemoveBucketResponse = BucketResponse;
 
 #[derive(Debug)]
 /// Base response for object operation

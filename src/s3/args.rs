@@ -180,12 +180,6 @@ impl<'a> BucketArgs<'a> {
     }
 }
 
-/// Argument for [bucket_exists()](crate::s3::client::Client::bucket_exists) API
-pub type BucketExistsArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [remove_bucket()](crate::s3::client::Client::remove_bucket) API
-pub type RemoveBucketArgs<'a> = BucketArgs<'a>;
-
 #[derive(Clone, Debug, Default)]
 /// Base object argument
 pub struct ObjectArgs<'a> {
@@ -267,38 +261,6 @@ impl<'a> ObjectVersionArgs<'a> {
 
 /// Argument for [remove_object()](crate::s3::client::Client::remove_object) API
 pub type RemoveObjectArgs<'a> = ObjectVersionArgs<'a>;
-
-#[derive(Clone, Debug, Default)]
-/// Argument for [make_bucket()](crate::s3::client::Client::make_bucket) API
-pub struct MakeBucketArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub object_lock: bool,
-}
-
-impl<'a> MakeBucketArgs<'a> {
-    /// Returns argument for [make_bucket()](crate::s3::client::Client::make_bucket) API with given bucket name
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// let args = MakeBucketArgs::new("my-bucket").unwrap();
-    /// ```
-    pub fn new(bucket_name: &'a str) -> Result<MakeBucketArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        Ok(MakeBucketArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            object_lock: false,
-        })
-    }
-}
 
 #[derive(Clone, Debug, Default)]
 /// Argument for [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload) API

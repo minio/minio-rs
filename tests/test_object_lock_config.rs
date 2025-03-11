@@ -17,21 +17,27 @@ mod common;
 
 use crate::common::{CleanupGuard, TestContext, rand_bucket_name};
 use minio::s3::args::{
-    DeleteObjectLockConfigArgs, GetObjectLockConfigArgs, MakeBucketArgs, SetObjectLockConfigArgs,
+    DeleteObjectLockConfigArgs, GetObjectLockConfigArgs, SetObjectLockConfigArgs,
 };
-use minio::s3::types::{ObjectLockConfig, RetentionMode};
+use minio::s3::response::{
+    DeleteObjectLockConfigResponse, GetObjectLockConfigResponse, SetObjectLockConfigResponse,
+};
+use minio::s3::types::{ObjectLockConfig, RetentionMode, S3Api};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_object_lock_config() {
     let ctx = TestContext::new_from_env();
-    let bucket_name = rand_bucket_name();
-
-    let mut args = MakeBucketArgs::new(&bucket_name).unwrap();
-    args.object_lock = true;
-    ctx.client.make_bucket(&args).await.unwrap();
+    let bucket_name: String = rand_bucket_name();
+    ctx.client
+        .make_bucket(&bucket_name)
+        .object_lock(true)
+        .send()
+        .await
+        .unwrap();
     let _cleanup = CleanupGuard::new(&ctx, &bucket_name);
 
-    ctx.client
+    let _resp: SetObjectLockConfigResponse = ctx
+        .client
         .set_object_lock_config(
             &SetObjectLockConfigArgs::new(
                 &bucket_name,
@@ -42,7 +48,7 @@ async fn set_get_delete_object_lock_config() {
         .await
         .unwrap();
 
-    let resp = ctx
+    let resp: GetObjectLockConfigResponse = ctx
         .client
         .get_object_lock_config(&GetObjectLockConfigArgs::new(&bucket_name).unwrap())
         .await
@@ -55,12 +61,13 @@ async fn set_get_delete_object_lock_config() {
     assert_eq!(resp.config.retention_duration_days, Some(7));
     assert!(resp.config.retention_duration_years.is_none());
 
-    ctx.client
+    let _resp: DeleteObjectLockConfigResponse = ctx
+        .client
         .delete_object_lock_config(&DeleteObjectLockConfigArgs::new(&bucket_name).unwrap())
         .await
         .unwrap();
 
-    let resp = ctx
+    let resp: GetObjectLockConfigResponse = ctx
         .client
         .get_object_lock_config(&GetObjectLockConfigArgs::new(&bucket_name).unwrap())
         .await
