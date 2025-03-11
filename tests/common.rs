@@ -148,6 +148,7 @@ pub struct TestContext {
 }
 
 impl TestContext {
+    #[allow(dead_code)]
     pub fn new_from_env() -> Self {
         let run_on_ci: bool = std::env::var("CI")
             .unwrap_or("false".into())

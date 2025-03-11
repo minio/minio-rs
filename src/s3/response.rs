@@ -33,11 +33,13 @@ mod delete_bucket_lifecycle;
 mod delete_bucket_notification;
 mod delete_bucket_policy;
 mod delete_bucket_replication;
+mod delete_bucket_tags;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
 mod get_bucket_notification;
 mod get_bucket_policy;
 mod get_bucket_replication;
+mod get_bucket_tags;
 mod get_bucket_versioning;
 mod get_object;
 mod list_buckets;
@@ -51,6 +53,7 @@ mod set_bucket_lifecycle;
 mod set_bucket_notification;
 mod set_bucket_policy;
 mod set_bucket_replication;
+mod set_bucket_tags;
 mod set_bucket_versioning;
 
 pub use delete_bucket_encryption::DeleteBucketEncryptionResponse;
@@ -58,11 +61,13 @@ pub use delete_bucket_lifecycle::DeleteBucketLifecycleResponse;
 pub use delete_bucket_notification::DeleteBucketNotificationResponse;
 pub use delete_bucket_policy::DeleteBucketPolicyResponse;
 pub use delete_bucket_replication::DeleteBucketReplicationResponse;
+pub use delete_bucket_tags::DeleteBucketTagsResponse;
 pub use get_bucket_encryption::GetBucketEncryptionResponse;
 pub use get_bucket_lifecycle::GetBucketLifecycleResponse;
 pub use get_bucket_notification::GetBucketNotificationResponse;
 pub use get_bucket_policy::GetBucketPolicyResponse;
 pub use get_bucket_replication::GetBucketReplicationResponse;
+pub use get_bucket_tags::GetBucketTagsResponse;
 pub use get_bucket_versioning::GetBucketVersioningResponse;
 pub use get_object::GetObjectResponse;
 pub use list_buckets::ListBucketsResponse;
@@ -80,6 +85,7 @@ pub use set_bucket_lifecycle::SetBucketLifecycleResponse;
 pub use set_bucket_notification::SetBucketNotificationResponse;
 pub use set_bucket_policy::SetBucketPolicyResponse;
 pub use set_bucket_replication::SetBucketReplicationResponse;
+pub use set_bucket_tags::SetBucketTagsResponse;
 pub use set_bucket_versioning::SetBucketVersioningResponse;
 
 #[derive(Debug)]
@@ -594,21 +600,6 @@ pub struct IsObjectLegalHoldEnabledResponse {
     pub version_id: Option<String>,
     pub enabled: bool,
 }
-
-/// Response of [delete_bucket_tags()](crate::s3::client::Client::delete_bucket_tags) API
-pub type DeleteBucketTagsResponse = BucketResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [get_bucket_tags()](crate::s3::client::Client::get_bucket_tags) API
-pub struct GetBucketTagsResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub tags: std::collections::HashMap<String, String>,
-}
-
-/// Response of [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags) API
-pub type SetBucketTagsResponse = BucketResponse;
 
 /// Response of [delete_object_lock_config()](crate::s3::client::Client::delete_object_lock_config) API
 pub type DeleteObjectLockConfigResponse = BucketResponse;

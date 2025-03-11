@@ -31,7 +31,6 @@ impl Client {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// use minio::s3::args::*;
     /// let config = r#"{
     ///   "Version": "2012-10-17",
     ///   "Statement": [

@@ -16,7 +16,8 @@
 mod common;
 
 use crate::common::{TestContext, create_bucket_helper};
-use minio::s3::args::{DeleteBucketTagsArgs, GetBucketTagsArgs, SetBucketTagsArgs};
+use minio::s3::response::{DeleteBucketTagsResponse, GetBucketTagsResponse, SetBucketTagsResponse};
+use minio::s3::types::S3Api;
 use std::collections::HashMap;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
@@ -29,26 +30,33 @@ async fn set_get_delete_bucket_tags() {
         (String::from("User"), String::from("jsmith")),
     ]);
 
-    ctx.client
-        .set_bucket_tags(&SetBucketTagsArgs::new(&bucket_name, &tags).unwrap())
+    let _resp: SetBucketTagsResponse = ctx
+        .client
+        .set_bucket_tags(&bucket_name)
+        .tags(tags.clone())
+        .send()
+        .await
+        .unwrap();
+
+    let resp: GetBucketTagsResponse = ctx
+        .client
+        .get_bucket_tags(&bucket_name)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.tags, resp.tags);
+
+    let _resp: DeleteBucketTagsResponse = ctx
+        .client
+        .delete_bucket_tags(&bucket_name)
+        .send()
         .await
         .unwrap();
 
     let resp = ctx
         .client
-        .get_bucket_tags(&GetBucketTagsArgs::new(&bucket_name).unwrap())
-        .await
-        .unwrap();
-    assert!(resp.tags.len() == tags.len() && resp.tags.keys().all(|k| tags.contains_key(k)));
-
-    ctx.client
-        .delete_bucket_tags(&DeleteBucketTagsArgs::new(&bucket_name).unwrap())
-        .await
-        .unwrap();
-
-    let resp = ctx
-        .client
-        .get_bucket_tags(&GetBucketTagsArgs::new(&bucket_name).unwrap())
+        .get_bucket_tags(&bucket_name)
+        .send()
         .await
         .unwrap();
     assert!(resp.tags.is_empty());

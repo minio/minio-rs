@@ -1323,50 +1323,6 @@ pub type DisableObjectLegalHoldArgs<'a> = ObjectVersionArgs<'a>;
 /// Argument for [is_object_legal_hold_enabled()](crate::s3::client::Client::is_object_legal_hold_enabled) API
 pub type IsObjectLegalHoldEnabledArgs<'a> = ObjectVersionArgs<'a>;
 
-/// Argument for [delete_bucket_tags()](crate::s3::client::Client::delete_bucket_tags) API
-pub type DeleteBucketTagsArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [get_bucket_tags()](crate::s3::client::Client::get_bucket_tags) API
-pub type GetBucketTagsArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags) API
-pub struct SetBucketTagsArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub tags: &'a HashMap<String, String>,
-}
-
-impl<'a> SetBucketTagsArgs<'a> {
-    /// Returns argument for [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags) API with given bucket name and tags
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// use std::collections::HashMap;
-    /// let mut tags: HashMap<String, String> = HashMap::new();
-    /// tags.insert(String::from("Project"), String::from("Project One"));
-    /// tags.insert(String::from("User"), String::from("jsmith"));
-    /// let args = SetBucketTagsArgs::new("my-bucket", &tags).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        tags: &'a HashMap<String, String>,
-    ) -> Result<SetBucketTagsArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        Ok(SetBucketTagsArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            tags,
-        })
-    }
-}
-
 /// Argument for [delete_object_lock_config()](crate::s3::client::Client::delete_object_lock_config) API
 pub type DeleteObjectLockConfigArgs<'a> = BucketArgs<'a>;
 
