@@ -14,29 +14,31 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
 use crate::s3::response::SetObjectRetentionResponse;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{RetentionMode, S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, UtcTime, check_bucket_name, md5sum_hash, to_iso8601utc};
+use crate::s3::utils::{
+    Multimap, UtcTime, check_bucket_name, check_object_name, insert, md5sum_hash, to_iso8601utc,
+};
 use bytes::Bytes;
 use http::Method;
 
 /// Argument builder for [set_object_retention()](Client::set_object_retention) API
 #[derive(Clone, Debug, Default)]
 pub struct SetObjectRetention {
-    pub client: Option<Client>,
+   client: Option<Client>,
 
-    pub extra_headers: Option<Multimap>,
-    pub extra_query_params: Option<Multimap>,
-    pub region: Option<String>,
-    pub bucket: String,
+   extra_headers: Option<Multimap>,
+   extra_query_params: Option<Multimap>,
+   region: Option<String>,
+   bucket: String,
 
-    pub object: String,
-    pub version_id: Option<String>,
-    pub bypass_governance_mode: bool,
-    pub retention_mode: Option<RetentionMode>,
-    pub retain_until_date: Option<UtcTime>,
+   object: String,
+   version_id: Option<String>,
+   bypass_governance_mode: bool,
+   retention_mode: Option<RetentionMode>,
+   retain_until_date: Option<UtcTime>,
 }
 
 impl SetObjectRetention {
@@ -99,74 +101,53 @@ impl S3Api for SetObjectRetention {
 }
 
 impl ToS3Request for SetObjectRetention {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        //TODO move the following checks to a validate fn
-        check_bucket_name(&self.bucket, true)?;
+    fn to_s3request(self) -> Result<S3Request, Error> {
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
+        {
+            check_bucket_name(&self.bucket, true)?;
+            check_object_name(&self.object)?;
 
-        if self.object.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
+            if self.retention_mode.is_some() ^ self.retain_until_date.is_some() {
+                return Err(Error::InvalidRetentionConfig(String::from(
+                    "both mode and retain_until_date must be set or unset",
+                )));
+            }
         }
-
-        if self.retention_mode.is_some() ^ self.retain_until_date.is_some() {
-            return Err(Error::InvalidRetentionConfig(String::from(
-                "both mode and retain_until_date must be set or unset",
-            )));
-        }
-
-        let mut headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         if self.bypass_governance_mode {
-            headers.insert(
-                String::from("x-amz-bypass-governance-retention"),
-                String::from("true"),
-            );
+            headers.insert("x-amz-bypass-governance-retention".into(), "true".into());
         }
 
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
-        if let Some(v) = &self.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
+        let mut query_params: Multimap = insert(self.extra_query_params, "retention");
+        if let Some(v) = self.version_id {
+            query_params.insert("versionId".into(), v);
         }
-        query_params.insert(String::from("retention"), String::new());
 
-        let mut data: String = String::from("<Retention>");
-        if let Some(v) = &self.retention_mode {
-            data.push_str("<Mode>");
-            data.push_str(&v.to_string());
-            data.push_str("</Mode>");
-        }
-        if let Some(v) = &self.retain_until_date {
-            data.push_str("<RetainUntilDate>");
-            data.push_str(&to_iso8601utc(*v));
-            data.push_str("</RetainUntilDate>");
-        }
-        data.push_str("</Retention>");
-
-        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
+        let data: String = {
+            let mut data: String = "<Retention>".into();
+            if let Some(v) = &self.retention_mode {
+                data.push_str("<Mode>");
+                data.push_str(&v.to_string());
+                data.push_str("</Mode>");
+            }
+            if let Some(v) = &self.retain_until_date {
+                data.push_str("<RetainUntilDate>");
+                data.push_str(&to_iso8601utc(*v));
+                data.push_str("</RetainUntilDate>");
+            }
+            data.push_str("</Retention>");
+            data
+        };
+        headers.insert("Content-MD5".into(), md5sum_hash(data.as_ref()));
 
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(data)));
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::PUT)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(client, Method::PUT)
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
             .headers(headers)
-            .object(Some(&self.object))
-            .body(body);
-
-        Ok(req)
+            .object(Some(self.object))
+            .body(body))
     }
 }

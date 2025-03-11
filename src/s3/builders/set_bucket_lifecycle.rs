@@ -14,25 +14,25 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
 use crate::s3::response::SetBucketLifecycleResponse;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{LifecycleConfig, S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, md5sum_hash};
+use crate::s3::utils::{Multimap, check_bucket_name, insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
 
 /// Argument builder for [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API
 #[derive(Clone, Debug, Default)]
 pub struct SetBucketLifecycle {
-    pub(crate) client: Option<Client>,
+   client: Option<Client>,
 
-    pub(crate) extra_headers: Option<Multimap>,
-    pub(crate) extra_query_params: Option<Multimap>,
-    pub(crate) region: Option<String>,
-    pub(crate) bucket: String,
+   extra_headers: Option<Multimap>,
+   extra_query_params: Option<Multimap>,
+   region: Option<String>,
+   bucket: String,
 
-    pub(crate) config: LifecycleConfig,
+   config: LifecycleConfig,
 }
 
 impl SetBucketLifecycle {
@@ -73,37 +73,21 @@ impl S3Api for SetBucketLifecycle {
 }
 
 impl ToS3Request for SetBucketLifecycle {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let mut headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
-        query_params.insert("lifecycle".into(), String::new());
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
 
         let bytes: Bytes = self.config.to_xml().into();
-        headers.insert(String::from("Content-MD5"), md5sum_hash(&bytes));
+        headers.insert("Content-MD5".into(), md5sum_hash(&bytes));
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
 
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
-
-        let req = S3Request::new(client, Method::PUT)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
-            .query_params(query_params)
+        Ok(S3Request::new(client, Method::PUT)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(insert(self.extra_query_params, "lifecycle"))
             .headers(headers)
-            .body(body);
-
-        Ok(req)
+            .body(body))
     }
 }

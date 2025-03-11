@@ -128,4 +128,7 @@ async fn upload_download_object() {
         .await
         .unwrap();
     assert_eq!(get_hash(&object_name), get_hash(&filename));
+
+    fs::remove_file(&object_name).unwrap();
+    fs::remove_file(&filename).unwrap();
 }

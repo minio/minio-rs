@@ -32,7 +32,6 @@ pub struct ListBuckets {
     extra_query_params: Option<Multimap>,
 }
 
-// builder interface
 impl ListBuckets {
     pub fn new() -> Self {
         Default::default()
@@ -54,27 +53,16 @@ impl ListBuckets {
     }
 }
 
-impl ToS3Request for ListBuckets {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            headers = v.clone();
-        }
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            query_params = v.clone();
-        }
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::GET,
-        )
-        .query_params(query_params)
-        .headers(headers);
-        Ok(req)
-    }
-}
-
 impl S3Api for ListBuckets {
     type S3Response = ListBucketsResponse;
+}
+
+impl ToS3Request for ListBuckets {
+    fn to_s3request(self) -> Result<S3Request, Error> {
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
+
+        Ok(S3Request::new(client, Method::GET)
+            .query_params(self.extra_query_params.unwrap_or_default())
+            .headers(self.extra_headers.unwrap_or_default()))
+    }
 }

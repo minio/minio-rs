@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use minio::s3::args::PostPolicy;
+use minio::s3::builders::PostPolicy;
 use minio::s3::types::{
     AndOperator, Destination, Filter, LifecycleConfig, LifecycleRule, NotificationConfig,
     ObjectLockConfig, PrefixFilterRule, QueueConfig, ReplicationConfig, ReplicationRule,

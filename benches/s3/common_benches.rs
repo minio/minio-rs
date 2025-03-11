@@ -17,7 +17,7 @@ use criterion::Criterion;
 use minio::s3::Client;
 use minio::s3::error::Error;
 use minio::s3::response::{MakeBucketResponse, PutObjectContentResponse};
-use minio::s3::types::{FromS3Response, S3Api};
+use minio::s3::types::{FromS3Response, S3Api, S3Request};
 use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::test_context::TestContext;
 use minio_common::utils::{
@@ -140,7 +140,7 @@ pub(crate) fn benchmark_s3_api<ApiType, GlobalSetupFuture>(
 
             // Per-iteration setup for initial request
             let api = per_iter_setup(&ctx);
-            let request = api.to_s3request().unwrap();
+            let request: S3Request = api.to_s3request().unwrap();
 
             // Execute the request to get a response, store the bytes for swift cloning
             let bytes: bytes::Bytes = rt.block_on(async {

@@ -20,6 +20,7 @@ use crate::s3::utils::get_option_text;
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
+use std::mem;
 use xmltree::Element;
 
 /// Response of
@@ -36,16 +37,17 @@ pub struct GetBucketVersioningResponse {
 
 #[async_trait]
 impl FromS3Response for GetBucketVersioningResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
             None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
             Some(v) => v.to_string(),
         };
-        let resp = resp?;
-        let headers = resp.headers().clone();
+        let mut resp = resp?;
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+
         let body = resp.bytes().await?;
         let root = Element::parse(body.reader())?;
         let status: Option<VersioningStatus> =
@@ -57,7 +59,7 @@ impl FromS3Response for GetBucketVersioningResponse {
 
         Ok(GetBucketVersioningResponse {
             headers,
-            region: req.get_computed_region(),
+            region: req.inner_region,
             bucket,
             status,
             mfa_delete,

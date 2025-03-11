@@ -32,30 +32,14 @@ impl S3Api for RemoveBucket {
 }
 
 impl ToS3Request for RemoveBucket {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
-
-        let req = S3Request::new(client, Method::DELETE)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
-            .query_params(query_params)
-            .headers(headers);
-
-        Ok(req)
+        Ok(S3Request::new(client, Method::DELETE)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(self.extra_query_params.unwrap_or_default())
+            .headers(self.extra_headers.unwrap_or_default()))
     }
 }

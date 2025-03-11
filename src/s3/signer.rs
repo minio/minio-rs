@@ -226,20 +226,14 @@ pub fn presign_v4(
     let canonical_headers = "host:".to_string() + host;
     let signed_headers = "host";
 
+    query_params.insert("X-Amz-Algorithm".into(), "AWS4-HMAC-SHA256".into());
     query_params.insert(
-        "X-Amz-Algorithm".to_string(),
-        "AWS4-HMAC-SHA256".to_string(),
-    );
-    query_params.insert(
-        "X-Amz-Credential".to_string(),
+        "X-Amz-Credential".into(),
         access_key.to_string() + "/" + &scope,
     );
-    query_params.insert("X-Amz-Date".to_string(), to_amz_date(date));
-    query_params.insert("X-Amz-Expires".to_string(), expires.to_string());
-    query_params.insert(
-        "X-Amz-SignedHeaders".to_string(),
-        signed_headers.to_string(),
-    );
+    query_params.insert("X-Amz-Date".into(), to_amz_date(date));
+    query_params.insert("X-Amz-Expires".into(), expires.to_string());
+    query_params.insert("X-Amz-SignedHeaders".into(), signed_headers.to_string());
 
     let canonical_query_string = get_canonical_query_string(query_params);
     let canonical_request_hash = get_canonical_request_hash(
@@ -254,7 +248,7 @@ pub fn presign_v4(
     let signing_key = get_signing_key(secret_key, date, region, "s3");
     let signature = get_signature(signing_key.as_slice(), string_to_sign.as_bytes());
 
-    query_params.insert("X-Amz-Signature".to_string(), signature);
+    query_params.insert("X-Amz-Signature".into(), signature);
 }
 
 /// Signs and updates headers for given parameters for pre-sign POST request

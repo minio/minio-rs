@@ -15,6 +15,7 @@
 
 use http::Method;
 
+use crate::s3::utils::check_object_name;
 use crate::s3::{
     client::Client,
     error::Error,
@@ -46,7 +47,6 @@ pub struct GetObject {
     unmodified_since: Option<UtcTime>,
 }
 
-// builder interface
 impl GetObject {
     pub fn new(bucket: &str, object: &str) -> Self {
         Self {
@@ -117,99 +117,72 @@ impl GetObject {
     }
 }
 
-// internal helpers
-impl GetObject {
-    fn get_range_header_value(&self) -> Option<String> {
-        let (offset, length) = match self.length {
-            Some(_) => (Some(self.offset.unwrap_or(0_u64)), self.length),
-            None => (self.offset, None),
-        };
-
-        if let Some(o) = offset {
-            let mut range = String::new();
-            range.push_str("bytes=");
-            range.push_str(&o.to_string());
-            range.push('-');
-            if let Some(l) = length {
-                range.push_str(&(o + l - 1).to_string());
-            }
-            Some(range)
-        } else {
-            None
-        }
-    }
-
-    fn get_headers(&self) -> Multimap {
-        let mut headers = Multimap::new();
-
-        if let Some(val) = self.get_range_header_value() {
-            headers.insert(String::from("Range"), val);
-        }
-
-        if let Some(v) = &self.match_etag {
-            headers.insert(String::from("if-match"), v.to_string());
-        }
-
-        if let Some(v) = &self.not_match_etag {
-            headers.insert(String::from("if-none-match"), v.to_string());
-        }
-
-        if let Some(v) = self.modified_since {
-            headers.insert(String::from("if-modified-since"), to_http_header_value(v));
-        }
-
-        if let Some(v) = self.unmodified_since {
-            headers.insert(String::from("if-unmodified-since"), to_http_header_value(v));
-        }
-
-        if let Some(v) = &self.ssec {
-            merge(&mut headers, &v.headers());
-        }
-
-        headers
-    }
+impl S3Api for GetObject {
+    type S3Response = GetObjectResponse;
 }
 
 impl ToS3Request for GetObject {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        check_bucket_name(&self.bucket, true)?;
-
-        if self.object.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
-
-        if self.ssec.is_some() && !client.is_secure() {
-            return Err(Error::SseTlsRequired(None));
+    fn to_s3request(self) -> Result<S3Request, Error> {
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
+        {
+            check_bucket_name(&self.bucket, true)?;
+            check_object_name(&self.object)?;
+            if self.ssec.is_some() && !client.is_secure() {
+                return Err(Error::SseTlsRequired(None));
+            }
         }
 
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
-        }
-        merge(&mut headers, &self.get_headers());
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
+        {
+            {
+                let (offset, length): (Option<u64>, Option<u64>) = match self.length {
+                    Some(_) => (Some(self.offset.unwrap_or(0_u64)), self.length),
+                    None => (self.offset, None),
+                };
 
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = &self.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
+                if let Some(o) = offset {
+                    let mut range: String = String::new();
+                    range.push_str("bytes=");
+                    range.push_str(&o.to_string());
+                    range.push('-');
+                    if let Some(l) = length {
+                        range.push_str(&(o + l - 1).to_string());
+                    }
+                    headers.insert("Range".into(), range);
+                }
+            }
+
+            if let Some(v) = self.match_etag {
+                headers.insert("if-match".into(), v);
+            }
+
+            if let Some(v) = self.not_match_etag {
+                headers.insert("if-none-match".into(), v);
+            }
+
+            if let Some(v) = self.modified_since {
+                headers.insert("if-modified-since".into(), to_http_header_value(v));
+            }
+
+            if let Some(v) = self.unmodified_since {
+                headers.insert("if-unmodified-since".into(), to_http_header_value(v));
+            }
+
+            if let Some(v) = &self.ssec {
+                merge(&mut headers, v.headers());
+            }
         }
 
-        let req = S3Request::new(client, Method::GET)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
-            .object(Some(&self.object))
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        if let Some(v) = self.version_id {
+            query_params.insert("versionId".into(), v);
+        }
+
+        Ok(S3Request::new(client, Method::GET)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .object(Some(self.object))
             .query_params(query_params)
-            .headers(headers);
-
-        Ok(req)
+            .headers(headers))
     }
-}
-
-impl S3Api for GetObject {
-    type S3Response = GetObjectResponse;
 }

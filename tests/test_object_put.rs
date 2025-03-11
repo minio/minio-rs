@@ -14,10 +14,8 @@
 // limitations under the License.
 
 use http::header;
-use minio::s3::args::StatObjectArgs;
 use minio::s3::builders::ObjectContent;
-use minio::s3::error::Error;
-use minio::s3::response::{PutObjectContentResponse, RemoveObjectResponse, StatObjectResponse};
+use minio::s3::response::{PutObjectContentResponse, StatObjectResponse};
 use minio::s3::types::S3Api;
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
@@ -28,10 +26,11 @@ use tokio::sync::mpsc;
 async fn put_object() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
-    let object_name = rand_object_name();
+    let object_name: String = rand_object_name();
 
     let size = 16_u64;
-    ctx.client
+    let resp: PutObjectContentResponse = ctx
+        .client
         .put_object_content(
             &bucket_name,
             &object_name,
@@ -40,37 +39,25 @@ async fn put_object() {
         .send()
         .await
         .unwrap();
-    let resp = ctx
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+
+    let resp: StatObjectResponse = ctx
         .client
-        .stat_object(&StatObjectArgs::new(&bucket_name, &object_name).unwrap())
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket_name, bucket_name);
-    assert_eq!(resp.object_name, object_name);
-    assert_eq!(resp.size as u64, size);
-    ctx.client
-        .remove_object(&bucket_name, object_name.as_str())
+        .stat_object(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
-    // Validate delete succeeded.
-    let resp = ctx
-        .client
-        .stat_object(&StatObjectArgs::new(&bucket_name, &object_name).unwrap())
-        .await;
-    match resp.err().unwrap() {
-        Error::S3Error(er) => {
-            assert_eq!(er.code, "NoSuchKey")
-        }
-        e => panic!("Unexpected error {:?}", e),
-    }
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.size, size);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn put_object_multipart() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
-    let object_name = rand_object_name();
+    let object_name: String = rand_object_name();
 
     let size: u64 = 16 + 5 * 1024 * 1024;
 
@@ -85,43 +72,42 @@ async fn put_object_multipart() {
         .unwrap();
     let resp = ctx
         .client
-        .stat_object(&StatObjectArgs::new(&bucket_name, &object_name).unwrap())
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket_name, bucket_name);
-    assert_eq!(resp.object_name, object_name);
-    assert_eq!(resp.size as u64, size);
-    ctx.client
-        .remove_object(&bucket_name, object_name.as_str())
+        .stat_object(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.size as u64, size);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn put_object_content_1() {
+async fn put_object_content() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
     let object_name = rand_object_name();
+
     let sizes = [16_u64, 5 * 1024 * 1024, 16 + 5 * 1024 * 1024];
 
     for size in sizes.iter() {
-        let resp: PutObjectContentResponse = ctx
+        let data_src = RandSrc::new(*size);
+        let rsp = ctx
             .client
             .put_object_content(
                 &bucket_name,
                 &object_name,
-                ObjectContent::new_from_stream(RandSrc::new(*size), Some(*size)),
+                ObjectContent::new_from_stream(data_src, Some(*size)),
             )
             .content_type(String::from("image/jpeg"))
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.object_size, *size);
-        let etag = resp.etag;
-        let resp: StatObjectResponse = ctx
+        assert_eq!(rsp.object_size, *size);
+        let etag = rsp.etag;
+        let resp = ctx
             .client
-            .stat_object(&StatObjectArgs::new(&bucket_name, &object_name).unwrap())
+            .stat_object(&bucket_name, &object_name)
+            .send()
             .await
             .unwrap();
         assert_eq!(resp.size, *size);
@@ -130,22 +116,7 @@ async fn put_object_content_1() {
             resp.headers.get(header::CONTENT_TYPE).unwrap(),
             "image/jpeg"
         );
-        let resp: RemoveObjectResponse = ctx
-            .client
-            .remove_object(&bucket_name, object_name.as_str())
-            .send()
-            .await
-            .unwrap();
-        assert!(!resp.is_delete_marker);
     }
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn put_object_content_2() {
-    let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
-    let object_name = rand_object_name();
-    let sizes = [16_u64, 5 * 1024 * 1024, 16 + 5 * 1024 * 1024];
 
     // Repeat test with no size specified in ObjectContent
     for size in sizes.iter() {
@@ -165,25 +136,21 @@ async fn put_object_content_2() {
         let etag = rsp.etag;
         let resp = ctx
             .client
-            .stat_object(&StatObjectArgs::new(&bucket_name, &object_name).unwrap())
+            .stat_object(&bucket_name, &object_name)
+            .send()
             .await
             .unwrap();
         assert_eq!(resp.size, *size);
         assert_eq!(resp.etag, etag);
-        ctx.client
-            .remove_object(&bucket_name, object_name.as_str())
-            .send()
-            .await
-            .unwrap();
     }
 }
 
-/// Test sending PutObject across async tasks.
+/// Test sending ObjectContent across async tasks.
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn put_object_content_3() {
+async fn put_object_content_2() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
-    let object_name = rand_object_name();
+    let object_name: String = rand_object_name();
     let sizes = vec![16_u64, 5 * 1024 * 1024, 16 + 5 * 1024 * 1024];
 
     let (sender, mut receiver): (mpsc::Sender<ObjectContent>, mpsc::Receiver<ObjectContent>) =
@@ -210,15 +177,16 @@ async fn put_object_content_3() {
         tokio::spawn(async move {
             let mut idx = 0;
             while let Some(item) = receiver.recv().await {
-                let resp: PutObjectContentResponse = client
+                let rsp = client
                     .put_object_content(&test_bucket, &object_name, item)
                     .send()
                     .await
                     .unwrap();
-                assert_eq!(resp.object_size, sizes[idx]);
-                let etag = resp.etag;
-                let resp: StatObjectResponse = client
-                    .stat_object(&StatObjectArgs::new(&test_bucket, &object_name).unwrap())
+                assert_eq!(rsp.object_size, sizes[idx]);
+                let etag = rsp.etag;
+                let resp = client
+                    .stat_object(&test_bucket, &object_name)
+                    .send()
                     .await
                     .unwrap();
                 assert_eq!(resp.size, sizes[idx]);

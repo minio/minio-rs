@@ -14,11 +14,11 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
 use crate::s3::response::SetBucketVersioningResponse;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name};
+use crate::s3::utils::{Multimap, check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
 use std::fmt;
@@ -43,15 +43,15 @@ impl fmt::Display for VersioningStatus {
 /// Argument builder for [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption) API
 #[derive(Clone, Debug, Default)]
 pub struct SetBucketVersioning {
-    pub(crate) client: Option<Client>,
+   client: Option<Client>,
 
-    pub(crate) extra_headers: Option<Multimap>,
-    pub(crate) extra_query_params: Option<Multimap>,
-    pub(crate) region: Option<String>,
-    pub(crate) bucket: String,
+   extra_headers: Option<Multimap>,
+   extra_query_params: Option<Multimap>,
+   region: Option<String>,
+   bucket: String,
 
-    pub(crate) status: Option<VersioningStatus>,
-    pub(crate) mfa_delete: Option<bool>,
+   status: Option<VersioningStatus>,
+   mfa_delete: Option<bool>,
 }
 
 impl SetBucketVersioning {
@@ -98,54 +98,39 @@ impl S3Api for SetBucketVersioning {
 }
 
 impl ToS3Request for SetBucketVersioning {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
+        let data = {
+            let mut data = "<VersioningConfiguration>".to_string();
 
-        query_params.insert("versioning".into(), String::new());
-
-        let mut data = "<VersioningConfiguration>".to_string();
-
-        if let Some(v) = self.mfa_delete {
-            data.push_str("<MFADelete>");
-            data.push_str(if v { "Enabled" } else { "Disabled" });
-            data.push_str("</MFADelete>");
-        }
-
-        match self.status {
-            Some(VersioningStatus::Enabled) => data.push_str("<Status>Enabled</Status>"),
-            Some(VersioningStatus::Suspended) => data.push_str("<Status>Suspended</Status>"),
-            None => {
-                return Err(Error::InvalidVersioningStatus(
-                    "Missing VersioningStatus".into(),
-                ));
+            if let Some(v) = self.mfa_delete {
+                data.push_str("<MFADelete>");
+                data.push_str(if v { "Enabled" } else { "Disabled" });
+                data.push_str("</MFADelete>");
             }
+
+            match self.status {
+                Some(VersioningStatus::Enabled) => data.push_str("<Status>Enabled</Status>"),
+                Some(VersioningStatus::Suspended) => data.push_str("<Status>Suspended</Status>"),
+                None => {
+                    return Err(Error::InvalidVersioningStatus(
+                        "Missing VersioningStatus".into(),
+                    ));
+                }
+            };
+
+            data.push_str("</VersioningConfiguration>");
+            data
         };
-
-        data.push_str("</VersioningConfiguration>");
-
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(data)));
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::PUT)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
-            .query_params(query_params)
-            .headers(headers)
-            .body(body);
-
-        Ok(req)
+        Ok(S3Request::new(client, Method::PUT)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(insert(self.extra_query_params, "versioning"))
+            .headers(self.extra_headers.unwrap_or_default())
+            .body(body))
     }
 }

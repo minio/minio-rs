@@ -18,6 +18,7 @@
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
+use std::mem;
 use xmltree::Element;
 
 use crate::s3::{
@@ -38,18 +39,18 @@ pub struct RemoveObjectResponse {
 
 #[async_trait]
 impl FromS3Response for RemoveObjectResponse {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let resp = resp?;
-        let headers = resp.headers().clone();
+        let mut resp = resp?;
+        let headers: HeaderMap = mem::take(resp.headers_mut());
         let is_delete_marker = headers
             .get("x-amz-delete-marker")
             .map(|v| v == "true")
             .unwrap_or(false);
 
-        let version_id = headers
+        let version_id: Option<String> = headers
             .get("x-amz-version-id")
             .map(|v| v.to_str().unwrap().to_string());
 
@@ -118,8 +119,8 @@ impl DeleteResult {
 
 #[async_trait]
 impl FromS3Response for RemoveObjectsResponse {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let resp = resp?;

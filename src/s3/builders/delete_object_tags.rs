@@ -17,21 +17,21 @@ use crate::s3::Client;
 use crate::s3::error::Error;
 use crate::s3::response::DeleteObjectTagsResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name};
+use crate::s3::utils::{Multimap, check_bucket_name, insert};
 use http::Method;
 
 /// Argument builder for [delete_object_tags()](Client::delete_object_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct DeleteObjectTags {
-    pub client: Option<Client>,
+    pub(crate) client: Option<Client>,
 
-    pub extra_headers: Option<Multimap>,
-    pub extra_query_params: Option<Multimap>,
-    pub region: Option<String>,
-    pub bucket: String,
+    pub(crate) extra_headers: Option<Multimap>,
+    pub(crate) extra_query_params: Option<Multimap>,
+    pub(crate) region: Option<String>,
+    pub(crate) bucket: String,
 
-    pub object: String,
-    pub version_id: Option<String>,
+    pub(crate) object: String,
+    pub(crate) version_id: Option<String>,
 }
 
 impl DeleteObjectTags {
@@ -77,36 +77,20 @@ impl S3Api for DeleteObjectTags {
 }
 
 impl ToS3Request for DeleteObjectTags {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
-        if let Some(v) = &self.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
+        let mut query_params: Multimap = insert(self.extra_query_params, "tagging");
+        if let Some(v) = self.version_id {
+            query_params.insert("versionId".into(), v);
         }
-        query_params.insert("tagging".into(), String::new());
 
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
-
-        let req = S3Request::new(client, Method::DELETE)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(client, Method::DELETE)
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
-            .object(Some(&self.object))
-            .headers(headers);
-
-        Ok(req)
+            .object(Some(self.object))
+            .headers(self.extra_headers.unwrap_or_default()))
     }
 }

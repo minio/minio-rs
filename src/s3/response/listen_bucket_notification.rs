@@ -15,6 +15,7 @@
 
 use futures_util::{Stream, TryStreamExt, stream};
 use http::HeaderMap;
+use std::mem;
 use tokio::io::AsyncBufReadExt;
 use tokio_util::io::StreamReader;
 
@@ -40,12 +41,12 @@ impl FromS3Response
         Box<dyn Stream<Item = Result<NotificationRecords, Error>> + Unpin + Send>,
     )
 {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let resp = resp?;
-        let headers = resp.headers().clone();
+        let mut resp = resp?;
+        let headers: HeaderMap = mem::take(resp.headers_mut());
 
         let stream_reader = StreamReader::new(resp.bytes_stream().map_err(std::io::Error::other));
 
@@ -76,7 +77,7 @@ impl FromS3Response
         Ok((
             ListenBucketNotificationResponse {
                 headers,
-                region: req.get_computed_region(),
+                region: req.inner_region,
                 bucket: req.bucket.unwrap().to_string(),
             },
             Box::new(record_stream),

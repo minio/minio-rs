@@ -15,40 +15,39 @@
 
 //! Various types for S3 API requests and responses
 
-use super::builders::SegmentedBytes;
 use super::client::{Client, DEFAULT_REGION};
 use crate::s3::error::Error;
 use crate::s3::utils::{
     Multimap, UtcTime, from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc,
 };
 
+use crate::s3::segmented_bytes::SegmentedBytes;
 use async_trait::async_trait;
 use futures_util::Stream;
 use http::Method;
 use serde::{Deserialize, Serialize};
-use xmltree::Element;
-
 use std::collections::HashMap;
 use std::fmt;
+use xmltree::Element;
 
 #[derive(Clone)]
-pub struct S3Request<'a> {
-    pub(crate) client: &'a Client,
+pub struct S3Request {
+    pub(crate) client: Client,
 
     pub method: Method,
-    pub region: Option<&'a str>,
-    pub bucket: Option<&'a str>,
-    pub object: Option<&'a str>,
+    pub region: Option<String>,
+    pub bucket: Option<String>,
+    pub object: Option<String>,
     pub query_params: Multimap,
     pub headers: Multimap,
     pub body: Option<SegmentedBytes>,
 
     // Computed region
-    inner_region: String,
+    pub(crate) inner_region: String,
 }
 
-impl<'a> S3Request<'a> {
-    pub fn new(client: &'a Client, method: Method) -> S3Request<'a> {
+impl S3Request {
+    pub fn new(client: Client, method: Method) -> S3Request {
         S3Request {
             client,
             method,
@@ -62,17 +61,17 @@ impl<'a> S3Request<'a> {
         }
     }
 
-    pub fn region(mut self, region: Option<&'a str>) -> Self {
+    pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
     }
 
-    pub fn bucket(mut self, bucket: Option<&'a str>) -> Self {
+    pub fn bucket(mut self, bucket: Option<String>) -> Self {
         self.bucket = bucket;
         self
     }
 
-    pub fn object(mut self, object: Option<&'a str>) -> Self {
+    pub fn object(mut self, object: Option<String>) -> Self {
         self.object = object;
         self
     }
@@ -92,14 +91,12 @@ impl<'a> S3Request<'a> {
         self
     }
 
-    pub fn get_computed_region(&self) -> String {
-        self.inner_region.clone()
-    }
-
     pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
         // Lookup the region of the bucket if provided.
-        self.inner_region = if let Some(bucket) = self.bucket {
-            self.client.get_region(bucket, self.region).await?
+        self.inner_region = if let Some(bucket) = &self.bucket {
+            self.client
+                .get_region_cached_async(bucket, self.region.as_deref())
+                .await?
         } else {
             DEFAULT_REGION.to_string()
         };
@@ -111,60 +108,46 @@ impl<'a> S3Request<'a> {
                 &self.inner_region,
                 &mut self.headers,
                 &self.query_params,
-                self.bucket,
-                self.object,
+                &self.bucket.as_deref(),
+                &self.object.as_deref(),
                 self.body.as_ref(),
             )
             .await
     }
 }
 
-pub trait ToS3Request {
-    fn to_s3request(&self) -> Result<S3Request, Error>;
+pub trait ToS3Request: Sized {
+    /// Consumes this builder and returns a `S3Request`.
+    fn to_s3request(self) -> Result<S3Request, Error>;
 }
 
 #[async_trait]
 pub trait FromS3Response: Sized {
-    async fn from_s3response<'a>(
-        s3req: S3Request<'a>,
+    async fn from_s3response(
+        s3req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error>;
 }
 
-/// A trait for interacting with the S3 API, providing a unified interface
-/// for sending requests and handling responses.
 #[async_trait]
 pub trait S3Api: ToS3Request {
-    /// The associated response type that must implement `FromS3Response`.
     type S3Response: FromS3Response;
-
-    /// Sends an S3 request and processes the response.
-    ///
-    /// # Returns
-    /// - `Ok(Self::S3Response)`: If the request is successful and the response can be parsed.
-    /// - `Err(Error)`: If there is a failure in request execution or response processing.
-    ///
-    /// # Example Usage
-    /// ```ignore
-    /// use minio::s3::types::S3Api;
-    /// async fn example(api: &impl S3Api) {
-    ///     match api.send().await {
-    ///         Ok(response) => println!("Success: {:?}", response),
-    ///         Err(err) => eprintln!("Error: {:?}", err),
-    ///     }
-    /// }
-    /// ```
-    async fn send(&self) -> Result<Self::S3Response, Error> {
-        // Convert the implementing type into an S3 request
+    /// Sends S3API request. Consumes this builder and returns a `S3Request`.
+    async fn send(self) -> Result<Self::S3Response, Error> {
         let mut req = self.to_s3request()?;
-
-        // Execute the request and await the response
         let resp: Result<reqwest::Response, Error> = req.execute().await;
-
-        // Convert the response into the associated response type
         Self::S3Response::from_s3response(req, resp).await
     }
 }
+
+/*
+#[async_trait]
+pub trait RunS3High: Sized {
+    type S3Response: Sized;
+    /// Run consumes this builder and returns a `S3Response`.
+    async fn run(self) -> Result<Self::S3Response, Error>;
+}
+*/
 
 #[async_trait]
 pub trait ToStream: Sized {
@@ -248,7 +231,7 @@ pub struct Retention {
 
 /// Parses legal hold string value
 pub fn parse_legal_hold(s: &str) -> Result<bool, Error> {
-    match s {
+    match s.to_uppercase().as_str() {
         "ON" => Ok(true),
         "OFF" => Ok(false),
         _ => Err(Error::InvalidLegalHold(s.to_string())),
@@ -365,8 +348,8 @@ pub struct JsonOutputSerialization {
 
 #[derive(Clone, Debug, Default)]
 /// Select request for [select_object_content()](crate::s3::client::Client::select_object_content) API
-pub struct SelectRequest<'a> {
-    pub expr: &'a str,
+pub struct SelectRequest {
+    pub expr: String,
     pub csv_input: Option<CsvInputSerialization>,
     pub json_input: Option<JsonInputSerialization>,
     pub parquet_input: Option<ParquetInputSerialization>,
@@ -377,7 +360,7 @@ pub struct SelectRequest<'a> {
     pub scan_end_range: Option<usize>,
 }
 
-impl<'a> SelectRequest<'a> {
+impl SelectRequest {
     pub fn new_csv_input_output(
         expr: &str,
         csv_input: CsvInputSerialization,
@@ -390,7 +373,7 @@ impl<'a> SelectRequest<'a> {
         }
 
         Ok(SelectRequest {
-            expr,
+            expr: expr.to_string(),
             csv_input: Some(csv_input),
             json_input: None,
             parquet_input: None,
@@ -403,10 +386,10 @@ impl<'a> SelectRequest<'a> {
     }
 
     pub fn new_csv_input_json_output(
-        expr: &'a str,
+        expr: String,
         csv_input: CsvInputSerialization,
         json_output: JsonOutputSerialization,
-    ) -> Result<SelectRequest<'a>, Error> {
+    ) -> Result<SelectRequest, Error> {
         if expr.is_empty() {
             return Err(Error::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
@@ -427,10 +410,10 @@ impl<'a> SelectRequest<'a> {
     }
 
     pub fn new_json_input_output(
-        expr: &'a str,
+        expr: String,
         json_input: JsonInputSerialization,
         json_output: JsonOutputSerialization,
-    ) -> Result<SelectRequest<'a>, Error> {
+    ) -> Result<SelectRequest, Error> {
         if expr.is_empty() {
             return Err(Error::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
@@ -451,10 +434,10 @@ impl<'a> SelectRequest<'a> {
     }
 
     pub fn new_parquet_input_csv_output(
-        expr: &'a str,
+        expr: String,
         parquet_input: ParquetInputSerialization,
         csv_output: CsvOutputSerialization,
-    ) -> Result<SelectRequest<'a>, Error> {
+    ) -> Result<SelectRequest, Error> {
         if expr.is_empty() {
             return Err(Error::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
@@ -475,10 +458,10 @@ impl<'a> SelectRequest<'a> {
     }
 
     pub fn new_parquet_input_json_output(
-        expr: &'a str,
+        expr: String,
         parquet_input: ParquetInputSerialization,
         json_output: JsonOutputSerialization,
-    ) -> Result<SelectRequest<'a>, Error> {
+    ) -> Result<SelectRequest, Error> {
         if expr.is_empty() {
             return Err(Error::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
@@ -502,7 +485,7 @@ impl<'a> SelectRequest<'a> {
         let mut data = String::from("<SelectObjectContentRequest>");
 
         data.push_str("<Expression>");
-        data.push_str(self.expr);
+        data.push_str(&self.expr);
         data.push_str("</Expression>");
         data.push_str("<ExpressionType>SQL</ExpressionType>");
 

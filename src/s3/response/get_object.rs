@@ -20,6 +20,7 @@ use crate::s3::{
 };
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
+use std::mem;
 
 pub struct GetObjectResponse {
     pub headers: http::HeaderMap,
@@ -34,30 +35,28 @@ pub struct GetObjectResponse {
 
 #[async_trait]
 impl FromS3Response for GetObjectResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
-        response: Result<reqwest::Response, Error>,
+    async fn from_s3response(
+        req: S3Request,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let response = response?;
-        let header_map = response.headers().clone();
-        let version_id = header_map
+        let mut resp = resp?;
+        let headers = mem::take(resp.headers_mut());
+        let version_id = headers
             .get("x-amz-version-id")
             .map(|v| v.to_str().unwrap().to_string());
 
-        let etag = header_map
+        let etag = headers
             .get("etag")
             .map(|v| v.to_str().unwrap().trim_matches('"').to_string());
 
-        let content_length = response
-            .content_length()
-            .ok_or(Error::ContentLengthUnknown)?;
-        let body = response.bytes_stream().map_err(std::io::Error::other);
+        let content_length = resp.content_length().ok_or(Error::ContentLengthUnknown)?;
+        let body = resp.bytes_stream().map_err(std::io::Error::other);
 
         let content = ObjectContent::new_from_stream(body, Some(content_length));
 
         Ok(GetObjectResponse {
-            headers: header_map,
-            region: req.region.unwrap_or("").to_string(),
+            headers,
+            region: req.region.unwrap_or("".to_string()),
             bucket_name: req.bucket.unwrap().to_string(),
             object_name: req.object.unwrap().to_string(),
             version_id,

@@ -17,21 +17,21 @@ use crate::s3::Client;
 use crate::s3::error::Error;
 use crate::s3::response::GetBucketTagsResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name};
+use crate::s3::utils::{Multimap, check_bucket_name, insert};
 use http::Method;
 use std::collections::HashMap;
 
 /// Argument builder for [get_bucket_tags()](crate::s3::client::Client::get_bucket_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct GetBucketTags {
-    pub(crate) client: Option<Client>,
+   client: Option<Client>,
 
-    pub(crate) extra_headers: Option<Multimap>,
-    pub(crate) extra_query_params: Option<Multimap>,
-    pub(crate) region: Option<String>,
-    pub(crate) bucket: String,
+   extra_headers: Option<Multimap>,
+   extra_query_params: Option<Multimap>,
+   region: Option<String>,
+   bucket: String,
 
-    pub(crate) tags: HashMap<String, String>,
+   tags: HashMap<String, String>,
 }
 
 impl GetBucketTags {
@@ -73,32 +73,14 @@ impl S3Api for GetBucketTags {
 }
 
 impl ToS3Request for GetBucketTags {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
-        query_params.insert(String::from("tagging"), String::new());
-
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
-
-        let req = S3Request::new(client, Method::GET)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
-            .query_params(query_params)
-            .headers(headers);
-
-        Ok(req)
+        Ok(S3Request::new(client, Method::GET)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(insert(self.extra_query_params, "tagging"))
+            .headers(self.extra_headers.unwrap_or_default()))
     }
 }

@@ -15,8 +15,8 @@
 
 //! Various utility and helper functions
 
-use std::collections::{BTreeMap, HashMap};
-
+use crate::s3::error::Error;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use base64::engine::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use byteorder::{BigEndian, ReadBytesExt};
@@ -32,13 +32,10 @@ use regex::Regex;
 use ring::digest::{Context, SHA256};
 #[cfg(not(feature = "ring"))]
 use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, HashMap};
 pub use urlencoding::decode as urldecode;
 pub use urlencoding::encode as urlencode;
 use xmltree::Element;
-
-use crate::s3::error::Error;
-
-use super::builders::SegmentedBytes;
 
 /// Date and time with UTC timezone
 pub type UtcTime = DateTime<Utc>;
@@ -52,10 +49,13 @@ pub fn b64encode<T: AsRef<[u8]>>(input: T) -> String {
 }
 
 /// Merges two multimaps.
-pub fn merge(m1: &mut Multimap, m2: &Multimap) {
-    for (key, values) in m2.iter_all() {
+pub fn merge<T>(m1: &mut Multimap, m2: T)
+where
+    T: IntoIterator<Item = (String, Vec<String>)>,
+{
+    for (key, values) in m2 {
         for value in values {
-            m1.insert(key.to_string(), value.to_string());
+            m1.insert(key.clone(), value);
         }
     }
 }
@@ -415,6 +415,16 @@ pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
     Ok(())
 }
 
+pub fn check_object_name(object_name: &str) -> Result<(), Error> {
+    if object_name.is_empty() {
+        Err(Error::InvalidObjectName(
+            "object name cannot be empty".into(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 /// Gets text value of given XML element for given tag.
 pub fn get_text(element: &Element, tag: &str) -> Result<String, Error> {
     Ok(element
@@ -523,6 +533,12 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
         tags.insert(k, v);
     }
     Ok(tags)
+}
+
+pub fn insert(data: Option<Multimap>, key: &str) -> Multimap {
+    let mut result: Multimap = data.unwrap_or_default();
+    result.insert(key.into(), String::new());
+    result
 }
 
 pub mod xml {

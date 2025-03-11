@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use minio::s3::args::PostPolicy;
+use minio::s3::builders::PostPolicy;
 use minio_common::example::create_post_policy_example;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
@@ -27,11 +27,8 @@ async fn get_presigned_post_form_data() {
 
     let policy: PostPolicy = create_post_policy_example(&bucket_name, &object_name);
 
-    let form_data: HashMap<String, String> = ctx
-        .client
-        .get_presigned_post_form_data(&policy)
-        .await
-        .unwrap();
+    let form_data: HashMap<String, String> =
+        ctx.client.get_presigned_post_form_data(policy).unwrap();
     //println!("form_data={:?}", &form_data);
     assert!(form_data.contains_key("x-amz-signature"));
     assert!(form_data.contains_key("policy"));

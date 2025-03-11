@@ -16,10 +16,11 @@
 //! S3 APIs for uploading objects.
 
 use super::Client;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::{
     builders::{
         AbortMultipartUpload, CompleteMultipartUpload, CreateMultipartUpload, ObjectContent,
-        PutObject, PutObjectContent, SegmentedBytes, UploadPart,
+        PutObject, PutObjectContent, UploadPart,
     },
     types::PartInfo,
 };

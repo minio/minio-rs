@@ -15,12 +15,11 @@
 
 //! Builders for RemoveObject APIs.
 
-use std::pin::Pin;
-
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
+use std::pin::Pin;
 use tokio_stream::iter as stream_iter;
 
 use crate::s3::{
@@ -29,9 +28,10 @@ use crate::s3::{
     error::Error,
     response::{RemoveObjectResponse, RemoveObjectsResponse},
     types::{S3Api, S3Request, ToS3Request, ToStream},
-    utils::{Multimap, check_bucket_name, md5sum_hash, merge},
+    utils::{Multimap, check_bucket_name, md5sum_hash},
 };
 
+// region: object-to-delete
 /// Specify an object to be deleted. The object can be specified by key or by
 /// key and version_id via the From trait.
 #[derive(Debug, Clone)]
@@ -69,19 +69,21 @@ impl From<(&str, Option<&str>)> for ObjectToDelete {
         }
     }
 }
+// endregion: object-to-delete
+
+// region: remove-object
 
 #[derive(Debug, Clone)]
 pub struct RemoveObject {
     client: Option<Client>,
 
-    bucket: String,
-    object: ObjectToDelete,
-
-    bypass_governance_mode: bool,
-
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
     region: Option<String>,
+    bucket: String,
+
+    object: ObjectToDelete,
+    bypass_governance_mode: bool,
 }
 
 impl RemoveObject {
@@ -126,40 +128,32 @@ impl RemoveObject {
     }
 }
 
-impl ToS3Request for RemoveObject {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        check_bucket_name(&self.bucket, true)?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = &self.object.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::DELETE,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .object(Some(&self.object.key))
-        .query_params(query_params)
-        .headers(headers);
-        Ok(req)
-    }
-}
-
 impl S3Api for RemoveObject {
     type S3Response = RemoveObjectResponse;
 }
 
+impl ToS3Request for RemoveObject {
+    fn to_s3request(self) -> Result<S3Request, Error> {
+        check_bucket_name(&self.bucket, true)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
+
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        if let Some(v) = self.object.version_id {
+            query_params.insert("versionId".into(), v);
+        }
+
+        Ok(S3Request::new(client, Method::DELETE)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .object(Some(self.object.key))
+            .query_params(query_params)
+            .headers(self.extra_headers.unwrap_or_default()))
+    }
+}
+
+// endregion: remove-object
+
+// region: remove-object-api
 #[derive(Debug, Clone)]
 pub struct RemoveObjectsApi {
     client: Option<ClientCore>,
@@ -227,7 +221,7 @@ impl RemoveObjectsApi {
 }
 
 impl ToS3Request for RemoveObjectsApi {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
         let mut data = String::from("<Delete>");
@@ -249,10 +243,7 @@ impl ToS3Request for RemoveObjectsApi {
         data.push_str("</Delete>");
         let data: Bytes = data.into();
 
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
-        }
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         if self.bypass_governance_mode {
             headers.insert(
                 String::from("x-amz-bypass-governance-retention"),
@@ -263,18 +254,17 @@ impl ToS3Request for RemoveObjectsApi {
             String::from("Content-Type"),
             String::from("application/xml"),
         );
-        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
+        headers.insert("Content-MD5".into(), md5sum_hash(data.as_ref()));
 
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("delete"), String::new());
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        query_params.insert("delete".into(), String::new());
 
-        let client = self.client.as_ref().ok_or(Error::NoClientProvided)?.inner();
+        let client: ClientCore = self.client.ok_or(Error::NoClientProvided)?;
+        let client: Client = client.0;
+
         let req = S3Request::new(client, Method::POST)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
             .headers(headers)
             .body(Some(data.into()));
@@ -286,6 +276,9 @@ impl S3Api for RemoveObjectsApi {
     type S3Response = RemoveObjectsResponse;
 }
 
+// endregion: remove-object-api
+
+// region: delete-object
 pub struct DeleteObjects {
     items: Pin<Box<dyn Stream<Item = ObjectToDelete> + Send + Sync>>,
 }
@@ -311,6 +304,10 @@ where
     }
 }
 
+// endregion: delete-object
+
+// region: remove-objects
+
 pub struct RemoveObjects {
     client: Option<Client>,
 
@@ -327,7 +324,7 @@ pub struct RemoveObjects {
 
 impl RemoveObjects {
     pub fn new(bucket: &str, objects: impl Into<DeleteObjects>) -> Self {
-        RemoveObjects {
+        Self {
             client: None,
 
             bucket: bucket.to_string(),
@@ -420,3 +417,5 @@ impl ToStream for RemoveObjects {
         )))
     }
 }
+
+// endregion: remove-objects

@@ -17,6 +17,7 @@ use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
 use http::HeaderMap;
+use std::mem;
 
 /// Response of
 /// [make_bucket()](crate::s3::client::Client::make_bucket)
@@ -30,22 +31,21 @@ pub struct MakeBucketResponse {
 
 #[async_trait]
 impl FromS3Response for MakeBucketResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
             None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
             Some(v) => v.to_string(),
         };
-        let resp = resp?;
-        let region: String = req.get_computed_region();
+        let mut resp = resp?;
+        let region: String = req.inner_region;
         if !req.client.region_map.contains_key(&bucket) {
             req.client.region_map.insert(bucket.clone(), region.clone());
         }
-
         Ok(MakeBucketResponse {
-            headers: resp.headers().clone(),
+            headers: mem::take(resp.headers_mut()),
             region,
             bucket,
         })

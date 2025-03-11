@@ -14,25 +14,25 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
 use crate::s3::response::SetBucketPolicyResponse;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name};
+use crate::s3::utils::{Multimap, check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
 
 /// Argument builder for [set_bucket_policy()](crate::s3::client::Client::set_bucket_policy) API
 #[derive(Clone, Debug, Default)]
 pub struct SetBucketPolicy {
-    pub(crate) client: Option<Client>,
+   client: Option<Client>,
 
-    pub(crate) extra_headers: Option<Multimap>,
-    pub(crate) extra_query_params: Option<Multimap>,
-    pub(crate) region: Option<String>,
-    pub(crate) bucket: String,
+   extra_headers: Option<Multimap>,
+   extra_query_params: Option<Multimap>,
+   region: Option<String>,
+   bucket: String,
 
-    pub(crate) config: String, //TODO consider PolicyConfig struct
+   config: String, //TODO consider PolicyConfig struct
 }
 
 impl SetBucketPolicy {
@@ -73,36 +73,18 @@ impl S3Api for SetBucketPolicy {
 }
 
 impl ToS3Request for SetBucketPolicy {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
-        query_params.insert(String::from("policy"), String::new());
-
-        let bytes: Bytes = self.config.to_string().into();
+        let bytes: Bytes = self.config.into();
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
 
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
-
-        let req = S3Request::new(client, Method::PUT)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
-            .query_params(query_params)
-            .headers(headers)
-            .body(body);
-
-        Ok(req)
+        Ok(S3Request::new(client, Method::PUT)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(insert(self.extra_query_params, "policy"))
+            .headers(self.extra_headers.unwrap_or_default())
+            .body(body))
     }
 }

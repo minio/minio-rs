@@ -16,17 +16,20 @@
 use std::path::PathBuf;
 use std::{ffi::OsString, path::Path, pin::Pin};
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use futures_util::Stream;
 use rand::prelude::random;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio_stream::StreamExt;
 
+use crate::s3::segmented_bytes::SegmentedBytes;
 #[cfg(test)]
 use quickcheck::Arbitrary;
 
 type IoResult<T> = Result<T, std::io::Error>;
+
+// region: Size
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum Size {
@@ -70,6 +73,7 @@ impl Arbitrary for Size {
         }
     }
 }
+// endregion: Size
 
 /// Object content that can be uploaded or downloaded. Can be constructed from a stream of `Bytes`,
 /// a file path, or a `Bytes` object.
@@ -297,161 +301,5 @@ impl ContentStream {
             }
         }
         Ok(segmented_bytes)
-    }
-}
-
-/// An aggregated collection of `Bytes` objects.
-#[derive(Debug, Clone)]
-pub struct SegmentedBytes {
-    segments: Vec<Vec<Bytes>>,
-    total_size: usize,
-}
-
-impl Default for SegmentedBytes {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl SegmentedBytes {
-    pub fn new() -> Self {
-        SegmentedBytes {
-            segments: Vec::new(),
-            total_size: 0,
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.total_size
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.total_size == 0
-    }
-
-    pub fn append(&mut self, bytes: Bytes) {
-        let last_segment = self.segments.last_mut();
-        if let Some(last_segment) = last_segment {
-            let last_len = last_segment.last().map(|b| b.len());
-            if let Some(last_len) = last_len {
-                if bytes.len() == last_len {
-                    self.total_size += bytes.len();
-                    last_segment.push(bytes);
-                    return;
-                }
-            }
-        }
-        self.total_size += bytes.len();
-        self.segments.push(vec![bytes]);
-    }
-
-    pub fn iter(&self) -> SegmentedBytesIterator {
-        SegmentedBytesIterator {
-            sb: self,
-            current_segment: 0,
-            current_segment_index: 0,
-        }
-    }
-
-    /// Copy all the content into a single `Bytes` object.
-    pub fn to_bytes(&self) -> Bytes {
-        let mut buf = BytesMut::with_capacity(self.total_size);
-        for segment in &self.segments {
-            for bytes in segment {
-                buf.extend_from_slice(bytes);
-            }
-        }
-        buf.freeze()
-    }
-}
-
-pub struct SegmentedBytesIntoIterator {
-    sb: SegmentedBytes,
-    current_segment: usize,
-    current_segment_index: usize,
-}
-
-impl Iterator for SegmentedBytesIntoIterator {
-    type Item = Bytes;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current_segment >= self.sb.segments.len() {
-            return None;
-        }
-        let segment = &self.sb.segments[self.current_segment];
-        if self.current_segment_index >= segment.len() {
-            self.current_segment += 1;
-            self.current_segment_index = 0;
-            return Iterator::next(self);
-        }
-        let bytes = &segment[self.current_segment_index];
-        self.current_segment_index += 1;
-        Some(bytes.clone())
-    }
-}
-
-impl IntoIterator for SegmentedBytes {
-    type Item = Bytes;
-
-    type IntoIter = SegmentedBytesIntoIterator;
-
-    fn into_iter(self) -> Self::IntoIter {
-        SegmentedBytesIntoIterator {
-            sb: self,
-            current_segment: 0,
-            current_segment_index: 0,
-        }
-    }
-}
-
-pub struct SegmentedBytesIterator<'a> {
-    sb: &'a SegmentedBytes,
-    current_segment: usize,
-    current_segment_index: usize,
-}
-
-impl Iterator for SegmentedBytesIterator<'_> {
-    type Item = Bytes;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current_segment >= self.sb.segments.len() {
-            return None;
-        }
-        let segment = &self.sb.segments[self.current_segment];
-        if self.current_segment_index >= segment.len() {
-            self.current_segment += 1;
-            self.current_segment_index = 0;
-            return Iterator::next(self);
-        }
-        let bytes = &segment[self.current_segment_index];
-        self.current_segment_index += 1;
-        Some(bytes.clone())
-    }
-}
-
-impl<'a> IntoIterator for &'a SegmentedBytes {
-    type Item = Bytes;
-    type IntoIter = SegmentedBytesIterator<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        SegmentedBytesIterator {
-            sb: self,
-            current_segment: 0,
-            current_segment_index: 0,
-        }
-    }
-}
-
-impl From<Bytes> for SegmentedBytes {
-    fn from(bytes: Bytes) -> Self {
-        let mut sb = SegmentedBytes::new();
-        sb.append(bytes);
-        sb
-    }
-}
-
-impl From<String> for SegmentedBytes {
-    fn from(s: String) -> Self {
-        SegmentedBytes::from(Bytes::from(s))
     }
 }
