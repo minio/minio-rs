@@ -1106,9 +1106,10 @@ pub struct LifecycleConfig {
 }
 
 impl LifecycleConfig {
-    pub fn from_xml(root: &Element) -> Result<LifecycleConfig, Error> {
+    pub fn from_xml(root: &mut Element) -> Result<LifecycleConfig, Error> {
         let mut config = LifecycleConfig { rules: Vec::new() };
 
+        // TODO consider consuming root
         if let Some(v) = root.get_child("Rule") {
             for rule in &v.children {
                 config
@@ -1529,7 +1530,7 @@ impl TopicConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 /// Notification configuration information
 pub struct NotificationConfig {
     pub cloud_func_config_list: Option<Vec<CloudFuncConfig>>,
@@ -1964,7 +1965,7 @@ impl ReplicationRule {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 /// Replication configuration information
 pub struct ReplicationConfig {
     pub role: Option<String>,

@@ -28,9 +28,7 @@ use crate::s3::http::{BaseUrl, Url};
 use crate::s3::response::*;
 use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
-use crate::s3::types::{
-    Directive, NotificationConfig, ObjectLockConfig, Part, ReplicationConfig, RetentionMode,
-};
+use crate::s3::types::{Directive, ObjectLockConfig, Part, RetentionMode};
 use crate::s3::utils::{
     Multimap, from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash,
     md5sum_hash_sb, merge, sha256_hash_sb, to_amz_date, to_iso8601utc, utc_now,
@@ -48,10 +46,16 @@ use xmltree::Element;
 
 mod delete_bucket_encryption;
 mod delete_bucket_lifecycle;
+mod delete_bucket_notification;
 mod delete_bucket_policy;
+mod delete_bucket_replication;
+mod delete_bucket_tags;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
+mod get_bucket_notification;
 mod get_bucket_policy;
+mod get_bucket_replication;
+mod get_bucket_tags;
 mod get_bucket_versioning;
 mod get_object;
 mod list_objects;
@@ -61,7 +65,10 @@ mod put_object;
 mod remove_objects;
 mod set_bucket_encryption;
 mod set_bucket_lifecycle;
+mod set_bucket_notification;
 mod set_bucket_policy;
+mod set_bucket_replication;
+mod set_bucket_tags;
 mod set_bucket_versioning;
 
 use super::builders::{ListBuckets, SegmentedBytes};
@@ -1229,107 +1236,6 @@ impl Client {
         })
     }
 
-    pub async fn delete_bucket_notification(
-        &self,
-        args: &DeleteBucketNotificationArgs<'_>,
-    ) -> Result<DeleteBucketNotificationResponse, Error> {
-        self.set_bucket_notification(&SetBucketNotificationArgs {
-            extra_headers: args.extra_headers,
-            extra_query_params: args.extra_query_params,
-            region: args.region,
-            bucket: args.bucket,
-            config: &NotificationConfig {
-                cloud_func_config_list: None,
-                queue_config_list: None,
-                topic_config_list: None,
-            },
-        })
-        .await
-    }
-
-    pub async fn delete_bucket_replication(
-        &self,
-        args: &DeleteBucketReplicationArgs<'_>,
-    ) -> Result<DeleteBucketReplicationResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("replication"), String::new());
-
-        let resp = self
-            .execute(
-                Method::DELETE,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await;
-        match resp {
-            Ok(resp) => Ok(DeleteBucketReplicationResponse {
-                headers: resp.headers().clone(),
-                region: region.clone(),
-                bucket: args.bucket.to_string(),
-            }),
-            Err(Error::S3Error(ref err))
-                if err.code == Error::ReplicationConfigurationNotFoundError.as_str() =>
-            {
-                Ok(DeleteBucketReplicationResponse {
-                    headers: HeaderMap::new(),
-                    region: region.clone(),
-                    bucket: args.bucket.to_string(),
-                })
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    pub async fn delete_bucket_tags(
-        &self,
-        args: &DeleteBucketTagsArgs<'_>,
-    ) -> Result<DeleteBucketTagsResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("tagging"), String::new());
-
-        let resp = self
-            .execute(
-                Method::DELETE,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await?;
-
-        Ok(DeleteBucketTagsResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket: args.bucket.to_string(),
-        })
-    }
-
     pub async fn delete_object_lock_config(
         &self,
         args: &DeleteObjectLockConfigArgs<'_>,
@@ -1479,149 +1385,6 @@ impl Client {
             object_name: args.object.to_string(),
             version_id: args.version_id.as_ref().map(|v| v.to_string()),
         })
-    }
-
-    pub async fn get_bucket_notification(
-        &self,
-        args: &GetBucketNotificationArgs<'_>,
-    ) -> Result<GetBucketNotificationResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("notification"), String::new());
-
-        let resp = self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await?;
-
-        let header_map = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
-
-        Ok(GetBucketNotificationResponse {
-            headers: header_map.clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            config: NotificationConfig::from_xml(&mut root)?,
-        })
-    }
-
-    pub async fn get_bucket_replication(
-        &self,
-        args: &GetBucketReplicationArgs<'_>,
-    ) -> Result<GetBucketReplicationResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("replication"), String::new());
-
-        let resp = self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await?;
-
-        let header_map = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let root = Element::parse(body.reader())?;
-
-        Ok(GetBucketReplicationResponse {
-            headers: header_map.clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            config: ReplicationConfig::from_xml(&root)?,
-        })
-    }
-
-    pub async fn get_bucket_tags(
-        &self,
-        args: &GetBucketTagsArgs<'_>,
-    ) -> Result<GetBucketTagsResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("tagging"), String::new());
-
-        match self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await
-        {
-            Ok(resp) => {
-                let header_map = resp.headers().clone();
-                let body = resp.bytes().await?;
-                let mut root = Element::parse(body.reader())?;
-
-                let element = root
-                    .get_mut_child("TagSet")
-                    .ok_or(Error::XmlError("<TagSet> tag not found".to_string()))?;
-                let mut tags = std::collections::HashMap::new();
-                while let Some(v) = element.take_child("Tag") {
-                    tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
-                }
-
-                Ok(GetBucketTagsResponse {
-                    headers: header_map.clone(),
-                    region: region.clone(),
-                    bucket_name: args.bucket.to_string(),
-                    tags,
-                })
-            }
-            Err(Error::S3Error(ref err)) if err.code == Error::NoSuchTagSet.as_str() => {
-                Ok(GetBucketTagsResponse {
-                    headers: HeaderMap::new(),
-                    region: region.clone(),
-                    bucket_name: args.bucket.to_string(),
-                    tags: HashMap::new(),
-                })
-            }
-            Err(e) => Err(e),
-        }
     }
 
     pub async fn get_object_old(
@@ -2278,131 +2041,6 @@ impl Client {
         Ok(RemoveBucketResponse {
             headers: resp.headers().clone(),
             region: region.to_string(),
-            bucket: args.bucket.to_string(),
-        })
-    }
-
-    pub async fn set_bucket_notification(
-        &self,
-        args: &SetBucketNotificationArgs<'_>,
-    ) -> Result<SetBucketNotificationResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("notification"), String::new());
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                Some(args.config.to_xml().into()),
-            )
-            .await?;
-
-        Ok(SetBucketNotificationResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket: args.bucket.to_string(),
-        })
-    }
-
-    pub async fn set_bucket_replication(
-        &self,
-        args: &SetBucketReplicationArgs<'_>,
-    ) -> Result<SetBucketReplicationResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("replication"), String::new());
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                Some(args.config.to_xml().into()),
-            )
-            .await?;
-
-        Ok(SetBucketReplicationResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket: args.bucket.to_string(),
-        })
-    }
-
-    pub async fn set_bucket_tags(
-        &self,
-        args: &SetBucketTagsArgs<'_>,
-    ) -> Result<SetBucketTagsResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("tagging"), String::new());
-
-        let mut data = String::from("<Tagging>");
-        if !args.tags.is_empty() {
-            data.push_str("<TagSet>");
-            for (key, value) in args.tags.iter() {
-                data.push_str("<Tag>");
-                data.push_str("<Key>");
-                data.push_str(key);
-                data.push_str("</Key>");
-                data.push_str("<Value>");
-                data.push_str(value);
-                data.push_str("</Value>");
-                data.push_str("</Tag>");
-            }
-            data.push_str("</TagSet>");
-        }
-        data.push_str("</Tagging>");
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                Some(data.into()),
-            )
-            .await?;
-
-        Ok(SetBucketTagsResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
             bucket: args.bucket.to_string(),
         })
     }

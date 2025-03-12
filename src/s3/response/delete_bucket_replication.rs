@@ -14,25 +14,22 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
-use crate::s3::types::{FromS3Response, LifecycleConfig, S3Request};
+use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
-use bytes::Buf;
 use http::HeaderMap;
-use xmltree::Element;
 
 /// Response of
-/// [get_bucket_lifecycle()](crate::s3::client::Client::get_bucket_lifecycle)
+/// [delete_bucket_replication()](crate::s3::client::Client::delete_bucket_replication)
 /// API
 #[derive(Clone, Debug)]
-pub struct GetBucketLifecycleResponse {
+pub struct DeleteBucketReplicationResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
-    pub config: LifecycleConfig,
 }
 
 #[async_trait]
-impl FromS3Response for GetBucketLifecycleResponse {
+impl FromS3Response for DeleteBucketReplicationResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
         resp: Result<reqwest::Response, Error>,
@@ -41,17 +38,22 @@ impl FromS3Response for GetBucketLifecycleResponse {
             None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
             Some(v) => v.to_string(),
         };
-        let resp = resp?;
-        let headers = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
-        let config = LifecycleConfig::from_xml(&mut root)?;
-
-        Ok(GetBucketLifecycleResponse {
-            headers,
-            region: req.get_computed_region(),
-            bucket,
-            config,
-        })
+        match resp {
+            Ok(r) => Ok(DeleteBucketReplicationResponse {
+                headers: r.headers().clone(),
+                region: req.get_computed_region(),
+                bucket,
+            }),
+            Err(Error::S3Error(ref err))
+                if err.code == Error::ReplicationConfigurationNotFoundError.as_str() =>
+            {
+                Ok(DeleteBucketReplicationResponse {
+                    headers: HeaderMap::new(),
+                    region: req.get_computed_region(),
+                    bucket,
+                })
+            }
+            Err(e) => Err(e),
+        }
     }
 }

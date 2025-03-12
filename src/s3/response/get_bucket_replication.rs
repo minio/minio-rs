@@ -14,25 +14,25 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
-use crate::s3::types::{FromS3Response, LifecycleConfig, S3Request};
+use crate::s3::types::{FromS3Response, ReplicationConfig, S3Request};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
 use xmltree::Element;
 
 /// Response of
-/// [get_bucket_lifecycle()](crate::s3::client::Client::get_bucket_lifecycle)
+/// [get_bucket_replication()](crate::s3::client::Client::get_bucket_replication)
 /// API
 #[derive(Clone, Debug)]
-pub struct GetBucketLifecycleResponse {
+pub struct GetBucketReplicationResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
-    pub config: LifecycleConfig,
+    pub config: ReplicationConfig,
 }
 
 #[async_trait]
-impl FromS3Response for GetBucketLifecycleResponse {
+impl FromS3Response for GetBucketReplicationResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
         resp: Result<reqwest::Response, Error>,
@@ -44,10 +44,10 @@ impl FromS3Response for GetBucketLifecycleResponse {
         let resp = resp?;
         let headers = resp.headers().clone();
         let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
-        let config = LifecycleConfig::from_xml(&mut root)?;
+        let root = Element::parse(body.reader())?;
+        let config = ReplicationConfig::from_xml(&root)?;
 
-        Ok(GetBucketLifecycleResponse {
+        Ok(GetBucketReplicationResponse {
             headers,
             region: req.get_computed_region(),
             bucket,
