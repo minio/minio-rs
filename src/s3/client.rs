@@ -127,11 +127,10 @@ impl ClientBuilder {
     pub fn build(self) -> Result<Client, Error> {
         let mut builder = reqwest::Client::builder().no_gzip();
 
-        let info = os_info::get();
         let mut user_agent = String::from("MinIO (")
-            + &info.os_type().to_string()
+            + std::env::consts::OS
             + "; "
-            + info.architecture().unwrap_or("unknown")
+            + std::env::consts::ARCH
             + ") minio-rs/"
             + env!("CARGO_PKG_VERSION");
 
