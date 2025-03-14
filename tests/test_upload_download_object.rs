@@ -16,9 +16,9 @@
 mod common;
 
 use crate::common::{RandReader, TestContext, create_bucket_helper, rand_object_name};
-use minio::s3::args::{DownloadObjectArgs, UploadObjectArgs};
 use minio::s3::types::S3Api;
 use sha2::{Digest, Sha256};
+use std::path::PathBuf;
 use std::{fs, io};
 
 fn get_hash(filename: &String) -> String {
@@ -38,14 +38,27 @@ async fn upload_download_object() {
     let mut file = fs::File::create(&object_name).unwrap();
     io::copy(&mut RandReader::new(size), &mut file).unwrap();
     file.sync_all().unwrap();
+
     ctx.client
-        .upload_object(&UploadObjectArgs::new(&bucket_name, &object_name, &object_name).unwrap())
+        .put_object_content(
+            &bucket_name,
+            &object_name,
+            PathBuf::from(&object_name).as_path(),
+        )
+        .send()
         .await
         .unwrap();
 
     let filename = rand_object_name();
-    ctx.client
-        .download_object(&DownloadObjectArgs::new(&bucket_name, &object_name, &filename).unwrap())
+    let get_obj_rsp = ctx
+        .client
+        .get_object(&bucket_name, &object_name)
+        .send()
+        .await
+        .unwrap();
+    get_obj_rsp
+        .content
+        .to_file(PathBuf::from(&filename).as_path())
         .await
         .unwrap();
     assert_eq!(get_hash(&object_name), get_hash(&filename));
@@ -70,13 +83,25 @@ async fn upload_download_object() {
     io::copy(&mut RandReader::new(size), &mut file).unwrap();
     file.sync_all().unwrap();
     ctx.client
-        .upload_object(&UploadObjectArgs::new(&bucket_name, &object_name, &object_name).unwrap())
+        .put_object_content(
+            &bucket_name,
+            &object_name,
+            PathBuf::from(&object_name).as_path(),
+        )
+        .send()
         .await
         .unwrap();
 
     let filename = rand_object_name();
-    ctx.client
-        .download_object(&DownloadObjectArgs::new(&bucket_name, &object_name, &filename).unwrap())
+    let get_rsp = ctx
+        .client
+        .get_object(&bucket_name, &object_name)
+        .send()
+        .await
+        .unwrap();
+    get_rsp
+        .content
+        .to_file(PathBuf::from(&filename).as_path())
         .await
         .unwrap();
     assert_eq!(get_hash(&object_name), get_hash(&filename));

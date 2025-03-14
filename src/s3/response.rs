@@ -139,6 +139,19 @@ pub struct PutObjectBaseResponse {
     pub version_id: Option<String>,
 }
 
+impl From<PutObjectResponse> for PutObjectBaseResponse {
+    fn from(response: PutObjectResponse) -> Self {
+        PutObjectBaseResponse {
+            headers: response.headers,
+            bucket_name: response.bucket_name,
+            object_name: response.object_name,
+            location: response.location,
+            etag: response.etag,
+            version_id: response.version_id,
+        }
+    }
+}
+
 /// Response of [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload) API
 pub type CompleteMultipartUploadResponse = PutObjectBaseResponse;
 

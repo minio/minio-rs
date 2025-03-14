@@ -15,10 +15,11 @@
 
 mod common;
 
-use crate::common::{RandReader, TestContext, create_bucket_helper, rand_object_name};
+use crate::common::{TestContext, create_bucket_helper, rand_object_name};
 use async_std::task;
+use common::RandSrc;
 use minio::s3::Client;
-use minio::s3::args::PutObjectArgs;
+use minio::s3::builders::ObjectContent;
 use minio::s3::creds::StaticProvider;
 use minio::s3::types::{NotificationRecords, S3Api};
 use tokio::sync::mpsc;
@@ -81,18 +82,14 @@ async fn listen_bucket_notification() {
     let spawned_task = task::spawn(listen_task());
     task::sleep(std::time::Duration::from_millis(200)).await;
 
-    let size = 16_usize;
+    let size = 16_u64;
     ctx.client
-        .put_object_old(
-            &mut PutObjectArgs::new(
-                &bucket_name,
-                &object_name,
-                &mut RandReader::new(size),
-                Some(size),
-                None,
-            )
-            .unwrap(),
+        .put_object_content(
+            &bucket_name,
+            &object_name,
+            ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
+        .send()
         .await
         .unwrap();
 
