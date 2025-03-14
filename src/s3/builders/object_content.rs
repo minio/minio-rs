@@ -111,6 +111,14 @@ impl From<&'static [u8]> for ObjectContent {
     }
 }
 
+impl From<&'static str> for ObjectContent {
+    fn from(value: &'static str) -> Self {
+        ObjectContent(ObjectContentInner::Bytes(SegmentedBytes::from(
+            Bytes::from(value),
+        )))
+    }
+}
+
 impl From<&Path> for ObjectContent {
     fn from(value: &Path) -> Self {
         ObjectContent(ObjectContentInner::FilePath(value.to_path_buf()))

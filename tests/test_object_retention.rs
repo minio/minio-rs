@@ -15,10 +15,10 @@
 
 mod common;
 
-use crate::common::{CleanupGuard, RandReader, TestContext, rand_bucket_name, rand_object_name};
-use minio::s3::args::{
-    GetObjectRetentionArgs, MakeBucketArgs, PutObjectArgs, SetObjectRetentionArgs,
-};
+use crate::common::{CleanupGuard, TestContext, rand_bucket_name, rand_object_name};
+use common::RandSrc;
+use minio::s3::args::{GetObjectRetentionArgs, MakeBucketArgs, SetObjectRetentionArgs};
+use minio::s3::builders::ObjectContent;
 use minio::s3::types::{RetentionMode, S3Api};
 use minio::s3::utils::{to_iso8601utc, utc_now};
 
@@ -34,19 +34,16 @@ async fn object_retention() {
 
     let object_name = rand_object_name();
 
-    let size = 16_usize;
+    let size = 16_u64;
+
     let obj_resp = ctx
         .client
-        .put_object_old(
-            &mut PutObjectArgs::new(
-                &bucket_name,
-                &object_name,
-                &mut RandReader::new(size),
-                Some(size),
-                None,
-            )
-            .unwrap(),
+        .put_object_content(
+            &bucket_name,
+            &object_name,
+            ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
+        .send()
         .await
         .unwrap();
 

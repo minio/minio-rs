@@ -28,7 +28,7 @@ use crate::s3::http::{BaseUrl, Url};
 use crate::s3::response::*;
 use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
-use crate::s3::types::{Directive, ObjectLockConfig, Part, RetentionMode};
+use crate::s3::types::{Directive, ObjectLockConfig, RetentionMode};
 use crate::s3::utils::{
     Multimap, from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash,
     md5sum_hash_sb, merge, sha256_hash_sb, to_amz_date, to_iso8601utc, utc_now,
@@ -40,7 +40,6 @@ use dashmap::DashMap;
 use hyper::http::Method;
 use reqwest::Body;
 use reqwest::header::HeaderMap;
-use tokio::fs;
 
 use xmltree::Element;
 
@@ -72,6 +71,7 @@ mod set_bucket_tags;
 mod set_bucket_versioning;
 
 use super::builders::{ListBuckets, SegmentedBytes};
+use super::types::{PartInfo, S3Api};
 
 /// Client Builder manufactures a Client using given parameters.
 #[derive(Debug, Default)]
@@ -632,44 +632,6 @@ impl Client {
         Ok(location)
     }
 
-    /// Executes [AbortMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_AbortMultipartUpload.html) S3 API
-    pub async fn abort_multipart_upload_old(
-        &self,
-        args: &AbortMultipartUploadArgs<'_>,
-    ) -> Result<AbortMultipartUploadResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("uploadId"), args.upload_id.to_string());
-
-        let resp = self
-            .execute(
-                Method::DELETE,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                None,
-            )
-            .await?;
-
-        Ok(AbortMultipartUploadResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket: args.bucket.to_string(),
-            object_name: args.object.to_string(),
-            upload_id: args.upload_id.to_string(),
-        })
-    }
-
     pub async fn bucket_exists(&self, args: &BucketExistsArgs<'_>) -> Result<bool, Error> {
         let region;
         match self.get_region(args.bucket, args.region).await {
@@ -717,68 +679,6 @@ impl Client {
                 _ => Err(e),
             },
         }
-    }
-
-    /// Executes [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html) S3 API
-    pub async fn complete_multipart_upload_old(
-        &self,
-        args: &CompleteMultipartUploadArgs<'_>,
-    ) -> Result<CompleteMultipartUploadResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut data = String::from("<CompleteMultipartUpload>");
-        for part in args.parts.iter() {
-            let s = format!(
-                "<Part><PartNumber>{}</PartNumber><ETag>{}</ETag></Part>",
-                part.number, part.etag
-            );
-            data.push_str(&s);
-        }
-        data.push_str("</CompleteMultipartUpload>");
-        let data: Bytes = data.into();
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        headers.insert(
-            String::from("Content-Type"),
-            String::from("application/xml"),
-        );
-        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("uploadId"), args.upload_id.to_string());
-
-        let resp = self
-            .execute(
-                Method::POST,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                Some(data),
-            )
-            .await?;
-        let header_map = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let root = Element::parse(body.reader())?;
-
-        Ok(CompleteMultipartUploadResponse {
-            headers: header_map.clone(),
-            bucket_name: get_text(&root, "Bucket")?,
-            object_name: get_text(&root, "Key")?,
-            location: get_text(&root, "Location")?,
-            etag: get_text(&root, "ETag")?.trim_matches('"').to_string(),
-            version_id: match header_map.get("x-amz-version-id") {
-                Some(v) => Some(v.to_str()?.to_string()),
-                None => None,
-            },
-        })
     }
 
     async fn calculate_part_count(&self, sources: &mut [ComposeSource<'_>]) -> Result<u16, Error> {
@@ -907,12 +807,14 @@ impl Client {
 
         let headers = args.get_headers();
 
-        let mut cmu_args = CreateMultipartUploadArgs::new(args.bucket, args.object)?;
-        cmu_args.extra_query_params = args.extra_query_params;
-        cmu_args.region = args.region;
-        cmu_args.headers = Some(&headers);
-        let resp = self.create_multipart_upload_old(&cmu_args).await?;
-        upload_id.push_str(&resp.upload_id);
+        let cmu = self
+            .create_multipart_upload(args.bucket, args.object)
+            .extra_query_params(args.extra_query_params.cloned())
+            .region(args.region.map(String::from))
+            .extra_headers(Some(headers))
+            .send()
+            .await?;
+        upload_id.push_str(&cmu.upload_id);
 
         let mut part_number = 0_u16;
         let ssec_headers = match args.sse {
@@ -923,7 +825,7 @@ impl Client {
             _ => Multimap::new(),
         };
 
-        let mut parts: Vec<Part> = Vec::new();
+        let mut parts: Vec<PartInfo> = Vec::new();
         for source in args.sources.iter() {
             let mut size = source.get_object_size();
             if let Some(l) = source.length {
@@ -961,9 +863,10 @@ impl Client {
                 upc_args.region = args.region;
 
                 let resp = self.upload_part_copy(&upc_args).await?;
-                parts.push(Part {
+                parts.push(PartInfo {
                     number: part_number,
                     etag: resp.etag,
+                    size: size as u64,
                 });
             } else {
                 while size > 0 {
@@ -991,9 +894,10 @@ impl Client {
                     upc_args.region = args.region;
 
                     let resp = self.upload_part_copy(&upc_args).await?;
-                    parts.push(Part {
+                    parts.push(PartInfo {
                         number: part_number,
                         etag: resp.etag,
+                        size: size as u64,
                     });
 
                     offset += length;
@@ -1002,10 +906,12 @@ impl Client {
             }
         }
 
-        let mut cmu_args =
-            CompleteMultipartUploadArgs::new(args.bucket, args.object, upload_id, &parts)?;
-        cmu_args.region = args.region;
-        self.complete_multipart_upload_old(&cmu_args).await
+        let rsp = self
+            .complete_multipart_upload(args.bucket, args.object, upload_id, parts)
+            .region(args.region.map(String::from))
+            .send()
+            .await?;
+        Ok(PutObjectBaseResponse::from(rsp))
     }
 
     pub async fn compose_object(
@@ -1021,8 +927,9 @@ impl Client {
         let mut upload_id = String::new();
         let res = self.do_compose_object(args, &mut upload_id).await;
         if res.is_err() && !upload_id.is_empty() {
-            let amuargs = &AbortMultipartUploadArgs::new(args.bucket, args.object, &upload_id)?;
-            self.abort_multipart_upload_old(amuargs).await?;
+            self.abort_multipart_upload(args.bucket, args.object, &upload_id)
+                .send()
+                .await?;
         }
 
         res
@@ -1144,54 +1051,6 @@ impl Client {
         })
     }
 
-    /// Executes [CreateMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html) S3 API
-    pub async fn create_multipart_upload_old(
-        &self,
-        args: &CreateMultipartUploadArgs<'_>,
-    ) -> Result<CreateMultipartUploadResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        if !headers.contains_key("Content-Type") {
-            headers.insert(
-                String::from("Content-Type"),
-                String::from("application/octet-stream"),
-            );
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("uploads"), String::new());
-
-        let resp = self
-            .execute(
-                Method::POST,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                None,
-            )
-            .await?;
-        let header_map = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let root = Element::parse(body.reader())?;
-
-        Ok(CreateMultipartUploadResponse {
-            headers: header_map.clone(),
-            region: region.clone(),
-            bucket: args.bucket.to_string(),
-            object_name: args.object.to_string(),
-            upload_id: get_text(&root, "UploadId")?,
-        })
-    }
-
     pub async fn disable_object_legal_hold(
         &self,
         args: &DisableObjectLegalHoldArgs<'_>,
@@ -1294,55 +1153,6 @@ impl Client {
         })
     }
 
-    pub async fn download_object(
-        &self,
-        args: &DownloadObjectArgs<'_>,
-    ) -> Result<DownloadObjectResponse, Error> {
-        let mut resp = self
-            .get_object_old(&GetObjectArgs {
-                extra_headers: args.extra_headers,
-                extra_query_params: args.extra_query_params,
-                region: args.region,
-                bucket: args.bucket,
-                object: args.object,
-                version_id: args.version_id,
-                ssec: args.ssec,
-                offset: None,
-                length: None,
-                match_etag: None,
-                not_match_etag: None,
-                modified_since: None,
-                unmodified_since: None,
-            })
-            .await?;
-        let path = Path::new(&args.filename);
-        if let Some(parent_dir) = path.parent() {
-            if !parent_dir.exists() {
-                fs::create_dir_all(parent_dir).await?;
-            }
-        }
-        let mut file = match args.overwrite {
-            true => File::create(args.filename)?,
-            false => File::options()
-                .write(true)
-                .truncate(true)
-                .create_new(true)
-                .open(args.filename)?,
-        };
-        while let Some(v) = resp.chunk().await? {
-            file.write_all(&v)?;
-        }
-        file.sync_all()?;
-
-        Ok(DownloadObjectResponse {
-            headers: resp.headers().clone(),
-            region: args.region.map_or(String::new(), String::from),
-            bucket_name: args.bucket.to_string(),
-            object_name: args.object.to_string(),
-            version_id: args.version_id.as_ref().map(|v| v.to_string()),
-        })
-    }
-
     pub async fn enable_object_legal_hold(
         &self,
         args: &EnableObjectLegalHoldArgs<'_>,
@@ -1384,42 +1194,6 @@ impl Client {
             object_name: args.object.to_string(),
             version_id: args.version_id.as_ref().map(|v| v.to_string()),
         })
-    }
-
-    pub async fn get_object_old(
-        &self,
-        args: &GetObjectArgs<'_>,
-    ) -> Result<reqwest::Response, Error> {
-        if args.ssec.is_some() && !self.base_url.https {
-            return Err(Error::SseTlsRequired(None));
-        }
-
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        merge(&mut headers, &args.get_headers());
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-
-        self.execute(
-            Method::GET,
-            &region,
-            &mut headers,
-            &query_params,
-            Some(args.bucket),
-            Some(args.object),
-            None,
-        )
-        .await
     }
 
     pub async fn get_object_lock_config(
@@ -1797,172 +1571,6 @@ impl Client {
         })
     }
 
-    fn read_part(
-        reader: &mut dyn std::io::Read,
-        buf: &mut [u8],
-        size: usize,
-    ) -> Result<usize, Error> {
-        let mut bytes_read = 0_usize;
-        let mut i = 0_usize;
-        let mut stop = false;
-        while !stop {
-            let br = reader.read(&mut buf[i..size])?;
-            bytes_read += br;
-            stop = (br == 0) || (br == size - i);
-            i += br;
-        }
-
-        Ok(bytes_read)
-    }
-
-    async fn do_put_object(
-        &self,
-        args: &mut PutObjectArgs<'_>,
-        buf: &mut [u8],
-        upload_id: &mut String,
-    ) -> Result<PutObjectResponseOld, Error> {
-        let mut headers = args.get_headers();
-        if !headers.contains_key("Content-Type") {
-            if args.content_type.is_empty() {
-                headers.insert(
-                    String::from("Content-Type"),
-                    String::from("application/octet-stream"),
-                );
-            } else {
-                headers.insert(String::from("Content-Type"), args.content_type.to_string());
-            }
-        }
-
-        let mut uploaded_size = 0_usize;
-        let mut part_number = 0_i16;
-        let mut stop = false;
-        let mut one_byte: Vec<u8> = Vec::new();
-        let mut parts: Vec<Part> = Vec::new();
-        let object_size = &args.object_size.unwrap();
-        let mut part_size = args.part_size;
-        let mut part_count = args.part_count;
-
-        while !stop {
-            part_number += 1;
-            let mut bytes_read = 0_usize;
-            if args.part_count > 0 {
-                if part_number == args.part_count {
-                    part_size = object_size - uploaded_size;
-                    stop = true;
-                }
-
-                bytes_read = Client::read_part(&mut args.stream, buf, part_size)?;
-                if bytes_read != part_size {
-                    return Err(Error::InsufficientData(part_size as u64, bytes_read as u64));
-                }
-            } else {
-                let mut size = part_size + 1;
-                let newbuf = match one_byte.len() == 1 {
-                    true => {
-                        buf[0] = one_byte.pop().unwrap();
-                        size -= 1;
-                        bytes_read = 1;
-                        &mut buf[1..]
-                    }
-                    false => buf,
-                };
-
-                let n = Client::read_part(&mut args.stream, newbuf, size)?;
-                bytes_read += n;
-
-                // If bytes read is less than or equals to part size, then we have reached last part.
-                if bytes_read <= part_size {
-                    part_count = part_number;
-                    part_size = bytes_read;
-                    stop = true;
-                } else {
-                    one_byte.push(buf[part_size + 1]);
-                }
-            }
-
-            let data = &buf[0..part_size];
-            uploaded_size += part_size;
-
-            if part_count == 1_i16 {
-                let mut poaargs = PutObjectApiArgs::new(args.bucket, args.object, data)?;
-                poaargs.extra_query_params = args.extra_query_params;
-                poaargs.region = args.region;
-                poaargs.headers = Some(&headers);
-
-                return self.put_object_api(&poaargs).await;
-            }
-
-            if upload_id.is_empty() {
-                let mut cmuargs = CreateMultipartUploadArgs::new(args.bucket, args.object)?;
-                cmuargs.extra_query_params = args.extra_query_params;
-                cmuargs.region = args.region;
-                cmuargs.headers = Some(&headers);
-
-                let resp = self.create_multipart_upload_old(&cmuargs).await?;
-                upload_id.push_str(&resp.upload_id);
-            }
-
-            let mut upargs = UploadPartArgs::new(
-                args.bucket,
-                args.object,
-                upload_id,
-                part_number as u16,
-                data,
-            )?;
-            upargs.region = args.region;
-
-            let ssec_headers = match args.sse {
-                Some(v) => match v.as_any().downcast_ref::<SseCustomerKey>() {
-                    Some(_) => v.headers(),
-                    _ => Multimap::new(),
-                },
-                _ => Multimap::new(),
-            };
-            upargs.headers = Some(&ssec_headers);
-
-            let resp = self.upload_part_old(&upargs).await?;
-            parts.push(Part {
-                number: part_number as u16,
-                etag: resp.etag.clone(),
-            });
-        }
-
-        let mut cmuargs =
-            CompleteMultipartUploadArgs::new(args.bucket, args.object, upload_id, &parts)?;
-        cmuargs.region = args.region;
-
-        self.complete_multipart_upload_old(&cmuargs).await
-    }
-
-    pub async fn put_object_old(
-        &self,
-        args: &mut PutObjectArgs<'_>,
-    ) -> Result<PutObjectResponseOld, Error> {
-        if let Some(v) = &args.sse {
-            if v.tls_required() && !self.base_url.https {
-                return Err(Error::SseTlsRequired(None));
-            }
-        }
-
-        let bufsize = match args.part_count > 0 {
-            true => args.part_size,
-            false => args.part_size + 1,
-        };
-        let mut buf = vec![0_u8; bufsize];
-
-        let mut upload_id = String::new();
-        let res = self.do_put_object(args, &mut buf, &mut upload_id).await;
-
-        std::mem::drop(buf);
-
-        if res.is_err() && !upload_id.is_empty() {
-            let amuargs = &AbortMultipartUploadArgs::new(args.bucket, args.object, &upload_id)?;
-            self.abort_multipart_upload_old(amuargs).await?;
-        }
-
-        res
-    }
-
     /// Executes [PutObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html) S3 API
     pub async fn put_object_api(
         &self,
@@ -2280,33 +1888,6 @@ impl Client {
             .await?;
 
         StatObjectResponse::new(resp.headers(), &region, args.bucket, args.object)
-    }
-
-    pub async fn upload_object(
-        &self,
-        args: &UploadObjectArgs<'_>,
-    ) -> Result<UploadObjectResponse, Error> {
-        let mut file = File::open(args.filename)?;
-
-        self.put_object_old(&mut PutObjectArgs {
-            extra_headers: args.extra_headers,
-            extra_query_params: args.extra_query_params,
-            region: args.region,
-            bucket: args.bucket,
-            object: args.object,
-            headers: args.headers,
-            user_metadata: args.user_metadata,
-            sse: args.sse,
-            tags: args.tags,
-            retention: args.retention,
-            legal_hold: args.legal_hold,
-            object_size: args.object_size,
-            part_size: args.part_size,
-            part_count: args.part_count,
-            content_type: args.content_type,
-            stream: &mut file,
-        })
-        .await
     }
 
     /// Executes [UploadPart](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html) S3 API

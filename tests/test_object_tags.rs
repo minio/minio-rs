@@ -15,8 +15,10 @@
 
 mod common;
 
-use crate::common::{RandReader, TestContext, create_bucket_helper, rand_object_name};
-use minio::s3::args::{DeleteObjectTagsArgs, GetObjectTagsArgs, PutObjectArgs, SetObjectTagsArgs};
+use crate::common::{TestContext, create_bucket_helper, rand_object_name};
+use common::RandSrc;
+use minio::s3::args::{DeleteObjectTagsArgs, GetObjectTagsArgs, SetObjectTagsArgs};
+use minio::s3::builders::ObjectContent;
 use minio::s3::types::S3Api;
 use std::collections::HashMap;
 
@@ -26,18 +28,14 @@ async fn object_tags() {
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
     let object_name = rand_object_name();
 
-    let size = 16_usize;
+    let size = 16_u64;
     ctx.client
-        .put_object_old(
-            &mut PutObjectArgs::new(
-                &bucket_name,
-                &object_name,
-                &mut RandReader::new(size),
-                Some(size),
-                None,
-            )
-            .unwrap(),
+        .put_object_content(
+            &bucket_name,
+            &object_name,
+            ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
+        .send()
         .await
         .unwrap();
 

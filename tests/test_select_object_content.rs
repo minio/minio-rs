@@ -16,12 +16,11 @@
 mod common;
 
 use crate::common::{TestContext, create_bucket_helper, rand_object_name};
-use minio::s3::args::{PutObjectArgs, SelectObjectContentArgs};
+use minio::s3::args::SelectObjectContentArgs;
 use minio::s3::types::{
     CsvInputSerialization, CsvOutputSerialization, FileHeaderInfo, QuoteFields, S3Api,
     SelectRequest,
 };
-use std::io::BufReader;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn select_object_content() {
@@ -38,16 +37,8 @@ async fn select_object_content() {
     let body = String::from("Year,Make,Model,Description,Price\n") + &data;
 
     ctx.client
-        .put_object_old(
-            &mut PutObjectArgs::new(
-                &bucket_name,
-                &object_name,
-                &mut BufReader::new(body.as_bytes()),
-                Some(body.len()),
-                None,
-            )
-            .unwrap(),
-        )
+        .put_object_content(&bucket_name, &object_name, body)
+        .send()
         .await
         .unwrap();
 

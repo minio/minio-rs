@@ -15,9 +15,9 @@
 
 mod common;
 
-use crate::common::{RandReader, RandSrc, TestContext, create_bucket_helper, rand_object_name};
+use crate::common::{RandSrc, TestContext, create_bucket_helper, rand_object_name};
 use http::header;
-use minio::s3::args::{PutObjectArgs, StatObjectArgs};
+use minio::s3::args::StatObjectArgs;
 use minio::s3::builders::ObjectContent;
 use minio::s3::error::Error;
 use minio::s3::types::S3Api;
@@ -29,18 +29,14 @@ async fn put_object() {
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
     let object_name = rand_object_name();
 
-    let size = 16_usize;
+    let size = 16_u64;
     ctx.client
-        .put_object_old(
-            &mut PutObjectArgs::new(
-                &bucket_name,
-                &object_name,
-                &mut RandReader::new(size),
-                Some(size),
-                None,
-            )
-            .unwrap(),
+        .put_object_content(
+            &bucket_name,
+            &object_name,
+            ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
+        .send()
         .await
         .unwrap();
     let resp = ctx
@@ -50,7 +46,7 @@ async fn put_object() {
         .unwrap();
     assert_eq!(resp.bucket_name, bucket_name);
     assert_eq!(resp.object_name, object_name);
-    assert_eq!(resp.size, size);
+    assert_eq!(resp.size as u64, size);
     ctx.client
         .remove_object(&bucket_name, object_name.as_str())
         .send()
@@ -75,18 +71,15 @@ async fn put_object_multipart() {
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
     let object_name = rand_object_name();
 
-    let size: usize = 16 + 5 * 1024 * 1024;
+    let size: u64 = 16 + 5 * 1024 * 1024;
+
     ctx.client
-        .put_object_old(
-            &mut PutObjectArgs::new(
-                &bucket_name,
-                &object_name,
-                &mut RandReader::new(size),
-                Some(size),
-                None,
-            )
-            .unwrap(),
+        .put_object_content(
+            &bucket_name,
+            &object_name,
+            ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
+        .send()
         .await
         .unwrap();
     let resp = ctx
@@ -96,7 +89,7 @@ async fn put_object_multipart() {
         .unwrap();
     assert_eq!(resp.bucket_name, bucket_name);
     assert_eq!(resp.object_name, object_name);
-    assert_eq!(resp.size, size);
+    assert_eq!(resp.size as u64, size);
     ctx.client
         .remove_object(&bucket_name, object_name.as_str())
         .send()
