@@ -168,7 +168,7 @@ impl ClientBuilder {
             client,
             base_url: self.base_url,
             provider: self.provider,
-            region_map: DashMap::new(),
+            region_map: Arc::default(),
         })
     }
 }
@@ -182,7 +182,7 @@ pub struct Client {
     client: reqwest::Client,
     base_url: BaseUrl,
     provider: Option<Arc<Box<(dyn Provider + Send + Sync + 'static)>>>,
-    region_map: DashMap<String, String>,
+    region_map: Arc<DashMap<String, String>>,
 }
 
 impl Client {
