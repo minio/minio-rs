@@ -16,6 +16,7 @@
 //! Argument builders for [minio::s3::client::Client](crate::s3::client::Client) APIs
 
 mod bucket_common;
+mod bucket_exists;
 mod delete_bucket_encryption;
 mod delete_bucket_lifecycle;
 mod delete_bucket_notification;
@@ -33,9 +34,11 @@ mod get_object;
 mod list_buckets;
 mod list_objects;
 mod listen_bucket_notification;
+mod make_bucket;
 mod object_content;
 mod object_prompt;
 mod put_object;
+mod remove_bucket;
 mod remove_objects;
 mod set_bucket_encryption;
 mod set_bucket_lifecycle;
@@ -46,6 +49,7 @@ mod set_bucket_tags;
 mod set_bucket_versioning;
 
 pub use bucket_common::*;
+pub use bucket_exists::*;
 pub use delete_bucket_encryption::*;
 pub use delete_bucket_lifecycle::*;
 pub use delete_bucket_notification::*;
@@ -63,9 +67,11 @@ pub use get_object::*;
 pub use list_buckets::*;
 pub use list_objects::*;
 pub use listen_bucket_notification::*;
+pub use make_bucket::*;
 pub use object_content::*;
 pub use object_prompt::*;
 pub use put_object::*;
+pub use remove_bucket::*;
 pub use remove_objects::*;
 pub use set_bucket_encryption::*;
 pub use set_bucket_lifecycle::*;

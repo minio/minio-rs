@@ -24,10 +24,10 @@ use tokio::io::AsyncRead;
 use tokio::time::timeout;
 use tokio_stream::Stream;
 
-use minio::s3::args::*;
 use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
+use minio::s3::types::S3Api;
 
 pub struct RandReader {
     size: usize,
@@ -254,10 +254,7 @@ impl TestContext {
 #[allow(dead_code)]
 pub async fn create_bucket_helper(ctx: &TestContext) -> (String, CleanupGuard) {
     let bucket_name = rand_bucket_name();
-    ctx.client
-        .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
-        .await
-        .unwrap();
+    let _resp = ctx.client.make_bucket(&bucket_name).send().await.unwrap();
     let guard = CleanupGuard::new(ctx, &bucket_name);
     (bucket_name, guard)
 }
@@ -294,8 +291,7 @@ impl Drop for CleanupGuard {
                 // do the actual removal of the bucket
                 match timeout(
                     std::time::Duration::from_secs(60),
-                    ctx.client
-                        .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap()),
+                    ctx.client.remove_bucket(&bucket_name).send(),
                 )
                 .await
                 {
@@ -305,7 +301,7 @@ impl Drop for CleanupGuard {
                         }
                         Err(e) => println!("Error removing bucket {}: {:?}", bucket_name, e),
                     },
-                    Err(_) => println!("Timeout after 15s while removing bucket {}", bucket_name),
+                    Err(_) => println!("Timeout after 60s while removing bucket {}", bucket_name),
                 }
             });
         })
