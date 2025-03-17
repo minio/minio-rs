@@ -18,9 +18,7 @@
 use crate::s3::error::Error;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
-use crate::s3::types::{
-    Directive, ObjectLockConfig, Part, Retention, RetentionMode, SelectRequest,
-};
+use crate::s3::types::{Directive, ObjectLockConfig, Retention, RetentionMode, SelectRequest};
 use crate::s3::utils::{
     Multimap, UtcTime, b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value,
     to_iso8601utc, to_signer_date, urlencode, utc_now,
@@ -31,9 +29,9 @@ use serde_json::Value;
 use serde_json::json;
 use std::collections::HashMap;
 
-pub const MIN_PART_SIZE: usize = 5_242_880; // 5 MiB
-pub const MAX_PART_SIZE: usize = 5_368_709_120; // 5 GiB
-pub const MAX_OBJECT_SIZE: usize = 5_497_558_138_880; // 5 TiB
+pub const MIN_PART_SIZE: u64 = 5_242_880; // 5 MiB
+pub const MAX_PART_SIZE: u64 = 5_368_709_120; // 5 GiB
+pub const MAX_OBJECT_SIZE: u64 = 5_497_558_138_880; // 5 TiB
 pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 pub const DEFAULT_EXPIRY_SECONDS: u32 = 604_800; // 7 days
 
@@ -98,58 +96,6 @@ fn object_write_args_headers(
     map
 }
 
-fn calc_part_info(
-    object_size: Option<usize>,
-    part_size: Option<usize>,
-) -> Result<(usize, i16), Error> {
-    if let Some(v) = part_size {
-        if v < MIN_PART_SIZE {
-            return Err(Error::InvalidMinPartSize(v as u64));
-        }
-
-        if v > MAX_PART_SIZE {
-            return Err(Error::InvalidMaxPartSize(v as u64));
-        }
-    }
-
-    if let Some(v) = object_size {
-        if v > MAX_OBJECT_SIZE {
-            return Err(Error::InvalidObjectSize(v as u64));
-        }
-    } else {
-        if part_size.is_none() {
-            return Err(Error::MissingPartSize);
-        }
-
-        return Ok((part_size.unwrap(), -1));
-    }
-
-    let mut psize = 0_usize;
-    if part_size.is_none() {
-        psize = (object_size.unwrap() as f64 / MAX_MULTIPART_COUNT as f64).ceil() as usize;
-        psize = MIN_PART_SIZE * (psize as f64 / MIN_PART_SIZE as f64).ceil() as usize;
-    }
-
-    if psize > object_size.unwrap() {
-        psize = object_size.unwrap();
-    }
-
-    let mut part_count = 1_i16;
-    if psize > 0 {
-        part_count = (object_size.unwrap() as f64 / psize as f64).ceil() as i16;
-    }
-
-    if part_count as u16 > MAX_MULTIPART_COUNT {
-        return Err(Error::InvalidPartCount(
-            object_size.unwrap() as u64,
-            psize as u64,
-            MAX_MULTIPART_COUNT,
-        ));
-    }
-
-    Ok((psize, part_count))
-}
-
 #[derive(Clone, Debug, Default)]
 /// Base bucket argument
 pub struct BucketArgs<'a> {
@@ -176,44 +122,6 @@ impl<'a> BucketArgs<'a> {
             extra_query_params: None,
             region: None,
             bucket: bucket_name,
-        })
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-/// Base object argument
-pub struct ObjectArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub object: &'a str,
-}
-
-impl<'a> ObjectArgs<'a> {
-    /// Returns a object argument with given bucket name and object name
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// let args = ObjectArgs::new("my-bucket", "my-object").unwrap();
-    /// ```
-    pub fn new(bucket_name: &'a str, object_name: &'a str) -> Result<ObjectArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        if object_name.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
-
-        Ok(ObjectArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            object: object_name,
         })
     }
 }
@@ -256,172 +164,6 @@ impl<'a> ObjectVersionArgs<'a> {
             bucket: bucket_name,
             object: object_name,
             version_id: None,
-        })
-    }
-}
-
-/// Argument for [remove_object()](crate::s3::client::Client::remove_object) API
-pub type RemoveObjectArgs<'a> = ObjectVersionArgs<'a>;
-
-#[derive(Clone, Debug, Default)]
-/// Argument for [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload) API
-pub struct AbortMultipartUploadArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub object: &'a str,
-    pub upload_id: &'a str,
-}
-
-impl<'a> AbortMultipartUploadArgs<'a> {
-    /// Returns argument for [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload) API with given bucket name, object name and upload ID
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// let args = AbortMultipartUploadArgs::new(
-    ///     "my-bucket",
-    ///     "my-object",
-    ///     "c53a2b73-f5e6-484a-9bc0-09cce13e8fd0",
-    /// ).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        object_name: &'a str,
-        upload_id: &'a str,
-    ) -> Result<AbortMultipartUploadArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        if object_name.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
-
-        if upload_id.is_empty() {
-            return Err(Error::InvalidUploadId(String::from(
-                "upload ID cannot be empty",
-            )));
-        }
-
-        Ok(AbortMultipartUploadArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            object: object_name,
-            upload_id,
-        })
-    }
-}
-
-#[derive(Clone, Debug)]
-/// Argument for [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload) API
-pub struct CompleteMultipartUploadArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub object: &'a str,
-    pub upload_id: &'a str,
-    pub parts: &'a Vec<Part>,
-}
-
-impl<'a> CompleteMultipartUploadArgs<'a> {
-    /// Returns argument for [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload) API with given bucket name, object name, upload ID and parts information
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// use minio::s3::types::Part;
-    /// let mut parts: Vec<Part> = Vec::new();
-    /// parts.push(Part {number: 1, etag: String::from("0b2daaba1d0b52a15a98c7ab6927347a")});
-    /// parts.push(Part {number: 2, etag: String::from("acc0485d88ec53f47b599e4e8998706d")});
-    /// let args = CompleteMultipartUploadArgs::new(
-    ///     "my-bucket",
-    ///     "my-object",
-    ///     "c53a2b73-f5e6-484a-9bc0-09cce13e8fd0",
-    ///     &parts,
-    /// ).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        object_name: &'a str,
-        upload_id: &'a str,
-        parts: &'a Vec<Part>,
-    ) -> Result<CompleteMultipartUploadArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        if object_name.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
-
-        if upload_id.is_empty() {
-            return Err(Error::InvalidUploadId(String::from(
-                "upload ID cannot be empty",
-            )));
-        }
-
-        if parts.is_empty() {
-            return Err(Error::EmptyParts(String::from("parts cannot be empty")));
-        }
-
-        Ok(CompleteMultipartUploadArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            object: object_name,
-            upload_id,
-            parts,
-        })
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-/// Argument for [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload) API
-pub struct CreateMultipartUploadArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub object: &'a str,
-    pub headers: Option<&'a Multimap>,
-}
-
-impl<'a> CreateMultipartUploadArgs<'a> {
-    /// Returns argument for [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload) API with given bucket name and object name
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// let args = CreateMultipartUploadArgs::new("my-bucket", "my-object").unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        object_name: &'a str,
-    ) -> Result<CreateMultipartUploadArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        if object_name.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
-
-        Ok(CreateMultipartUploadArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            object: object_name,
-            headers: None,
         })
     }
 }
@@ -590,93 +332,6 @@ impl<'a> UploadPartArgs<'a> {
     }
 }
 
-/// Argument for [put_object()](crate::s3::client::Client::put_object) API
-pub struct PutObjectArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub object: &'a str,
-    pub headers: Option<&'a Multimap>,
-    pub user_metadata: Option<&'a Multimap>,
-    pub sse: Option<&'a (dyn Sse + Send + Sync)>,
-    pub tags: Option<&'a HashMap<String, String>>,
-    pub retention: Option<&'a Retention>,
-    pub legal_hold: bool,
-    pub object_size: Option<usize>,
-    pub part_size: usize,
-    pub part_count: i16,
-    pub content_type: &'a str,
-    pub stream: &'a mut dyn std::io::Read,
-}
-
-impl<'a> PutObjectArgs<'a> {
-    /// Returns argument for [put_object()](crate::s3::client::Client::put_object) API with given bucket name, object name, stream, optional object size and optional part size
-    ///
-    /// * If stream size is known and wanted to create object with entire stream data, pass stream size as object size.
-    /// * If part size is omitted, this API calculates optimal part size for given object size.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use minio::s3::args::*;
-    /// use std::fs::File;
-    /// let filename = "asiaphotos-2015.zip";
-    /// let meta = std::fs::metadata(filename).unwrap();
-    /// let object_size = Some(meta.len() as usize);
-    /// let mut file = File::open(filename).unwrap();
-    /// let args = PutObjectArgs::new("my-bucket", "my-object", &mut file, object_size, None).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        object_name: &'a str,
-        stream: &'a mut dyn std::io::Read,
-        object_size: Option<usize>,
-        part_size: Option<usize>,
-    ) -> Result<PutObjectArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        if object_name.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
-
-        let (psize, part_count) = calc_part_info(object_size, part_size)?;
-
-        Ok(PutObjectArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            object: object_name,
-            headers: None,
-            user_metadata: None,
-            sse: None,
-            tags: None,
-            retention: None,
-            legal_hold: false,
-            object_size,
-            part_size: psize,
-            part_count,
-            content_type: "application/octet-stream",
-            stream,
-        })
-    }
-
-    pub fn get_headers(&self) -> Multimap {
-        object_write_args_headers(
-            self.extra_headers,
-            self.headers,
-            self.user_metadata,
-            self.sse,
-            self.tags,
-            self.retention,
-            self.legal_hold,
-        )
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 /// Base argument for object conditional read APIs
 pub struct ObjectConditionalReadArgs<'a> {
@@ -687,8 +342,8 @@ pub struct ObjectConditionalReadArgs<'a> {
     pub object: &'a str,
     pub version_id: Option<&'a str>,
     pub ssec: Option<&'a SseCustomerKey>,
-    pub offset: Option<usize>,
-    pub length: Option<usize>,
+    pub offset: Option<u64>,
+    pub length: Option<u64>,
     pub match_etag: Option<&'a str>,
     pub not_match_etag: Option<&'a str>,
     pub modified_since: Option<UtcTime>,
@@ -735,7 +390,7 @@ impl<'a> ObjectConditionalReadArgs<'a> {
 
     fn get_range_value(&self) -> String {
         let (offset, length) = match self.length {
-            Some(_) => (Some(self.offset.unwrap_or(0_usize)), self.length),
+            Some(_) => (Some(self.offset.unwrap_or(0_u64)), self.length),
             None => (self.offset, None),
         };
 
@@ -833,9 +488,6 @@ impl<'a> ObjectConditionalReadArgs<'a> {
         headers
     }
 }
-
-/// Argument for [get_object()](crate::s3::client::Client::get_object) API
-pub type GetObjectArgs<'a> = ObjectConditionalReadArgs<'a>;
 
 /// Argument for [stat_object()](crate::s3::client::Client::stat_object) API
 pub type StatObjectArgs<'a> = ObjectConditionalReadArgs<'a>;
@@ -1063,15 +715,15 @@ pub struct ComposeSource<'a> {
     pub object: &'a str,
     pub version_id: Option<&'a str>,
     pub ssec: Option<&'a SseCustomerKey>,
-    pub offset: Option<usize>,
-    pub length: Option<usize>,
+    pub offset: Option<u64>,
+    pub length: Option<u64>,
     pub match_etag: Option<&'a str>,
     pub not_match_etag: Option<&'a str>,
     pub modified_since: Option<UtcTime>,
     pub unmodified_since: Option<UtcTime>,
 
-    object_size: Option<usize>, // populated by build_headers()
-    headers: Option<Multimap>,  // populated by build_headers()
+    object_size: Option<u64>,  // populated by build_headers()
+    headers: Option<Multimap>, // populated by build_headers()
 }
 
 impl<'a> ComposeSource<'a> {
@@ -1111,7 +763,7 @@ impl<'a> ComposeSource<'a> {
         })
     }
 
-    pub fn get_object_size(&self) -> usize {
+    pub fn get_object_size(&self) -> u64 {
         self.object_size.expect("ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This shoud not happen.")
     }
 
@@ -1119,7 +771,7 @@ impl<'a> ComposeSource<'a> {
         self.headers.as_ref().expect("ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This shoud not happen.").clone()
     }
 
-    pub fn build_headers(&mut self, object_size: usize, etag: String) -> Result<(), Error> {
+    pub fn build_headers(&mut self, object_size: u64, etag: String) -> Result<(), Error> {
         if let Some(v) = self.offset {
             if v >= object_size {
                 return Err(Error::InvalidComposeSourceOffset(

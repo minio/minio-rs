@@ -189,7 +189,7 @@ pub struct StatObjectResponse {
     pub region: String,
     pub bucket_name: String,
     pub object_name: String,
-    pub size: usize,
+    pub size: u64,
     pub etag: String,
     pub version_id: Option<String>,
     pub last_modified: Option<UtcTime>,
@@ -208,8 +208,8 @@ impl StatObjectResponse {
         object_name: &str,
     ) -> Result<StatObjectResponse, Error> {
         let size = match headers.get("Content-Length") {
-            Some(v) => v.to_str()?.parse::<usize>()?,
-            None => 0_usize,
+            Some(v) => v.to_str()?.parse::<u64>()?,
+            None => 0_u64,
         };
 
         let etag = match headers.get("ETag") {

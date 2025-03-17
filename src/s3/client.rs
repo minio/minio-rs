@@ -641,7 +641,7 @@ impl Client {
     }
 
     async fn calculate_part_count(&self, sources: &mut [ComposeSource<'_>]) -> Result<u16, Error> {
-        let mut object_size = 0_usize;
+        let mut object_size = 0_u64;
         let mut i = 0;
         let mut part_count = 0_u16;
 
