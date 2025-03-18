@@ -36,6 +36,7 @@ mod delete_bucket_policy;
 mod delete_bucket_replication;
 mod delete_bucket_tags;
 mod delete_object_lock_config;
+mod delete_object_tags;
 mod disable_object_legal_hold;
 mod enable_object_legal_hold;
 mod get_bucket_encryption;
@@ -47,6 +48,7 @@ mod get_bucket_tags;
 mod get_bucket_versioning;
 mod get_object;
 mod get_object_lock_config;
+mod get_object_tags;
 mod is_object_legal_hold_enabled;
 mod list_buckets;
 pub(crate) mod list_objects;
@@ -64,6 +66,7 @@ mod set_bucket_replication;
 mod set_bucket_tags;
 mod set_bucket_versioning;
 mod set_object_lock_config;
+mod set_object_tags;
 
 pub use bucket_exists::BucketExistsResponse;
 pub use delete_bucket_encryption::DeleteBucketEncryptionResponse;
@@ -73,6 +76,7 @@ pub use delete_bucket_policy::DeleteBucketPolicyResponse;
 pub use delete_bucket_replication::DeleteBucketReplicationResponse;
 pub use delete_bucket_tags::DeleteBucketTagsResponse;
 pub use delete_object_lock_config::DeleteObjectLockConfigResponse;
+pub use delete_object_tags::DeleteObjectTagsResponse;
 pub use disable_object_legal_hold::DisableObjectLegalHoldResponse;
 pub use enable_object_legal_hold::EnableObjectLegalHoldResponse;
 pub use get_bucket_encryption::GetBucketEncryptionResponse;
@@ -84,6 +88,7 @@ pub use get_bucket_tags::GetBucketTagsResponse;
 pub use get_bucket_versioning::GetBucketVersioningResponse;
 pub use get_object::GetObjectResponse;
 pub use get_object_lock_config::GetObjectLockConfigResponse;
+pub use get_object_tags::GetObjectTagsResponse;
 pub use is_object_legal_hold_enabled::IsObjectLegalHoldEnabledResponse;
 pub use list_buckets::ListBucketsResponse;
 pub use list_objects::ListObjectsResponse;
@@ -105,6 +110,7 @@ pub use set_bucket_replication::SetBucketReplicationResponse;
 pub use set_bucket_tags::SetBucketTagsResponse;
 pub use set_bucket_versioning::SetBucketVersioningResponse;
 pub use set_object_lock_config::SetObjectLockConfigResponse;
+pub use set_object_tags::SetObjectTagsResponse;
 
 #[derive(Debug)]
 /// Base response for bucket operation
@@ -119,8 +125,8 @@ pub struct BucketResponse {
 pub struct ObjectResponse {
     pub headers: HeaderMap,
     pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
+    pub bucket: String,
+    pub object: String,
     pub version_id: Option<String>,
 }
 
@@ -623,23 +629,6 @@ pub struct GetObjectRetentionResponse {
 
 /// Response of [set_object_retention()](crate::s3::client::Client::set_object_retention) API
 pub type SetObjectRetentionResponse = ObjectResponse;
-
-/// Response of [delete_object_tags()](crate::s3::client::Client::delete_object_tags) API
-pub type DeleteObjectTagsResponse = ObjectResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [get_object_tags()](crate::s3::client::Client::get_object_tags) API
-pub struct GetObjectTagsResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
-    pub version_id: Option<String>,
-    pub tags: std::collections::HashMap<String, String>,
-}
-
-/// Response of [set_object_tags()](crate::s3::client::Client::set_object_tags) API
-pub type SetObjectTagsResponse = ObjectResponse;
 
 #[derive(Clone, Debug)]
 /// Response of [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API

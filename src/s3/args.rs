@@ -996,61 +996,6 @@ impl<'a> SetObjectRetentionArgs<'a> {
     }
 }
 
-/// Argument for [delete_object_tags()](crate::s3::client::Client::delete_object_tags) API
-pub type DeleteObjectTagsArgs<'a> = ObjectVersionArgs<'a>;
-
-/// Argument for [get_object_tags()](crate::s3::client::Client::get_object_tags) API
-pub type GetObjectTagsArgs<'a> = ObjectVersionArgs<'a>;
-
-/// Argument for [set_object_tags()](crate::s3::client::Client::set_object_tags) API
-pub struct SetObjectTagsArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub object: &'a str,
-    pub version_id: Option<&'a str>,
-    pub tags: &'a HashMap<String, String>,
-}
-
-impl<'a> SetObjectTagsArgs<'a> {
-    /// Returns argument for [set_object_tags()](crate::s3::client::Client::set_object_tags) API with given bucket name, object name and tags
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// use std::collections::HashMap;
-    /// let mut tags: HashMap<String, String> = HashMap::new();
-    /// tags.insert(String::from("Project"), String::from("Project One"));
-    /// tags.insert(String::from("User"), String::from("jsmith"));
-    /// let args = SetObjectTagsArgs::new("my-bucket", "my-object", &tags).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        object_name: &'a str,
-        tags: &'a HashMap<String, String>,
-    ) -> Result<SetObjectTagsArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        if object_name.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
-
-        Ok(SetObjectTagsArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            object: object_name,
-            version_id: None,
-            tags,
-        })
-    }
-}
-
 /// Argument for [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API
 pub struct GetPresignedObjectUrlArgs<'a> {
     pub extra_query_params: Option<&'a Multimap>,
