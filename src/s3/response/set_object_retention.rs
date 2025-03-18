@@ -19,17 +19,20 @@ use async_trait::async_trait;
 use http::HeaderMap;
 
 /// Response of
-/// [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags)
+/// [set_object_retention_response()](crate::s3::client::Client::set_object_retention_response)
 /// API
 #[derive(Clone, Debug)]
-pub struct SetBucketTagsResponse {
+pub struct SetObjectRetentionResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
+
+    pub object: String,
+    pub version_id: Option<String>,
 }
 
 #[async_trait]
-impl FromS3Response for SetBucketTagsResponse {
+impl FromS3Response for SetObjectRetentionResponse {
     async fn from_s3response<'a>(
         req: S3Request<'a>,
         resp: Result<reqwest::Response, Error>,
@@ -39,10 +42,18 @@ impl FromS3Response for SetBucketTagsResponse {
             Some(v) => v.to_string(),
         };
         let resp = resp?;
-        Ok(SetBucketTagsResponse {
-            headers: resp.headers().clone(),
-            region: req.get_computed_region(),
+
+        let headers: HeaderMap = resp.headers().clone();
+        let region: String = req.get_computed_region();
+        let object: String = req.object.unwrap().into();
+        let version_id: Option<String> = req.query_params.get("versionId").cloned(); //TODO consider taking the version_id
+
+        Ok(SetObjectRetentionResponse {
+            headers,
+            region,
             bucket,
+            object,
+            version_id,
         })
     }
 }

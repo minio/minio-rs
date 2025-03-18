@@ -39,7 +39,6 @@ impl FromS3Response for SetObjectLockConfigResponse {
             Some(v) => v.to_string(),
         };
         let resp = resp?;
-
         Ok(SetObjectLockConfigResponse {
             headers: resp.headers().clone(),
             region: req.get_computed_region(),

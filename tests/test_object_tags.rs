@@ -43,8 +43,8 @@ async fn object_tags() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket_name, bucket_name);
-    assert_eq!(resp.object_name, object_name);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
     assert_eq!(resp.object_size, size);
     assert_eq!(resp.version_id, None);
     assert_eq!(&resp.location, "");

@@ -18,7 +18,7 @@
 use crate::s3::error::Error;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
-use crate::s3::types::{Directive, Retention, RetentionMode, SelectRequest};
+use crate::s3::types::{Directive, Retention, SelectRequest};
 use crate::s3::utils::{
     Multimap, UtcTime, b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value,
     to_iso8601utc, to_signer_date, urlencode, utc_now,
@@ -926,73 +926,6 @@ impl<'a> ComposeObjectArgs<'a> {
             self.retention,
             self.legal_hold,
         )
-    }
-}
-
-/// Argument for [get_object_retention()](crate::s3::client::Client::get_object_retention) API
-pub type GetObjectRetentionArgs<'a> = ObjectVersionArgs<'a>;
-
-/// Argument for [set_object_retention()](crate::s3::client::Client::set_object_retention) API
-pub struct SetObjectRetentionArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub object: &'a str,
-    pub version_id: Option<&'a str>,
-    pub bypass_governance_mode: bool,
-    pub retention_mode: Option<RetentionMode>,
-    pub retain_until_date: Option<UtcTime>,
-}
-
-impl<'a> SetObjectRetentionArgs<'a> {
-    /// Returns argument for [set_object_retention()](crate::s3::client::Client::set_object_retention) API with given bucket name, object name, retention mode and retain-until date.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// use minio::s3::types::RetentionMode;
-    /// use minio::s3::utils::*;
-    /// use chrono::Timelike;
-    /// let args = SetObjectRetentionArgs::new(
-    ///     "my-bucket",
-    ///     "my-object",
-    ///     Some(RetentionMode::COMPLIANCE),
-    ///     Some(utc_now().with_nanosecond(0).unwrap()),
-    /// ).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        object_name: &'a str,
-        retention_mode: Option<RetentionMode>,
-        retain_until_date: Option<UtcTime>,
-    ) -> Result<SetObjectRetentionArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        if object_name.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
-
-        if retention_mode.is_some() ^ retain_until_date.is_some() {
-            return Err(Error::InvalidRetentionConfig(String::from(
-                "both mode and retain_until_date must be set or unset",
-            )));
-        }
-
-        Ok(SetObjectRetentionArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            object: object_name,
-            version_id: None,
-            bypass_governance_mode: false,
-            retention_mode,
-            retain_until_date,
-        })
     }
 }
 

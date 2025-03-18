@@ -28,10 +28,9 @@ use crate::s3::http::{BaseUrl, Url};
 use crate::s3::response::*;
 use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
-use crate::s3::types::{Directive, RetentionMode};
+use crate::s3::types::Directive;
 use crate::s3::utils::{
-    Multimap, from_iso8601utc, get_option_text, get_text, md5sum_hash, md5sum_hash_sb, merge,
-    sha256_hash_sb, to_amz_date, to_iso8601utc, utc_now,
+    Multimap, get_text, md5sum_hash, md5sum_hash_sb, merge, sha256_hash_sb, to_amz_date, utc_now,
 };
 
 use async_recursion::async_recursion;
@@ -39,7 +38,6 @@ use bytes::{Buf, Bytes};
 use dashmap::DashMap;
 use hyper::http::Method;
 use reqwest::Body;
-use reqwest::header::HeaderMap;
 
 use xmltree::Element;
 
@@ -63,6 +61,7 @@ mod get_bucket_tags;
 mod get_bucket_versioning;
 mod get_object;
 mod get_object_lock_config;
+mod get_object_retention;
 mod get_object_tags;
 mod is_object_legal_hold_enabled;
 mod list_objects;
@@ -80,6 +79,7 @@ mod set_bucket_replication;
 mod set_bucket_tags;
 mod set_bucket_versioning;
 mod set_object_lock_config;
+mod set_object_retention;
 mod set_object_tags;
 
 use super::builders::{ListBuckets, SegmentedBytes};
@@ -1015,117 +1015,6 @@ impl Client {
             },
         })
     }
-    /*
-       pub async fn delete_object_tags(
-           &self,
-           args: &DeleteObjectTagsArgs<'_>,
-       ) -> Result<DeleteObjectTagsResponse, Error> {
-           let region = self.get_region(args.bucket, args.region).await?;
-
-           let mut headers = Multimap::new();
-           if let Some(v) = &args.extra_headers {
-               merge(&mut headers, v);
-           }
-
-           let mut query_params = Multimap::new();
-           if let Some(v) = &args.extra_query_params {
-               merge(&mut query_params, v);
-           }
-           if let Some(v) = args.version_id {
-               query_params.insert(String::from("versionId"), v.to_string());
-           }
-           query_params.insert(String::from("tagging"), String::new());
-
-           let resp = self
-               .execute(
-                   Method::DELETE,
-                   &region,
-                   &mut headers,
-                   &query_params,
-                   Some(args.bucket),
-                   Some(args.object),
-                   None,
-               )
-               .await?;
-
-           Ok(DeleteObjectTagsResponse {
-               headers: resp.headers().clone(),
-               region: region.clone(),
-               bucket_name: args.bucket.to_string(),
-               object_name: args.object.to_string(),
-               version_id: args.version_id.as_ref().map(|v| v.to_string()),
-           })
-       }
-    */
-    pub async fn get_object_retention(
-        &self,
-        args: &GetObjectRetentionArgs<'_>,
-    ) -> Result<GetObjectRetentionResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("retention"), String::new());
-
-        match self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                None,
-            )
-            .await
-        {
-            Ok(resp) => {
-                let header_map = resp.headers().clone();
-                let body = resp.bytes().await?;
-                let root = Element::parse(body.reader())?;
-
-                Ok(GetObjectRetentionResponse {
-                    headers: header_map.clone(),
-                    region: region.clone(),
-                    bucket_name: args.bucket.to_string(),
-                    object_name: args.object.to_string(),
-                    version_id: args.version_id.as_ref().map(|v| v.to_string()),
-                    retention_mode: match get_option_text(&root, "Mode") {
-                        Some(v) => Some(RetentionMode::parse(&v)?),
-                        _ => None,
-                    },
-                    retain_until_date: match get_option_text(&root, "RetainUntilDate") {
-                        Some(v) => Some(from_iso8601utc(&v)?),
-                        _ => None,
-                    },
-                })
-            }
-            Err(Error::S3Error(ref err))
-                if err.code == Error::NoSuchObjectLockConfiguration.as_str() =>
-            {
-                Ok(GetObjectRetentionResponse {
-                    headers: HeaderMap::new(),
-                    region: region.clone(),
-                    bucket_name: args.bucket.to_string(),
-                    object_name: args.object.to_string(),
-                    version_id: args.version_id.as_ref().map(|v| v.to_string()),
-                    retention_mode: None,
-                    retain_until_date: None,
-                })
-            }
-            Err(e) => Err(e),
-        }
-    }
 
     pub async fn get_presigned_object_url(
         &self,
@@ -1251,106 +1140,6 @@ impl Client {
                 Some(v) => Some(v.to_str()?.to_string()),
                 None => None,
             },
-        })
-    }
-
-    /*
-    pub async fn set_object_lock_config(
-        &self,
-        args: &SetObjectLockConfigArgs<'_>,
-    ) -> Result<SetObjectLockConfigResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("object-lock"), String::new());
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                Some(args.config.to_xml().into()),
-            )
-            .await?;
-
-        Ok(SetObjectLockConfigResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket: args.bucket.to_string(),
-        })
-    }
-     */
-
-    pub async fn set_object_retention(
-        &self,
-        args: &SetObjectRetentionArgs<'_>,
-    ) -> Result<SetObjectRetentionResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        if args.bypass_governance_mode {
-            headers.insert(
-                String::from("x-amz-bypass-governance-retention"),
-                String::from("true"),
-            );
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("retention"), String::new());
-
-        let mut data = String::from("<Retention>");
-        if let Some(v) = &args.retention_mode {
-            data.push_str("<Mode>");
-            data.push_str(&v.to_string());
-            data.push_str("</Mode>");
-        }
-        if let Some(v) = &args.retain_until_date {
-            data.push_str("<RetainUntilDate>");
-            data.push_str(&to_iso8601utc(*v));
-            data.push_str("</RetainUntilDate>");
-        }
-        data.push_str("</Retention>");
-
-        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                Some(data.into()),
-            )
-            .await?;
-
-        Ok(SetObjectRetentionResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket: args.bucket.to_string(),
-            object: args.object.to_string(),
-            version_id: args.version_id.as_ref().map(|v| v.to_string()),
         })
     }
 

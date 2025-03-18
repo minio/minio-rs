@@ -39,7 +39,6 @@ impl FromS3Response for RemoveBucketResponse {
             Some(v) => v.to_string(),
         };
         let resp = resp?;
-
         Ok(RemoveBucketResponse {
             headers: resp.headers().clone(),
             region: req.get_computed_region(),

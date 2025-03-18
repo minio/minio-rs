@@ -189,7 +189,7 @@ pub struct PartInfo {
     pub size: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Contains retention mode information
 pub enum RetentionMode {
     GOVERNANCE,

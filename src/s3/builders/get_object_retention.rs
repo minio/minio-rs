@@ -14,18 +14,15 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
-use crate::s3::response::SetObjectTagsResponse;
+use crate::s3::response::GetObjectRetentionResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{Multimap, check_bucket_name};
-use bytes::Bytes;
 use http::Method;
-use std::collections::HashMap;
 
-/// Argument builder for [set_object_tags()](Client::set_object_tags) API
+/// Argument builder for [get_object_retention()](Client::get_object_retention) API
 #[derive(Clone, Debug, Default)]
-pub struct SetObjectTags {
+pub struct GetObjectRetention {
     pub client: Option<Client>,
 
     pub extra_headers: Option<Multimap>,
@@ -35,10 +32,9 @@ pub struct SetObjectTags {
 
     pub object: String,
     pub version_id: Option<String>,
-    pub tags: HashMap<String, String>,
 }
 
-impl SetObjectTags {
+impl GetObjectRetention {
     pub fn new(bucket: &str) -> Self {
         //TODO make bucket of type String because its cloned anyway
         Self {
@@ -75,28 +71,15 @@ impl SetObjectTags {
         self.version_id = version_id;
         self
     }
-
-    pub fn tags(mut self, tags: HashMap<String, String>) -> Self {
-        self.tags = tags;
-        self
-    }
 }
 
-impl S3Api for SetObjectTags {
-    type S3Response = SetObjectTagsResponse;
+impl S3Api for GetObjectRetention {
+    type S3Response = GetObjectRetentionResponse;
 }
 
-impl ToS3Request for SetObjectTags {
+impl ToS3Request for GetObjectRetention {
     fn to_s3request(&self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
-
-        // TODO add to all other function (that use object) the following test
-        // TODO should it be moved to the object setter function? or use validate as in put_object
-        if self.object.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
 
         let headers = self
             .extra_headers
@@ -114,35 +97,16 @@ impl ToS3Request for SetObjectTags {
         if let Some(v) = &self.version_id {
             query_params.insert(String::from("versionId"), v.to_string());
         }
-        query_params.insert("tagging".into(), String::new());
+        query_params.insert(String::from("retention"), String::new());
 
-        let mut data = String::from("<Tagging>");
-        if !self.tags.is_empty() {
-            data.push_str("<TagSet>");
-            for (key, value) in self.tags.iter() {
-                data.push_str("<Tag>");
-                data.push_str("<Key>");
-                data.push_str(key);
-                data.push_str("</Key>");
-                data.push_str("<Value>");
-                data.push_str(value);
-                data.push_str("</Value>");
-                data.push_str("</Tag>");
-            }
-            data.push_str("</TagSet>");
-        }
-        data.push_str("</Tagging>");
-
-        let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(data)));
         let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::PUT)
+        let req = S3Request::new(client, Method::GET)
             .region(self.region.as_deref())
             .bucket(Some(&self.bucket))
             .query_params(query_params)
-            .object(Some(&self.object))
             .headers(headers)
-            .body(body);
+            .object(Some(&self.object));
 
         Ok(req)
     }

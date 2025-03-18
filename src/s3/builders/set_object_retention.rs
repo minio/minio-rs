@@ -16,16 +16,15 @@
 use crate::s3::Client;
 use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
-use crate::s3::response::SetObjectTagsResponse;
-use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name};
+use crate::s3::response::SetObjectRetentionResponse;
+use crate::s3::types::{RetentionMode, S3Api, S3Request, ToS3Request};
+use crate::s3::utils::{Multimap, UtcTime, check_bucket_name, md5sum_hash, to_iso8601utc};
 use bytes::Bytes;
 use http::Method;
-use std::collections::HashMap;
 
-/// Argument builder for [set_object_tags()](Client::set_object_tags) API
+/// Argument builder for [set_object_retention()](Client::set_object_retention) API
 #[derive(Clone, Debug, Default)]
-pub struct SetObjectTags {
+pub struct SetObjectRetention {
     pub client: Option<Client>,
 
     pub extra_headers: Option<Multimap>,
@@ -35,17 +34,21 @@ pub struct SetObjectTags {
 
     pub object: String,
     pub version_id: Option<String>,
-    pub tags: HashMap<String, String>,
+    pub bypass_governance_mode: bool,
+    pub retention_mode: Option<RetentionMode>,
+    pub retain_until_date: Option<UtcTime>,
 }
 
-impl SetObjectTags {
+impl SetObjectRetention {
     pub fn new(bucket: &str) -> Self {
         //TODO make bucket of type String because its cloned anyway
         Self {
             bucket: bucket.to_owned(),
+            bypass_governance_mode: false,
             ..Default::default()
         }
     }
+
     pub fn client(mut self, client: &Client) -> Self {
         self.client = Some(client.clone());
         self
@@ -76,34 +79,57 @@ impl SetObjectTags {
         self
     }
 
-    pub fn tags(mut self, tags: HashMap<String, String>) -> Self {
-        self.tags = tags;
+    pub fn bypass_governance_mode(mut self, bypass_governance_mode: bool) -> Self {
+        self.bypass_governance_mode = bypass_governance_mode;
+        self
+    }
+
+    pub fn retention_mode(mut self, retention_mode: Option<RetentionMode>) -> Self {
+        self.retention_mode = retention_mode;
+        self
+    }
+
+    pub fn retain_until_date(mut self, retain_until_date: Option<UtcTime>) -> Self {
+        self.retain_until_date = retain_until_date;
         self
     }
 }
 
-impl S3Api for SetObjectTags {
-    type S3Response = SetObjectTagsResponse;
+impl S3Api for SetObjectRetention {
+    type S3Response = SetObjectRetentionResponse;
 }
 
-impl ToS3Request for SetObjectTags {
+impl ToS3Request for SetObjectRetention {
     fn to_s3request(&self) -> Result<S3Request, Error> {
+        //TODO move the following checks to a validate fn
         check_bucket_name(&self.bucket, true)?;
 
-        // TODO add to all other function (that use object) the following test
-        // TODO should it be moved to the object setter function? or use validate as in put_object
         if self.object.is_empty() {
             return Err(Error::InvalidObjectName(String::from(
                 "object name cannot be empty",
             )));
         }
 
-        let headers = self
+        if self.retention_mode.is_some() ^ self.retain_until_date.is_some() {
+            return Err(Error::InvalidRetentionConfig(String::from(
+                "both mode and retain_until_date must be set or unset",
+            )));
+        }
+
+        let mut headers = self
             .extra_headers
             .as_ref()
             .filter(|v| !v.is_empty())
             .cloned()
             .unwrap_or_default();
+
+        if self.bypass_governance_mode {
+            headers.insert(
+                String::from("x-amz-bypass-governance-retention"),
+                String::from("true"),
+            );
+        }
+
         let mut query_params = self
             .extra_query_params
             .as_ref()
@@ -114,24 +140,22 @@ impl ToS3Request for SetObjectTags {
         if let Some(v) = &self.version_id {
             query_params.insert(String::from("versionId"), v.to_string());
         }
-        query_params.insert("tagging".into(), String::new());
+        query_params.insert(String::from("retention"), String::new());
 
-        let mut data = String::from("<Tagging>");
-        if !self.tags.is_empty() {
-            data.push_str("<TagSet>");
-            for (key, value) in self.tags.iter() {
-                data.push_str("<Tag>");
-                data.push_str("<Key>");
-                data.push_str(key);
-                data.push_str("</Key>");
-                data.push_str("<Value>");
-                data.push_str(value);
-                data.push_str("</Value>");
-                data.push_str("</Tag>");
-            }
-            data.push_str("</TagSet>");
+        let mut data: String = String::from("<Retention>");
+        if let Some(v) = &self.retention_mode {
+            data.push_str("<Mode>");
+            data.push_str(&v.to_string());
+            data.push_str("</Mode>");
         }
-        data.push_str("</Tagging>");
+        if let Some(v) = &self.retain_until_date {
+            data.push_str("<RetainUntilDate>");
+            data.push_str(&to_iso8601utc(*v));
+            data.push_str("</RetainUntilDate>");
+        }
+        data.push_str("</Retention>");
+
+        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
 
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(data)));
         let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
@@ -140,8 +164,8 @@ impl ToS3Request for SetObjectTags {
             .region(self.region.as_deref())
             .bucket(Some(&self.bucket))
             .query_params(query_params)
-            .object(Some(&self.object))
             .headers(headers)
+            .object(Some(&self.object))
             .body(body);
 
         Ok(req)

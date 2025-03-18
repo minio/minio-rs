@@ -39,7 +39,6 @@ impl FromS3Response for MakeBucketResponse {
             Some(v) => v.to_string(),
         };
         let resp = resp?;
-
         Ok(MakeBucketResponse {
             headers: resp.headers().clone(),
             region: req.get_computed_region(),
