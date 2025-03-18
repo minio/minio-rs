@@ -16,9 +16,6 @@
 mod common;
 
 use crate::common::{CleanupGuard, TestContext, rand_bucket_name};
-use minio::s3::args::{
-    DeleteObjectLockConfigArgs, GetObjectLockConfigArgs, SetObjectLockConfigArgs,
-};
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
     DeleteObjectLockConfigResponse, GetObjectLockConfigResponse, SetObjectLockConfigResponse,
@@ -38,17 +35,14 @@ async fn set_get_delete_object_lock_config() {
     let _cleanup = CleanupGuard::new(&ctx, &bucket_name);
 
     const DURATION_DAYS: i32 = 7;
+    let config =
+        ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();
 
     let resp: SetObjectLockConfigResponse = ctx
         .client
-        .set_object_lock_config(
-            &SetObjectLockConfigArgs::new(
-                &bucket_name,
-                &ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None)
-                    .unwrap(),
-            )
-            .unwrap(),
-        )
+        .set_object_lock_config(&bucket_name)
+        .config(config)
+        .send()
         .await
         .unwrap();
     assert_eq!(resp.bucket, bucket_name);
@@ -56,7 +50,8 @@ async fn set_get_delete_object_lock_config() {
 
     let resp: GetObjectLockConfigResponse = ctx
         .client
-        .get_object_lock_config(&GetObjectLockConfigArgs::new(&bucket_name).unwrap())
+        .get_object_lock_config(&bucket_name)
+        .send()
         .await
         .unwrap();
     assert!(match resp.config.retention_mode {
@@ -70,7 +65,8 @@ async fn set_get_delete_object_lock_config() {
 
     let resp: DeleteObjectLockConfigResponse = ctx
         .client
-        .delete_object_lock_config(&DeleteObjectLockConfigArgs::new(&bucket_name).unwrap())
+        .delete_object_lock_config(&bucket_name)
+        .send()
         .await
         .unwrap();
     assert_eq!(resp.bucket, bucket_name);
@@ -78,7 +74,8 @@ async fn set_get_delete_object_lock_config() {
 
     let resp: GetObjectLockConfigResponse = ctx
         .client
-        .get_object_lock_config(&GetObjectLockConfigArgs::new(&bucket_name).unwrap())
+        .get_object_lock_config(&bucket_name)
+        .send()
         .await
         .unwrap();
     assert!(resp.config.retention_mode.is_none());

@@ -28,7 +28,7 @@ use crate::s3::http::{BaseUrl, Url};
 use crate::s3::response::*;
 use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
-use crate::s3::types::{Directive, ObjectLockConfig, RetentionMode};
+use crate::s3::types::{Directive, RetentionMode};
 use crate::s3::utils::{
     Multimap, from_iso8601utc, get_option_text, get_text, md5sum_hash, md5sum_hash_sb, merge,
     sha256_hash_sb, to_amz_date, to_iso8601utc, utc_now,
@@ -50,6 +50,7 @@ mod delete_bucket_notification;
 mod delete_bucket_policy;
 mod delete_bucket_replication;
 mod delete_bucket_tags;
+mod delete_object_lock_config;
 mod disable_object_legal_hold;
 mod enable_object_legal_hold;
 mod get_bucket_encryption;
@@ -60,6 +61,7 @@ mod get_bucket_replication;
 mod get_bucket_tags;
 mod get_bucket_versioning;
 mod get_object;
+mod get_object_lock_config;
 mod is_object_legal_hold_enabled;
 mod list_objects;
 mod listen_bucket_notification;
@@ -75,6 +77,7 @@ mod set_bucket_policy;
 mod set_bucket_replication;
 mod set_bucket_tags;
 mod set_bucket_versioning;
+mod set_object_lock_config;
 
 use super::builders::{ListBuckets, SegmentedBytes};
 use super::types::{PartInfo, S3Api};
@@ -1009,25 +1012,25 @@ impl Client {
             },
         })
     }
-
-    pub async fn delete_object_lock_config(
-        &self,
-        args: &DeleteObjectLockConfigArgs<'_>,
-    ) -> Result<DeleteObjectLockConfigResponse, Error> {
-        self.set_object_lock_config(&SetObjectLockConfigArgs {
-            extra_headers: args.extra_headers,
-            extra_query_params: args.extra_query_params,
-            region: args.region,
-            bucket: args.bucket,
-            config: &ObjectLockConfig {
-                retention_mode: None,
-                retention_duration_days: None,
-                retention_duration_years: None,
-            },
-        })
-        .await
-    }
-
+    /*
+        pub async fn delete_object_lock_config(
+            &self,
+            args: &DeleteObjectLockConfigArgs<'_>,
+        ) -> Result<DeleteObjectLockConfigResponse, Error> {
+            self.set_object_lock_config(&SetObjectLockConfigArgs {
+                extra_headers: args.extra_headers,
+                extra_query_params: args.extra_query_params,
+                region: args.region,
+                bucket: args.bucket,
+                config: &ObjectLockConfig {
+                    retention_mode: None,
+                    retention_duration_days: None,
+                    retention_duration_years: None,
+                },
+            })
+            .await
+        }
+    */
     pub async fn delete_object_tags(
         &self,
         args: &DeleteObjectTagsArgs<'_>,
@@ -1066,47 +1069,6 @@ impl Client {
             bucket_name: args.bucket.to_string(),
             object_name: args.object.to_string(),
             version_id: args.version_id.as_ref().map(|v| v.to_string()),
-        })
-    }
-
-    pub async fn get_object_lock_config(
-        &self,
-        args: &GetObjectLockConfigArgs<'_>,
-    ) -> Result<GetObjectLockConfigResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("object-lock"), String::new());
-
-        let resp = self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await?;
-
-        let header_map = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let root = Element::parse(body.reader())?;
-
-        Ok(GetObjectLockConfigResponse {
-            headers: header_map.clone(),
-            region: region.clone(),
-            bucket: args.bucket.to_string(),
-            config: ObjectLockConfig::from_xml(&root)?,
         })
     }
 
@@ -1361,6 +1323,7 @@ impl Client {
         })
     }
 
+    /*
     pub async fn set_object_lock_config(
         &self,
         args: &SetObjectLockConfigArgs<'_>,
@@ -1396,6 +1359,7 @@ impl Client {
             bucket: args.bucket.to_string(),
         })
     }
+     */
 
     pub async fn set_object_retention(
         &self,

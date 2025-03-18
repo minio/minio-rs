@@ -2011,7 +2011,7 @@ impl ReplicationConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 /// Object lock configuration information
 pub struct ObjectLockConfig {
     pub retention_mode: Option<RetentionMode>,

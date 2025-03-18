@@ -23,7 +23,7 @@ use std::io::BufReader;
 use xmltree::Element;
 
 use crate::s3::error::Error;
-use crate::s3::types::{ObjectLockConfig, RetentionMode, SelectProgress, parse_legal_hold};
+use crate::s3::types::{RetentionMode, SelectProgress, parse_legal_hold};
 use crate::s3::utils::{
     UtcTime, copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32,
 };
@@ -35,6 +35,7 @@ mod delete_bucket_notification;
 mod delete_bucket_policy;
 mod delete_bucket_replication;
 mod delete_bucket_tags;
+mod delete_object_lock_config;
 mod disable_object_legal_hold;
 mod enable_object_legal_hold;
 mod get_bucket_encryption;
@@ -45,6 +46,7 @@ mod get_bucket_replication;
 mod get_bucket_tags;
 mod get_bucket_versioning;
 mod get_object;
+mod get_object_lock_config;
 mod is_object_legal_hold_enabled;
 mod list_buckets;
 pub(crate) mod list_objects;
@@ -61,6 +63,7 @@ mod set_bucket_policy;
 mod set_bucket_replication;
 mod set_bucket_tags;
 mod set_bucket_versioning;
+mod set_object_lock_config;
 
 pub use bucket_exists::BucketExistsResponse;
 pub use delete_bucket_encryption::DeleteBucketEncryptionResponse;
@@ -69,6 +72,7 @@ pub use delete_bucket_notification::DeleteBucketNotificationResponse;
 pub use delete_bucket_policy::DeleteBucketPolicyResponse;
 pub use delete_bucket_replication::DeleteBucketReplicationResponse;
 pub use delete_bucket_tags::DeleteBucketTagsResponse;
+pub use delete_object_lock_config::DeleteObjectLockConfigResponse;
 pub use disable_object_legal_hold::DisableObjectLegalHoldResponse;
 pub use enable_object_legal_hold::EnableObjectLegalHoldResponse;
 pub use get_bucket_encryption::GetBucketEncryptionResponse;
@@ -79,6 +83,7 @@ pub use get_bucket_replication::GetBucketReplicationResponse;
 pub use get_bucket_tags::GetBucketTagsResponse;
 pub use get_bucket_versioning::GetBucketVersioningResponse;
 pub use get_object::GetObjectResponse;
+pub use get_object_lock_config::GetObjectLockConfigResponse;
 pub use is_object_legal_hold_enabled::IsObjectLegalHoldEnabledResponse;
 pub use list_buckets::ListBucketsResponse;
 pub use list_objects::ListObjectsResponse;
@@ -99,6 +104,7 @@ pub use set_bucket_policy::SetBucketPolicyResponse;
 pub use set_bucket_replication::SetBucketReplicationResponse;
 pub use set_bucket_tags::SetBucketTagsResponse;
 pub use set_bucket_versioning::SetBucketVersioningResponse;
+pub use set_object_lock_config::SetObjectLockConfigResponse;
 
 #[derive(Debug)]
 /// Base response for bucket operation
@@ -602,21 +608,6 @@ impl SelectObjectContentResponse {
         }
     }
 }
-
-/// Response of [delete_object_lock_config()](crate::s3::client::Client::delete_object_lock_config) API
-pub type DeleteObjectLockConfigResponse = BucketResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [get_object_lock_config()](crate::s3::client::Client::get_object_lock_config) API
-pub struct GetObjectLockConfigResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket: String,
-    pub config: ObjectLockConfig,
-}
-
-/// Response of [set_object_lock_config()](crate::s3::client::Client::set_object_lock_config) API
-pub type SetObjectLockConfigResponse = BucketResponse;
 
 #[derive(Clone, Debug)]
 /// Response of [get_object_retention()](crate::s3::client::Client::get_object_retention) API

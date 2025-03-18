@@ -18,7 +18,7 @@
 use crate::s3::error::Error;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::sse::{Sse, SseCustomerKey};
-use crate::s3::types::{Directive, ObjectLockConfig, Retention, RetentionMode, SelectRequest};
+use crate::s3::types::{Directive, Retention, RetentionMode, SelectRequest};
 use crate::s3::utils::{
     Multimap, UtcTime, b64encode, check_bucket_name, merge, to_amz_date, to_http_header_value,
     to_iso8601utc, to_signer_date, urlencode, utc_now,
@@ -926,48 +926,6 @@ impl<'a> ComposeObjectArgs<'a> {
             self.retention,
             self.legal_hold,
         )
-    }
-}
-
-/// Argument for [delete_object_lock_config()](crate::s3::client::Client::delete_object_lock_config) API
-pub type DeleteObjectLockConfigArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [get_object_lock_config()](crate::s3::client::Client::get_object_lock_config) API
-pub type GetObjectLockConfigArgs<'a> = BucketArgs<'a>;
-
-/// Argument for [set_object_lock_config()](crate::s3::client::Client::set_object_lock_config) API
-pub struct SetObjectLockConfigArgs<'a> {
-    pub extra_headers: Option<&'a Multimap>,
-    pub extra_query_params: Option<&'a Multimap>,
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
-    pub config: &'a ObjectLockConfig,
-}
-
-impl<'a> SetObjectLockConfigArgs<'a> {
-    /// Returns argument for [set_object_lock_config()](crate::s3::client::Client::set_object_lock_config) API with given bucket name and configuration
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use minio::s3::args::*;
-    /// use minio::s3::types::*;
-    /// let config = ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(100), None).unwrap();
-    /// let args = SetObjectLockConfigArgs::new("my-bucket", &config).unwrap();
-    /// ```
-    pub fn new(
-        bucket_name: &'a str,
-        config: &'a ObjectLockConfig,
-    ) -> Result<SetObjectLockConfigArgs<'a>, Error> {
-        check_bucket_name(bucket_name, true)?;
-
-        Ok(SetObjectLockConfigArgs {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            bucket: bucket_name,
-            config,
-        })
     }
 }
 
