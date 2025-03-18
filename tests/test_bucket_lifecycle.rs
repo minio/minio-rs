@@ -16,6 +16,7 @@
 mod common;
 
 use crate::common::{TestContext, create_bucket_helper};
+use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
     DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, SetBucketLifecycleResponse,
 };
@@ -26,33 +27,37 @@ async fn set_get_delete_bucket_lifecycle() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
 
-    let rules: Vec<LifecycleRule> = vec![LifecycleRule {
-        abort_incomplete_multipart_upload_days_after_initiation: None,
-        expiration_date: None,
-        expiration_days: Some(365),
-        expiration_expired_object_delete_marker: None,
-        filter: Filter {
-            and_operator: None,
-            prefix: Some(String::from("logs/")),
-            tag: None,
-        },
-        id: String::from("rule1"),
-        noncurrent_version_expiration_noncurrent_days: None,
-        noncurrent_version_transition_noncurrent_days: None,
-        noncurrent_version_transition_storage_class: None,
-        status: true,
-        transition_date: None,
-        transition_days: None,
-        transition_storage_class: None,
-    }];
+    let config: LifecycleConfig = LifecycleConfig {
+        rules: vec![LifecycleRule {
+            abort_incomplete_multipart_upload_days_after_initiation: None,
+            expiration_date: None,
+            expiration_days: Some(365),
+            expiration_expired_object_delete_marker: None,
+            filter: Filter {
+                and_operator: None,
+                prefix: Some(String::from("logs/")),
+                tag: None,
+            },
+            id: String::from("rule1"),
+            noncurrent_version_expiration_noncurrent_days: None,
+            noncurrent_version_transition_noncurrent_days: None,
+            noncurrent_version_transition_storage_class: None,
+            status: true,
+            transition_date: None,
+            transition_days: None,
+            transition_storage_class: None,
+        }],
+    };
 
-    let _resp: SetBucketLifecycleResponse = ctx
+    let resp: SetBucketLifecycleResponse = ctx
         .client
         .set_bucket_lifecycle(&bucket_name)
-        .life_cycle_config(LifecycleConfig { rules })
+        .life_cycle_config(config.clone())
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
     //println!("response of setting lifecycle: resp={:?}", resp);
 
     if false {
@@ -63,8 +68,10 @@ async fn set_get_delete_bucket_lifecycle() {
             .send()
             .await
             .unwrap();
+        assert_eq!(resp.config, config);
+        assert_eq!(resp.bucket, bucket_name);
+        assert_eq!(resp.region, DEFAULT_REGION);
         println!("response of getting lifecycle: resp={:?}", resp);
-        //assert_eq!(resp.config, rules.to_string());
     }
 
     let _resp: DeleteBucketLifecycleResponse = ctx

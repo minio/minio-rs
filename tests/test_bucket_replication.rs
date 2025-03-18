@@ -17,9 +17,10 @@ mod common;
 
 use crate::common::{TestContext, create_bucket_helper};
 use minio::s3::builders::VersioningStatus;
+use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
-    DeleteBucketReplicationResponse, GetBucketVersioningResponse, SetBucketReplicationResponse,
-    SetBucketVersioningResponse,
+    DeleteBucketReplicationResponse, GetBucketReplicationResponse, GetBucketVersioningResponse,
+    SetBucketReplicationResponse, SetBucketVersioningResponse,
 };
 use minio::s3::types::{
     AndOperator, Destination, Filter, ReplicationConfig, ReplicationRule, S3Api,
@@ -66,34 +67,49 @@ async fn set_get_delete_bucket_replication() {
         }],
     };
 
-    let _resp: SetBucketVersioningResponse = ctx
+    let resp: SetBucketVersioningResponse = ctx
         .client
         .set_bucket_versioning(&bucket_name)
         .versioning_status(VersioningStatus::Enabled)
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    if false {
-        // TODO panic: called `Result::unwrap()` on an `Err` value: S3Error(ErrorResponse { code: "XMinioAdminRemoteTargetNotFoundError", message: "The remote target does not exist",
-        let resp: SetBucketReplicationResponse = ctx
-            .client
-            .set_bucket_replication(&bucket_name)
-            .replication_config(config)
-            .send()
-            .await
-            .unwrap();
-        println!("response of setting replication: resp={:?}", resp);
-    }
     let resp: GetBucketVersioningResponse = ctx
         .client
         .get_bucket_versioning(&bucket_name)
         .send()
         .await
         .unwrap();
-    println!("response of getting replication: resp={:?}", resp);
+    assert_eq!(resp.status, Some(VersioningStatus::Enabled));
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
     if false {
+        // TODO panic: called `Result::unwrap()` on an `Err` value: S3Error(ErrorResponse { code: "XMinioAdminRemoteTargetNotFoundError", message: "The remote target does not exist",
+        let resp: SetBucketReplicationResponse = ctx
+            .client
+            .set_bucket_replication(&bucket_name)
+            .replication_config(config.clone())
+            .send()
+            .await
+            .unwrap();
+        println!("response of setting replication: resp={:?}", resp);
+        assert_eq!(resp.bucket, bucket_name);
+        assert_eq!(resp.region, DEFAULT_REGION);
+
+        let resp: GetBucketReplicationResponse = ctx
+            .client
+            .get_bucket_replication(&bucket_name)
+            .send()
+            .await
+            .unwrap();
+        //assert_eq!(resp.config, config); //TODO
+        assert_eq!(resp.bucket, bucket_name);
+        assert_eq!(resp.region, DEFAULT_REGION);
+
         // TODO called `Result::unwrap()` on an `Err` value: S3Error(ErrorResponse { code: "XMinioAdminRemoteTargetNotFoundError", message: "The remote target does not exist",
         let resp: DeleteBucketReplicationResponse = ctx
             .client

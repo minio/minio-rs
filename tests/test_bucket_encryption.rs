@@ -16,7 +16,10 @@
 mod common;
 
 use crate::common::{TestContext, create_bucket_helper};
-use minio::s3::response::{DeleteBucketEncryptionResponse, GetBucketEncryptionResponse};
+use minio::s3::client::DEFAULT_REGION;
+use minio::s3::response::{
+    DeleteBucketEncryptionResponse, GetBucketEncryptionResponse, SetBucketEncryptionResponse,
+};
 use minio::s3::types::{S3Api, SseConfig};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
@@ -28,13 +31,16 @@ async fn set_get_delete_bucket_encryption() {
 
     if false {
         // TODO this gives a runtime error
-        let _resp = ctx
+        let resp: SetBucketEncryptionResponse = ctx
             .client
             .set_bucket_encryption(&bucket_name)
             .sse_config(config.clone())
             .send()
             .await
             .unwrap();
+        assert_eq!(resp.config, config);
+        assert_eq!(resp.bucket, bucket_name);
+        assert_eq!(resp.region, DEFAULT_REGION);
     }
 
     let resp: GetBucketEncryptionResponse = ctx
@@ -43,15 +49,18 @@ async fn set_get_delete_bucket_encryption() {
         .send()
         .await
         .unwrap();
-
     assert_eq!(resp.config, config);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    let _resp: DeleteBucketEncryptionResponse = ctx
+    let resp: DeleteBucketEncryptionResponse = ctx
         .client
         .delete_bucket_encryption(&bucket_name)
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
     let resp: GetBucketEncryptionResponse = ctx
         .client
@@ -59,10 +68,8 @@ async fn set_get_delete_bucket_encryption() {
         .send()
         .await
         .unwrap();
-
-    println!(
-        "response of getting encryption config: resp.sse_config={:?}",
-        resp.config
-    );
     assert_eq!(resp.config, SseConfig::default());
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
+    //println!("response of getting encryption config: resp.sse_config={:?}", resp.config);
 }

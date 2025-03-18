@@ -17,6 +17,7 @@ mod common;
 
 use crate::common::{TestContext, create_bucket_helper, rand_object_name};
 use minio::s3::builders::ObjectToDelete;
+use minio::s3::response::PutObjectContentResponse;
 use minio::s3::types::ToStream;
 use tokio_stream::StreamExt;
 
@@ -29,11 +30,13 @@ async fn list_objects() {
     let mut names: Vec<String> = Vec::new();
     for _ in 1..=N_OBJECTS {
         let object_name = rand_object_name();
-        ctx.client
-            .put_object_content(&bucket_name, &object_name, "")
+        let resp: PutObjectContentResponse = ctx
+            .client
+            .put_object_content(&bucket_name, &object_name, "hello world")
             .send()
             .await
             .unwrap();
+        assert_eq!(resp.bucket, bucket_name);
         names.push(object_name);
     }
 
@@ -59,6 +62,7 @@ async fn list_objects() {
         .verbose_mode(true)
         .to_stream()
         .await;
+
     while let Some(item) = resp.next().await {
         let res = item.unwrap();
         for obj in res.result.iter() {

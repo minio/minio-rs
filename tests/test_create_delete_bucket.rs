@@ -16,6 +16,8 @@
 mod common;
 
 use crate::common::{TestContext, rand_bucket_name};
+use minio::s3::client::DEFAULT_REGION;
+use minio::s3::response::{BucketExistsResponse, RemoveBucketResponse};
 use minio::s3::types::S3Api;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
@@ -25,23 +27,17 @@ async fn create_delete_bucket() {
 
     ctx.client.make_bucket(&bucket_name).send().await.unwrap();
 
-    let exists: bool = ctx
-        .client
-        .bucket_exists(&bucket_name)
-        .send()
-        .await
-        .unwrap()
-        .exists;
-    assert!(exists);
+    let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
+    assert!(resp.exists);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    ctx.client.remove_bucket(&bucket_name).send().await.unwrap();
+    let resp: RemoveBucketResponse = ctx.client.remove_bucket(&bucket_name).send().await.unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    let exists: bool = ctx
-        .client
-        .bucket_exists(&bucket_name)
-        .send()
-        .await
-        .unwrap()
-        .exists;
-    assert!(!exists);
+    let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
+    assert!(!resp.exists);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 }

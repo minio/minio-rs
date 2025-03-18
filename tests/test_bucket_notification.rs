@@ -1,6 +1,7 @@
 mod common;
 
 use crate::common::{TestContext, create_bucket_helper};
+use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
     DeleteBucketNotificationResponse, GetBucketNotificationResponse, SetBucketNotificationResponse,
 };
@@ -22,7 +23,7 @@ async fn set_get_delete_bucket_notification() {
                 String::from("s3:ObjectCreated:Put"),
                 String::from("s3:ObjectCreated:Copy"),
             ],
-            id: None,
+            id: Some("".to_string()), //TODO or should this be NONE??
             prefix_filter_rule: Some(PrefixFilterRule {
                 value: String::from("images"),
             }),
@@ -37,11 +38,13 @@ async fn set_get_delete_bucket_notification() {
     let resp: SetBucketNotificationResponse = ctx
         .client
         .set_bucket_notification(&bucket_name)
-        .notification_config(config)
+        .notification_config(config.clone())
         .send()
         .await
         .unwrap();
-    println!("response of setting notification: resp={:?}", resp);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
+    //println!("response of setting notification: resp={:?}", resp);
 
     let resp: GetBucketNotificationResponse = ctx
         .client
@@ -49,7 +52,10 @@ async fn set_get_delete_bucket_notification() {
         .send()
         .await
         .unwrap();
-    println!("response of getting notification: resp={:?}", resp);
+    assert_eq!(resp.config, config);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
+    //println!("response of getting notification: resp={:?}", resp);
 
     assert_eq!(resp.config.queue_config_list.as_ref().unwrap().len(), 1);
     assert!(
@@ -89,7 +95,9 @@ async fn set_get_delete_bucket_notification() {
         .send()
         .await
         .unwrap();
-    println!("response of deleting notification: resp={:?}", resp);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
+    //println!("response of deleting notification: resp={:?}", resp);
 
     let resp: GetBucketNotificationResponse = ctx
         .client
@@ -97,5 +105,7 @@ async fn set_get_delete_bucket_notification() {
         .send()
         .await
         .unwrap();
-    assert!(resp.config.queue_config_list.is_none());
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.config, NotificationConfig::default());
 }

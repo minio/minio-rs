@@ -16,6 +16,7 @@
 mod common;
 
 use crate::common::{TestContext, create_bucket_helper};
+use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{DeleteBucketTagsResponse, GetBucketTagsResponse, SetBucketTagsResponse};
 use minio::s3::types::S3Api;
 use std::collections::HashMap;
@@ -30,13 +31,15 @@ async fn set_get_delete_bucket_tags() {
         (String::from("User"), String::from("jsmith")),
     ]);
 
-    let _resp: SetBucketTagsResponse = ctx
+    let resp: SetBucketTagsResponse = ctx
         .client
         .set_bucket_tags(&bucket_name)
         .tags(tags.clone())
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
     let resp: GetBucketTagsResponse = ctx
         .client
@@ -44,20 +47,26 @@ async fn set_get_delete_bucket_tags() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.tags, resp.tags);
+    assert_eq!(resp.tags, tags);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    let _resp: DeleteBucketTagsResponse = ctx
+    let resp: DeleteBucketTagsResponse = ctx
         .client
         .delete_bucket_tags(&bucket_name)
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    let resp = ctx
+    let resp: GetBucketTagsResponse = ctx
         .client
         .get_bucket_tags(&bucket_name)
         .send()
         .await
         .unwrap();
     assert!(resp.tags.is_empty());
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 }

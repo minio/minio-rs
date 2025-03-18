@@ -1066,8 +1066,8 @@ impl Client {
 
         Ok(GetPresignedObjectUrlResponse {
             region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            object_name: args.object.to_string(),
+            bucket: args.bucket.to_string(),
+            object: args.object.to_string(),
             version_id: args.version_id.as_ref().map(|v| v.to_string()),
             url: url.to_string(),
         })

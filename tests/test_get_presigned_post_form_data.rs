@@ -18,6 +18,7 @@ mod common;
 use crate::common::{TestContext, create_bucket_helper, rand_object_name};
 use minio::s3::args::PostPolicy;
 use minio::s3::utils::utc_now;
+use std::collections::HashMap;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn get_presigned_post_form_data() {
@@ -33,11 +34,15 @@ async fn get_presigned_post_form_data() {
         .add_content_length_range_condition(1024 * 1024, 4 * 1024 * 1024)
         .unwrap();
 
-    let form_data = ctx
+    let form_data: HashMap<String, String> = ctx
         .client
         .get_presigned_post_form_data(&policy)
         .await
         .unwrap();
+    //println!("form_data={:?}", &form_data);
     assert!(form_data.contains_key("x-amz-signature"));
     assert!(form_data.contains_key("policy"));
+    assert!(form_data.contains_key("x-amz-date"));
+    assert!(form_data.contains_key("x-amz-algorithm"));
+    assert!(form_data.contains_key("x-amz-credential"));
 }

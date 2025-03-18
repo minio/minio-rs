@@ -39,12 +39,15 @@ async fn object_legal_hold() {
     let object_name = rand_object_name();
 
     let data = Bytes::from("hello, world".to_string().into_bytes());
-    let _resp: PutObjectContentResponse = ctx
+    let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(&bucket_name, &object_name, data.clone())
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.object_size, data.len() as u64);
     //println!("response of put object content: resp={:?}", resp);
 
     let resp: DisableObjectLegalHoldResponse = ctx

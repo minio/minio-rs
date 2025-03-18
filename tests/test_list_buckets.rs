@@ -1,4 +1,5 @@
 use crate::common::{CleanupGuard, TestContext, create_bucket_helper};
+use minio::s3::response::ListBucketsResponse;
 // MinIO Rust Library for Amazon S3 Compatible Cloud Storage
 // Copyright 2025 MinIO, Inc.
 //
@@ -34,7 +35,7 @@ async fn list_buckets() {
     assert_eq!(names.len(), N_BUCKETS);
 
     let mut count = 0;
-    let resp = ctx.client.list_buckets().send().await.unwrap();
+    let resp: ListBucketsResponse = ctx.client.list_buckets().send().await.unwrap();
 
     for bucket in resp.buckets.iter() {
         if names.contains(&bucket.name) {

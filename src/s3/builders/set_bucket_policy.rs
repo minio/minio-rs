@@ -16,7 +16,7 @@
 use crate::s3::Client;
 use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
-use crate::s3::response::SetBucketLifecycleResponse;
+use crate::s3::response::SetBucketPolicyResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{Multimap, check_bucket_name};
 use bytes::Bytes;
@@ -69,7 +69,7 @@ impl SetBucketPolicy {
 }
 
 impl S3Api for SetBucketPolicy {
-    type S3Response = SetBucketLifecycleResponse;
+    type S3Response = SetBucketPolicyResponse;
 }
 
 impl ToS3Request for SetBucketPolicy {

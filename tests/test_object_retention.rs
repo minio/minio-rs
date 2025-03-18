@@ -19,7 +19,10 @@ use crate::common::{CleanupGuard, TestContext, rand_bucket_name, rand_object_nam
 use common::RandSrc;
 use minio::s3::builders::ObjectContent;
 use minio::s3::client::DEFAULT_REGION;
-use minio::s3::response::{GetObjectRetentionResponse, MakeBucketResponse, PutObjectContentResponse, RemoveObjectResponse, SetObjectRetentionResponse};
+use minio::s3::response::{
+    GetObjectRetentionResponse, MakeBucketResponse, PutObjectContentResponse, RemoveObjectResponse,
+    SetObjectRetentionResponse,
+};
 use minio::s3::types::{RetentionMode, S3Api};
 use minio::s3::utils::{to_iso8601utc, utc_now};
 
@@ -27,7 +30,8 @@ use minio::s3::utils::{to_iso8601utc, utc_now};
 async fn object_retention() {
     let ctx = TestContext::new_from_env();
     let bucket_name: String = rand_bucket_name();
-    let resp: MakeBucketResponse = ctx.client
+    let resp: MakeBucketResponse = ctx
+        .client
         .make_bucket(&bucket_name)
         .object_lock(true)
         .send()

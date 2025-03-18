@@ -54,10 +54,10 @@ async fn set_get_delete_object_lock_config() {
         .send()
         .await
         .unwrap();
-    assert!(match resp.config.retention_mode {
-        Some(r) => matches!(r, RetentionMode::GOVERNANCE),
-        _ => false,
-    });
+    assert_eq!(
+        resp.config.retention_mode.unwrap(),
+        RetentionMode::GOVERNANCE
+    );
     assert_eq!(resp.config.retention_duration_days, Some(DURATION_DAYS));
     assert!(resp.config.retention_duration_years.is_none());
     assert_eq!(resp.bucket, bucket_name);

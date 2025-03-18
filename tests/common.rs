@@ -30,21 +30,21 @@ use minio::s3::http::BaseUrl;
 use minio::s3::types::S3Api;
 
 pub struct RandReader {
-    size: usize,
+    size: u64,
 }
 
 impl RandReader {
     #[allow(dead_code)]
-    pub fn new(size: usize) -> RandReader {
+    pub fn new(size: u64) -> RandReader {
         RandReader { size }
     }
 }
 
 impl io::Read for RandReader {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
-        let bytes_read = match self.size > buf.len() {
+        let bytes_read: usize = match (self.size as usize) > buf.len() {
             true => buf.len(),
-            false => self.size,
+            false => self.size as usize,
         };
 
         if bytes_read > 0 {
@@ -52,7 +52,7 @@ impl io::Read for RandReader {
             random.fill_bytes(&mut buf[0..bytes_read]);
         }
 
-        self.size -= bytes_read;
+        self.size -= bytes_read as u64;
 
         Ok(bytes_read)
     }
