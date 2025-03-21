@@ -15,6 +15,8 @@
 
 //! HTTP URL definitions
 
+use super::utils::urlencode_object_key;
+use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::Error;
 use crate::s3::utils::match_hostname;
 use crate::s3::utils::{Multimap, to_query_string};
@@ -25,8 +27,6 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::fmt;
 use std::str::FromStr;
-
-use super::utils::urlencode_object_key;
 
 const AWS_S3_PREFIX: &str = r"^(((bucket\.|accesspoint\.)vpce(-[a-z_\d]+)+\.s3\.)|([a-z_\d-]{1,63}\.)s3-control(-[a-z_\d]+)*\.|(s3(-[a-z_\d]+)*\.))";
 
@@ -185,7 +185,7 @@ fn get_aws_info(
     let domain_suffix = tokens.join(".");
 
     if host == "s3-external-1.amazonaws.com" {
-        region_in_host = "us-east-1".to_string();
+        region_in_host = DEFAULT_REGION.to_string();
     }
     if host == "s3-us-gov-west-1.amazonaws.com" || host == "s3-fips-us-gov-west-1.amazonaws.com" {
         region_in_host = "us-gov-west-1".to_string();

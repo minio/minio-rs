@@ -17,8 +17,12 @@ mod common;
 
 use crate::common::{TestContext, create_bucket_helper, rand_object_name};
 use common::RandSrc;
-use minio::s3::args::{DeleteObjectTagsArgs, GetObjectTagsArgs, SetObjectTagsArgs};
 use minio::s3::builders::ObjectContent;
+use minio::s3::client::DEFAULT_REGION;
+use minio::s3::response::{
+    DeleteObjectTagsResponse, GetObjectTagsResponse, PutObjectContentResponse,
+    RemoveObjectResponse, SetObjectTagsResponse,
+};
 use minio::s3::types::S3Api;
 use std::collections::HashMap;
 
@@ -29,7 +33,8 @@ async fn object_tags() {
     let object_name = rand_object_name();
 
     let size = 16_u64;
-    ctx.client
+    let resp: PutObjectContentResponse = ctx
+        .client
         .put_object_content(
             &bucket_name,
             &object_name,
@@ -38,39 +43,74 @@ async fn object_tags() {
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.object_size, size);
+    assert_eq!(resp.version_id, None);
+    assert_eq!(&resp.location, "");
 
     let tags = HashMap::from([
         (String::from("Project"), String::from("Project One")),
         (String::from("User"), String::from("jsmith")),
     ]);
 
-    ctx.client
-        .set_object_tags(&SetObjectTagsArgs::new(&bucket_name, &object_name, &tags).unwrap())
-        .await
-        .unwrap();
-
-    let resp = ctx
+    let resp: SetObjectTagsResponse = ctx
         .client
-        .get_object_tags(&GetObjectTagsArgs::new(&bucket_name, &object_name).unwrap())
+        .set_object_tags(&bucket_name)
+        .object(object_name.clone())
+        .tags(tags.clone())
+        .send()
         .await
         .unwrap();
-    assert!(resp.tags.len() == tags.len() && resp.tags.keys().all(|k| tags.contains_key(k)));
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.version_id, None);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    ctx.client
-        .delete_object_tags(&DeleteObjectTagsArgs::new(&bucket_name, &object_name).unwrap())
-        .await
-        .unwrap();
-
-    let resp = ctx
+    let resp: GetObjectTagsResponse = ctx
         .client
-        .get_object_tags(&GetObjectTagsArgs::new(&bucket_name, &object_name).unwrap())
+        .get_object_tags(&bucket_name)
+        .object(object_name.clone())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.tags, tags);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.version_id, None);
+    assert_eq!(resp.region, DEFAULT_REGION);
+
+    let resp: DeleteObjectTagsResponse = ctx
+        .client
+        .delete_object_tags(&bucket_name)
+        .object(object_name.clone())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.version_id, None);
+    assert_eq!(resp.region, DEFAULT_REGION);
+
+    let resp: GetObjectTagsResponse = ctx
+        .client
+        .get_object_tags(&bucket_name.clone())
+        .object(object_name.clone())
+        .send()
         .await
         .unwrap();
     assert!(resp.tags.is_empty());
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.version_id, None);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    ctx.client
+    let resp: RemoveObjectResponse = ctx
+        .client
         .remove_object(&bucket_name, object_name.as_str())
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.version_id, None);
+    assert!(!resp.is_delete_marker)
 }

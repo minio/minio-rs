@@ -118,8 +118,8 @@ pub type UploadPartResponse2 = PutObjectResponse;
 #[derive(Debug, Clone)]
 pub struct PutObjectContentResponse {
     pub headers: HeaderMap,
-    pub bucket_name: String,
-    pub object_name: String,
+    pub bucket: String,
+    pub object: String,
     pub location: String,
     pub object_size: u64,
     pub etag: String,

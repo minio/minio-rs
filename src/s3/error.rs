@@ -97,11 +97,11 @@ pub enum Error {
     SelectError(String, String),
     UnsupportedApi(String),
     InvalidComposeSource(String),
-    InvalidComposeSourceOffset(String, String, Option<String>, usize, usize),
-    InvalidComposeSourceLength(String, String, Option<String>, usize, usize),
-    InvalidComposeSourceSize(String, String, Option<String>, usize, usize),
-    InvalidComposeSourcePartSize(String, String, Option<String>, usize, usize),
-    InvalidComposeSourceMultipart(String, String, Option<String>, usize, usize),
+    InvalidComposeSourceOffset(String, String, Option<String>, u64, u64),
+    InvalidComposeSourceLength(String, String, Option<String>, u64, u64),
+    InvalidComposeSourceSize(String, String, Option<String>, u64, u64),
+    InvalidComposeSourcePartSize(String, String, Option<String>, u64, u64),
+    InvalidComposeSourceMultipart(String, String, Option<String>, u64, u64),
     InvalidDirective(String),
     InvalidCopyDirective(String),
     InvalidMultipartCount(u16),
@@ -121,6 +121,7 @@ pub enum Error {
     ReplicationConfigurationNotFoundError,
     NoSuchObjectLockConfiguration,
     NoSuchBucketPolicy,
+    NoSuchBucket,
 }
 
 impl std::error::Error for Error {}
@@ -296,6 +297,7 @@ impl fmt::Display for Error {
             }
             Error::NoSuchObjectLockConfiguration => write!(f, "no such object lock"),
             Error::NoSuchBucketPolicy => write!(f, "no such bucket policy"),
+            Error::NoSuchBucket => write!(f, "no such bucket"),
         }
     }
 }
@@ -307,6 +309,7 @@ impl Error {
             Error::ReplicationConfigurationNotFoundError => "ReplicationConfigurationNotFoundError",
             Error::NoSuchObjectLockConfiguration => "NoSuchObjectLockConfiguration",
             Error::NoSuchBucketPolicy => "NoSuchBucketPolicy",
+            Error::NoSuchBucket => "NoSuchBucket",
             _ => "TODO",
         }
     }

@@ -16,54 +16,69 @@
 mod common;
 
 use crate::common::{CleanupGuard, TestContext, rand_bucket_name};
-use minio::s3::args::{
-    DeleteObjectLockConfigArgs, GetObjectLockConfigArgs, MakeBucketArgs, SetObjectLockConfigArgs,
+use minio::s3::client::DEFAULT_REGION;
+use minio::s3::response::{
+    DeleteObjectLockConfigResponse, GetObjectLockConfigResponse, SetObjectLockConfigResponse,
 };
-use minio::s3::types::{ObjectLockConfig, RetentionMode};
+use minio::s3::types::{ObjectLockConfig, RetentionMode, S3Api};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_object_lock_config() {
     let ctx = TestContext::new_from_env();
-    let bucket_name = rand_bucket_name();
-
-    let mut args = MakeBucketArgs::new(&bucket_name).unwrap();
-    args.object_lock = true;
-    ctx.client.make_bucket(&args).await.unwrap();
+    let bucket_name: String = rand_bucket_name();
+    ctx.client
+        .make_bucket(&bucket_name)
+        .object_lock(true)
+        .send()
+        .await
+        .unwrap();
     let _cleanup = CleanupGuard::new(&ctx, &bucket_name);
 
-    ctx.client
-        .set_object_lock_config(
-            &SetObjectLockConfigArgs::new(
-                &bucket_name,
-                &ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(7), None).unwrap(),
-            )
-            .unwrap(),
-        )
-        .await
-        .unwrap();
+    const DURATION_DAYS: i32 = 7;
+    let config =
+        ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();
 
-    let resp = ctx
+    let resp: SetObjectLockConfigResponse = ctx
         .client
-        .get_object_lock_config(&GetObjectLockConfigArgs::new(&bucket_name).unwrap())
+        .set_object_lock_config(&bucket_name)
+        .config(config)
+        .send()
         .await
         .unwrap();
-    assert!(match resp.config.retention_mode {
-        Some(r) => matches!(r, RetentionMode::GOVERNANCE),
-        _ => false,
-    });
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    assert_eq!(resp.config.retention_duration_days, Some(7));
+    let resp: GetObjectLockConfigResponse = ctx
+        .client
+        .get_object_lock_config(&bucket_name)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.config.retention_mode.unwrap(),
+        RetentionMode::GOVERNANCE
+    );
+    assert_eq!(resp.config.retention_duration_days, Some(DURATION_DAYS));
     assert!(resp.config.retention_duration_years.is_none());
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    ctx.client
-        .delete_object_lock_config(&DeleteObjectLockConfigArgs::new(&bucket_name).unwrap())
+    let resp: DeleteObjectLockConfigResponse = ctx
+        .client
+        .delete_object_lock_config(&bucket_name)
+        .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    let resp = ctx
+    let resp: GetObjectLockConfigResponse = ctx
         .client
-        .get_object_lock_config(&GetObjectLockConfigArgs::new(&bucket_name).unwrap())
+        .get_object_lock_config(&bucket_name)
+        .send()
         .await
         .unwrap();
     assert!(resp.config.retention_mode.is_none());
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 }

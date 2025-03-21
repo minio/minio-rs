@@ -835,8 +835,8 @@ impl PutObjectContent {
             let res = po.send().await?;
             return Ok(PutObjectContentResponse {
                 headers: res.headers,
-                bucket_name: self.bucket,
-                object_name: self.object,
+                bucket: self.bucket,
+                object: self.object,
                 location: res.location,
                 object_size: size,
                 etag: res.etag,
@@ -951,8 +951,8 @@ impl PutObjectContent {
         let res = complete_mpu.send().await?;
         Ok(PutObjectContentResponse {
             headers: res.headers,
-            bucket_name: self.bucket.clone(),
-            object_name: self.object.clone(),
+            bucket: self.bucket.clone(),
+            object: self.object.clone(),
             location: res.location,
             object_size: size,
             etag: res.etag,

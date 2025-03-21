@@ -39,7 +39,6 @@ impl FromS3Response for SetBucketTagsResponse {
             Some(v) => v.to_string(),
         };
         let resp = resp?;
-
         Ok(SetBucketTagsResponse {
             headers: resp.headers().clone(),
             region: req.get_computed_region(),

@@ -125,7 +125,7 @@ async fn put_object_content() {
             .stat_object(&StatObjectArgs::new(&bucket_name, &object_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(resp.size, *size as usize);
+        assert_eq!(resp.size, *size);
         assert_eq!(resp.etag, etag);
         assert_eq!(
             resp.headers.get(header::CONTENT_TYPE).unwrap(),
@@ -159,7 +159,7 @@ async fn put_object_content() {
             .stat_object(&StatObjectArgs::new(&bucket_name, &object_name).unwrap())
             .await
             .unwrap();
-        assert_eq!(resp.size, *size as usize);
+        assert_eq!(resp.size, *size);
         assert_eq!(resp.etag, etag);
         ctx.client
             .remove_object(&bucket_name, object_name.as_str())
@@ -212,7 +212,7 @@ async fn put_object_content_2() {
                     .stat_object(&StatObjectArgs::new(&test_bucket, &object_name).unwrap())
                     .await
                     .unwrap();
-                assert_eq!(resp.size, sizes[idx] as usize);
+                assert_eq!(resp.size, sizes[idx]);
                 assert_eq!(resp.etag, etag);
                 client
                     .remove_object(&test_bucket, object_name.as_str())

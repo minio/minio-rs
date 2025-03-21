@@ -28,10 +28,9 @@ use crate::s3::http::{BaseUrl, Url};
 use crate::s3::response::*;
 use crate::s3::signer::{presign_v4, sign_v4_s3};
 use crate::s3::sse::SseCustomerKey;
-use crate::s3::types::{Directive, ObjectLockConfig, RetentionMode};
+use crate::s3::types::Directive;
 use crate::s3::utils::{
-    Multimap, from_iso8601utc, get_default_text, get_option_text, get_text, md5sum_hash,
-    md5sum_hash_sb, merge, sha256_hash_sb, to_amz_date, to_iso8601utc, utc_now,
+    Multimap, get_text, md5sum_hash, md5sum_hash_sb, merge, sha256_hash_sb, to_amz_date, utc_now,
 };
 
 use async_recursion::async_recursion;
@@ -39,16 +38,20 @@ use bytes::{Buf, Bytes};
 use dashmap::DashMap;
 use hyper::http::Method;
 use reqwest::Body;
-use reqwest::header::HeaderMap;
 
 use xmltree::Element;
 
+mod bucket_exists;
 mod delete_bucket_encryption;
 mod delete_bucket_lifecycle;
 mod delete_bucket_notification;
 mod delete_bucket_policy;
 mod delete_bucket_replication;
 mod delete_bucket_tags;
+mod delete_object_lock_config;
+mod delete_object_tags;
+mod disable_object_legal_hold;
+mod enable_object_legal_hold;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
 mod get_bucket_notification;
@@ -57,10 +60,16 @@ mod get_bucket_replication;
 mod get_bucket_tags;
 mod get_bucket_versioning;
 mod get_object;
+mod get_object_lock_config;
+mod get_object_retention;
+mod get_object_tags;
+mod is_object_legal_hold_enabled;
 mod list_objects;
 mod listen_bucket_notification;
+mod make_bucket;
 mod object_prompt;
 mod put_object;
+mod remove_bucket;
 mod remove_objects;
 mod set_bucket_encryption;
 mod set_bucket_lifecycle;
@@ -69,9 +78,14 @@ mod set_bucket_policy;
 mod set_bucket_replication;
 mod set_bucket_tags;
 mod set_bucket_versioning;
+mod set_object_lock_config;
+mod set_object_retention;
+mod set_object_tags;
 
 use super::builders::{ListBuckets, SegmentedBytes};
 use super::types::{PartInfo, S3Api};
+
+pub const DEFAULT_REGION: &str = "us-east-1";
 
 /// Client Builder manufactures a Client using given parameters.
 #[derive(Debug, Default)]
@@ -180,9 +194,9 @@ impl ClientBuilder {
 #[derive(Clone, Debug, Default)]
 pub struct Client {
     client: reqwest::Client,
-    base_url: BaseUrl,
+    pub(crate) base_url: BaseUrl,
     provider: Option<Arc<Box<(dyn Provider + Send + Sync + 'static)>>>,
-    region_map: Arc<DashMap<String, String>>,
+    pub(crate) region_map: Arc<DashMap<String, String>>,
 }
 
 impl Client {
@@ -597,7 +611,7 @@ impl Client {
         }
 
         if bucket_name.is_empty() || self.provider.is_none() {
-            return Ok(String::from("us-east-1"));
+            return Ok(String::from(DEFAULT_REGION));
         }
 
         if let Some(v) = self.region_map.get(bucket_name) {
@@ -611,7 +625,7 @@ impl Client {
         let resp = self
             .execute(
                 Method::GET,
-                &String::from("us-east-1"),
+                &String::from(DEFAULT_REGION),
                 &mut headers,
                 &query_params,
                 Some(bucket_name),
@@ -624,7 +638,7 @@ impl Client {
 
         let mut location = root.get_text().unwrap_or_default().to_string();
         if location.is_empty() {
-            location = String::from("us-east-1");
+            location = String::from(DEFAULT_REGION);
         }
 
         self.region_map
@@ -632,57 +646,8 @@ impl Client {
         Ok(location)
     }
 
-    pub async fn bucket_exists(&self, args: &BucketExistsArgs<'_>) -> Result<bool, Error> {
-        let region;
-        match self.get_region(args.bucket, args.region).await {
-            Ok(r) => region = r,
-            Err(e) => match e {
-                Error::S3Error(ref er) => {
-                    if er.code == "NoSuchBucket" {
-                        return Ok(false);
-                    }
-                    return Err(e);
-                }
-                _ => return Err(e),
-            },
-        };
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        let mut query_params = &Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            query_params = v;
-        }
-
-        match self
-            .execute(
-                Method::HEAD,
-                &region,
-                &mut headers,
-                query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await
-        {
-            Ok(_) => Ok(true),
-            Err(e) => match e {
-                Error::S3Error(ref er) => {
-                    if er.code == "NoSuchBucket" {
-                        return Ok(false);
-                    }
-                    Err(e)
-                }
-                _ => Err(e),
-            },
-        }
-    }
-
     async fn calculate_part_count(&self, sources: &mut [ComposeSource<'_>]) -> Result<u16, Error> {
-        let mut object_size = 0_usize;
+        let mut object_size = 0_u64;
         let mut i = 0;
         let mut part_count = 0_u16;
 
@@ -735,7 +700,7 @@ impl Client {
 
             object_size += size;
             if object_size > MAX_OBJECT_SIZE {
-                return Err(Error::InvalidObjectSize(object_size as u64));
+                return Err(Error::InvalidObjectSize(object_size));
             }
 
             if size > MAX_PART_SIZE {
@@ -866,7 +831,7 @@ impl Client {
                 parts.push(PartInfo {
                     number: part_number,
                     etag: resp.etag,
-                    size: size as u64,
+                    size,
                 });
             } else {
                 while size > 0 {
@@ -897,7 +862,7 @@ impl Client {
                     parts.push(PartInfo {
                         number: part_number,
                         etag: resp.etag,
-                        size: size as u64,
+                        size,
                     });
 
                     offset += length;
@@ -1051,316 +1016,6 @@ impl Client {
         })
     }
 
-    pub async fn disable_object_legal_hold(
-        &self,
-        args: &DisableObjectLegalHoldArgs<'_>,
-    ) -> Result<DisableObjectLegalHoldResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("legal-hold"), String::new());
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                Some(Bytes::from(
-                    &b"<LegalHold><Status>OFF</Status></LegalHold>"[..],
-                )),
-            )
-            .await?;
-
-        Ok(DisableObjectLegalHoldResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            object_name: args.object.to_string(),
-            version_id: args.version_id.as_ref().map(|v| v.to_string()),
-        })
-    }
-
-    pub async fn delete_object_lock_config(
-        &self,
-        args: &DeleteObjectLockConfigArgs<'_>,
-    ) -> Result<DeleteObjectLockConfigResponse, Error> {
-        self.set_object_lock_config(&SetObjectLockConfigArgs {
-            extra_headers: args.extra_headers,
-            extra_query_params: args.extra_query_params,
-            region: args.region,
-            bucket: args.bucket,
-            config: &ObjectLockConfig {
-                retention_mode: None,
-                retention_duration_days: None,
-                retention_duration_years: None,
-            },
-        })
-        .await
-    }
-
-    pub async fn delete_object_tags(
-        &self,
-        args: &DeleteObjectTagsArgs<'_>,
-    ) -> Result<DeleteObjectTagsResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("tagging"), String::new());
-
-        let resp = self
-            .execute(
-                Method::DELETE,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                None,
-            )
-            .await?;
-
-        Ok(DeleteObjectTagsResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            object_name: args.object.to_string(),
-            version_id: args.version_id.as_ref().map(|v| v.to_string()),
-        })
-    }
-
-    pub async fn enable_object_legal_hold(
-        &self,
-        args: &EnableObjectLegalHoldArgs<'_>,
-    ) -> Result<EnableObjectLegalHoldResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("legal-hold"), String::new());
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                Some(Bytes::from(
-                    &b"<LegalHold><Status>ON</Status></LegalHold>"[..],
-                )),
-            )
-            .await?;
-
-        Ok(EnableObjectLegalHoldResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            object_name: args.object.to_string(),
-            version_id: args.version_id.as_ref().map(|v| v.to_string()),
-        })
-    }
-
-    pub async fn get_object_lock_config(
-        &self,
-        args: &GetObjectLockConfigArgs<'_>,
-    ) -> Result<GetObjectLockConfigResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("object-lock"), String::new());
-
-        let resp = self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await?;
-
-        let header_map = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let root = Element::parse(body.reader())?;
-
-        Ok(GetObjectLockConfigResponse {
-            headers: header_map.clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            config: ObjectLockConfig::from_xml(&root)?,
-        })
-    }
-
-    pub async fn get_object_retention(
-        &self,
-        args: &GetObjectRetentionArgs<'_>,
-    ) -> Result<GetObjectRetentionResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("retention"), String::new());
-
-        match self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                None,
-            )
-            .await
-        {
-            Ok(resp) => {
-                let header_map = resp.headers().clone();
-                let body = resp.bytes().await?;
-                let root = Element::parse(body.reader())?;
-
-                Ok(GetObjectRetentionResponse {
-                    headers: header_map.clone(),
-                    region: region.clone(),
-                    bucket_name: args.bucket.to_string(),
-                    object_name: args.object.to_string(),
-                    version_id: args.version_id.as_ref().map(|v| v.to_string()),
-                    retention_mode: match get_option_text(&root, "Mode") {
-                        Some(v) => Some(RetentionMode::parse(&v)?),
-                        _ => None,
-                    },
-                    retain_until_date: match get_option_text(&root, "RetainUntilDate") {
-                        Some(v) => Some(from_iso8601utc(&v)?),
-                        _ => None,
-                    },
-                })
-            }
-            Err(Error::S3Error(ref err))
-                if err.code == Error::NoSuchObjectLockConfiguration.as_str() =>
-            {
-                Ok(GetObjectRetentionResponse {
-                    headers: HeaderMap::new(),
-                    region: region.clone(),
-                    bucket_name: args.bucket.to_string(),
-                    object_name: args.object.to_string(),
-                    version_id: args.version_id.as_ref().map(|v| v.to_string()),
-                    retention_mode: None,
-                    retain_until_date: None,
-                })
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    pub async fn get_object_tags(
-        &self,
-        args: &GetObjectTagsArgs<'_>,
-    ) -> Result<GetObjectTagsResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("tagging"), String::new());
-
-        let resp = self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                None,
-            )
-            .await?;
-
-        let header_map = resp.headers().clone();
-        let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
-
-        let element = root
-            .get_mut_child("TagSet")
-            .ok_or(Error::XmlError("<TagSet> tag not found".to_string()))?;
-        let mut tags = std::collections::HashMap::new();
-        while let Some(v) = element.take_child("Tag") {
-            tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
-        }
-
-        Ok(GetObjectTagsResponse {
-            headers: header_map.clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            object_name: args.object.to_string(),
-            version_id: args.version_id.as_ref().map(|v| v.to_string()),
-            tags,
-        })
-    }
-
     pub async fn get_presigned_object_url(
         &self,
         args: &GetPresignedObjectUrlArgs<'_>,
@@ -1411,8 +1066,8 @@ impl Client {
 
         Ok(GetPresignedObjectUrlResponse {
             region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            object_name: args.object.to_string(),
+            bucket: args.bucket.to_string(),
+            object: args.object.to_string(),
             version_id: args.version_id.as_ref().map(|v| v.to_string()),
             url: url.to_string(),
         })
@@ -1438,137 +1093,8 @@ impl Client {
         )
     }
 
-    pub async fn is_object_legal_hold_enabled(
-        &self,
-        args: &IsObjectLegalHoldEnabledArgs<'_>,
-    ) -> Result<IsObjectLegalHoldEnabledResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("legal-hold"), String::new());
-
-        match self
-            .execute(
-                Method::GET,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                None,
-            )
-            .await
-        {
-            Ok(resp) => {
-                let header_map = resp.headers().clone();
-                let body = resp.bytes().await?;
-                let root = Element::parse(body.reader())?;
-                Ok(IsObjectLegalHoldEnabledResponse {
-                    headers: header_map.clone(),
-                    region: region.clone(),
-                    bucket_name: args.bucket.to_string(),
-                    object_name: args.object.to_string(),
-                    version_id: args.version_id.as_ref().map(|v| v.to_string()),
-                    enabled: get_default_text(&root, "Status") == "ON",
-                })
-            }
-            Err(Error::S3Error(ref err))
-                if err.code == Error::NoSuchObjectLockConfiguration.as_str() =>
-            {
-                Ok(IsObjectLegalHoldEnabledResponse {
-                    headers: HeaderMap::new(),
-                    region: region.clone(),
-                    bucket_name: args.bucket.to_string(),
-                    object_name: args.object.to_string(),
-                    version_id: args.version_id.as_ref().map(|v| v.to_string()),
-                    enabled: false,
-                })
-            }
-            Err(e) => Err(e),
-        }
-    }
-
     pub fn list_buckets(&self) -> ListBuckets {
         ListBuckets::new().client(self)
-    }
-
-    pub async fn make_bucket(
-        &self,
-        args: &MakeBucketArgs<'_>,
-    ) -> Result<MakeBucketResponse, Error> {
-        let mut region = "us-east-1";
-        if let Some(r) = &args.region {
-            if !self.base_url.region.is_empty() {
-                if self.base_url.region != *r {
-                    return Err(Error::RegionMismatch(
-                        self.base_url.region.clone(),
-                        r.to_string(),
-                    ));
-                }
-                region = r;
-            }
-        }
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        };
-
-        if args.object_lock {
-            headers.insert(
-                String::from("x-amz-bucket-object-lock-enabled"),
-                String::from("true"),
-            );
-        }
-
-        let mut query_params = &Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            query_params = v;
-        }
-
-        let data = match region {
-            "us-east-1" => String::new(),
-            _ => format!(
-                "<CreateBucketConfiguration><LocationConstraint>{}</LocationConstraint></CreateBucketConfiguration>",
-                region
-            ),
-        };
-
-        let body = match data.is_empty() {
-            true => None,
-            false => Some(data.into()),
-        };
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                region,
-                &mut headers,
-                query_params,
-                Some(args.bucket),
-                None,
-                body,
-            )
-            .await?;
-        self.region_map
-            .insert(args.bucket.to_string(), region.to_string());
-
-        Ok(MakeBucketResponse {
-            headers: resp.headers().clone(),
-            region: region.to_string(),
-            bucket: args.bucket.to_string(),
-        })
     }
 
     /// Executes [PutObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html) S3 API
@@ -1614,197 +1140,6 @@ impl Client {
                 Some(v) => Some(v.to_str()?.to_string()),
                 None => None,
             },
-        })
-    }
-
-    pub async fn remove_bucket(
-        &self,
-        args: &RemoveBucketArgs<'_>,
-    ) -> Result<RemoveBucketResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        let mut query_params = &Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            query_params = v;
-        }
-
-        let resp = self
-            .execute(
-                Method::DELETE,
-                &region,
-                &mut headers,
-                query_params,
-                Some(args.bucket),
-                None,
-                None,
-            )
-            .await?;
-        self.region_map.remove(&args.bucket.to_string());
-
-        Ok(RemoveBucketResponse {
-            headers: resp.headers().clone(),
-            region: region.to_string(),
-            bucket: args.bucket.to_string(),
-        })
-    }
-
-    pub async fn set_object_lock_config(
-        &self,
-        args: &SetObjectLockConfigArgs<'_>,
-    ) -> Result<SetObjectLockConfigResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("object-lock"), String::new());
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                None,
-                Some(args.config.to_xml().into()),
-            )
-            .await?;
-
-        Ok(SetObjectLockConfigResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket: args.bucket.to_string(),
-        })
-    }
-
-    pub async fn set_object_retention(
-        &self,
-        args: &SetObjectRetentionArgs<'_>,
-    ) -> Result<SetObjectRetentionResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-        if args.bypass_governance_mode {
-            headers.insert(
-                String::from("x-amz-bypass-governance-retention"),
-                String::from("true"),
-            );
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("retention"), String::new());
-
-        let mut data = String::from("<Retention>");
-        if let Some(v) = &args.retention_mode {
-            data.push_str("<Mode>");
-            data.push_str(&v.to_string());
-            data.push_str("</Mode>");
-        }
-        if let Some(v) = &args.retain_until_date {
-            data.push_str("<RetainUntilDate>");
-            data.push_str(&to_iso8601utc(*v));
-            data.push_str("</RetainUntilDate>");
-        }
-        data.push_str("</Retention>");
-
-        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                Some(data.into()),
-            )
-            .await?;
-
-        Ok(SetObjectRetentionResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            object_name: args.object.to_string(),
-            version_id: args.version_id.as_ref().map(|v| v.to_string()),
-        })
-    }
-
-    pub async fn set_object_tags(
-        &self,
-        args: &SetObjectTagsArgs<'_>,
-    ) -> Result<SetObjectTagsResponse, Error> {
-        let region = self.get_region(args.bucket, args.region).await?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &args.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &args.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = args.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("tagging"), String::new());
-
-        let mut data = String::from("<Tagging>");
-        if !args.tags.is_empty() {
-            data.push_str("<TagSet>");
-            for (key, value) in args.tags.iter() {
-                data.push_str("<Tag>");
-                data.push_str("<Key>");
-                data.push_str(key);
-                data.push_str("</Key>");
-                data.push_str("<Value>");
-                data.push_str(value);
-                data.push_str("</Value>");
-                data.push_str("</Tag>");
-            }
-            data.push_str("</TagSet>");
-        }
-        data.push_str("</Tagging>");
-
-        let resp = self
-            .execute(
-                Method::PUT,
-                &region,
-                &mut headers,
-                &query_params,
-                Some(args.bucket),
-                Some(args.object),
-                Some(data.into()),
-            )
-            .await?;
-
-        Ok(SetObjectTagsResponse {
-            headers: resp.headers().clone(),
-            region: region.clone(),
-            bucket_name: args.bucket.to_string(),
-            object_name: args.object.to_string(),
-            version_id: args.version_id.as_ref().map(|v| v.to_string()),
         })
     }
 

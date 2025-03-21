@@ -16,18 +16,18 @@
 mod common;
 
 use crate::common::{TestContext, create_bucket_helper};
-use minio::s3::args::BucketExistsArgs;
+use minio::s3::client::DEFAULT_REGION;
+use minio::s3::response::BucketExistsResponse;
+use minio::s3::types::S3Api;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn bucket_exists() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
 
-    let exists = ctx
-        .client
-        .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
-        .await
-        .unwrap();
+    let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
 
-    assert!(exists);
+    assert!(resp.exists);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 }

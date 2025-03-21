@@ -41,7 +41,6 @@ impl Client {
     ///         .send().await;
     /// }
     /// ```
-
     pub fn set_bucket_tags(&self, bucket: &str) -> SetBucketTags {
         SetBucketTags::new(bucket).client(self)
     }

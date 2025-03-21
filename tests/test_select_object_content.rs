@@ -17,6 +17,7 @@ mod common;
 
 use crate::common::{TestContext, create_bucket_helper, rand_object_name};
 use minio::s3::args::SelectObjectContentArgs;
+use minio::s3::response::RemoveObjectResponse;
 use minio::s3::types::{
     CsvInputSerialization, CsvOutputSerialization, FileHeaderInfo, QuoteFields, S3Api,
     SelectRequest,
@@ -80,9 +81,11 @@ async fn select_object_content() {
         got += core::str::from_utf8(&buf[..size]).unwrap();
     }
     assert_eq!(got, data);
-    ctx.client
+    let resp: RemoveObjectResponse = ctx
+        .client
         .remove_object(&bucket_name, object_name.as_str())
         .send()
         .await
         .unwrap();
+    assert!(!resp.is_delete_marker);
 }

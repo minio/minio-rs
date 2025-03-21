@@ -13,14 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_trait::async_trait;
-use tokio_stream::StreamExt;
-
 use crate::s3::{
     builders::ObjectContent,
     error::Error,
     types::{FromS3Response, S3Request},
 };
+use async_trait::async_trait;
+use futures_util::TryStreamExt;
 
 pub struct GetObjectResponse {
     pub headers: http::HeaderMap,
@@ -52,9 +51,7 @@ impl FromS3Response for GetObjectResponse {
         let content_length = response
             .content_length()
             .ok_or(Error::ContentLengthUnknown)?;
-        let body = response.bytes_stream().map(|result| {
-            result.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
-        });
+        let body = response.bytes_stream().map_err(std::io::Error::other);
 
         let content = ObjectContent::new_from_stream(body, Some(content_length));
 

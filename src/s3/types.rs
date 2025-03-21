@@ -16,7 +16,7 @@
 //! Various types for S3 API requests and responses
 
 use super::builders::SegmentedBytes;
-use super::client::Client;
+use super::client::{Client, DEFAULT_REGION};
 use crate::s3::error::Error;
 use crate::s3::utils::{
     Multimap, UtcTime, from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc,
@@ -32,7 +32,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub struct S3Request<'a> {
-    client: &'a Client,
+    pub(crate) client: &'a Client,
 
     pub method: Method,
     pub region: Option<&'a str>,
@@ -100,7 +100,7 @@ impl<'a> S3Request<'a> {
         self.inner_region = if let Some(bucket) = self.bucket {
             self.client.get_region(bucket, self.region).await?
         } else {
-            "us-east-1".to_string()
+            DEFAULT_REGION.to_string()
         };
 
         // Execute the API request.
@@ -188,7 +188,7 @@ pub struct PartInfo {
     pub size: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Contains retention mode information
 pub enum RetentionMode {
     GOVERNANCE,
@@ -831,21 +831,21 @@ impl SseConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Contains key and value
 pub struct Tag {
     pub key: String,
     pub value: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// And operator contains prefix and tags
 pub struct AndOperator {
     pub prefix: Option<String>,
     pub tags: Option<HashMap<String, String>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 /// Filter information
 pub struct Filter {
     pub and_operator: Option<AndOperator>,
@@ -961,7 +961,7 @@ impl Filter {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Lifecycle rule information
 pub struct LifecycleRule {
     pub abort_incomplete_multipart_upload_days_after_initiation: Option<usize>,
@@ -1099,7 +1099,7 @@ impl LifecycleRule {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(PartialEq, Clone, Debug, Default)]
 /// Lifecycle configuration
 pub struct LifecycleConfig {
     pub rules: Vec<LifecycleRule>,
@@ -1357,7 +1357,7 @@ fn to_xml_common_notification_config(
     data
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Prefix filter rule
 pub struct PrefixFilterRule {
     pub value: String,
@@ -1367,7 +1367,7 @@ impl PrefixFilterRule {
     pub const NAME: &'static str = "prefix";
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Suffix filter rule
 pub struct SuffixFilterRule {
     pub value: String,
@@ -1377,7 +1377,7 @@ impl SuffixFilterRule {
     pub const NAME: &'static str = "suffix";
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Cloud function configuration information
 pub struct CloudFuncConfig {
     pub events: Vec<String>,
@@ -1428,7 +1428,7 @@ impl CloudFuncConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Queue configuration information
 pub struct QueueConfig {
     pub events: Vec<String>,
@@ -1479,7 +1479,7 @@ impl QueueConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Topic configuration information
 pub struct TopicConfig {
     pub events: Vec<String>,
@@ -1530,7 +1530,7 @@ impl TopicConfig {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(PartialEq, Clone, Debug, Default)]
 /// Notification configuration information
 pub struct NotificationConfig {
     pub cloud_func_config_list: Option<Vec<CloudFuncConfig>>,
@@ -1621,7 +1621,7 @@ impl NotificationConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Access control translation information
 pub struct AccessControlTranslation {
     pub owner: String,
@@ -1641,13 +1641,13 @@ impl Default for AccessControlTranslation {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Encryption configuration information
 pub struct EncryptionConfig {
     pub replica_kms_key_id: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Metrics information
 pub struct Metrics {
     pub event_threshold_minutes: Option<i32>,
@@ -1663,7 +1663,7 @@ impl Metrics {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Replication time information
 pub struct ReplicationTime {
     pub time_minutes: Option<i32>,
@@ -1679,7 +1679,7 @@ impl ReplicationTime {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Destination information
 pub struct Destination {
     pub bucket_arn: String,
@@ -1814,13 +1814,13 @@ impl Destination {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Source selection criteria information
 pub struct SourceSelectionCriteria {
     pub sse_kms_encrypted_objects_status: Option<bool>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 /// Replication rule information
 pub struct ReplicationRule {
     pub destination: Destination,
@@ -1965,7 +1965,7 @@ impl ReplicationRule {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(PartialEq, Clone, Debug, Default)]
 /// Replication configuration information
 pub struct ReplicationConfig {
     pub role: Option<String>,
@@ -2010,7 +2010,7 @@ impl ReplicationConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 /// Object lock configuration information
 pub struct ObjectLockConfig {
     pub retention_mode: Option<RetentionMode>,

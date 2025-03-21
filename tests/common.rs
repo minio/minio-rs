@@ -24,27 +24,27 @@ use tokio::io::AsyncRead;
 use tokio::time::timeout;
 use tokio_stream::Stream;
 
-use minio::s3::args::*;
 use minio::s3::client::Client;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
+use minio::s3::types::S3Api;
 
 pub struct RandReader {
-    size: usize,
+    size: u64,
 }
 
 impl RandReader {
     #[allow(dead_code)]
-    pub fn new(size: usize) -> RandReader {
+    pub fn new(size: u64) -> RandReader {
         RandReader { size }
     }
 }
 
 impl io::Read for RandReader {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
-        let bytes_read = match self.size > buf.len() {
+        let bytes_read: usize = match (self.size as usize) > buf.len() {
             true => buf.len(),
-            false => self.size,
+            false => self.size as usize,
         };
 
         if bytes_read > 0 {
@@ -52,7 +52,7 @@ impl io::Read for RandReader {
             random.fill_bytes(&mut buf[0..bytes_read]);
         }
 
-        self.size -= bytes_read;
+        self.size -= bytes_read as u64;
 
         Ok(bytes_read)
     }
@@ -254,10 +254,7 @@ impl TestContext {
 #[allow(dead_code)]
 pub async fn create_bucket_helper(ctx: &TestContext) -> (String, CleanupGuard) {
     let bucket_name = rand_bucket_name();
-    ctx.client
-        .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
-        .await
-        .unwrap();
+    let _resp = ctx.client.make_bucket(&bucket_name).send().await.unwrap();
     let guard = CleanupGuard::new(ctx, &bucket_name);
     (bucket_name, guard)
 }
@@ -294,8 +291,7 @@ impl Drop for CleanupGuard {
                 // do the actual removal of the bucket
                 match timeout(
                     std::time::Duration::from_secs(60),
-                    ctx.client
-                        .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap()),
+                    ctx.client.remove_and_purge_bucket(&bucket_name),
                 )
                 .await
                 {
@@ -305,7 +301,7 @@ impl Drop for CleanupGuard {
                         }
                         Err(e) => println!("Error removing bucket {}: {:?}", bucket_name, e),
                     },
-                    Err(_) => println!("Timeout after 15s while removing bucket {}", bucket_name),
+                    Err(_) => println!("Timeout after 60s while removing bucket {}", bucket_name),
                 }
             });
         })

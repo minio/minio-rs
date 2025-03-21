@@ -23,17 +23,22 @@ use std::io::BufReader;
 use xmltree::Element;
 
 use crate::s3::error::Error;
-use crate::s3::types::{ObjectLockConfig, RetentionMode, SelectProgress, parse_legal_hold};
+use crate::s3::types::{RetentionMode, SelectProgress, parse_legal_hold};
 use crate::s3::utils::{
     UtcTime, copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32,
 };
 
+mod bucket_exists;
 mod delete_bucket_encryption;
 mod delete_bucket_lifecycle;
 mod delete_bucket_notification;
 mod delete_bucket_policy;
 mod delete_bucket_replication;
 mod delete_bucket_tags;
+mod delete_object_lock_config;
+mod delete_object_tags;
+mod disable_object_legal_hold;
+mod enable_object_legal_hold;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
 mod get_bucket_notification;
@@ -42,11 +47,17 @@ mod get_bucket_replication;
 mod get_bucket_tags;
 mod get_bucket_versioning;
 mod get_object;
+mod get_object_lock_config;
+mod get_object_retention;
+mod get_object_tags;
+mod is_object_legal_hold_enabled;
 mod list_buckets;
 pub(crate) mod list_objects;
 mod listen_bucket_notification;
+mod make_bucket;
 mod object_prompt;
 mod put_object;
+mod remove_bucket;
 mod remove_objects;
 mod set_bucket_encryption;
 mod set_bucket_lifecycle;
@@ -55,13 +66,21 @@ mod set_bucket_policy;
 mod set_bucket_replication;
 mod set_bucket_tags;
 mod set_bucket_versioning;
+mod set_object_lock_config;
+mod set_object_retention;
+mod set_object_tags;
 
+pub use bucket_exists::BucketExistsResponse;
 pub use delete_bucket_encryption::DeleteBucketEncryptionResponse;
 pub use delete_bucket_lifecycle::DeleteBucketLifecycleResponse;
 pub use delete_bucket_notification::DeleteBucketNotificationResponse;
 pub use delete_bucket_policy::DeleteBucketPolicyResponse;
 pub use delete_bucket_replication::DeleteBucketReplicationResponse;
 pub use delete_bucket_tags::DeleteBucketTagsResponse;
+pub use delete_object_lock_config::DeleteObjectLockConfigResponse;
+pub use delete_object_tags::DeleteObjectTagsResponse;
+pub use disable_object_legal_hold::DisableObjectLegalHoldResponse;
+pub use enable_object_legal_hold::EnableObjectLegalHoldResponse;
 pub use get_bucket_encryption::GetBucketEncryptionResponse;
 pub use get_bucket_lifecycle::GetBucketLifecycleResponse;
 pub use get_bucket_notification::GetBucketNotificationResponse;
@@ -70,16 +89,24 @@ pub use get_bucket_replication::GetBucketReplicationResponse;
 pub use get_bucket_tags::GetBucketTagsResponse;
 pub use get_bucket_versioning::GetBucketVersioningResponse;
 pub use get_object::GetObjectResponse;
+pub use get_object_lock_config::GetObjectLockConfigResponse;
+pub use get_object_retention::GetObjectRetentionResponse;
+pub use get_object_tags::GetObjectTagsResponse;
+pub use is_object_legal_hold_enabled::IsObjectLegalHoldEnabledResponse;
 pub use list_buckets::ListBucketsResponse;
 pub use list_objects::ListObjectsResponse;
 pub use listen_bucket_notification::ListenBucketNotificationResponse;
+pub use make_bucket::MakeBucketResponse;
 pub use object_prompt::ObjectPromptResponse;
 pub use put_object::{
     AbortMultipartUploadResponse2, CompleteMultipartUploadResponse2,
     CreateMultipartUploadResponse2, PutObjectContentResponse, PutObjectResponse,
     UploadPartResponse2,
 };
-pub use remove_objects::{DeleteError, DeletedObject, RemoveObjectResponse, RemoveObjectsResponse};
+pub use remove_bucket::RemoveBucketResponse;
+pub use remove_objects::{
+    DeleteError, DeleteResult, DeletedObject, RemoveObjectResponse, RemoveObjectsResponse,
+};
 pub use set_bucket_encryption::SetBucketEncryptionResponse;
 pub use set_bucket_lifecycle::SetBucketLifecycleResponse;
 pub use set_bucket_notification::SetBucketNotificationResponse;
@@ -87,6 +114,9 @@ pub use set_bucket_policy::SetBucketPolicyResponse;
 pub use set_bucket_replication::SetBucketReplicationResponse;
 pub use set_bucket_tags::SetBucketTagsResponse;
 pub use set_bucket_versioning::SetBucketVersioningResponse;
+pub use set_object_lock_config::SetObjectLockConfigResponse;
+pub use set_object_retention::SetObjectRetentionResponse;
+pub use set_object_tags::SetObjectTagsResponse;
 
 #[derive(Debug)]
 /// Base response for bucket operation
@@ -96,19 +126,13 @@ pub struct BucketResponse {
     pub bucket: String,
 }
 
-/// Response of [make_bucket()](crate::s3::client::Client::make_bucket) API
-pub type MakeBucketResponse = BucketResponse;
-
-/// Response of [remove_bucket()](crate::s3::client::Client::remove_bucket) API
-pub type RemoveBucketResponse = BucketResponse;
-
 #[derive(Debug)]
 /// Base response for object operation
 pub struct ObjectResponse {
     pub headers: HeaderMap,
     pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
+    pub bucket: String,
+    pub object: String,
     pub version_id: Option<String>,
 }
 
@@ -183,7 +207,7 @@ pub struct StatObjectResponse {
     pub region: String,
     pub bucket_name: String,
     pub object_name: String,
-    pub size: usize,
+    pub size: u64,
     pub etag: String,
     pub version_id: Option<String>,
     pub last_modified: Option<UtcTime>,
@@ -202,8 +226,8 @@ impl StatObjectResponse {
         object_name: &str,
     ) -> Result<StatObjectResponse, Error> {
         let size = match headers.get("Content-Length") {
-            Some(v) => v.to_str()?.parse::<usize>()?,
-            None => 0_usize,
+            Some(v) => v.to_str()?.parse::<u64>()?,
+            None => 0_u64,
         };
 
         let etag = match headers.get("ETag") {
@@ -581,10 +605,7 @@ impl SelectObjectContentResponse {
             match self.do_read().await {
                 Err(e) => {
                     self.done = true;
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        e.to_string(),
-                    ));
+                    return Err(std::io::Error::other(e.to_string()));
                 }
                 Ok(_) => {
                     if self.payload.is_empty() {
@@ -596,77 +617,12 @@ impl SelectObjectContentResponse {
         }
     }
 }
-
-/// Response of [enable_object_legal_hold()](crate::s3::client::Client::enable_object_legal_hold) API
-pub type EnableObjectLegalHoldResponse = ObjectResponse;
-
-/// Response of [disable_object_legal_hold()](crate::s3::client::Client::disable_object_legal_hold) API
-pub type DisableObjectLegalHoldResponse = ObjectResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [is_object_legal_hold_enabled()](crate::s3::client::Client::is_object_legal_hold_enabled) API
-pub struct IsObjectLegalHoldEnabledResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
-    pub version_id: Option<String>,
-    pub enabled: bool,
-}
-
-/// Response of [delete_object_lock_config()](crate::s3::client::Client::delete_object_lock_config) API
-pub type DeleteObjectLockConfigResponse = BucketResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [get_object_lock_config()](crate::s3::client::Client::get_object_lock_config) API
-pub struct GetObjectLockConfigResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub config: ObjectLockConfig,
-}
-
-/// Response of [set_object_lock_config()](crate::s3::client::Client::set_object_lock_config) API
-pub type SetObjectLockConfigResponse = BucketResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [get_object_retention()](crate::s3::client::Client::get_object_retention) API
-pub struct GetObjectRetentionResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
-    pub version_id: Option<String>,
-    pub retention_mode: Option<RetentionMode>,
-    pub retain_until_date: Option<UtcTime>,
-}
-
-/// Response of [set_object_retention()](crate::s3::client::Client::set_object_retention) API
-pub type SetObjectRetentionResponse = ObjectResponse;
-
-/// Response of [delete_object_tags()](crate::s3::client::Client::delete_object_tags) API
-pub type DeleteObjectTagsResponse = ObjectResponse;
-
-#[derive(Clone, Debug)]
-/// Response of [get_object_tags()](crate::s3::client::Client::get_object_tags) API
-pub struct GetObjectTagsResponse {
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
-    pub version_id: Option<String>,
-    pub tags: std::collections::HashMap<String, String>,
-}
-
-/// Response of [set_object_tags()](crate::s3::client::Client::set_object_tags) API
-pub type SetObjectTagsResponse = ObjectResponse;
-
 #[derive(Clone, Debug)]
 /// Response of [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API
 pub struct GetPresignedObjectUrlResponse {
     pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
+    pub bucket: String,
+    pub object: String,
     pub version_id: Option<String>,
     pub url: String,
 }

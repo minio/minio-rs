@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use futures_util::{Stream, StreamExt, stream};
+use futures_util::{Stream, TryStreamExt, stream};
 use http::HeaderMap;
 use tokio::io::AsyncBufReadExt;
 use tokio_util::io::StreamReader;
@@ -47,10 +47,7 @@ impl FromS3Response
         let resp = resp?;
         let headers = resp.headers().clone();
 
-        let body_stream = resp.bytes_stream();
-        let body_stream = body_stream
-            .map(|r| r.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err)));
-        let stream_reader = StreamReader::new(body_stream);
+        let stream_reader = StreamReader::new(resp.bytes_stream().map_err(std::io::Error::other));
 
         let record_stream = Box::pin(stream::unfold(
             stream_reader,

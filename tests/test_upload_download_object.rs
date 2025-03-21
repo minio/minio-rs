@@ -16,6 +16,7 @@
 mod common;
 
 use crate::common::{RandReader, TestContext, create_bucket_helper, rand_object_name};
+use minio::s3::response::PutObjectContentResponse;
 use minio::s3::types::S3Api;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
@@ -34,12 +35,13 @@ async fn upload_download_object() {
     let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
     let object_name = rand_object_name();
 
-    let size = 16_usize;
+    let size = 16_u64;
     let mut file = fs::File::create(&object_name).unwrap();
     io::copy(&mut RandReader::new(size), &mut file).unwrap();
     file.sync_all().unwrap();
 
-    ctx.client
+    let resp: PutObjectContentResponse = ctx
+        .client
         .put_object_content(
             &bucket_name,
             &object_name,
@@ -48,6 +50,9 @@ async fn upload_download_object() {
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.object_size, size);
 
     let filename = rand_object_name();
     let get_obj_rsp = ctx
@@ -78,7 +83,7 @@ async fn upload_download_object() {
         .unwrap();
 
     let object_name = rand_object_name();
-    let size: usize = 16 + 5 * 1024 * 1024;
+    let size: u64 = 16 + 5 * 1024 * 1024;
     let mut file = fs::File::create(&object_name).unwrap();
     io::copy(&mut RandReader::new(size), &mut file).unwrap();
     file.sync_all().unwrap();
