@@ -39,5 +39,5 @@ async fn create_delete_bucket() {
     let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
     assert!(!resp.exists);
     assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.region, "");
 }

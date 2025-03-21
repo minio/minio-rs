@@ -49,7 +49,7 @@ impl FromS3Response for BucketExistsResponse {
             Err(Error::S3Error(ref err)) if err.code == Error::NoSuchBucket.as_str() => {
                 Ok(BucketExistsResponse {
                     headers: HeaderMap::new(),
-                    region: req.get_computed_region(),
+                    region: String::new(), // NOTE the bucket does not exist and the region is not provided
                     bucket,
                     exists: false,
                 })

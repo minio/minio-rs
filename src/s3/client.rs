@@ -700,7 +700,7 @@ impl Client {
 
             object_size += size;
             if object_size > MAX_OBJECT_SIZE {
-                return Err(Error::InvalidObjectSize(object_size as u64));
+                return Err(Error::InvalidObjectSize(object_size));
             }
 
             if size > MAX_PART_SIZE {
@@ -831,7 +831,7 @@ impl Client {
                 parts.push(PartInfo {
                     number: part_number,
                     etag: resp.etag,
-                    size: size as u64,
+                    size,
                 });
             } else {
                 while size > 0 {
@@ -862,7 +862,7 @@ impl Client {
                     parts.push(PartInfo {
                         number: part_number,
                         etag: resp.etag,
-                        size: size as u64,
+                        size,
                     });
 
                     offset += length;

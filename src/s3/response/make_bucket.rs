@@ -39,9 +39,14 @@ impl FromS3Response for MakeBucketResponse {
             Some(v) => v.to_string(),
         };
         let resp = resp?;
+        let region: String = req.get_computed_region();
+        if !req.client.region_map.contains_key(&bucket) {
+            req.client.region_map.insert(bucket.clone(), region.clone());
+        }
+
         Ok(MakeBucketResponse {
             headers: resp.headers().clone(),
-            region: req.get_computed_region(),
+            region,
             bucket,
         })
     }

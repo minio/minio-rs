@@ -104,7 +104,9 @@ pub use put_object::{
     UploadPartResponse2,
 };
 pub use remove_bucket::RemoveBucketResponse;
-pub use remove_objects::{DeleteError, DeletedObject, RemoveObjectResponse, RemoveObjectsResponse};
+pub use remove_objects::{
+    DeleteError, DeleteResult, DeletedObject, RemoveObjectResponse, RemoveObjectsResponse,
+};
 pub use set_bucket_encryption::SetBucketEncryptionResponse;
 pub use set_bucket_lifecycle::SetBucketLifecycleResponse;
 pub use set_bucket_notification::SetBucketNotificationResponse;
@@ -603,10 +605,7 @@ impl SelectObjectContentResponse {
             match self.do_read().await {
                 Err(e) => {
                     self.done = true;
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        e.to_string(),
-                    ));
+                    return Err(std::io::Error::other(e.to_string()));
                 }
                 Ok(_) => {
                     if self.payload.is_empty() {

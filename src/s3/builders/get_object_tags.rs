@@ -36,7 +36,6 @@ pub struct GetObjectTags {
 
 impl GetObjectTags {
     pub fn new(bucket: &str) -> Self {
-        //TODO make bucket of type String because its cloned anyway
         Self {
             bucket: bucket.to_owned(),
             ..Default::default()

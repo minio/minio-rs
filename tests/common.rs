@@ -291,7 +291,7 @@ impl Drop for CleanupGuard {
                 // do the actual removal of the bucket
                 match timeout(
                     std::time::Duration::from_secs(60),
-                    ctx.client.remove_bucket(&bucket_name).send(),
+                    ctx.client.remove_and_purge_bucket(&bucket_name),
                 )
                 .await
                 {

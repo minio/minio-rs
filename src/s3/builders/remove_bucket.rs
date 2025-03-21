@@ -56,9 +56,6 @@ impl ToS3Request for RemoveBucket {
             .query_params(query_params)
             .headers(headers);
 
-        //TODO bucket_name used to be removed AFTER execution of the remove bucket...
-        client.region_map.remove(&self.bucket);
-
         Ok(req)
     }
 }

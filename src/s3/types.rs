@@ -32,7 +32,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub struct S3Request<'a> {
-    client: &'a Client,
+    pub(crate) client: &'a Client,
 
     pub method: Method,
     pub region: Option<&'a str>,
@@ -92,7 +92,6 @@ impl<'a> S3Request<'a> {
     }
 
     pub fn get_computed_region(&self) -> String {
-        //TODO return ref
         self.inner_region.clone()
     }
 

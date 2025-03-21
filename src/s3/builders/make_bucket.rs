@@ -145,11 +145,6 @@ impl ToS3Request for MakeBucket {
             .headers(headers)
             .body(body);
 
-        //TODO insert into region_map used to be executed after creating the bucket...
-        client
-            .region_map
-            .insert(self.bucket.clone(), region.to_string());
-
         Ok(req)
     }
 }
