@@ -16,17 +16,35 @@
 mod common;
 
 use crate::common::{RandReader, TestContext, create_bucket_helper, rand_object_name};
+use hex::ToHex;
 use minio::s3::response::PutObjectContentResponse;
 use minio::s3::types::S3Api;
+#[cfg(feature = "ring")]
+use ring::digest::{Context, SHA256};
+#[cfg(not(feature = "ring"))]
 use sha2::{Digest, Sha256};
+#[cfg(feature = "ring")]
+use std::io::Read;
 use std::path::PathBuf;
 use std::{fs, io};
 
 fn get_hash(filename: &String) -> String {
-    let mut hasher = Sha256::new();
-    let mut file = fs::File::open(filename).unwrap();
-    io::copy(&mut file, &mut hasher).unwrap();
-    format!("{:x}", hasher.finalize())
+    #[cfg(feature = "ring")]
+    {
+        let mut context = Context::new(&SHA256);
+        let mut file = fs::File::open(filename).unwrap();
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf).unwrap();
+        context.update(&buf);
+        context.finish().encode_hex()
+    }
+    #[cfg(not(feature = "ring"))]
+    {
+        let mut hasher = Sha256::new();
+        let mut file = fs::File::open(filename).unwrap();
+        io::copy(&mut file, &mut hasher).unwrap();
+        hasher.finalize().encode_hex()
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]

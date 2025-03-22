@@ -22,11 +22,15 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use byteorder::{BigEndian, ReadBytesExt};
 use chrono::{DateTime, Datelike, NaiveDateTime, ParseError, Utc};
 use crc::{CRC_32_ISO_HDLC, Crc};
+use hex::ToHex;
 use lazy_static::lazy_static;
 use md5::compute as md5compute;
 use multimap::MultiMap;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use regex::Regex;
+#[cfg(feature = "ring")]
+use ring::digest::{Context, SHA256};
+#[cfg(not(feature = "ring"))]
 use sha2::{Digest, Sha256};
 pub use urlencoding::decode as urldecode;
 pub use urlencoding::encode as urlencode;
@@ -68,17 +72,35 @@ pub fn uint32(mut data: &[u8]) -> Result<u32, std::io::Error> {
 
 /// Gets hex encoded SHA256 hash of given data
 pub fn sha256_hash(data: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    format!("{:x}", hasher.finalize())
+    #[cfg(feature = "ring")]
+    {
+        ring::digest::digest(&SHA256, data).encode_hex()
+    }
+    #[cfg(not(feature = "ring"))]
+    {
+        let mut hasher = Sha256::new();
+        hasher.update(data);
+        hasher.finalize().encode_hex()
+    }
 }
 
 pub fn sha256_hash_sb(sb: &SegmentedBytes) -> String {
-    let mut hasher = Sha256::new();
-    for data in sb.iter() {
-        hasher.update(data);
+    #[cfg(feature = "ring")]
+    {
+        let mut context = Context::new(&SHA256);
+        for data in sb.iter() {
+            context.update(data.as_ref());
+        }
+        context.finish().encode_hex()
     }
-    format!("{:x}", hasher.finalize())
+    #[cfg(not(feature = "ring"))]
+    {
+        let mut hasher = Sha256::new();
+        for data in sb.iter() {
+            hasher.update(data);
+        }
+        hasher.finalize().encode_hex()
+    }
 }
 
 /// Gets bas64 encoded MD5 hash of given data
