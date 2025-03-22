@@ -20,15 +20,28 @@ use crate::s3::utils::{
     to_signer_date,
 };
 use hex::encode as hexencode;
+#[cfg(not(feature = "ring"))]
 use hmac::{Hmac, Mac};
 use hyper::http::Method;
+#[cfg(feature = "ring")]
+use ring::hmac;
+#[cfg(not(feature = "ring"))]
 use sha2::Sha256;
 
 /// Returns HMAC hash for given key and data
 pub fn hmac_hash(key: &[u8], data: &[u8]) -> Vec<u8> {
-    let mut hasher = Hmac::<Sha256>::new_from_slice(key).expect("HMAC can take key of any size");
-    hasher.update(data);
-    hasher.finalize().into_bytes().to_vec()
+    #[cfg(feature = "ring")]
+    {
+        let key = hmac::Key::new(hmac::HMAC_SHA256, key);
+        hmac::sign(&key, data).as_ref().to_vec()
+    }
+    #[cfg(not(feature = "ring"))]
+    {
+        let mut hasher =
+            Hmac::<Sha256>::new_from_slice(key).expect("HMAC can take key of any size");
+        hasher.update(data);
+        hasher.finalize().into_bytes().to_vec()
+    }
 }
 
 /// Returns hex encoded HMAC hash for given key and data
