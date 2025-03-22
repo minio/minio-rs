@@ -735,7 +735,7 @@ impl Client {
         Ok(part_count)
     }
 
-    #[async_recursion(?Send)]
+    #[async_recursion]
     pub async fn do_compose_object(
         &self,
         args: &mut ComposeObjectArgs<'_>,
