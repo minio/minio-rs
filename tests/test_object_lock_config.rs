@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-
-use crate::common::{CleanupGuard, TestContext, rand_bucket_name};
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
     DeleteObjectLockConfigResponse, GetObjectLockConfigResponse, SetObjectLockConfigResponse,
 };
 use minio::s3::types::{ObjectLockConfig, RetentionMode, S3Api};
+use minio_common::cleanup_guard::CleanupGuard;
+use minio_common::test_context::TestContext;
+use minio_common::utils::rand_bucket_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_object_lock_config() {
@@ -32,7 +32,7 @@ async fn set_get_delete_object_lock_config() {
         .send()
         .await
         .unwrap();
-    let _cleanup = CleanupGuard::new(&ctx, &bucket_name);
+    let _cleanup = CleanupGuard::new(&ctx.client, &bucket_name);
 
     const DURATION_DAYS: i32 = 7;
     let config =

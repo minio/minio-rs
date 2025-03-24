@@ -13,23 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-
-use crate::common::{TestContext, create_bucket_helper, rand_object_name};
-use minio::s3::builders::ObjectToDelete;
 use minio::s3::response::PutObjectContentResponse;
 use minio::s3::types::ToStream;
+use minio_common::test_context::TestContext;
+use minio_common::utils::rand_object_name;
 use tokio_stream::StreamExt;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn list_objects() {
+async fn list_objects(use_api_v1: bool, include_versions: bool) {
     const N_OBJECTS: usize = 3;
     let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
+    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
     let mut names: Vec<String> = Vec::new();
     for _ in 1..=N_OBJECTS {
-        let object_name = rand_object_name();
+        let object_name: String = rand_object_name();
         let resp: PutObjectContentResponse = ctx
             .client
             .put_object_content(&bucket_name, &object_name, "hello world")
@@ -37,10 +34,17 @@ async fn list_objects() {
             .await
             .unwrap();
         assert_eq!(resp.bucket, bucket_name);
+        assert_eq!(resp.object, object_name);
         names.push(object_name);
     }
 
-    let mut stream = ctx.client.list_objects(&bucket_name).to_stream().await;
+    let mut stream = ctx
+        .client
+        .list_objects(&bucket_name)
+        .use_api_v1(use_api_v1)
+        .include_versions(include_versions)
+        .to_stream()
+        .await;
 
     let mut count = 0;
     while let Some(items) = stream.next().await {
@@ -51,22 +55,24 @@ async fn list_objects() {
         }
     }
     assert_eq!(count, N_OBJECTS);
+}
 
-    let del_items: Vec<ObjectToDelete> = names
-        .iter()
-        .map(|v| ObjectToDelete::from(v.as_str()))
-        .collect();
-    let mut resp = ctx
-        .client
-        .remove_objects(&bucket_name, del_items.into_iter())
-        .verbose_mode(true)
-        .to_stream()
-        .await;
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn list_objects_v1_no_versions() {
+    list_objects(true, false).await;
+}
 
-    while let Some(item) = resp.next().await {
-        let res = item.unwrap();
-        for obj in res.result.iter() {
-            assert!(obj.is_deleted());
-        }
-    }
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn list_objects_v1_with_versions() {
+    list_objects(true, true).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn list_objects_v2_no_versions() {
+    list_objects(false, false).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn list_objects_v2_with_versions() {
+    list_objects(false, true).await;
 }

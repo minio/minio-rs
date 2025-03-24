@@ -13,20 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-
-use crate::common::{TestContext, create_bucket_helper, rand_object_name};
 use minio::s3::args::SelectObjectContentArgs;
-use minio::s3::response::RemoveObjectResponse;
 use minio::s3::types::{
-    CsvInputSerialization, CsvOutputSerialization, FileHeaderInfo, QuoteFields, S3Api,
-    SelectRequest,
+    CsvInputSerialization, CsvOutputSerialization, FileHeaderInfo, QuoteFields, SelectRequest,
 };
+use minio_common::test_context::TestContext;
+use minio_common::utils::rand_object_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn select_object_content() {
     let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
+    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
     let object_name = rand_object_name();
 
     let mut data = String::new();
@@ -81,11 +78,4 @@ async fn select_object_content() {
         got += core::str::from_utf8(&buf[..size]).unwrap();
     }
     assert_eq!(got, data);
-    let resp: RemoveObjectResponse = ctx
-        .client
-        .remove_object(&bucket_name, object_name.as_str())
-        .send()
-        .await
-        .unwrap();
-    assert!(!resp.is_delete_marker);
 }

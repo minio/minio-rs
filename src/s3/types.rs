@@ -31,6 +31,7 @@ use xmltree::Element;
 use std::collections::HashMap;
 use std::fmt;
 
+#[derive(Clone)]
 pub struct S3Request<'a> {
     pub(crate) client: &'a Client,
 
@@ -130,13 +131,37 @@ pub trait FromS3Response: Sized {
     ) -> Result<Self, Error>;
 }
 
+/// A trait for interacting with the S3 API, providing a unified interface
+/// for sending requests and handling responses.
 #[async_trait]
 pub trait S3Api: ToS3Request {
+    /// The associated response type that must implement `FromS3Response`.
     type S3Response: FromS3Response;
 
+    /// Sends an S3 request and processes the response.
+    ///
+    /// # Returns
+    /// - `Ok(Self::S3Response)`: If the request is successful and the response can be parsed.
+    /// - `Err(Error)`: If there is a failure in request execution or response processing.
+    ///
+    /// # Example Usage
+    /// ```ignore
+    /// use minio::s3::types::S3Api;
+    /// async fn example(api: &impl S3Api) {
+    ///     match api.send().await {
+    ///         Ok(response) => println!("Success: {:?}", response),
+    ///         Err(err) => eprintln!("Error: {:?}", err),
+    ///     }
+    /// }
+    /// ```
     async fn send(&self) -> Result<Self::S3Response, Error> {
+        // Convert the implementing type into an S3 request
         let mut req = self.to_s3request()?;
+
+        // Execute the request and await the response
         let resp: Result<reqwest::Response, Error> = req.execute().await;
+
+        // Convert the response into the associated response type
         Self::S3Response::from_s3response(req, resp).await
     }
 }
