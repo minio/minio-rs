@@ -519,7 +519,7 @@ impl ToS3Request for UploadPart {
         .object(Some(&self.object))
         .query_params(query_params)
         .headers(headers)
-        .body(Some(self.data.clone()));
+        .body(Some(self.data.clone())); // Clone? really?
 
         Ok(req)
     }
@@ -599,7 +599,7 @@ impl S3Api for PutObject {
     type S3Response = PutObjectResponse;
 }
 
-fn object_write_args_headers(
+pub(crate) fn object_write_args_headers(
     extra_headers: Option<&Multimap>,
     user_metadata: Option<&Multimap>,
     sse: &Option<Arc<dyn Sse>>,
@@ -788,16 +788,24 @@ impl PutObjectContent {
     }
 
     pub async fn send(mut self) -> Result<PutObjectContentResponse, Error> {
-        check_bucket_name(&self.bucket, true)?;
+        let client = self.client.clone().ok_or(Error::NoClientProvided)?;
 
-        if self.object.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
+        {
+            check_bucket_name(&self.bucket, true)?;
+
+            if self.object.is_empty() {
+                return Err(Error::InvalidObjectName(String::from(
+                    "object name cannot be empty",
+                )));
+            }
+            if let Some(v) = &self.sse {
+                if v.tls_required() && !client.is_secure() {
+                    return Err(Error::SseTlsRequired(None));
+                }
+            }
         }
 
-        let input_content = std::mem::take(&mut self.input_content);
-        self.content_stream = input_content
+        self.content_stream = std::mem::take(&mut self.input_content)
             .to_content_stream()
             .await
             .map_err(Error::IOError)?;
@@ -805,21 +813,13 @@ impl PutObjectContent {
         // object_size may be Size::Unknown.
         let object_size = self.content_stream.get_size();
 
-        let (psize, expected_parts) = calc_part_info(object_size, self.part_size)?;
+        let (part_size, n_expected_parts) = calc_part_info(object_size, self.part_size)?;
         // Set the chosen part size and part count.
-        self.part_size = Size::Known(psize);
-        self.part_count = expected_parts;
-
-        let client = self.client.clone().ok_or(Error::NoClientProvided)?;
-
-        if let Some(v) = &self.sse {
-            if v.tls_required() && !client.is_secure() {
-                return Err(Error::SseTlsRequired(None));
-            }
-        }
+        self.part_size = Size::Known(part_size);
+        self.part_count = n_expected_parts;
 
         // Read the first part.
-        let seg_bytes = self.content_stream.read_upto(psize as usize).await?;
+        let seg_bytes = self.content_stream.read_upto(part_size as usize).await?;
 
         // In the first part read, if:
         //
@@ -827,22 +827,21 @@ impl PutObjectContent {
         //   - we are expecting only one part to be uploaded,
         //
         // we upload it as a simple put object.
-        if (object_size.is_unknown() && (seg_bytes.len() as u64) < psize)
-            || expected_parts == Some(1)
+        if (object_size.is_unknown() && (seg_bytes.len() as u64) < part_size)
+            || n_expected_parts == Some(1)
         {
             let size = seg_bytes.len() as u64;
-            let po = self.to_put_object(seg_bytes);
-            let res = po.send().await?;
+            let resp: PutObjectResponse = self.to_put_object(seg_bytes).send().await?;
             return Ok(PutObjectContentResponse {
-                headers: res.headers,
+                headers: resp.headers,
                 bucket: self.bucket,
                 object: self.object,
-                location: res.location,
+                location: resp.location,
                 object_size: size,
-                etag: res.etag,
-                version_id: res.version_id,
+                etag: resp.etag,
+                version_id: resp.version_id,
             });
-        } else if object_size.is_known() && (seg_bytes.len() as u64) < psize {
+        } else if object_size.is_known() && (seg_bytes.len() as u64) < part_size {
             // Not enough data!
             let expected = object_size.as_u64().unwrap();
             let got = seg_bytes.len() as u64;
@@ -851,12 +850,11 @@ impl PutObjectContent {
 
         // Otherwise, we start a multipart upload.
         let create_mpu = self.to_create_multipart_upload();
-
         let create_mpu_resp = create_mpu.send().await?;
 
         let mpu_res = self
             .send_mpu(
-                psize,
+                part_size,
                 create_mpu_resp.upload_id.clone(),
                 object_size,
                 seg_bytes,
@@ -873,9 +871,10 @@ impl PutObjectContent {
         mpu_res
     }
 
+    /// multipart upload
     async fn send_mpu(
         &mut self,
-        psize: u64,
+        part_size: u64,
         upload_id: String,
         object_size: Size,
         first_part: SegmentedBytes,
@@ -891,18 +890,23 @@ impl PutObjectContent {
         let mut first_part = Some(first_part);
         let mut total_read = 0;
         while !done {
-            let part_content = {
+            let part_content: SegmentedBytes = {
                 if let Some(v) = first_part.take() {
                     v
                 } else {
-                    self.content_stream.read_upto(psize as usize).await?
+                    self.content_stream.read_upto(part_size as usize).await?
                 }
             };
             part_number += 1;
             let buffer_size = part_content.len() as u64;
             total_read += buffer_size;
 
-            assert!(buffer_size <= psize, "{:?} <= {:?}", buffer_size, psize);
+            assert!(
+                buffer_size <= part_size,
+                "{:?} <= {:?}",
+                buffer_size,
+                part_size
+            );
 
             if buffer_size == 0 && part_number > 1 {
                 // We are done as we uploaded at least 1 part and we have
@@ -932,7 +936,7 @@ impl PutObjectContent {
             });
 
             // Finally check if we are done.
-            if buffer_size < psize {
+            if buffer_size < part_size {
                 done = true;
             }
         }
@@ -1050,7 +1054,10 @@ pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 
 /// Returns the size of each part to upload and the total number of parts. The
 /// number of parts is `None` when the object size is unknown.
-fn calc_part_info(object_size: Size, part_size: Size) -> Result<(u64, Option<u16>), Error> {
+pub(crate) fn calc_part_info(
+    object_size: Size,
+    part_size: Size,
+) -> Result<(u64, Option<u16>), Error> {
     // Validate arguments against limits.
     if let Size::Known(v) = part_size {
         if v < MIN_PART_SIZE {

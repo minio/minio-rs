@@ -28,6 +28,7 @@ use crate::s3::utils::{
     UtcTime, copy_slice, crc32, from_http_header_value, from_iso8601utc, get_text, uint32,
 };
 
+mod append_object;
 mod bucket_exists;
 mod delete_bucket_encryption;
 mod delete_bucket_lifecycle;
@@ -70,6 +71,7 @@ mod set_object_lock_config;
 mod set_object_retention;
 mod set_object_tags;
 
+pub use append_object::AppendObjectResponse;
 pub use bucket_exists::BucketExistsResponse;
 pub use delete_bucket_encryption::DeleteBucketEncryptionResponse;
 pub use delete_bucket_lifecycle::DeleteBucketLifecycleResponse;
