@@ -66,6 +66,8 @@ impl Client {
         UploadPart::new(bucket, object, upload_id, part_number, data).client(self)
     }
 
+    /// Creates a PutObjectContent request builder to upload data to MinIO/S3.
+    /// The content is streamed, and this higher-level API handles multipart uploads transparently.
     pub fn put_object_content(
         &self,
         bucket: &str,

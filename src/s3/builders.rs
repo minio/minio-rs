@@ -15,6 +15,7 @@
 
 //! Argument builders for [minio::s3::client::Client](crate::s3::client::Client) APIs
 
+mod append_object;
 mod bucket_common;
 mod bucket_exists;
 mod delete_bucket_encryption;
@@ -59,6 +60,7 @@ mod set_object_lock_config;
 mod set_object_retention;
 mod set_object_tags;
 
+pub use append_object::*;
 pub use bucket_common::*;
 pub use bucket_exists::*;
 pub use delete_bucket_encryption::*;

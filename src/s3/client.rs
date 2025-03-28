@@ -41,6 +41,7 @@ use reqwest::Body;
 
 use xmltree::Element;
 
+mod append_object;
 mod bucket_exists;
 mod delete_bucket_encryption;
 mod delete_bucket_lifecycle;
