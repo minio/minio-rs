@@ -981,18 +981,18 @@ impl<'a> GetPresignedObjectUrlArgs<'a> {
 ///
 /// Condition elements and respective condition for Post policy is available <a
 /// href="https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html#sigv4-PolicyConditions">here</a>.
-pub struct PostPolicy<'a> {
-    pub region: Option<&'a str>,
-    pub bucket: &'a str,
+pub struct PostPolicy {
+    pub region: Option<String>,
+    pub bucket: String,
 
-    expiration: &'a UtcTime,
+    expiration: UtcTime,
     eq_conditions: HashMap<String, String>,
     starts_with_conditions: HashMap<String, String>,
     lower_limit: Option<usize>,
     upper_limit: Option<usize>,
 }
 
-impl<'a> PostPolicy<'a> {
+impl PostPolicy {
     const EQ: &'static str = "eq";
     const STARTS_WITH: &'static str = "starts-with";
     const ALGORITHM: &'static str = "AWS4-HMAC-SHA256";
@@ -1006,14 +1006,14 @@ impl<'a> PostPolicy<'a> {
     /// use minio::s3::utils::*;
     /// use chrono::Duration;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let policy = PostPolicy::new("my-bucket", &expiration).unwrap();
+    /// let policy = PostPolicy::new("my-bucket", expiration).unwrap();
     /// ```
-    pub fn new(bucket_name: &'a str, expiration: &'a UtcTime) -> Result<PostPolicy<'a>, Error> {
+    pub fn new(bucket_name: &str, expiration: UtcTime) -> Result<PostPolicy, Error> {
         check_bucket_name(bucket_name, true)?;
 
         Ok(PostPolicy {
             region: None,
-            bucket: bucket_name,
+            bucket: bucket_name.to_owned(),
             expiration,
             eq_conditions: HashMap::new(),
             starts_with_conditions: HashMap::new(),
@@ -1056,7 +1056,7 @@ impl<'a> PostPolicy<'a> {
     /// use minio::s3::utils::*;
     /// use chrono::Duration;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("my-bucket", &expiration).unwrap();
+    /// let mut policy = PostPolicy::new("my-bucket", expiration).unwrap();
     ///
     /// // Add condition that 'key' (object name) equals to 'my-objectname'
     /// policy.add_equals_condition("key", "my-object");
@@ -1092,7 +1092,7 @@ impl<'a> PostPolicy<'a> {
     /// use minio::s3::utils::*;
     /// use chrono::Duration;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("my-bucket", &expiration).unwrap();
+    /// let mut policy = PostPolicy::new("my-bucket", expiration).unwrap();
     /// policy.add_equals_condition("key", "my-object");
     ///
     /// policy.remove_equals_condition("key");
@@ -1109,7 +1109,7 @@ impl<'a> PostPolicy<'a> {
     /// use minio::s3::utils::*;
     /// use chrono::Duration;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("my-bucket", &expiration).unwrap();
+    /// let mut policy = PostPolicy::new("my-bucket", expiration).unwrap();
     ///
     /// // Add condition that 'Content-Type' starts with 'image/'
     /// policy.add_starts_with_condition("Content-Type", "image/");
@@ -1148,7 +1148,7 @@ impl<'a> PostPolicy<'a> {
     /// use minio::s3::utils::*;
     /// use chrono::Duration;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("my-bucket", &expiration).unwrap();
+    /// let mut policy = PostPolicy::new("my-bucket", expiration).unwrap();
     /// policy.add_starts_with_condition("Content-Type", "image/");
     ///
     /// policy.remove_starts_with_condition("Content-Type");
@@ -1165,7 +1165,7 @@ impl<'a> PostPolicy<'a> {
     /// use minio::s3::utils::*;
     /// use chrono::Duration;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("my-bucket", &expiration).unwrap();
+    /// let mut policy = PostPolicy::new("my-bucket", expiration).unwrap();
     ///
     /// // Add condition that 'content-length-range' is between 64kiB to 10MiB
     /// policy.add_content_length_range_condition(64 * 1024, 10 * 1024 * 1024);
@@ -1248,7 +1248,7 @@ impl<'a> PostPolicy<'a> {
         conditions.push(json!([PostPolicy::EQ, "$x-amz-date", amz_date]));
 
         let policy = json!({
-            "expiration": to_iso8601utc(*self.expiration),
+            "expiration": to_iso8601utc(self.expiration),
             "conditions": conditions,
         });
 

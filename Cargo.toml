@@ -24,7 +24,7 @@ ring = ["dep:ring"]
 
 [dependencies]
 async-recursion = "1.1.1"
-async-trait = "0.1.87"
+async-trait = "0.1.88"
 base64 = "0.22.1"
 byteorder = "1.5.0"
 bytes = "1.10.1"
@@ -36,11 +36,9 @@ env_logger = "0.11.7"
 futures-util = "0.3.31"
 hex = "0.4.3"
 hmac = { version = "0.12.1", optional = true }
-#home = "0.5.9"
-http = "1.2.0"
 hyper = { version = "1.6.0", features = ["full"] }
 lazy_static = "1.5.0"
-log = "0.4.26"
+log = "0.4.27"
 md5 = "0.7.0"
 multimap = "0.10.0"
 percent-encoding = "2.3.1"
@@ -50,17 +48,24 @@ ring = { version = "0.17.14", optional = true, default-features = false, feature
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 sha2 = { version = "0.10.8", optional = true }
-tokio = { version = "1.44.0", features = ["full"] }
+tokio = { version = "1.44.1", features = ["full"] }
 tokio-stream = "0.1.17"
-tokio-util = { version = "0.7.13", features = ["io"] }
+tokio-util = { version = "0.7.14", features = ["io"] }
 urlencoding = "2.1.3"
 xmltree = "0.11.0"
 futures = "0.3.31"
+http = "1.3.1"
 
 [dev-dependencies]
-async-std = { version = "1.13.0", features = ["attributes", "tokio1"] }
-clap = { version = "4.5.31", features = ["derive"] }
+minio_common = { path = "./common" }
+async-std = { version = "1.13.1", features = ["attributes", "tokio1"] }
+clap = { version = "4.5.34", features = ["derive"] }
 quickcheck = "1.0.3"
+criterion = "0.5.1"
+
+[lib]
+name = "minio"
+path = "src/lib.rs"
 
 [[example]]
 name = "file_uploader"
@@ -70,3 +75,8 @@ name = "file_downloader"
 
 [[example]]
 name = "object_prompt"
+
+[[bench]]
+name = "s3-api"
+path = "benches/s3/api_benchmarks.rs"
+harness = false

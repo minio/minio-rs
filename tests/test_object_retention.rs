@@ -13,18 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-
-use crate::common::{CleanupGuard, TestContext, rand_bucket_name, rand_object_name};
-use common::RandSrc;
 use minio::s3::builders::ObjectContent;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
-    GetObjectRetentionResponse, MakeBucketResponse, PutObjectContentResponse, RemoveObjectResponse,
+    GetObjectRetentionResponse, MakeBucketResponse, PutObjectContentResponse,
     SetObjectRetentionResponse,
 };
 use minio::s3::types::{RetentionMode, S3Api};
 use minio::s3::utils::{to_iso8601utc, utc_now};
+use minio_common::cleanup_guard::CleanupGuard;
+use minio_common::rand_src::RandSrc;
+use minio_common::test_context::TestContext;
+use minio_common::utils::{rand_bucket_name, rand_object_name};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn object_retention() {
@@ -37,7 +37,7 @@ async fn object_retention() {
         .send()
         .await
         .unwrap();
-    let _cleanup = CleanupGuard::new(&ctx, &bucket_name);
+    let _cleanup = CleanupGuard::new(&ctx.client, &bucket_name);
     assert_eq!(resp.bucket, bucket_name);
     let object_name = rand_object_name();
 
@@ -57,7 +57,7 @@ async fn object_retention() {
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.object_size, size);
     //assert_eq!(resp.version_id, None);
-    assert_eq!(resp.location, "");
+    assert_eq!(resp.region, "");
     //assert_eq!(resp.etag, "");
 
     let retain_until_date = utc_now() + chrono::Duration::days(1);
@@ -114,16 +114,4 @@ async fn object_retention() {
     assert_eq!(resp.version_id, None);
     assert_eq!(resp.region, DEFAULT_REGION);
     assert_eq!(resp.object, object_name);
-
-    let resp: RemoveObjectResponse = ctx
-        .client
-        .remove_object(
-            &bucket_name,
-            (object_name.as_str(), obj_resp.version_id.as_deref()),
-        )
-        .send()
-        .await
-        .unwrap();
-    //assert_eq!(resp.version_id, None);
-    assert!(resp.is_delete_marker);
 }

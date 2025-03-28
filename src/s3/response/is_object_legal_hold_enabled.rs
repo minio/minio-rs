@@ -29,7 +29,7 @@ pub struct IsObjectLegalHoldEnabledResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
-    pub object_name: String,
+    pub object: String,
     pub version_id: Option<String>,
     pub enabled: bool,
 }
@@ -59,7 +59,7 @@ impl FromS3Response for IsObjectLegalHoldEnabledResponse {
                     headers,
                     region,
                     bucket,
-                    object_name,
+                    object: object_name,
                     version_id,
                     enabled: get_default_text(&root, "Status") == "ON",
                 })
@@ -71,7 +71,7 @@ impl FromS3Response for IsObjectLegalHoldEnabledResponse {
                     headers: HeaderMap::new(),
                     region,
                     bucket,
-                    object_name,
+                    object: object_name,
                     version_id,
                     enabled: false,
                 })

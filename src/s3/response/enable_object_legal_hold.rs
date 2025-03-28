@@ -26,7 +26,7 @@ pub struct EnableObjectLegalHoldResponse {
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
-    pub object_name: String,
+    pub object: String,
     pub version_id: Option<String>,
 }
 
@@ -50,7 +50,7 @@ impl FromS3Response for EnableObjectLegalHoldResponse {
             headers: resp.headers().clone(),
             region,
             bucket,
-            object_name,
+            object: object_name,
             version_id,
         })
     }

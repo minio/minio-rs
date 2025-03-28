@@ -13,19 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use minio::s3::client::DEFAULT_REGION;
-use minio::s3::response::BucketExistsResponse;
-use minio::s3::types::S3Api;
-use minio_common::test_context::TestContext;
+use crate::common_benches::{Ctx2, benchmark_s3_api};
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn bucket_exists() {
-    let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+use criterion::Criterion;
+use minio::s3::builders::ListBuckets;
 
-    let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
-
-    assert!(resp.exists);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+pub(crate) fn bench_list_buckets(criterion: &mut Criterion) {
+    benchmark_s3_api(
+        "list_buckets",
+        criterion,
+        || async { Ctx2::new().await },
+        |ctx| ListBuckets::new().client(&ctx.client),
+    )
 }

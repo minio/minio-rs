@@ -13,18 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-
-use crate::common::{TestContext, create_bucket_helper};
 use minio::s3::builders::VersioningStatus;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{GetBucketVersioningResponse, SetBucketVersioningResponse};
 use minio::s3::types::S3Api;
+use minio_common::test_context::TestContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn set_get_delete_bucket_versioning() {
+async fn set_get_bucket_versioning() {
     let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
+    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
     let resp: SetBucketVersioningResponse = ctx
         .client

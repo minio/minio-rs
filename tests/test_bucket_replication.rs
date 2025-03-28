@@ -13,81 +13,82 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-
-use crate::common::{TestContext, create_bucket_helper};
 use minio::s3::builders::VersioningStatus;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
     DeleteBucketReplicationResponse, GetBucketReplicationResponse, GetBucketVersioningResponse,
-    SetBucketReplicationResponse, SetBucketVersioningResponse,
+    SetBucketPolicyResponse, SetBucketReplicationResponse, SetBucketVersioningResponse,
 };
-use minio::s3::types::{
-    AndOperator, Destination, Filter, ReplicationConfig, ReplicationRule, S3Api,
+use minio::s3::types::{ReplicationConfig, S3Api};
+use minio_common::example::{
+    create_bucket_policy_config_example_for_replication, create_bucket_replication_config_example,
 };
-use std::collections::HashMap;
+use minio_common::test_context::TestContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_bucket_replication() {
     let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
+    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
-    let mut tags: HashMap<String, String> = HashMap::new();
-    tags.insert(String::from("key1"), String::from("value1"));
-    tags.insert(String::from("key2"), String::from("value2"));
+    let ctx2 = TestContext::new_from_env();
+    let (bucket_name2, _cleanup2) = ctx2.create_bucket_helper().await;
 
-    let config = ReplicationConfig {
-        role: Some("example1".to_string()),
-        rules: vec![ReplicationRule {
-            destination: Destination {
-                bucket_arn: String::from("REPLACE-WITH-ACTUAL-DESTINATION-BUCKET-ARN"),
-                access_control_translation: None,
-                account: None,
-                encryption_config: None,
-                metrics: None,
-                replication_time: None,
-                storage_class: None,
-            },
-            delete_marker_replication_status: None,
-            existing_object_replication_status: None,
-            filter: Some(Filter {
-                and_operator: Some(AndOperator {
-                    prefix: Some(String::from("TaxDocs")),
-                    tags: Some(tags),
-                }),
-                prefix: None,
-                tag: None,
-            }),
-            id: Some(String::from("rule1")),
-            prefix: None,
-            priority: Some(1),
-            source_selection_criteria: None,
-            delete_replication_status: Some(false),
-            status: true,
-        }],
-    };
+    {
+        let resp: SetBucketVersioningResponse = ctx
+            .client
+            .set_bucket_versioning(&bucket_name)
+            .versioning_status(VersioningStatus::Enabled)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.bucket, bucket_name);
+        assert_eq!(resp.region, DEFAULT_REGION);
 
-    let resp: SetBucketVersioningResponse = ctx
-        .client
-        .set_bucket_versioning(&bucket_name)
-        .versioning_status(VersioningStatus::Enabled)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+        let resp: SetBucketVersioningResponse = ctx
+            .client
+            .set_bucket_versioning(&bucket_name2)
+            .versioning_status(VersioningStatus::Enabled)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.bucket, bucket_name2);
+        assert_eq!(resp.region, DEFAULT_REGION);
 
-    let resp: GetBucketVersioningResponse = ctx
-        .client
-        .get_bucket_versioning(&bucket_name)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.status, Some(VersioningStatus::Enabled));
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+        let resp: GetBucketVersioningResponse = ctx
+            .client
+            .get_bucket_versioning(&bucket_name)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status, Some(VersioningStatus::Enabled));
+        assert_eq!(resp.bucket, bucket_name);
+        assert_eq!(resp.region, DEFAULT_REGION);
+
+        if false {
+            //TODO: to allow replication policy needs to be applied, but this fails
+            let config: String = create_bucket_policy_config_example_for_replication();
+            let _resp: SetBucketPolicyResponse = ctx
+                .client
+                .set_bucket_policy(&bucket_name)
+                .config(config.clone())
+                .send()
+                .await
+                .unwrap();
+
+            let _resp: SetBucketPolicyResponse = ctx
+                .client
+                .set_bucket_policy(&bucket_name2)
+                .config(config.clone())
+                .send()
+                .await
+                .unwrap();
+        }
+    }
+
+    let config: ReplicationConfig = create_bucket_replication_config_example(&bucket_name2);
 
     if false {
+        //TODO setup permissions that allow replication
         // TODO panic: called `Result::unwrap()` on an `Err` value: S3Error(ErrorResponse { code: "XMinioAdminRemoteTargetNotFoundError", message: "The remote target does not exist",
         let resp: SetBucketReplicationResponse = ctx
             .client

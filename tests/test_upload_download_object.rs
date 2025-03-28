@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-
-use crate::common::{RandReader, TestContext, create_bucket_helper, rand_object_name};
 use hex::ToHex;
 use minio::s3::response::PutObjectContentResponse;
 use minio::s3::types::S3Api;
+use minio_common::rand_reader::RandReader;
+use minio_common::test_context::TestContext;
+use minio_common::utils::rand_object_name;
 #[cfg(feature = "ring")]
 use ring::digest::{Context, SHA256};
 #[cfg(not(feature = "ring"))]
@@ -50,7 +50,7 @@ fn get_hash(filename: &String) -> String {
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn upload_download_object() {
     let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
+    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
     let object_name = rand_object_name();
 
     let size = 16_u64;
@@ -128,18 +128,4 @@ async fn upload_download_object() {
         .await
         .unwrap();
     assert_eq!(get_hash(&object_name), get_hash(&filename));
-
-    fs::remove_file(&object_name).unwrap();
-    fs::remove_file(&filename).unwrap();
-
-    ctx.client
-        .remove_object(&bucket_name, object_name.as_str())
-        .send()
-        .await
-        .unwrap();
-    ctx.client
-        .remove_object(&bucket_name, object_name.as_str())
-        .send()
-        .await
-        .unwrap();
 }

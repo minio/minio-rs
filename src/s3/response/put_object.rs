@@ -120,7 +120,7 @@ pub struct PutObjectContentResponse {
     pub headers: HeaderMap,
     pub bucket: String,
     pub object: String,
-    pub location: String,
+    pub region: String,
     pub object_size: u64,
     pub etag: String,
     pub version_id: Option<String>,

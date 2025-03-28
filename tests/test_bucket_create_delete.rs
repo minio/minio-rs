@@ -13,19 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-
-use crate::common::{TestContext, rand_bucket_name};
 use minio::s3::client::DEFAULT_REGION;
-use minio::s3::response::{BucketExistsResponse, RemoveBucketResponse};
+use minio::s3::response::{BucketExistsResponse, MakeBucketResponse, RemoveBucketResponse};
 use minio::s3::types::S3Api;
+use minio_common::test_context::TestContext;
+use minio_common::utils::rand_bucket_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn create_delete_bucket() {
     let ctx = TestContext::new_from_env();
     let bucket_name = rand_bucket_name();
 
-    ctx.client.make_bucket(&bucket_name).send().await.unwrap();
+    let resp: MakeBucketResponse = ctx.client.make_bucket(&bucket_name).send().await.unwrap();
+    assert_eq!(resp.bucket, bucket_name);
 
     let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
     assert!(resp.exists);

@@ -1,5 +1,3 @@
-use crate::common::{CleanupGuard, TestContext, create_bucket_helper};
-use minio::s3::response::ListBucketsResponse;
 // MinIO Rust Library for Amazon S3 Compatible Cloud Storage
 // Copyright 2025 MinIO, Inc.
 //
@@ -15,9 +13,10 @@ use minio::s3::response::ListBucketsResponse;
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use minio::s3::response::ListBucketsResponse;
 use minio::s3::types::S3Api;
-
-mod common;
+use minio_common::cleanup_guard::CleanupGuard;
+use minio_common::test_context::TestContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_buckets() {
@@ -27,7 +26,7 @@ async fn list_buckets() {
     let mut names: Vec<String> = Vec::new();
     let mut guards: Vec<CleanupGuard> = Vec::new();
     for _ in 1..=N_BUCKETS {
-        let (bucket_name, guard) = create_bucket_helper(&ctx).await;
+        let (bucket_name, guard) = ctx.create_bucket_helper().await;
         names.push(bucket_name);
         guards.push(guard);
     }
