@@ -38,8 +38,8 @@ pub struct RemoveObjectResponse {
 
 #[async_trait]
 impl FromS3Response for RemoveObjectResponse {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let resp = resp?;
@@ -118,8 +118,8 @@ impl DeleteResult {
 
 #[async_trait]
 impl FromS3Response for RemoveObjectsResponse {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let resp = resp?;

@@ -19,6 +19,7 @@ use crate::s3::error::Error;
 use crate::s3::response::SetObjectRetentionResponse;
 use crate::s3::types::{RetentionMode, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{Multimap, UtcTime, check_bucket_name, md5sum_hash, to_iso8601utc};
+use async_trait::async_trait;
 use bytes::Bytes;
 use http::Method;
 
@@ -98,8 +99,9 @@ impl S3Api for SetObjectRetention {
     type S3Response = SetObjectRetentionResponse;
 }
 
+#[async_trait]
 impl ToS3Request for SetObjectRetention {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
         //TODO move the following checks to a validate fn
         check_bucket_name(&self.bucket, true)?;
 
@@ -115,12 +117,8 @@ impl ToS3Request for SetObjectRetention {
             )));
         }
 
-        let mut headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
 
         if self.bypass_governance_mode {
             headers.insert(
@@ -128,13 +126,6 @@ impl ToS3Request for SetObjectRetention {
                 String::from("true"),
             );
         }
-
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
 
         if let Some(v) = &self.version_id {
             query_params.insert(String::from("versionId"), v.to_string());
@@ -157,16 +148,14 @@ impl ToS3Request for SetObjectRetention {
         headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
 
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(data)));
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::PUT)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(client, Method::PUT)
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
             .headers(headers)
-            .object(Some(&self.object))
-            .body(body);
-
-        Ok(req)
+            .object(Some(self.object))
+            .body(body))
     }
 }

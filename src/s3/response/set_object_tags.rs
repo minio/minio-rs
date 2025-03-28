@@ -17,6 +17,7 @@ use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
 use http::HeaderMap;
+use std::mem;
 
 /// Response of
 /// [set_object_tags()](crate::s3::client::Client::set_object_tags)
@@ -33,24 +34,22 @@ pub struct SetObjectTagsResponse {
 
 #[async_trait]
 impl FromS3Response for SetObjectTagsResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
             None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
             Some(v) => v.to_string(),
         };
-        let resp = resp?;
+        let mut resp = resp?;
 
-        let headers: HeaderMap = resp.headers().clone();
-        let region: String = req.get_computed_region();
-        let object: String = req.object.unwrap().into();
+        let object: String = req.object.unwrap();
         let version_id: Option<String> = req.query_params.get("versionId").cloned(); //TODO consider taking the version_id
 
         Ok(SetObjectTagsResponse {
-            headers,
-            region,
+            headers: mem::take(resp.headers_mut()),
+            region: req.inner_region,
             bucket,
             object,
             version_id,

@@ -40,8 +40,8 @@ impl FromS3Response
         Box<dyn Stream<Item = Result<NotificationRecords, Error>> + Unpin + Send>,
     )
 {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let resp = resp?;
@@ -76,7 +76,7 @@ impl FromS3Response
         Ok((
             ListenBucketNotificationResponse {
                 headers,
-                region: req.get_computed_region(),
+                region: req.inner_region,
                 bucket: req.bucket.unwrap().to_string(),
             },
             Box::new(record_stream),

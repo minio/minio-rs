@@ -22,15 +22,11 @@ use super::{
 
 /// ClientCore exposes lower-level APIs not exposed by the high-level client.
 #[derive(Debug, Clone)]
-pub struct ClientCore(Client);
+pub struct ClientCore(pub(crate) Client);
 
 impl ClientCore {
     pub fn new(client: &Client) -> Self {
         Self(client.clone())
-    }
-
-    pub(crate) fn inner(&self) -> &Client {
-        &self.0
     }
 
     /// Creates a builder to execute

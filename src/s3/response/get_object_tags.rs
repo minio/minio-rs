@@ -20,6 +20,7 @@ use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
 use std::collections::HashMap;
+use std::mem;
 use xmltree::Element;
 
 /// Response of
@@ -38,19 +39,18 @@ pub struct GetObjectTagsResponse {
 
 #[async_trait]
 impl FromS3Response for GetObjectTagsResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let bucket: String = match req.bucket {
             None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
             Some(v) => v.to_string(),
         };
-        let resp = resp?;
+        let mut resp = resp?;
 
-        let headers: HeaderMap = resp.headers().clone();
-        let region: String = req.get_computed_region();
-        let object: String = req.object.unwrap().into();
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+        let object: String = req.object.unwrap();
         let version_id: Option<String> = req.query_params.get("versionId").cloned(); //TODO consider taking the version_id
 
         let body = resp.bytes().await?;
@@ -65,7 +65,7 @@ impl FromS3Response for GetObjectTagsResponse {
 
         Ok(GetObjectTagsResponse {
             headers,
-            region,
+            region: req.inner_region,
             bucket,
             object,
             version_id,

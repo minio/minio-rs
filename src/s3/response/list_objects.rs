@@ -12,11 +12,11 @@
 
 //! Response types for ListObjects APIs
 
-use std::collections::HashMap;
-
 use async_trait::async_trait;
 use bytes::Buf;
 use reqwest::header::HeaderMap;
+use std::collections::HashMap;
+use std::mem;
 
 use crate::s3::{
     error::Error,
@@ -202,12 +202,12 @@ pub struct ListObjectsV1Response {
 
 #[async_trait]
 impl FromS3Response for ListObjectsV1Response {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let resp = resp?;
-        let headers = resp.headers().clone();
+        let mut resp = resp?;
+        let headers = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
         let xmltree_root = xmltree::Element::parse(body.reader())?;
         let root = Element::from(&xmltree_root);
@@ -257,8 +257,8 @@ pub struct ListObjectsV2Response {
 
 #[async_trait]
 impl FromS3Response for ListObjectsV2Response {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let resp = resp?;
@@ -316,8 +316,8 @@ pub struct ListObjectVersionsResponse {
 
 #[async_trait]
 impl FromS3Response for ListObjectVersionsResponse {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let resp = resp?;

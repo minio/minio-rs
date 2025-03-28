@@ -18,6 +18,7 @@ use crate::s3::error::Error;
 use crate::s3::response::IsObjectLegalHoldEnabledResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{Multimap, check_bucket_name};
+use async_trait::async_trait;
 use http::Method;
 
 /// Argument builder for [is_object_legal_hold_enabled()](Client::is_object_legal_hold_enabled) API
@@ -72,37 +73,25 @@ impl S3Api for IsObjectLegalHoldEnabled {
     type S3Response = IsObjectLegalHoldEnabledResponse;
 }
 
+#[async_trait]
 impl ToS3Request for IsObjectLegalHoldEnabled {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    async fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
+        let headers: Multimap = self.extra_headers.unwrap_or_default();
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         if let Some(v) = &self.version_id {
             query_params.insert(String::from("versionId"), v.to_string());
         }
         query_params.insert(String::from("legal-hold"), String::new());
 
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::GET)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(client, Method::GET)
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
             .headers(headers)
-            .object(Some(&self.object));
-
-        Ok(req)
+            .object(Some(self.object)))
     }
 }
