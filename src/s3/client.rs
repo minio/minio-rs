@@ -1075,7 +1075,7 @@ impl Client {
 
     pub async fn get_presigned_post_form_data(
         &self,
-        policy: &PostPolicy<'_>,
+        policy: &PostPolicy,
     ) -> Result<HashMap<String, String>, Error> {
         if self.provider.is_none() {
             return Err(Error::PostPolicyError(
@@ -1083,7 +1083,9 @@ impl Client {
             ));
         }
 
-        let region = self.get_region(policy.bucket, policy.region).await?;
+        let region = self
+            .get_region(&policy.bucket, policy.region.as_deref())
+            .await?;
         let creds = self.provider.as_ref().unwrap().fetch();
         policy.form_data(
             creds.access_key,

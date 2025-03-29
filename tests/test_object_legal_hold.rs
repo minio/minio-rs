@@ -13,9 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-
-use crate::common::{CleanupGuard, TestContext, rand_bucket_name, rand_object_name};
 use bytes::Bytes;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
@@ -23,6 +20,9 @@ use minio::s3::response::{
     IsObjectLegalHoldEnabledResponse, MakeBucketResponse, PutObjectContentResponse,
 };
 use minio::s3::types::S3Api;
+use minio_common::cleanup_guard::CleanupGuard;
+use minio_common::test_context::TestContext;
+use minio_common::utils::{rand_bucket_name, rand_object_name};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn object_legal_hold() {
@@ -35,7 +35,7 @@ async fn object_legal_hold() {
         .send()
         .await
         .unwrap();
-    let _cleanup = CleanupGuard::new(&ctx, &bucket_name);
+    let _cleanup = CleanupGuard::new(&ctx.client, &bucket_name);
     let object_name = rand_object_name();
 
     let data = Bytes::from("hello, world".to_string().into_bytes());
@@ -58,7 +58,7 @@ async fn object_legal_hold() {
         .await
         .unwrap();
     //println!("response of setting object legal hold: resp={:?}", resp);
-    assert_eq!(resp.object_name, object_name);
+    assert_eq!(resp.object, object_name);
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
     assert_eq!(resp.version_id, None);
@@ -72,7 +72,7 @@ async fn object_legal_hold() {
         .unwrap();
     //println!("response of getting object legal hold: resp={:?}", resp);
     assert!(!resp.enabled);
-    assert_eq!(resp.object_name, object_name);
+    assert_eq!(resp.object, object_name);
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
     assert_eq!(resp.version_id, None);
@@ -85,7 +85,7 @@ async fn object_legal_hold() {
         .await
         .unwrap();
     //println!("response of setting object legal hold: resp={:?}", resp);
-    assert_eq!(resp.object_name, object_name);
+    assert_eq!(resp.object, object_name);
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
     assert_eq!(resp.version_id, None);
@@ -99,7 +99,7 @@ async fn object_legal_hold() {
         .unwrap();
     //println!("response of getting object legal hold: resp={:?}", resp);
     assert!(resp.enabled);
-    assert_eq!(resp.object_name, object_name);
+    assert_eq!(resp.object, object_name);
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
     assert_eq!(resp.version_id, None);

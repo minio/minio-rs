@@ -1,39 +1,34 @@
-mod common;
+// MinIO Rust Library for Amazon S3 Compatible Cloud Storage
+// Copyright 2025 MinIO, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-use crate::common::{TestContext, create_bucket_helper};
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
     DeleteBucketNotificationResponse, GetBucketNotificationResponse, SetBucketNotificationResponse,
 };
-use minio::s3::types::{
-    NotificationConfig, PrefixFilterRule, QueueConfig, S3Api, SuffixFilterRule,
-};
+use minio::s3::types::{NotificationConfig, S3Api};
+use minio_common::example::create_bucket_notification_config_example;
+use minio_common::test_context::TestContext;
 
 const SQS_ARN: &str = "arn:minio:sqs::miniojavatest:webhook";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_bucket_notification() {
     let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
+    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
-    let config = NotificationConfig {
-        cloud_func_config_list: None,
-        queue_config_list: Some(vec![QueueConfig {
-            events: vec![
-                String::from("s3:ObjectCreated:Put"),
-                String::from("s3:ObjectCreated:Copy"),
-            ],
-            id: Some("".to_string()), //TODO or should this be NONE??
-            prefix_filter_rule: Some(PrefixFilterRule {
-                value: String::from("images"),
-            }),
-            suffix_filter_rule: Some(SuffixFilterRule {
-                value: String::from("pg"),
-            }),
-            queue: String::from(SQS_ARN),
-        }]),
-        topic_config_list: None,
-    };
+    let config: NotificationConfig = create_bucket_notification_config_example();
 
     let resp: SetBucketNotificationResponse = ctx
         .client

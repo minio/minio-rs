@@ -13,18 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-
-use crate::common::{TestContext, create_bucket_helper, rand_object_name};
 use http::Method;
 use minio::s3::args::GetPresignedObjectUrlArgs;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::GetPresignedObjectUrlResponse;
+use minio_common::test_context::TestContext;
+use minio_common::utils::rand_object_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn get_presigned_object_url() {
     let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = create_bucket_helper(&ctx).await;
+    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
     let object_name = rand_object_name();
     let resp: GetPresignedObjectUrlResponse = ctx
