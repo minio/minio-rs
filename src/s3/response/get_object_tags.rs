@@ -15,7 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::get_text;
+use crate::s3::utils::{get_text, take_bucket, take_object, take_version_id};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
@@ -43,12 +43,6 @@ impl FromS3Response for GetObjectTagsResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
-        let object = req
-            .object
-            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
         let mut resp = resp?;
 
         let headers: HeaderMap = mem::take(resp.headers_mut());
@@ -63,12 +57,12 @@ impl FromS3Response for GetObjectTagsResponse {
             tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
         }
 
-        Ok(GetObjectTagsResponse {
+        Ok(Self {
             headers,
             region: req.inner_region,
-            bucket,
-            object,
-            version_id: req.query_params.get("versionId").cloned(), //TODO consider taking the version_id
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
+            version_id: take_version_id(req.query_params),
             tags,
         })
     }

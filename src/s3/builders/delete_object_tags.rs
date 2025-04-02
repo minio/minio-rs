@@ -17,21 +17,21 @@ use crate::s3::Client;
 use crate::s3::error::Error;
 use crate::s3::response::DeleteObjectTagsResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, insert};
+use crate::s3::utils::{Multimap, check_bucket_name, check_object_name, insert};
 use http::Method;
 
 /// Argument builder for [delete_object_tags()](Client::delete_object_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct DeleteObjectTags {
-    pub(crate) client: Option<Client>,
+    client: Option<Client>,
 
-    pub(crate) extra_headers: Option<Multimap>,
-    pub(crate) extra_query_params: Option<Multimap>,
-    pub(crate) region: Option<String>,
-    pub(crate) bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-    pub(crate) object: String,
-    pub(crate) version_id: Option<String>,
+    object: String,
+    version_id: Option<String>,
 }
 
 impl DeleteObjectTags {
@@ -79,6 +79,7 @@ impl S3Api for DeleteObjectTags {
 impl ToS3Request for DeleteObjectTags {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
         let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         let mut query_params: Multimap = insert(self.extra_query_params, "tagging");

@@ -36,7 +36,7 @@ impl ToS3Request for GetBucketLifecycle {
         check_bucket_name(&self.bucket, true)?;
         let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let region: String = client.get_region_cached(&self.bucket, self.region.as_deref())?;
+        let region: String = client.get_region_cached(&self.bucket, &self.region)?;
 
         Ok(S3Request::new(client, Method::GET)
             .region(Some(region))

@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::s3::utils::{take_bucket, take_object};
 use crate::s3::{
     builders::ObjectContent,
     error::Error,
@@ -39,13 +40,8 @@ impl FromS3Response for GetObjectResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
-        let object = req
-            .object
-            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
         let mut resp = resp?;
+
         let headers = mem::take(resp.headers_mut());
 
         let etag: Option<String> = headers
@@ -61,11 +57,11 @@ impl FromS3Response for GetObjectResponse {
         let body = resp.bytes_stream().map_err(std::io::Error::other);
         let content = ObjectContent::new_from_stream(body, Some(content_length));
 
-        Ok(GetObjectResponse {
+        Ok(Self {
             headers,
-            region: req.region.unwrap_or("".to_string()),
-            bucket,
-            object,
+            region: req.inner_region,
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
             version_id,
             content,
             object_size: content_length,

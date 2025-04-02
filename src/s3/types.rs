@@ -30,19 +30,19 @@ use std::collections::HashMap;
 use std::fmt;
 use xmltree::Element;
 
-#[derive(Clone)]
+#[derive(Clone, Default, Debug)]
 pub struct S3Request {
     pub(crate) client: Client,
 
-    pub method: Method,
-    pub region: Option<String>,
-    pub bucket: Option<String>,
-    pub object: Option<String>,
-    pub query_params: Multimap,
-    pub headers: Multimap,
-    pub body: Option<SegmentedBytes>,
+    method: Method,
+    region: Option<String>,
+    pub(crate) bucket: Option<String>,
+    pub(crate) object: Option<String>,
+    pub(crate) query_params: Multimap,
+    headers: Multimap,
+    body: Option<SegmentedBytes>,
 
-    // Computed region
+    /// region computed by [`execute`]
     pub(crate) inner_region: String,
 }
 
@@ -51,13 +51,7 @@ impl S3Request {
         S3Request {
             client,
             method,
-            region: None,
-            bucket: None,
-            object: None,
-            query_params: Multimap::new(),
-            headers: Multimap::new(),
-            body: None,
-            inner_region: String::new(),
+            ..Default::default()
         }
     }
 
@@ -91,17 +85,15 @@ impl S3Request {
         self
     }
 
-    pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
-        // Lookup the region of the bucket if provided.
-        self.inner_region = if let Some(bucket) = &self.bucket {
-            self.client
-                .get_region_cached_async(bucket, self.region.as_deref())
-                .await?
-        } else {
-            DEFAULT_REGION.to_string()
-        };
+    fn compute_inner_region(&self) -> Result<String, Error> {
+        Ok(match &self.bucket {
+            Some(b) => self.client.get_region_cached(b, &self.region)?,
+            None => DEFAULT_REGION.to_string(),
+        })
+    }
 
-        // Execute the API request.
+    pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
+        self.inner_region = self.compute_inner_region()?;
         self.client
             .execute2(
                 self.method.clone(),
@@ -139,15 +131,6 @@ pub trait S3Api: ToS3Request {
         Self::S3Response::from_s3response(req, resp).await
     }
 }
-
-/*
-#[async_trait]
-pub trait RunS3High: Sized {
-    type S3Response: Sized;
-    /// Run consumes this builder and returns a `S3Response`.
-    async fn run(self) -> Result<Self::S3Response, Error>;
-}
-*/
 
 #[async_trait]
 pub trait ToStream: Sized {

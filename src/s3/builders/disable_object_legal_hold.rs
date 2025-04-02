@@ -18,7 +18,7 @@ use crate::s3::error::Error;
 use crate::s3::response::DisableObjectLegalHoldResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, insert, md5sum_hash};
+use crate::s3::utils::{Multimap, check_bucket_name, check_object_name, insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
 
@@ -77,6 +77,7 @@ impl S3Api for DisableObjectLegalHold {
 impl ToS3Request for DisableObjectLegalHold {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
         let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();

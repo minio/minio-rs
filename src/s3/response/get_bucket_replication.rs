@@ -15,6 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, ReplicationConfig, S3Request};
+use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
@@ -38,9 +39,6 @@ impl FromS3Response for GetBucketReplicationResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
         let mut resp = resp?;
 
         let headers: HeaderMap = mem::take(resp.headers_mut());
@@ -48,10 +46,10 @@ impl FromS3Response for GetBucketReplicationResponse {
         let root = Element::parse(body.reader())?;
         let config = ReplicationConfig::from_xml(&root)?;
 
-        Ok(GetBucketReplicationResponse {
+        Ok(Self {
             headers,
             region: req.inner_region,
-            bucket,
+            bucket: take_bucket(req.bucket)?,
             config,
         })
     }

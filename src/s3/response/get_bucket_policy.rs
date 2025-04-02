@@ -15,6 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;
@@ -36,21 +37,18 @@ impl FromS3Response for GetBucketPolicyResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
         match resp {
-            Ok(mut r) => Ok(GetBucketPolicyResponse {
+            Ok(mut r) => Ok(Self {
                 headers: mem::take(r.headers_mut()),
                 region: req.inner_region,
-                bucket,
+                bucket: take_bucket(req.bucket)?,
                 config: r.text().await?,
             }),
             Err(Error::S3Error(ref err)) if err.code == Error::NoSuchBucketPolicy.as_str() => {
-                Ok(GetBucketPolicyResponse {
+                Ok(Self {
                     headers: HeaderMap::new(),
                     region: req.inner_region,
-                    bucket,
+                    bucket: take_bucket(req.bucket)?,
                     config: String::from("{}"),
                 })
             }

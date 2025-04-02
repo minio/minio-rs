@@ -15,7 +15,9 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, RetentionMode, S3Request};
-use crate::s3::utils::{UtcTime, from_iso8601utc, get_option_text};
+use crate::s3::utils::{
+    UtcTime, from_iso8601utc, get_option_text, take_bucket, take_object, take_version_id,
+};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
@@ -43,13 +45,6 @@ impl FromS3Response for GetObjectRetentionResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
-        let object = req
-            .object
-            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
-
         match resp {
             Ok(mut r) => {
                 let headers = mem::take(r.headers_mut());
@@ -64,12 +59,12 @@ impl FromS3Response for GetObjectRetentionResponse {
                     _ => None,
                 };
 
-                Ok(GetObjectRetentionResponse {
+                Ok(Self {
                     headers,
                     region: req.inner_region,
-                    bucket,
-                    object,
-                    version_id: req.query_params.get("versionId").cloned(),
+                    bucket: take_bucket(req.bucket)?,
+                    object: take_object(req.object)?,
+                    version_id: take_version_id(req.query_params),
                     retention_mode,
                     retain_until_date,
                 })
@@ -77,12 +72,12 @@ impl FromS3Response for GetObjectRetentionResponse {
             Err(Error::S3Error(ref err))
                 if err.code == Error::NoSuchObjectLockConfiguration.as_str() =>
             {
-                Ok(GetObjectRetentionResponse {
+                Ok(Self {
                     headers: HeaderMap::new(),
                     region: req.inner_region,
-                    bucket,
-                    object,
-                    version_id: req.query_params.get("versionId").cloned(),
+                    bucket: take_bucket(req.bucket)?,
+                    object: take_object(req.object)?,
+                    version_id: take_version_id(req.query_params),
                     retention_mode: None,
                     retain_until_date: None,
                 })

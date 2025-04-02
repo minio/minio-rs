@@ -15,7 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request, SelectProgress};
-use crate::s3::utils::{copy_slice, crc32, get_text, uint32};
+use crate::s3::utils::{copy_slice, crc32, get_text, take_bucket, take_object, uint32};
 use async_trait::async_trait;
 use http::HeaderMap;
 use std::collections::{HashMap, VecDeque};
@@ -325,20 +325,13 @@ impl FromS3Response for SelectObjectContentResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
-        let object = req
-            .object
-            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
-
         let mut resp = resp?;
 
-        Ok(SelectObjectContentResponse {
+        Ok(Self {
             headers: mem::take(resp.headers_mut()),
             region: req.inner_region,
-            bucket: bucket,
-            object: object,
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
             progress: SelectProgress {
                 bytes_scanned: 0,
                 bytes_progressed: 0,

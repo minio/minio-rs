@@ -53,13 +53,13 @@ impl Client {
     /// ```
     pub fn select_object_content(
         &self,
-        bucket: &str,
-        object: &str,
+        bucket_name: &str,
+        object_name: &str,
         request: SelectRequest,
     ) -> SelectObjectContent {
-        SelectObjectContent::new(bucket)
+        SelectObjectContent::new(bucket_name)
             .client(self)
-            .object(object.to_string())
+            .object(object_name.to_owned())
             .request(request)
     }
 }

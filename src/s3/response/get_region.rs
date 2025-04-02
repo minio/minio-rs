@@ -16,6 +16,7 @@
 use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
@@ -39,9 +40,6 @@ impl FromS3Response for GetRegionResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
         let mut resp = resp?;
 
         let headers: HeaderMap = mem::take(resp.headers_mut());
@@ -53,10 +51,10 @@ impl FromS3Response for GetRegionResponse {
             location = String::from(DEFAULT_REGION);
         }
 
-        Ok(GetRegionResponse {
+        Ok(Self {
             headers,
             region: req.inner_region,
-            bucket,
+            bucket: take_bucket(req.bucket)?,
             region_response: location,
         })
     }

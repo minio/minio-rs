@@ -19,7 +19,7 @@ use crate::s3::response::SelectObjectContentResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::SseCustomerKey;
 use crate::s3::types::{S3Api, S3Request, SelectRequest, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, insert, md5sum_hash};
+use crate::s3::utils::{Multimap, check_bucket_name, check_object_name, insert, md5sum_hash};
 use async_trait::async_trait;
 use bytes::Bytes;
 use http::Method;
@@ -99,12 +99,13 @@ impl ToS3Request for SelectObjectContent {
         let client: Client = self.client.ok_or(Error::NoClientProvided)?;
         {
             check_bucket_name(&self.bucket, true)?;
+            check_object_name(&self.object)?;
 
             if self.ssec.is_some() && !client.base_url.https {
                 return Err(Error::SseTlsRequired(None));
             }
         }
-        let region: String = client.get_region_cached(&self.bucket, self.region.as_deref())?;
+        let region: String = client.get_region_cached(&self.bucket, &self.region)?;
         let data = self.request.to_xml();
         let bytes: Bytes = data.into();
 

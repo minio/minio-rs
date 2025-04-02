@@ -22,6 +22,7 @@ use http::Method;
 use std::pin::Pin;
 use tokio_stream::iter as stream_iter;
 
+use crate::s3::utils::check_object_name;
 use crate::s3::{
     Client,
     client_core::ClientCore,
@@ -34,7 +35,7 @@ use crate::s3::{
 // region: object-to-delete
 /// Specify an object to be deleted. The object can be specified by key or by
 /// key and version_id via the From trait.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ObjectToDelete {
     key: String,
     version_id: Option<String>,
@@ -44,7 +45,7 @@ pub struct ObjectToDelete {
 impl From<&str> for ObjectToDelete {
     fn from(key: &str) -> Self {
         ObjectToDelete {
-            key: key.to_string(),
+            key: key.to_owned(),
             version_id: None,
         }
     }
@@ -73,7 +74,7 @@ impl From<(&str, Option<&str>)> for ObjectToDelete {
 
 // region: remove-object
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct RemoveObject {
     client: Option<Client>,
 
@@ -89,16 +90,9 @@ pub struct RemoveObject {
 impl RemoveObject {
     pub fn new(bucket: &str, object: impl Into<ObjectToDelete>) -> Self {
         Self {
-            client: None,
-
             bucket: bucket.to_string(),
             object: object.into(),
-
-            bypass_governance_mode: false,
-
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
+            ..Default::default()
         }
     }
 
@@ -135,6 +129,7 @@ impl S3Api for RemoveObject {
 impl ToS3Request for RemoveObject {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object.key)?;
         let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
@@ -154,7 +149,7 @@ impl ToS3Request for RemoveObject {
 // endregion: remove-object
 
 // region: remove-object-api
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct RemoveObjectsApi {
     client: Option<ClientCore>,
 
@@ -172,17 +167,9 @@ pub struct RemoveObjectsApi {
 impl RemoveObjectsApi {
     pub fn new(bucket: &str, objects: Vec<ObjectToDelete>) -> Self {
         RemoveObjectsApi {
-            client: None,
-
             bucket: bucket.to_string(),
             objects,
-
-            bypass_governance_mode: false,
-            verbose_mode: false,
-
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
+            ..Default::default()
         }
     }
 

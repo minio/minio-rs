@@ -116,7 +116,7 @@ impl ToS3Request for UploadPartCopy {
             }
         }
 
-        let region: String = client.get_region_cached(&self.bucket, self.region.as_deref())?;
+        let region: String = client.get_region_cached(&self.bucket, &self.region)?;
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         merge(&mut headers, self.headers.clone());
@@ -339,7 +339,7 @@ impl ToS3Request for CopyObjectInternal {
             }
         };
 
-        let region: String = client.get_region_cached(&self.bucket, self.region.as_deref())?;
+        let region: String = client.get_region_cached(&self.bucket, &self.region)?;
 
         Ok(S3Request::new(client, Method::PUT)
             .region(Some(region))

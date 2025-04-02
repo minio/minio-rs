@@ -15,7 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::get_default_text;
+use crate::s3::utils::{get_default_text, take_bucket, take_object, take_version_id};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
@@ -41,37 +41,30 @@ impl FromS3Response for IsObjectLegalHoldEnabledResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
-        let object = req
-            .object
-            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
-
         match resp {
             Ok(mut r) => {
                 let headers: HeaderMap = mem::take(r.headers_mut());
                 let body = r.bytes().await?;
                 let root = Element::parse(body.reader())?;
 
-                Ok(IsObjectLegalHoldEnabledResponse {
+                Ok(Self {
                     headers,
                     region: req.inner_region,
-                    bucket,
-                    object,
-                    version_id: req.query_params.get("versionId").cloned(),
+                    bucket: take_bucket(req.bucket)?,
+                    object: take_object(req.object)?,
+                    version_id: take_version_id(req.query_params),
                     enabled: get_default_text(&root, "Status") == "ON",
                 })
             }
             Err(Error::S3Error(ref err))
                 if err.code == Error::NoSuchObjectLockConfiguration.as_str() =>
             {
-                Ok(IsObjectLegalHoldEnabledResponse {
+                Ok(Self {
                     headers: HeaderMap::new(),
                     region: req.inner_region,
-                    bucket,
-                    object,
-                    version_id: req.query_params.get("versionId").cloned(),
+                    bucket: take_bucket(req.bucket)?,
+                    object: take_object(req.object)?,
+                    version_id: take_version_id(req.query_params),
                     enabled: false,
                 })
             }

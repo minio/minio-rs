@@ -19,6 +19,7 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
+use crate::s3::utils::{take_bucket, take_object};
 use crate::s3::{
     error::Error,
     types::{FromS3Response, S3Request},
@@ -42,12 +43,6 @@ impl FromS3Response for PutObjectResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
-        let object = req
-            .object
-            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
         let mut resp = resp?;
 
         let headers: HeaderMap = mem::take(resp.headers_mut());
@@ -62,11 +57,11 @@ impl FromS3Response for PutObjectResponse {
             .get("x-amz-version-id")
             .and_then(|v| v.to_str().ok().map(String::from));
 
-        Ok(PutObjectResponse {
+        Ok(Self {
             headers,
-            bucket,
-            object,
-            region: req.region.unwrap_or("".to_string()),
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
+            region: req.inner_region,
             etag,
             version_id,
         })
@@ -99,13 +94,12 @@ impl FromS3Response for CreateMultipartUploadResponse {
         let headers: HeaderMap = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
         let root = Element::parse(body.reader())?;
-        let region: String = req.region.unwrap_or("".to_string()); // Keep this since it defaults to an empty string
         let upload_id: String =
             get_text(&root, "UploadId").map_err(|e| Error::InvalidUploadId(e.to_string()))?;
 
         Ok(CreateMultipartUploadResponse {
             headers,
-            region,
+            region: req.inner_region,
             bucket,
             object,
             upload_id,

@@ -15,7 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request, SseConfig};
-use crate::s3::utils::{get_option_text, get_text};
+use crate::s3::utils::{get_option_text, get_text, take_bucket};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
@@ -39,9 +39,6 @@ impl FromS3Response for GetBucketEncryptionResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
         match resp {
             Ok(mut r) => {
                 let headers: HeaderMap = mem::take(r.headers_mut());
@@ -58,10 +55,10 @@ impl FromS3Response for GetBucketEncryptionResponse {
                         "<ApplyServerSideEncryptionByDefault> tag not found".into(),
                     ))?;
 
-                Ok(GetBucketEncryptionResponse {
+                Ok(Self {
                     headers,
                     region: req.inner_region,
-                    bucket,
+                    bucket: take_bucket(req.bucket)?,
                     config: SseConfig {
                         sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
                         kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID"),
@@ -71,10 +68,10 @@ impl FromS3Response for GetBucketEncryptionResponse {
             Err(Error::S3Error(ref err))
                 if err.code == "ServerSideEncryptionConfigurationNotFoundError" =>
             {
-                Ok(GetBucketEncryptionResponse {
+                Ok(Self {
                     headers: HeaderMap::new(),
                     region: req.inner_region,
-                    bucket,
+                    bucket: take_bucket(req.bucket)?,
                     config: Default::default(),
                 })
             }

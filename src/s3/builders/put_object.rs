@@ -202,6 +202,8 @@ impl S3Api for AbortMultipartUpload {
 impl ToS3Request for AbortMultipartUpload {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         let headers: Multimap = self.extra_headers.unwrap_or_default();
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
@@ -209,8 +211,6 @@ impl ToS3Request for AbortMultipartUpload {
             String::from("uploadId"),
             urlencode(&self.upload_id).to_string(),
         );
-
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         Ok(S3Request::new(client, Method::DELETE)
             .region(self.region)
@@ -248,9 +248,9 @@ impl S3Api for CompleteMultipartUpload {
 impl CompleteMultipartUpload {
     pub fn new(bucket: &str, object: &str, upload_id: &str, parts: Vec<PartInfo>) -> Self {
         CompleteMultipartUpload {
-            bucket: bucket.to_string(),
-            object: object.to_string(),
-            upload_id: upload_id.to_string(),
+            bucket: bucket.to_owned(),
+            object: object.to_owned(),
+            upload_id: upload_id.to_owned(),
             parts,
             ..Default::default()
         }
@@ -289,6 +289,7 @@ impl ToS3Request for CompleteMultipartUpload {
                 return Err(Error::EmptyParts("parts cannot be empty".into()));
             }
         }
+        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         // Set capacity of the byte-buffer based on the part count - attempting
         // to avoid extra allocations when building the XML payload.
@@ -313,7 +314,6 @@ impl ToS3Request for CompleteMultipartUpload {
         }
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.insert("uploadId".into(), self.upload_id.to_string());
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         Ok(S3Request::new(client, Method::POST)
             .region(self.region)

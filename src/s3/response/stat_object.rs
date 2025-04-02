@@ -14,7 +14,9 @@
 // limitations under the License.
 
 use crate::s3::types::{RetentionMode, parse_legal_hold};
-use crate::s3::utils::{UtcTime, from_http_header_value, from_iso8601utc};
+use crate::s3::utils::{
+    UtcTime, from_http_header_value, from_iso8601utc, take_bucket, take_object,
+};
 use crate::s3::{
     error::Error,
     types::{FromS3Response, S3Request},
@@ -42,14 +44,17 @@ pub struct StatObjectResponse {
     pub user_metadata: HashMap<String, String>,
 }
 
-impl StatObjectResponse {
-    pub fn new(
-        headers: HeaderMap,
-        region: String,
-        bucket: String,
-        object: String,
-    ) -> Result<StatObjectResponse, Error> {
-        let size = match headers.get("Content-Length") {
+#[async_trait]
+impl FromS3Response for StatObjectResponse {
+    async fn from_s3response(
+        req: S3Request,
+        resp: Result<reqwest::Response, Error>,
+    ) -> Result<Self, Error> {
+        let mut resp = resp?;
+
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+
+        let size: u64 = match headers.get("Content-Length") {
             Some(v) => v.to_str()?.parse::<u64>()?,
             None => 0_u64,
         };
@@ -96,11 +101,11 @@ impl StatObjectResponse {
             }
         }
 
-        Ok(StatObjectResponse {
+        Ok(Self {
             headers,
-            region,
-            bucket,
-            object,
+            region: req.inner_region,
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
             size,
             etag,
             version_id,
@@ -111,28 +116,5 @@ impl StatObjectResponse {
             delete_marker,
             user_metadata,
         })
-    }
-}
-
-#[async_trait]
-impl FromS3Response for StatObjectResponse {
-    async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
-        let object = req
-            .object
-            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
-        let mut resp = resp?;
-
-        StatObjectResponse::new(
-            mem::take(resp.headers_mut()),
-            req.inner_region,
-            bucket,
-            object,
-        )
     }
 }

@@ -47,11 +47,11 @@ impl Client {
     /// it calls ['abort_multipart_upload`].
     pub fn compose_object(
         &self,
-        bucket: &str,
+        bucket_name: &str,
         object_name: &str,
         sources: Vec<ComposeSource>,
     ) -> ComposeObject {
-        ComposeObject::new(bucket)
+        ComposeObject::new(bucket_name)
             .client(self)
             .object(object_name.to_owned())
             .sources(sources)

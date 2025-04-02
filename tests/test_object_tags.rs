@@ -46,7 +46,7 @@ async fn object_tags() {
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.object_size, size);
     assert_eq!(resp.version_id, None);
-    assert_eq!(&resp.region, "");
+    assert_eq!(resp.region, DEFAULT_REGION);
 
     let tags = HashMap::from([
         (String::from("Project"), String::from("Project One")),

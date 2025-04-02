@@ -15,6 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;
@@ -35,14 +36,12 @@ impl FromS3Response for RemoveBucketResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
+        let bucket: String = take_bucket(req.bucket)?;
         let mut resp = resp?;
 
         req.client.region_map.remove(&bucket);
 
-        Ok(RemoveBucketResponse {
+        Ok(Self {
             headers: mem::take(resp.headers_mut()),
             region: req.inner_region,
             bucket,

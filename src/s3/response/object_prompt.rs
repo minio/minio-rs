@@ -15,6 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::{take_bucket, take_object};
 use async_trait::async_trait;
 use std::mem;
 
@@ -32,24 +33,17 @@ impl FromS3Response for ObjectPromptResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
-        let object = req
-            .object
-            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
         let mut resp = resp?;
 
         let headers = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
         let prompt_response: String = String::from_utf8(body.to_vec())?;
-        let region: String = req.region.unwrap_or("".to_string()); // Keep this since it defaults to an empty string
 
-        Ok(ObjectPromptResponse {
+        Ok(Self {
             headers,
-            region,
-            bucket,
-            object,
+            region: req.inner_region,
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
             prompt_response,
         })
     }

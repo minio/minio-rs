@@ -17,7 +17,7 @@ use crate::s3::Client;
 use crate::s3::error::Error;
 use crate::s3::response::IsObjectLegalHoldEnabledResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, insert};
+use crate::s3::utils::{Multimap, check_bucket_name, check_object_name, insert};
 use http::Method;
 
 /// Argument builder for [is_object_legal_hold_enabled()](Client::is_object_legal_hold_enabled) API
@@ -75,6 +75,7 @@ impl S3Api for IsObjectLegalHoldEnabled {
 impl ToS3Request for IsObjectLegalHoldEnabled {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
         let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         let mut query_params: Multimap = insert(self.extra_query_params, "legal-hold");

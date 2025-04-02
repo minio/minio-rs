@@ -46,9 +46,9 @@ impl ObjectPrompt {
     pub fn new(bucket: &str, object: &str, prompt: &str) -> Self {
         ObjectPrompt {
             client: None,
-            bucket: bucket.to_string(),
-            object: object.to_string(),
-            prompt: prompt.to_string(),
+            bucket: bucket.to_owned(),
+            object: object.to_owned(),
+            prompt: prompt.to_owned(),
             ..Default::default()
         }
     }

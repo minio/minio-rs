@@ -56,8 +56,8 @@ async fn object_retention() {
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.object_size, size);
-    //assert_eq!(resp.version_id, None);
-    assert_eq!(resp.region, "");
+    assert_ne!(resp.version_id, None);
+    assert_eq!(resp.region, DEFAULT_REGION);
     //assert_eq!(resp.etag, "");
 
     let retain_until_date = utc_now() + chrono::Duration::days(1);
@@ -71,9 +71,9 @@ async fn object_retention() {
         .await
         .unwrap();
     assert_eq!(obj_resp.bucket, bucket_name);
+    assert_eq!(obj_resp.object, object_name);
     assert_eq!(obj_resp.version_id, None);
     assert_eq!(obj_resp.region, DEFAULT_REGION);
-    assert_eq!(obj_resp.object, object_name);
 
     let resp: GetObjectRetentionResponse = ctx
         .client
@@ -97,9 +97,9 @@ async fn object_retention() {
         .await
         .unwrap();
     assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
     assert_eq!(resp.version_id, None);
     assert_eq!(resp.region, DEFAULT_REGION);
-    assert_eq!(resp.object, object_name);
 
     let resp: GetObjectRetentionResponse = ctx
         .client
@@ -111,7 +111,7 @@ async fn object_retention() {
     assert!(resp.retention_mode.is_none());
     assert!(resp.retain_until_date.is_none());
     assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
     assert_eq!(resp.version_id, None);
     assert_eq!(resp.region, DEFAULT_REGION);
-    assert_eq!(resp.object, object_name);
 }

@@ -16,7 +16,7 @@
 use crate::s3::builders::VersioningStatus;
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::get_option_text;
+use crate::s3::utils::{get_option_text, take_bucket};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
@@ -41,9 +41,6 @@ impl FromS3Response for GetBucketVersioningResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
         let mut resp = resp?;
 
         let headers: HeaderMap = mem::take(resp.headers_mut());
@@ -57,10 +54,10 @@ impl FromS3Response for GetBucketVersioningResponse {
             });
         let mfa_delete: Option<bool> = get_option_text(&root, "MFADelete").map(|v| v == "Enabled");
 
-        Ok(GetBucketVersioningResponse {
+        Ok(Self {
             headers,
             region: req.inner_region,
-            bucket,
+            bucket: take_bucket(req.bucket)?,
             status,
             mfa_delete,
         })

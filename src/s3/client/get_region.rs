@@ -23,10 +23,8 @@ use tokio::task;
 
 impl Client {
     /// Create a GetRegion request builder.
-    pub fn get_region(&self, bucket: &str, region: Option<&str>) -> GetRegion {
-        GetRegion::new(bucket)
-            .region(region.map(|s| s.to_string()))
-            .client(self)
+    pub fn get_region(&self, bucket: &str, region: Option<String>) -> GetRegion {
+        GetRegion::new(bucket).client(self).region(region)
     }
 
     /// Retrieves the region for the specified bucket name from the cache.
@@ -35,16 +33,16 @@ impl Client {
     pub async fn get_region_cached_async(
         &self,
         bucket: &str,
-        region: Option<&str>,
+        region: &Option<String>,
     ) -> Result<String, Error> {
-        if let Some(region) = region.filter(|v| !v.is_empty()) {
-            if !self.base_url.region.is_empty() && self.base_url.region != region {
+        if let Some(r) = region {
+            if !self.base_url.region.is_empty() && (&self.base_url.region != r) {
                 return Err(Error::RegionMismatch(
                     self.base_url.region.clone(),
-                    region.to_string(),
+                    r.to_owned(),
                 ));
             }
-            return Ok(region.to_string());
+            return Ok(r.to_owned());
         }
 
         if !self.base_url.region.is_empty() {
@@ -52,7 +50,7 @@ impl Client {
         }
 
         if bucket.is_empty() || self.provider.is_none() {
-            return Ok(DEFAULT_REGION.to_string());
+            return Ok(DEFAULT_REGION.to_owned());
         }
 
         if let Some(v) = self.region_map.get(bucket) {
@@ -60,20 +58,25 @@ impl Client {
         }
 
         // Fallback: Fetch and cache the region
-        let mut location = self
-            .get_region(bucket, region)
+        let mut r: String = self
+            .get_region(bucket, region.clone())
             .send()
             .await?
             .region_response;
-        if location.is_empty() {
-            location = DEFAULT_REGION.to_string();
+
+        if r.is_empty() {
+            r = DEFAULT_REGION.to_owned();
         }
 
-        self.region_map.insert(bucket.to_string(), location.clone());
-        Ok(location)
+        self.region_map.insert(bucket.to_owned(), r.clone());
+        Ok(r)
     }
 
-    pub fn get_region_cached(&self, bucket: &str, region: Option<&str>) -> Result<String, Error> {
+    pub fn get_region_cached(
+        &self,
+        bucket: &str,
+        region: &Option<String>,
+    ) -> Result<String, Error> {
         task::block_in_place(|| {
             tokio::runtime::Runtime::new()
                 .unwrap()

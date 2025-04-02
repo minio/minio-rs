@@ -154,6 +154,6 @@ impl FromS3Response for RemoveObjectsResponse {
             })
             .collect::<Result<Vec<DeleteResult>, Error>>()?;
 
-        Ok(RemoveObjectsResponse { headers, result })
+        Ok(Self { headers, result })
     }
 }

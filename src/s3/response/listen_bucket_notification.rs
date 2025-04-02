@@ -19,6 +19,7 @@ use std::mem;
 use tokio::io::AsyncBufReadExt;
 use tokio_util::io::StreamReader;
 
+use crate::s3::utils::take_bucket;
 use crate::s3::{
     error::Error,
     types::{FromS3Response, NotificationRecords, S3Request},
@@ -78,7 +79,7 @@ impl FromS3Response
             ListenBucketNotificationResponse {
                 headers,
                 region: req.inner_region,
-                bucket: req.bucket.unwrap().to_string(),
+                bucket: take_bucket(req.bucket)?,
             },
             Box::new(record_stream),
         ))

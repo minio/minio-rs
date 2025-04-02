@@ -158,7 +158,7 @@ impl ToS3Request for StatObject {
             query_params.insert("versionId".into(), v);
         }
 
-        let region: String = client.get_region_cached(&self.bucket, self.region.as_deref())?;
+        let region: String = client.get_region_cached(&self.bucket, &self.region)?;
 
         Ok(S3Request::new(client, Method::GET)
             .region(Some(region))

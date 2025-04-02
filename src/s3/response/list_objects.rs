@@ -425,7 +425,7 @@ impl From<ListObjectsV2Response> for ListObjectsResponse {
 
 impl From<ListObjectsV1Response> for ListObjectsResponse {
     fn from(value: ListObjectsV1Response) -> Self {
-        ListObjectsResponse {
+        Self {
             headers: value.headers,
             name: value.name,
             encoding_type: value.encoding_type,

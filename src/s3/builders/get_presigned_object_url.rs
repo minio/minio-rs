@@ -60,9 +60,7 @@ impl GetPresignedObjectUrl {
     }
 
     pub fn compute(self) -> Result<GetPresignedObjectUrlResponse, Error> {
-        let region: String = self
-            .client
-            .get_region_cached(&self.bucket, self.region.as_deref())?;
+        let region: String = self.client.get_region_cached(&self.bucket, &self.region)?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         if let Some(v) = &self.version_id {

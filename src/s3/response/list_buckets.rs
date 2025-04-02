@@ -53,6 +53,6 @@ impl FromS3Response for ListBucketsResponse {
             })
         }
 
-        Ok(ListBucketsResponse { headers, buckets })
+        Ok(Self { headers, buckets })
     }
 }

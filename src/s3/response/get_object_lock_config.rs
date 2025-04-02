@@ -15,6 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, ObjectLockConfig, S3Request};
+use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
@@ -38,19 +39,16 @@ impl FromS3Response for GetObjectLockConfigResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
         let mut resp = resp?;
 
         let headers = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
         let root = Element::parse(body.reader())?;
 
-        Ok(GetObjectLockConfigResponse {
+        Ok(Self {
             headers,
             region: req.inner_region,
-            bucket,
+            bucket: take_bucket(req.bucket)?,
             config: ObjectLockConfig::from_xml(&root)?,
         })
     }

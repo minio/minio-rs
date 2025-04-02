@@ -39,7 +39,7 @@ impl GetPresignedPolicyFormData {
     pub fn compute(&self) -> Result<HashMap<String, String>, Error> {
         let region: String = self
             .client
-            .get_region_cached(&self.policy.bucket, self.policy.region.as_deref())?;
+            .get_region_cached(&self.policy.bucket, &self.policy.region)?;
 
         let creds = self.client.provider.as_ref().unwrap().fetch();
         self.policy.form_data(

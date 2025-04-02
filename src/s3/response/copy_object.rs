@@ -15,7 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::get_text;
+use crate::s3::utils::{get_text, take_bucket, take_object};
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -39,12 +39,6 @@ impl FromS3Response for UploadPartCopyResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
-        let object = req
-            .object
-            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
         let mut resp = resp?;
 
         let headers: HeaderMap = mem::take(resp.headers_mut());
@@ -59,11 +53,11 @@ impl FromS3Response for UploadPartCopyResponse {
             .get("x-amz-version-id")
             .and_then(|v| v.to_str().ok().map(String::from));
 
-        Ok(UploadPartCopyResponse {
+        Ok(Self {
             headers,
             region: req.inner_region,
-            bucket,
-            object,
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
             etag,
             version_id,
         })
