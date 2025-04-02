@@ -41,13 +41,12 @@ impl FromS3Response for IsObjectLegalHoldEnabledResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
-
-        let object: String = req.object.unwrap();
-        let version_id: Option<String> = req.query_params.get("versionId").cloned();
+        let bucket = req
+            .bucket
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
+        let object = req
+            .object
+            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
 
         match resp {
             Ok(mut r) => {
@@ -60,7 +59,7 @@ impl FromS3Response for IsObjectLegalHoldEnabledResponse {
                     region: req.inner_region,
                     bucket,
                     object,
-                    version_id,
+                    version_id: req.query_params.get("versionId").cloned(),
                     enabled: get_default_text(&root, "Status") == "ON",
                 })
             }
@@ -72,7 +71,7 @@ impl FromS3Response for IsObjectLegalHoldEnabledResponse {
                     region: req.inner_region,
                     bucket,
                     object,
-                    version_id,
+                    version_id: req.query_params.get("versionId").cloned(),
                     enabled: false,
                 })
             }

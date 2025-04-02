@@ -769,8 +769,8 @@ impl ComposeObjectInternal {
                     let resp: UploadPartCopyResponse = match client
                         .upload_part_copy(&self.bucket)
                         .region(self.region.clone())
-                        .object(self.object.to_owned())
-                        .upload_id(upload_id.to_owned())
+                        .object(self.object.clone())
+                        .upload_id(upload_id.clone())
                         .part_number(part_number)
                         .headers(headers)
                         .send()

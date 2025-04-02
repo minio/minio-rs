@@ -26,16 +26,16 @@ use std::collections::HashMap;
 /// Argument builder for [set_object_tags()](Client::set_object_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct SetObjectTags {
-   client: Option<Client>,
+    client: Option<Client>,
 
-   extra_headers: Option<Multimap>,
-   extra_query_params: Option<Multimap>,
-   region: Option<String>,
-   bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-   object: String,
-   version_id: Option<String>,
-   tags: HashMap<String, String>,
+    object: String,
+    version_id: Option<String>,
+    tags: HashMap<String, String>,
 }
 
 impl SetObjectTags {

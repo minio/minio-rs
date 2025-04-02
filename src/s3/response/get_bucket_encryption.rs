@@ -39,10 +39,9 @@ impl FromS3Response for GetBucketEncryptionResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
+        let bucket = req
+            .bucket
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
         match resp {
             Ok(mut r) => {
                 let headers: HeaderMap = mem::take(r.headers_mut());
@@ -51,13 +50,13 @@ impl FromS3Response for GetBucketEncryptionResponse {
 
                 let rule = root
                     .get_mut_child("Rule")
-                    .ok_or(Error::XmlError(String::from("<Rule> tag not found")))?;
+                    .ok_or(Error::XmlError("<Rule> tag not found".into()))?;
 
                 let sse_by_default = rule
                     .get_mut_child("ApplyServerSideEncryptionByDefault")
-                    .ok_or(Error::XmlError(String::from(
-                        "<ApplyServerSideEncryptionByDefault> tag not found",
-                    )))?;
+                    .ok_or(Error::XmlError(
+                        "<ApplyServerSideEncryptionByDefault> tag not found".into(),
+                    ))?;
 
                 Ok(GetBucketEncryptionResponse {
                     headers,

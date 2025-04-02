@@ -23,15 +23,15 @@ use http::Method;
 /// Argument builder for [get_object_retention()](Client::get_object_retention) API
 #[derive(Clone, Debug, Default)]
 pub struct GetObjectRetention {
-   client: Option<Client>,
+    client: Option<Client>,
 
-   extra_headers: Option<Multimap>,
-   extra_query_params: Option<Multimap>,
-   region: Option<String>,
-   bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-   object: String,
-   version_id: Option<String>,
+    object: String,
+    version_id: Option<String>,
 }
 
 impl GetObjectRetention {

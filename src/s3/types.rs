@@ -827,10 +827,13 @@ impl SseConfig {
         data.push_str("<SSEAlgorithm>");
         data.push_str(&self.sse_algorithm);
         data.push_str("</SSEAlgorithm>");
-        if self.kms_master_key_id.is_some() {
-            data.push_str("<KMSMasterKeyID>");
-            data.push_str(self.kms_master_key_id.as_ref().unwrap());
-            data.push_str("</KMSMasterKeyID>");
+        match &self.kms_master_key_id {
+            Some(v) => {
+                data.push_str("<KMSMasterKeyID>");
+                data.push_str(v);
+                data.push_str("</KMSMasterKeyID>");
+            }
+            _ => {}
         }
         data.push_str(
             "</ApplyServerSideEncryptionByDefault></Rule></ServerSideEncryptionConfiguration>",

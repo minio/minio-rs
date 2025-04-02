@@ -35,11 +35,11 @@ impl FromS3Response for MakeBucketResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
+        let bucket = req
+            .bucket
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
         let mut resp = resp?;
+
         let region: String = req.inner_region;
         if !req.client.region_map.contains_key(&bucket) {
             req.client.region_map.insert(bucket.clone(), region.clone());

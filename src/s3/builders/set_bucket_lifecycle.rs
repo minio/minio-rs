@@ -25,14 +25,14 @@ use http::Method;
 /// Argument builder for [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API
 #[derive(Clone, Debug, Default)]
 pub struct SetBucketLifecycle {
-   client: Option<Client>,
+    client: Option<Client>,
 
-   extra_headers: Option<Multimap>,
-   extra_query_params: Option<Multimap>,
-   region: Option<String>,
-   bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-   config: LifecycleConfig,
+    config: LifecycleConfig,
 }
 
 impl SetBucketLifecycle {

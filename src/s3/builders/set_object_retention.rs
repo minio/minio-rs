@@ -27,18 +27,18 @@ use http::Method;
 /// Argument builder for [set_object_retention()](Client::set_object_retention) API
 #[derive(Clone, Debug, Default)]
 pub struct SetObjectRetention {
-   client: Option<Client>,
+    client: Option<Client>,
 
-   extra_headers: Option<Multimap>,
-   extra_query_params: Option<Multimap>,
-   region: Option<String>,
-   bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-   object: String,
-   version_id: Option<String>,
-   bypass_governance_mode: bool,
-   retention_mode: Option<RetentionMode>,
-   retain_until_date: Option<UtcTime>,
+    object: String,
+    version_id: Option<String>,
+    bypass_governance_mode: bool,
+    retention_mode: Option<RetentionMode>,
+    retain_until_date: Option<UtcTime>,
 }
 
 impl SetObjectRetention {

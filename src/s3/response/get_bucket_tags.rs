@@ -40,10 +40,9 @@ impl FromS3Response for GetBucketTagsResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
+        let bucket = req
+            .bucket
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
         match resp {
             Ok(mut r) => {
                 let headers: HeaderMap = mem::take(r.headers_mut());

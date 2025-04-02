@@ -39,10 +39,12 @@ impl FromS3Response for UploadPartCopyResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v,
-        };
+        let bucket = req
+            .bucket
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
+        let object = req
+            .object
+            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
         let mut resp = resp?;
 
         let headers: HeaderMap = mem::take(resp.headers_mut());
@@ -53,16 +55,15 @@ impl FromS3Response for UploadPartCopyResponse {
             get_text(&root, "ETag")?.trim_matches('"').to_string()
         };
 
-        let version_id: Option<String> = match headers.get("x-amz-version-id") {
-            Some(v) => Some(v.to_str()?.to_string()),
-            None => None,
-        };
+        let version_id: Option<String> = headers
+            .get("x-amz-version-id")
+            .and_then(|v| v.to_str().ok().map(String::from));
 
         Ok(UploadPartCopyResponse {
             headers,
             region: req.inner_region,
             bucket,
-            object: req.object.unwrap(),
+            object,
             etag,
             version_id,
         })
@@ -86,10 +87,12 @@ impl FromS3Response for CopyObjectInternalResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v,
-        };
+        let bucket = req
+            .bucket
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
+        let object = req
+            .object
+            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
         let mut resp = resp?;
 
         let headers: HeaderMap = mem::take(resp.headers_mut());
@@ -100,16 +103,15 @@ impl FromS3Response for CopyObjectInternalResponse {
             get_text(&root, "ETag")?.trim_matches('"').to_string()
         };
 
-        let version_id: Option<String> = match headers.get("x-amz-version-id") {
-            Some(v) => Some(v.to_str()?.to_string()),
-            None => None,
-        };
+        let version_id: Option<String> = headers
+            .get("x-amz-version-id")
+            .and_then(|v| v.to_str().ok().map(String::from));
 
         Ok(CopyObjectInternalResponse {
             headers,
             region: req.inner_region,
             bucket,
-            object: req.object.unwrap(),
+            object,
             etag,
             version_id,
         })

@@ -30,8 +30,8 @@ use xmltree::Element;
 pub struct SelectObjectContentResponse {
     pub headers: HeaderMap,
     pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
+    pub bucket: String,
+    pub object: String,
     pub progress: SelectProgress,
 
     resp: reqwest::Response,
@@ -325,17 +325,20 @@ impl FromS3Response for SelectObjectContentResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
+        let bucket = req
+            .bucket
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
+        let object = req
+            .object
+            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
+
         let mut resp = resp?;
 
         Ok(SelectObjectContentResponse {
             headers: mem::take(resp.headers_mut()),
             region: req.inner_region,
-            bucket_name: bucket,
-            object_name: req.object.unwrap(),
+            bucket: bucket,
+            object: object,
             progress: SelectProgress {
                 bytes_scanned: 0,
                 bytes_progressed: 0,

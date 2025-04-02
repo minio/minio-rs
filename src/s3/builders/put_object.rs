@@ -122,10 +122,8 @@ impl S3Api for CreateMultipartUpload {
 impl ToS3Request for CreateMultipartUpload {
     fn to_s3request(self) -> Result<S3Request, Error> {
         let client: Client = self.client.ok_or(Error::NoClientProvided)?;
-        {
-            check_bucket_name(&self.bucket, true)?;
-            check_object_name(&self.object)?;
-        }
+        check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
 
         let headers: Multimap = into_headers_put_object(
             self.extra_headers,
@@ -665,9 +663,9 @@ impl PutObjectContent {
         // object_size may be Size::Unknown.
         let object_size = self.content_stream.get_size();
 
-        let (psize, expected_parts) = calc_part_info(object_size, self.part_size)?;
+        let (part_size, expected_parts) = calc_part_info(object_size, self.part_size)?;
         // Set the chosen part size and part count.
-        self.part_size = Size::Known(psize);
+        self.part_size = Size::Known(part_size);
         self.part_count = expected_parts;
 
         let client = self.client.clone().ok_or(Error::NoClientProvided)?;
@@ -679,7 +677,7 @@ impl PutObjectContent {
         }
 
         // Read the first part.
-        let seg_bytes = self.content_stream.read_upto(psize as usize).await?;
+        let seg_bytes = self.content_stream.read_upto(part_size as usize).await?;
 
         // In the first part read, if:
         //
@@ -687,55 +685,90 @@ impl PutObjectContent {
         //   - we are expecting only one part to be uploaded,
         //
         // we upload it as a simple put object.
-        if (object_size.is_unknown() && (seg_bytes.len() as u64) < psize)
+        if (object_size.is_unknown() && (seg_bytes.len() as u64) < part_size)
             || expected_parts == Some(1)
         {
             let size = seg_bytes.len() as u64;
-            let po = self.to_put_object(seg_bytes);
-            let res = po.send().await?;
-            return Ok(PutObjectContentResponse {
+
+            let res: PutObjectResponse = PutObject(UploadPart {
+                client: self.client.clone(),
+                extra_headers: self.extra_headers.clone(),
+                extra_query_params: self.extra_query_params.clone(),
+                bucket: self.bucket.clone(),
+                object: self.object.clone(),
+                region: self.region.clone(),
+                user_metadata: self.user_metadata.clone(),
+                sse: self.sse.clone(),
+                tags: self.tags.clone(),
+                retention: self.retention.clone(),
+                legal_hold: self.legal_hold,
+                part_number: None,
+                upload_id: None,
+                data: seg_bytes,
+                content_type: self.content_type.clone(),
+            })
+            .send()
+            .await?;
+
+            Ok(PutObjectContentResponse {
                 headers: res.headers,
-                bucket: self.bucket,
-                object: self.object,
+                bucket: res.bucket,
+                object: res.object,
                 region: res.region,
                 object_size: size,
                 etag: res.etag,
                 version_id: res.version_id,
-            });
-        } else if object_size.is_known() && (seg_bytes.len() as u64) < psize {
+            })
+        } else if object_size.is_known() && (seg_bytes.len() as u64) < part_size {
             // Not enough data!
-            let expected = object_size.as_u64().unwrap();
-            let got = seg_bytes.len() as u64;
-            return Err(Error::InsufficientData(expected, got));
-        }
+            let expected: u64 = object_size.as_u64().unwrap();
+            let got: u64 = seg_bytes.len() as u64;
+            Err(Error::InsufficientData(expected, got))
+        } else {
+            let bucket: String = self.bucket.clone();
+            let object: String = self.object.clone();
 
-        // Otherwise, we start a multipart upload.
-        let create_mpu = self.to_create_multipart_upload();
+            // Otherwise, we start a multipart upload.
+            let create_mpu_resp: CreateMultipartUploadResponse = CreateMultipartUpload {
+                client: Some(client.clone()),
+                extra_headers: self.extra_headers.clone(),
+                extra_query_params: self.extra_query_params.clone(),
+                region: self.region.clone(),
+                bucket: self.bucket.clone(),
+                object: self.object.clone(),
+                user_metadata: self.user_metadata.clone(),
+                sse: self.sse.clone(),
+                tags: self.tags.clone(),
+                retention: self.retention.clone(),
+                legal_hold: self.legal_hold,
+                content_type: self.content_type.clone(),
+            }
+            .send()
+            .await?;
 
-        let create_mpu_resp = create_mpu.send().await?;
-
-        let mpu_res = self
-            .send_mpu(
-                psize,
-                create_mpu_resp.upload_id.clone(),
-                object_size,
-                seg_bytes,
-            )
-            .await;
-        if mpu_res.is_err() {
-            // If we failed to complete the multipart upload, we should abort it.
-            let _ =
-                AbortMultipartUpload::new(&self.bucket, &self.object, &create_mpu_resp.upload_id)
+            let mpu_res = self
+                .send_mpu(
+                    part_size,
+                    create_mpu_resp.upload_id.clone(),
+                    object_size,
+                    seg_bytes,
+                )
+                .await;
+            if mpu_res.is_err() {
+                // If we failed to complete the multipart upload, we should abort it.
+                let _ = AbortMultipartUpload::new(&bucket, &object, &create_mpu_resp.upload_id)
                     .client(&client)
                     .send()
                     .await;
+            }
+            mpu_res
         }
-        mpu_res
     }
 
+    /// send multi-part-upload
     async fn send_mpu(
-        &mut self,
-        psize: u64,
+        mut self,
+        part_size: u64,
         upload_id: String,
         object_size: Size,
         first_part: SegmentedBytes,
@@ -755,23 +788,27 @@ impl PutObjectContent {
                 if let Some(v) = first_part.take() {
                     v
                 } else {
-                    self.content_stream.read_upto(psize as usize).await?
+                    self.content_stream.read_upto(part_size as usize).await?
                 }
             };
             part_number += 1;
             let buffer_size = part_content.len() as u64;
             total_read += buffer_size;
 
-            assert!(buffer_size <= psize, "{:?} <= {:?}", buffer_size, psize);
+            assert!(
+                buffer_size <= part_size,
+                "{:?} <= {:?}",
+                buffer_size,
+                part_size
+            );
 
-            if buffer_size == 0 && part_number > 1 {
-                // We are done as we uploaded at least 1 part and we have
-                // reached the end of the stream.
+            if (buffer_size == 0) && (part_number > 1) {
+                // We are done as we uploaded at least 1 part and we have reached the end of the stream.
                 break;
             }
 
             // Check if we have too many parts to upload.
-            if self.part_count.is_none() && part_number > MAX_MULTIPART_COUNT {
+            if self.part_count.is_none() && (part_number > MAX_MULTIPART_COUNT) {
                 return Err(Error::TooManyParts);
             }
 
@@ -783,16 +820,35 @@ impl PutObjectContent {
             }
 
             // Upload the part now.
-            let upload_part = self.to_upload_part(part_content, &upload_id, part_number);
-            let upload_part_resp = upload_part.send().await?;
+            let resp: UploadPartResponse = UploadPart {
+                client: self.client.clone(),
+                extra_headers: self.extra_headers.clone(),
+                extra_query_params: self.extra_query_params.clone(),
+                bucket: self.bucket.clone(),
+                object: self.object.clone(),
+                region: self.region.clone(),
+                // User metadata is not sent with UploadPart.
+                user_metadata: None,
+                sse: self.sse.clone(),
+                tags: self.tags.clone(),
+                retention: self.retention.clone(),
+                legal_hold: self.legal_hold,
+                part_number: Some(part_number),
+                upload_id: Some(upload_id.to_string()),
+                data: part_content,
+                content_type: self.content_type.clone(),
+            }
+            .send()
+            .await?;
+
             parts.push(PartInfo {
                 number: part_number,
-                etag: upload_part_resp.etag,
+                etag: resp.etag,
                 size: buffer_size,
             });
 
             // Finally check if we are done.
-            if buffer_size < psize {
+            if buffer_size < part_size {
                 done = true;
             }
         }
@@ -807,99 +863,28 @@ impl PutObjectContent {
             }
         }
 
-        let complete_mpu = self.to_complete_multipart_upload(&upload_id, parts);
-        let res = complete_mpu.send().await?;
+        let res: CompleteMultipartUploadResponse = CompleteMultipartUpload {
+            client: self.client,
+            extra_headers: self.extra_headers,
+            extra_query_params: self.extra_query_params,
+            bucket: self.bucket,
+            object: self.object,
+            region: self.region,
+            parts,
+            upload_id,
+        }
+        .send()
+        .await?;
+
         Ok(PutObjectContentResponse {
             headers: res.headers,
-            bucket: self.bucket.clone(),
-            object: self.object.clone(),
+            bucket: res.bucket,
+            object: res.object,
             region: res.region,
             object_size: size,
             etag: res.etag,
             version_id: res.version_id,
         })
-    }
-}
-
-impl PutObjectContent {
-    fn to_put_object(&self, data: SegmentedBytes) -> PutObject {
-        PutObject(UploadPart {
-            client: self.client.clone(),
-            extra_headers: self.extra_headers.clone(),
-            extra_query_params: self.extra_query_params.clone(),
-            bucket: self.bucket.clone(),
-            object: self.object.clone(),
-            region: self.region.clone(),
-            user_metadata: self.user_metadata.clone(),
-            sse: self.sse.clone(),
-            tags: self.tags.clone(),
-            retention: self.retention.clone(),
-            legal_hold: self.legal_hold,
-            part_number: None,
-            upload_id: None,
-            data,
-            content_type: self.content_type.clone(),
-        })
-    }
-
-    fn to_upload_part(
-        &self,
-        data: SegmentedBytes,
-        upload_id: &str,
-        part_number: u16,
-    ) -> UploadPart {
-        UploadPart {
-            client: self.client.clone(),
-            extra_headers: self.extra_headers.clone(),
-            extra_query_params: self.extra_query_params.clone(),
-            bucket: self.bucket.clone(),
-            object: self.object.clone(),
-            region: self.region.clone(),
-            // User metadata is not sent with UploadPart.
-            user_metadata: None,
-            sse: self.sse.clone(),
-            tags: self.tags.clone(),
-            retention: self.retention.clone(),
-            legal_hold: self.legal_hold,
-            part_number: Some(part_number),
-            upload_id: Some(upload_id.to_string()),
-            data,
-            content_type: self.content_type.clone(),
-        }
-    }
-
-    fn to_complete_multipart_upload(
-        &self,
-        upload_id: &str,
-        parts: Vec<PartInfo>,
-    ) -> CompleteMultipartUpload {
-        CompleteMultipartUpload {
-            client: self.client.clone(),
-            extra_headers: self.extra_headers.clone(),
-            extra_query_params: self.extra_query_params.clone(),
-            bucket: self.bucket.clone(),
-            object: self.object.clone(),
-            region: self.region.clone(),
-            parts,
-            upload_id: upload_id.to_string(),
-        }
-    }
-
-    fn to_create_multipart_upload(&self) -> CreateMultipartUpload {
-        CreateMultipartUpload {
-            client: self.client.clone(),
-            extra_headers: self.extra_headers.clone(),
-            extra_query_params: self.extra_query_params.clone(),
-            region: self.region.clone(),
-            bucket: self.bucket.clone(),
-            object: self.object.clone(),
-            user_metadata: self.user_metadata.clone(),
-            sse: self.sse.clone(),
-            tags: self.tags.clone(),
-            retention: self.retention.clone(),
-            legal_hold: self.legal_hold,
-            content_type: self.content_type.clone(),
-        }
     }
 }
 

@@ -26,14 +26,14 @@ use std::collections::HashMap;
 /// Argument builder for [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct SetBucketTags {
-   client: Option<Client>,
+    client: Option<Client>,
 
-   extra_headers: Option<Multimap>,
-   extra_query_params: Option<Multimap>,
-   region: Option<String>,
-   bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-   tags: HashMap<String, String>,
+    tags: HashMap<String, String>,
 }
 
 impl SetBucketTags {

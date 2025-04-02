@@ -25,14 +25,14 @@ use http::Method;
 /// Argument builder for [make_bucket()](Client::make_bucket) API
 #[derive(Clone, Debug, Default)]
 pub struct MakeBucket {
-   client: Option<Client>,
+    client: Option<Client>,
 
-   extra_headers: Option<Multimap>,
-   extra_query_params: Option<Multimap>,
-   region: Option<String>,
-   bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-   object_lock: bool,
+    object_lock: bool,
 }
 
 impl MakeBucket {

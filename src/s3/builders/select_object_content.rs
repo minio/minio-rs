@@ -27,17 +27,17 @@ use http::Method;
 /// Argument builder for [bucket_exists()](Client::bucket_exists) API
 #[derive(Default)]
 pub struct SelectObjectContent {
-   client: Option<Client>,
+    client: Option<Client>,
 
-   extra_headers: Option<Multimap>,
-   extra_query_params: Option<Multimap>,
-   region: Option<String>,
-   bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-   object: String,
-   version_id: Option<String>,
-   ssec: Option<SseCustomerKey>,
-   request: SelectRequest,
+    object: String,
+    version_id: Option<String>,
+    ssec: Option<SseCustomerKey>,
+    request: SelectRequest,
 }
 
 impl SelectObjectContent {

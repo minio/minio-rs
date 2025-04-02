@@ -23,15 +23,15 @@ use http::Method;
 /// Argument builder for [is_object_legal_hold_enabled()](Client::is_object_legal_hold_enabled) API
 #[derive(Clone, Debug, Default)]
 pub struct IsObjectLegalHoldEnabled {
-   client: Option<Client>,
+    client: Option<Client>,
 
-   extra_headers: Option<Multimap>,
-   extra_query_params: Option<Multimap>,
-   region: Option<String>,
-   bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-   object: String,
-   version_id: Option<String>,
+    object: String,
+    version_id: Option<String>,
 }
 
 impl IsObjectLegalHoldEnabled {

@@ -52,7 +52,7 @@ impl FromS3Response for RemoveObjectResponse {
 
         let version_id: Option<String> = headers
             .get("x-amz-version-id")
-            .map(|v| v.to_str().unwrap().to_string());
+            .and_then(|v| v.to_str().ok().map(String::from));
 
         Ok(RemoveObjectResponse {
             headers,

@@ -25,8 +25,8 @@ use std::mem;
 pub struct GetObjectResponse {
     pub headers: http::HeaderMap,
     pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
+    pub bucket: String,
+    pub object: String,
     pub version_id: Option<String>,
     pub content: ObjectContent,
     pub object_size: u64,
@@ -39,26 +39,33 @@ impl FromS3Response for GetObjectResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let bucket = req
+            .bucket
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
+        let object = req
+            .object
+            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
         let mut resp = resp?;
         let headers = mem::take(resp.headers_mut());
-        let version_id = headers
-            .get("x-amz-version-id")
-            .map(|v| v.to_str().unwrap().to_string());
 
-        let etag = headers
+        let etag: Option<String> = headers
             .get("etag")
-            .map(|v| v.to_str().unwrap().trim_matches('"').to_string());
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.trim_matches('"').to_string());
 
-        let content_length = resp.content_length().ok_or(Error::ContentLengthUnknown)?;
+        let version_id: Option<String> = headers
+            .get("x-amz-version-id")
+            .and_then(|v| v.to_str().ok().map(String::from));
+
+        let content_length: u64 = resp.content_length().ok_or(Error::ContentLengthUnknown)?;
         let body = resp.bytes_stream().map_err(std::io::Error::other);
-
         let content = ObjectContent::new_from_stream(body, Some(content_length));
 
         Ok(GetObjectResponse {
             headers,
             region: req.region.unwrap_or("".to_string()),
-            bucket_name: req.bucket.unwrap().to_string(),
-            object_name: req.object.unwrap().to_string(),
+            bucket,
+            object,
             version_id,
             content,
             object_size: content_length,

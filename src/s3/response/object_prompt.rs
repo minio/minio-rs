@@ -32,20 +32,14 @@ impl FromS3Response for ObjectPromptResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
-        let object: String = match req.object {
-            None => {
-                return Err(Error::InvalidObjectName(
-                    "Missing object name in request".into(),
-                ));
-            }
-            Some(v) => v.to_string(),
-        };
-
+        let bucket = req
+            .bucket
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
+        let object = req
+            .object
+            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
         let mut resp = resp?;
+
         let headers = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
         let prompt_response: String = String::from_utf8(body.to_vec())?;

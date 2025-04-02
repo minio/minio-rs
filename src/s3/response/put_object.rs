@@ -42,31 +42,25 @@ impl FromS3Response for PutObjectResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
-        let object: String = match req.object {
-            None => {
-                return Err(Error::InvalidObjectName(
-                    "Missing object name in request".into(),
-                ));
-            }
-            Some(v) => v.to_string(),
-        };
-
+        let bucket = req
+            .bucket
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
+        let object = req
+            .object
+            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
         let mut resp = resp?;
+
         let headers: HeaderMap = mem::take(resp.headers_mut());
 
-        let etag: String = match headers.get("etag") {
-            Some(v) => v.to_str()?.to_string().trim_matches('"').to_string(),
-            None => String::new(),
-        };
+        let etag: String = headers
+            .get("etag")
+            .and_then(|v| v.to_str().ok()) // Convert to &str safely
+            .map(|s| s.trim_matches('"').to_string()) // Trim and convert to String
+            .unwrap_or_default();
 
-        let version_id: Option<String> = match headers.get("x-amz-version-id") {
-            Some(v) => Some(v.to_str()?.to_string()),
-            None => None,
-        };
+        let version_id: Option<String> = headers
+            .get("x-amz-version-id")
+            .and_then(|v| v.to_str().ok().map(String::from));
 
         Ok(PutObjectResponse {
             headers,
@@ -94,27 +88,20 @@ impl FromS3Response for CreateMultipartUploadResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
-        let object: String = match req.object {
-            None => {
-                return Err(Error::InvalidObjectName(
-                    "Missing object name in request".into(),
-                ));
-            }
-            Some(v) => v.to_string(),
-        };
-
+        let bucket = req
+            .bucket
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
+        let object = req
+            .object
+            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
         let mut resp = resp?;
+
         let headers: HeaderMap = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
         let root = Element::parse(body.reader())?;
-
         let region: String = req.region.unwrap_or("".to_string()); // Keep this since it defaults to an empty string
-
-        let upload_id: String = get_text(&root, "UploadId")?;
+        let upload_id: String =
+            get_text(&root, "UploadId").map_err(|e| Error::InvalidUploadId(e.to_string()))?;
 
         Ok(CreateMultipartUploadResponse {
             headers,

@@ -40,22 +40,19 @@ impl FromS3Response for ListBucketsResponse {
 
         let body = resp.bytes().await?;
         let mut root = Element::parse(body.reader())?;
-        let buckets = root
+        let buckets_xml = root
             .get_mut_child("Buckets")
             .ok_or(Error::XmlError("<Buckets> tag not found".into()))?;
 
-        let mut bucket_list: Vec<Bucket> = Vec::new();
-        while let Some(b) = buckets.take_child("Bucket") {
+        let mut buckets: Vec<Bucket> = Vec::new();
+        while let Some(b) = buckets_xml.take_child("Bucket") {
             let bucket = b;
-            bucket_list.push(Bucket {
+            buckets.push(Bucket {
                 name: get_text(&bucket, "Name")?,
                 creation_date: from_iso8601utc(&get_text(&bucket, "CreationDate")?)?,
             })
         }
 
-        Ok(ListBucketsResponse {
-            headers,
-            buckets: bucket_list,
-        })
+        Ok(ListBucketsResponse { headers, buckets })
     }
 }
