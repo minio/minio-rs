@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::{DateTime, Utc};
 use minio::s3::builders::PostPolicy;
 use minio::s3::types::{
     AndOperator, Destination, Filter, LifecycleConfig, LifecycleRule, NotificationConfig,
@@ -185,7 +186,7 @@ pub fn create_object_lock_config_example() -> ObjectLockConfig {
     ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap()
 }
 pub fn create_post_policy_example(bucket_name: &str, object_name: &str) -> PostPolicy {
-    let expiration = utc_now() + chrono::Duration::days(5);
+    let expiration: DateTime<Utc> = utc_now() + chrono::Duration::days(5);
 
     let mut policy = PostPolicy::new(&bucket_name, expiration).unwrap();
     policy.add_equals_condition("key", &object_name).unwrap();

@@ -17,10 +17,31 @@
 
 use super::Client;
 use crate::s3::builders::MakeBucket;
+use std::sync::Arc;
 
 impl Client {
-    /// Create a MakeBucket request builder.
-    pub fn make_bucket(&self, bucket: &str) -> MakeBucket {
-        MakeBucket::new(bucket).client(self)
+    /// Creates a [`MakeBucket`] request builder.
+    ///
+    /// To execute the request, call [`MakeBucket::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`MakeBucketResponse`](crate::s3::response::MakeBucketResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::MakeBucketResponse;
+    /// use minio::s3::types::S3Api;
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let resp: MakeBucketResponse =
+    ///         client.make_bucket("bucket-name").send().await.unwrap();
+    ///     println!("Made bucket '{}' in region '{}'", resp.bucket, resp.region);
+    /// }
+    /// ```
+    pub fn make_bucket(self: &Arc<Self>, bucket: &str) -> MakeBucket {
+        MakeBucket::new(self, bucket.to_owned())
     }
 }

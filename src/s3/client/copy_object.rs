@@ -20,39 +20,39 @@ use crate::s3::builders::{
     ComposeObject, ComposeObjectInternal, ComposeSource, CopyObject, CopyObjectInternal,
     UploadPartCopy,
 };
+use std::sync::Arc;
 
 impl Client {
     /// Executes [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) S3 API
-    pub fn upload_part_copy(&self, bucket: &str) -> UploadPartCopy {
-        UploadPartCopy::new(bucket).client(self)
+    pub fn upload_part_copy(self: &Arc<Self>, bucket: &str) -> UploadPartCopy {
+        UploadPartCopy::new(self, bucket)
     }
 
     /// Create a CopyObject request builder. This is a lower-level API that
     /// performs a non-multipart object copy.
-    pub fn copy_object_internal(&self, bucket: &str) -> CopyObjectInternal {
-        CopyObjectInternal::new(bucket).client(self)
+    pub fn copy_object_internal(self: &Arc<Self>, bucket: &str) -> CopyObjectInternal {
+        CopyObjectInternal::new(self, bucket)
     }
 
     /// copy object is a high-order API that calls [`stat_object`] and based on the results calls
     /// either [`compose_object`] or [`copy_object_leaf`]  to copy the object.
-    pub fn copy_object(&self, bucket: &str) -> CopyObject {
-        CopyObject::new(bucket).client(self)
+    pub fn copy_object(self: &Arc<Self>, bucket: &str) -> CopyObject {
+        CopyObject::new(self, bucket)
     }
 
-    pub(crate) fn compose_object_internal(&self, bucket: &str) -> ComposeObjectInternal {
-        ComposeObjectInternal::new(bucket).client(self)
+    pub(crate) fn compose_object_internal(self: &Arc<Self>, bucket: &str) -> ComposeObjectInternal {
+        ComposeObjectInternal::new(self, bucket)
     }
 
     /// compose object is high-order API that calls [`compose_object_internal`] and if that call fails,
     /// it calls ['abort_multipart_upload`].
     pub fn compose_object(
-        &self,
+        self: &Arc<Self>,
         bucket_name: &str,
         object_name: &str,
         sources: Vec<ComposeSource>,
     ) -> ComposeObject {
-        ComposeObject::new(bucket_name)
-            .client(self)
+        ComposeObject::new(self, bucket_name)
             .object(object_name.to_owned())
             .sources(sources)
     }

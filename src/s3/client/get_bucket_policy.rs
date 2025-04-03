@@ -17,10 +17,31 @@
 
 use super::Client;
 use crate::s3::builders::GetBucketPolicy;
+use std::sync::Arc;
 
 impl Client {
-    /// Create a GetBucketPolicy request builder.
-    pub fn get_bucket_policy(&self, bucket: &str) -> GetBucketPolicy {
-        GetBucketPolicy::new(bucket).client(self)
+    /// Creates a [`GetBucketPolicy`] request builder.
+    ///
+    /// To execute the request, call [`GetBucketPolicy::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetBucketPolicyResponse`](crate::s3::response::GetBucketPolicyResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::GetBucketPolicyResponse;
+    /// use minio::s3::types::S3Api;
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let resp: GetBucketPolicyResponse =
+    ///         client.get_bucket_policy("bucket-name").send().await.unwrap();
+    ///     println!("retrieved bucket policy config '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
+    /// }
+    /// ```
+    pub fn get_bucket_policy(self: &Arc<Self>, bucket: &str) -> GetBucketPolicy {
+        GetBucketPolicy::new(self, bucket.to_owned())
     }
 }

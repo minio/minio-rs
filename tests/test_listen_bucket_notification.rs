@@ -14,10 +14,9 @@
 // limitations under the License.
 
 use async_std::task;
-use minio::s3::Client;
 use minio::s3::builders::ObjectContent;
-use minio::s3::creds::StaticProvider;
-use minio::s3::types::{NotificationRecords, S3Api};
+use minio::s3::response::PutObjectContentResponse;
+use minio::s3::types::{NotificationRecord, NotificationRecords, S3Api};
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
@@ -30,59 +29,54 @@ async fn listen_bucket_notification() {
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
     let object_name = rand_object_name();
 
-    let name = object_name.clone();
-    let (sender, mut receiver): (mpsc::UnboundedSender<bool>, mpsc::UnboundedReceiver<bool>) =
-        mpsc::unbounded_channel();
+    type MessageType = u32;
+    const SECRET_MSG: MessageType = 42;
 
-    let access_key = ctx.access_key.clone();
-    let secret_key = ctx.secret_key.clone();
-    let base_url = ctx.base_url.clone();
-    let ignore_cert_check = ctx.ignore_cert_check;
-    let ssl_cert_file = ctx.ssl_cert_file.clone();
-    let test_bucket = bucket_name.clone();
+    let (sender, mut receiver): (
+        mpsc::UnboundedSender<MessageType>,
+        mpsc::UnboundedReceiver<MessageType>,
+    ) = mpsc::unbounded_channel();
 
-    let listen_task = move || async move {
-        let static_provider = StaticProvider::new(&access_key, &secret_key, None);
-        let ssl_cert_file = &ssl_cert_file;
-        let client = Client::new(
-            base_url,
-            Some(Box::new(static_provider)),
-            ssl_cert_file.as_deref(),
-            ignore_cert_check,
-        )
-        .unwrap();
+    let bucket_name2 = bucket_name.clone();
+    let object_name2 = object_name.clone();
 
-        let event_fn = |event: NotificationRecords| {
-            let record = event.records.first();
-            if let Some(record) = record {
-                let key = &record.s3.object.key;
-                if name == *key {
-                    sender.send(true).unwrap();
-                    return false;
-                }
-            }
-            sender.send(false).unwrap();
-            false
-        };
+    let spawned_listen_task = task::spawn(async move {
+        let ctx2 = TestContext::new_from_env();
 
-        let (_, mut event_stream) = client
-            .listen_bucket_notification(&test_bucket)
+        let (_resp, mut event_stream) = ctx2
+            .client
+            .listen_bucket_notification(&bucket_name2)
             .send()
             .await
             .unwrap();
-        while let Some(event) = event_stream.next().await {
-            let event = event.unwrap();
-            if !event_fn(event) {
-                break;
-            }
-        }
-    };
 
-    let spawned_task = task::spawn(listen_task());
+        while let Some(event) = event_stream.next().await {
+            let event: NotificationRecords = event.unwrap();
+            let record: Option<&NotificationRecord> = event.records.first();
+
+            if let Some(record) = record {
+                let key: &str = &record.s3.object.key;
+                if key == &object_name2 {
+                    // Do something with the record, check if you received an event triggered
+                    // by the put_object that will happen in a few ms.
+                    assert_eq!(record.event_name, "s3:ObjectCreated:Put");
+                    assert_eq!(record.s3.bucket.name, bucket_name2);
+                    //println!("record {:#?}", record);
+
+                    sender.send(SECRET_MSG).unwrap();
+                    break;
+                }
+            }
+            sender.send(0).unwrap();
+        }
+    });
+
+    // wait a few ms to before we issue a put_object
     task::sleep(std::time::Duration::from_millis(200)).await;
 
     let size = 16_u64;
-    ctx.client
+    let resp: PutObjectContentResponse = ctx
+        .client
         .put_object_content(
             &bucket_name,
             &object_name,
@@ -91,13 +85,10 @@ async fn listen_bucket_notification() {
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
 
-    ctx.client
-        .remove_object(&bucket_name, object_name.as_str())
-        .send()
-        .await
-        .unwrap();
+    spawned_listen_task.await;
 
-    spawned_task.await;
-    assert!(receiver.recv().await.unwrap());
+    let received_message: MessageType = receiver.recv().await.unwrap();
+    assert_eq!(received_message, SECRET_MSG);
 }

@@ -27,8 +27,12 @@ async fn get_presigned_post_form_data() {
 
     let policy: PostPolicy = create_post_policy_example(&bucket_name, &object_name);
 
-    let form_data: HashMap<String, String> =
-        ctx.client.get_presigned_post_form_data(policy).unwrap();
+    let form_data: HashMap<String, String> = ctx
+        .client
+        .get_presigned_post_form_data(policy)
+        .send()
+        .await
+        .unwrap();
     //println!("form_data={:?}", &form_data);
     assert!(form_data.contains_key("x-amz-signature"));
     assert!(form_data.contains_key("policy"));

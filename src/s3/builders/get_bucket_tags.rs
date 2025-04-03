@@ -20,11 +20,12 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{Multimap, check_bucket_name, insert};
 use http::Method;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Argument builder for [get_bucket_tags()](crate::s3::client::Client::get_bucket_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct GetBucketTags {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -35,16 +36,12 @@ pub struct GetBucketTags {
 }
 
 impl GetBucketTags {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client: Arc::clone(client),
+            bucket,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -75,9 +72,8 @@ impl S3Api for GetBucketTags {
 impl ToS3Request for GetBucketTags {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        Ok(S3Request::new(client, Method::GET)
+        Ok(S3Request::new(self.client, Method::GET)
             .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(insert(self.extra_query_params, "tagging"))

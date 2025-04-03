@@ -63,8 +63,7 @@ async fn object_retention() {
     let retain_until_date = utc_now() + chrono::Duration::days(1);
     let obj_resp: SetObjectRetentionResponse = ctx
         .client
-        .set_object_retention(&bucket_name)
-        .object(object_name.clone())
+        .set_object_retention(&bucket_name, &object_name)
         .retention_mode(Some(RetentionMode::GOVERNANCE))
         .retain_until_date(Some(retain_until_date))
         .send()
@@ -77,8 +76,7 @@ async fn object_retention() {
 
     let resp: GetObjectRetentionResponse = ctx
         .client
-        .get_object_retention(&bucket_name)
-        .object(object_name.clone())
+        .get_object_retention(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -90,8 +88,7 @@ async fn object_retention() {
 
     let resp: SetObjectRetentionResponse = ctx
         .client
-        .set_object_retention(&bucket_name)
-        .object(object_name.clone())
+        .set_object_retention(&bucket_name, &object_name)
         .bypass_governance_mode(true)
         .send()
         .await
@@ -103,8 +100,7 @@ async fn object_retention() {
 
     let resp: GetObjectRetentionResponse = ctx
         .client
-        .get_object_retention(&bucket_name)
-        .object(object_name.clone())
+        .get_object_retention(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();

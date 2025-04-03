@@ -19,11 +19,12 @@ use crate::s3::response::GetObjectRetentionResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{Multimap, check_bucket_name, check_object_name, insert};
 use http::Method;
+use std::sync::Arc;
 
 /// Argument builder for [get_object_retention()](Client::get_object_retention) API
 #[derive(Clone, Debug, Default)]
 pub struct GetObjectRetention {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -35,15 +36,13 @@ pub struct GetObjectRetention {
 }
 
 impl GetObjectRetention {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client: Arc::clone(client),
+            bucket,
+            object,
             ..Default::default()
         }
-    }
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -61,11 +60,6 @@ impl GetObjectRetention {
         self
     }
 
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
-        self
-    }
-
     pub fn version_id(mut self, version_id: Option<String>) -> Self {
         self.version_id = version_id;
         self
@@ -80,14 +74,13 @@ impl ToS3Request for GetObjectRetention {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         let mut query_params: Multimap = insert(self.extra_query_params, "retention");
         if let Some(v) = self.version_id {
             query_params.insert("versionId".into(), v);
         }
 
-        Ok(S3Request::new(client, Method::GET)
+        Ok(S3Request::new(self.client, Method::GET)
             .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(query_params)

@@ -55,8 +55,7 @@ async fn object_tags() {
 
     let resp: SetObjectTagsResponse = ctx
         .client
-        .set_object_tags(&bucket_name)
-        .object(object_name.clone())
+        .set_object_tags(&bucket_name, &object_name)
         .tags(tags.clone())
         .send()
         .await
@@ -68,8 +67,7 @@ async fn object_tags() {
 
     let resp: GetObjectTagsResponse = ctx
         .client
-        .get_object_tags(&bucket_name)
-        .object(object_name.clone())
+        .get_object_tags(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -81,8 +79,7 @@ async fn object_tags() {
 
     let resp: DeleteObjectTagsResponse = ctx
         .client
-        .delete_object_tags(&bucket_name)
-        .object(object_name.clone())
+        .delete_object_tags(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -93,8 +90,7 @@ async fn object_tags() {
 
     let resp: GetObjectTagsResponse = ctx
         .client
-        .get_object_tags(&bucket_name.clone())
-        .object(object_name.clone())
+        .get_object_tags(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();

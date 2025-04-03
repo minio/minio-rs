@@ -15,18 +15,39 @@
 
 use crate::s3::Client;
 use crate::s3::builders::GetPresignedObjectUrl;
-use crate::s3::error::Error;
-use crate::s3::response::GetPresignedObjectUrlResponse;
 use http::Method;
+use std::sync::Arc;
 
 impl Client {
-    /// Create a GetPresignedObjectURL builder.
+    /// Creates a [`GetPresignedObjectURL`] request builder.
+    ///
+    /// To execute the request, call [`GetPresignedObjectURL::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetPresignedObjectURLResponse`](crate::s3::response::GetPresignedObjectURLResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use http::Method;
+    /// use minio::s3::Client;
+    /// use minio::s3::response::GetPresignedObjectUrlResponse;
+    /// use minio::s3::types::S3Api;
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let resp: GetPresignedObjectUrlResponse = client
+    ///         .get_presigned_object_url("bucket-name", "object-name", Method::GET)
+    ///         .send().await.unwrap();
+    ///     println!("the presigned url: '{:?}'", resp.url);
+    /// }
+    /// ```
     pub fn get_presigned_object_url(
-        &self,
+        self: &Arc<Self>,
         bucket: &str,
         object: &str,
         method: Method,
-    ) -> Result<GetPresignedObjectUrlResponse, Error> {
-        GetPresignedObjectUrl::new(self, bucket.to_string(), object.to_string(), method)?.compute()
+    ) -> GetPresignedObjectUrl {
+        GetPresignedObjectUrl::new(self, bucket.to_owned(), object.to_owned(), method)
     }
 }

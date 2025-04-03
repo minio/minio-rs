@@ -17,10 +17,31 @@
 
 use super::Client;
 use crate::s3::builders::GetBucketTags;
+use std::sync::Arc;
 
 impl Client {
-    /// Create a GetBucketTags request builder.
-    pub fn get_bucket_tags(&self, bucket: &str) -> GetBucketTags {
-        GetBucketTags::new(bucket).client(self)
+    /// Creates a [`GetBucketTags`] request builder.
+    ///
+    /// To execute the request, call [`GetBucketTags::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetBucketTagsResponse`](crate::s3::response::GetBucketTagsResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::GetBucketTagsResponse;
+    /// use minio::s3::types::S3Api;
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let resp: GetBucketTagsResponse =
+    ///         client.get_bucket_tags("bucket-name").send().await.unwrap();
+    ///     println!("retrieved bucket tags '{:?}' from bucket '{}' is enabled", resp.tags, resp.bucket);
+    /// }
+    /// ```
+    pub fn get_bucket_tags(self: &Arc<Self>, bucket: &str) -> GetBucketTags {
+        GetBucketTags::new(self, bucket.to_owned())
     }
 }

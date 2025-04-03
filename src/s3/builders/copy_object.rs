@@ -34,7 +34,7 @@ use std::sync::Arc;
 /// Argument builder for [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) API
 #[derive(Clone, Debug, Default)]
 pub struct UploadPartCopy {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -48,16 +48,12 @@ pub struct UploadPartCopy {
 }
 
 impl UploadPartCopy {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: &str) -> Self {
         Self {
+            client: Arc::clone(client),
             bucket: bucket.to_owned(),
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -102,7 +98,6 @@ impl S3Api for UploadPartCopy {
 
 impl ToS3Request for UploadPartCopy {
     fn to_s3request(self) -> Result<S3Request, Error> {
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
@@ -116,7 +111,7 @@ impl ToS3Request for UploadPartCopy {
             }
         }
 
-        let region: String = client.get_region_cached(&self.bucket, &self.region)?;
+        let region: String = self.client.get_region_cached(&self.bucket, &self.region)?;
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         merge(&mut headers, self.headers.clone());
@@ -127,7 +122,7 @@ impl ToS3Request for UploadPartCopy {
             query_params.insert("uploadId".into(), self.upload_id);
         }
 
-        Ok(S3Request::new(client, Method::PUT)
+        Ok(S3Request::new(self.client, Method::PUT)
             .region(Some(region))
             .bucket(Some(self.bucket))
             .object(Some(self.object))
@@ -138,7 +133,7 @@ impl ToS3Request for UploadPartCopy {
 
 #[derive(Clone, Debug, Default)]
 pub struct CopyObjectInternal {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -159,16 +154,12 @@ pub struct CopyObjectInternal {
 }
 
 impl CopyObjectInternal {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: &str) -> Self {
         Self {
+            client: client.clone(),
             bucket: bucket.to_owned(),
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -243,14 +234,13 @@ impl S3Api for CopyObjectInternal {
 
 impl ToS3Request for CopyObjectInternal {
     fn to_s3request(self) -> Result<S3Request, Error> {
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
         {
             if let Some(v) = &self.sse {
-                if v.tls_required() && !client.base_url.https {
+                if v.tls_required() && !self.client.base_url.https {
                     return Err(Error::SseTlsRequired(None));
                 }
             }
-            if self.source.ssec.is_some() && !client.base_url.https {
+            if self.source.ssec.is_some() && !self.client.base_url.https {
                 return Err(Error::SseTlsRequired(None));
             }
         }
@@ -339,9 +329,9 @@ impl ToS3Request for CopyObjectInternal {
             }
         };
 
-        let region: String = client.get_region_cached(&self.bucket, &self.region)?;
+        let region: String = self.client.get_region_cached(&self.bucket, &self.region)?;
 
-        Ok(S3Request::new(client, Method::PUT)
+        Ok(S3Request::new(self.client, Method::PUT)
             .region(Some(region))
             .bucket(Some(self.bucket))
             .object(Some(self.object))
@@ -353,7 +343,7 @@ impl ToS3Request for CopyObjectInternal {
 /// Argument builder for [copy_object()](Client::copy_object_old) API
 #[derive(Clone, Debug, Default)]
 pub struct CopyObject {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -373,15 +363,12 @@ pub struct CopyObject {
 }
 
 impl CopyObject {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: &str) -> Self {
         Self {
+            client: client.clone(),
             bucket: bucket.to_owned(),
             ..Default::default()
         }
-    }
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -445,7 +432,7 @@ impl CopyObject {
 
 impl CopyObject {
     pub async fn run(self) -> Result<CopyObjectResponse, Error> {
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
+        let client = Arc::clone(&self.client);
         {
             if let Some(v) = &self.sse {
                 if v.tls_required() && !client.base_url.https {
@@ -567,7 +554,7 @@ impl CopyObject {
 
 #[derive(Clone, Debug, Default)]
 pub struct ComposeObjectInternal {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -585,16 +572,12 @@ pub struct ComposeObjectInternal {
 }
 
 impl ComposeObjectInternal {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: &str) -> Self {
         Self {
+            client: client.clone(),
             bucket: bucket.to_owned(),
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -658,10 +641,7 @@ impl ComposeObjectInternal {
     pub async fn run(self) -> (Result<ComposeObjectResponse, Error>, String) {
         let mut upload_id = String::new();
 
-        let client: Client = match self.client {
-            None => return (Err(Error::NoClientProvided), upload_id),
-            Some(v) => v,
-        };
+        let client = Arc::clone(&self.client);
 
         let mut sources = self.sources;
         let part_count: u16 = match client.calculate_part_count(&mut sources).await {
@@ -766,7 +746,8 @@ impl ComposeObjectInternal {
                         );
                     }
 
-                    let resp: UploadPartCopyResponse = match client
+                    let client_clone = Arc::clone(&self.client);
+                    let resp: UploadPartCopyResponse = match client_clone
                         .upload_part_copy(&self.bucket)
                         .region(self.region.clone())
                         .object(self.object.clone())
@@ -801,7 +782,8 @@ impl ComposeObjectInternal {
                             format!("bytes={}-{}", offset, end_bytes),
                         );
 
-                        let resp: UploadPartCopyResponse = match client
+                        let client_clone = Arc::clone(&self.client);
+                        let resp: UploadPartCopyResponse = match client_clone
                             .upload_part_copy(&self.bucket)
                             .region(self.region.clone())
                             .object(self.object.clone())
@@ -853,7 +835,7 @@ impl ComposeObjectInternal {
 
 #[derive(Clone, Debug, Default)]
 pub struct ComposeObject {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -871,16 +853,12 @@ pub struct ComposeObject {
 }
 
 impl ComposeObject {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: &str) -> Self {
         Self {
+            client: Arc::clone(client),
             bucket: bucket.to_owned(),
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -941,7 +919,7 @@ impl ComposeObject {
 
 impl ComposeObject {
     pub async fn run(self) -> Result<ComposeObjectResponse, Error> {
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
+        let client = Arc::clone(&self.client);
 
         {
             if let Some(v) = &self.sse {

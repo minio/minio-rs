@@ -17,20 +17,26 @@
 
 use super::Client;
 use crate::s3::builders::SetBucketNotification;
+use std::sync::Arc;
 
 impl Client {
-    /// Create a SetBucketNotification request builder.
+    /// Creates a [`SetBucketNotification`] request builder.
     ///
-    /// Returns argument for [set_bucket_notification()](crate::s3::client::Client::set_bucket_notification) API with given bucket name and configuration
+    /// To execute the request, call [`SetBucketNotification::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`SetBucketNotificationResponse`](crate::s3::response::SetBucketNotificationResponse).
     ///
-    /// # Examples
+    /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use minio::s3::Client;
     /// use minio::s3::types::{NotificationConfig, PrefixFilterRule, QueueConfig, S3Api, SuffixFilterRule};
+    /// use minio::s3::response::SetBucketNotificationResponse;
+    /// use std::sync::Arc;
     ///
     /// #[tokio::main]
     /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///
     ///     let config = NotificationConfig {
     ///         cloud_func_config_list: None,
     ///         queue_config_list: Some(vec![QueueConfig {
@@ -49,14 +55,15 @@ impl Client {
     ///         }]),
     ///         topic_config_list: None,
     ///     };
-    ///     let client = Client::default();
-    ///     let _resp = client
-    ///          .set_bucket_notification("my-bucket-name")
-    ///          .notification_config(config)
-    ///          .send().await;
+    ///
+    ///     let resp: SetBucketNotificationResponse = client
+    ///         .set_bucket_notification("bucket-name")
+    ///         .notification_config(config)
+    ///         .send().await.unwrap();
+    ///     println!("set bucket notification for bucket '{:?}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_notification(&self, bucket: &str) -> SetBucketNotification {
-        SetBucketNotification::new(bucket).client(self)
+    pub fn set_bucket_notification(self: &Arc<Self>, bucket: &str) -> SetBucketNotification {
+        SetBucketNotification::new(self, bucket.to_owned())
     }
 }

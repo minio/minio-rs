@@ -19,11 +19,12 @@ use crate::common::{create_bucket_if_not_exists, create_client_on_play};
 use minio::s3::Client;
 use minio::s3::response::{GetBucketEncryptionResponse, SetBucketEncryptionResponse};
 use minio::s3::types::{S3Api, SseConfig};
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
-    let client: Client = create_client_on_play()?;
+    let client: Arc<Client> = create_client_on_play()?;
 
     let bucket_name: &str = "encryption-rust-bucket";
     create_bucket_if_not_exists(bucket_name, &client).await?;

@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::Client;
 use crate::s3::builders::BucketCommon;
 use crate::s3::error::Error;
 use crate::s3::response::BucketExistsResponse;
@@ -34,9 +33,8 @@ impl S3Api for BucketExists {
 impl ToS3Request for BucketExists {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        Ok(S3Request::new(client, Method::HEAD)
+        Ok(S3Request::new(self.client, Method::HEAD)
             .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(self.extra_query_params.unwrap_or_default())

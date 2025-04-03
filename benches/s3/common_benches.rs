@@ -24,10 +24,11 @@ use minio_common::utils::{
     get_bytes_from_response, get_response_from_bytes, rand_bucket_name, rand_object_name,
 };
 use std::env;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 pub(crate) struct Ctx2 {
-    pub client: Client,
+    pub client: Arc<Client>,
     pub bucket: String,
     pub object: String,
     _cleanup: CleanupGuard,

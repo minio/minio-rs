@@ -17,10 +17,32 @@
 
 use super::Client;
 use crate::s3::builders::StatObject;
+use std::sync::Arc;
 
 impl Client {
     /// Create a StatObject request builder.
-    pub fn stat_object(&self, bucket: &str, object: &str) -> StatObject {
-        StatObject::new(bucket, object).client(self)
+    /// Creates a [`StatObject`] request builder.
+    ///
+    /// To execute the request, call [`StatObject::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`StatObjectResponse`](crate::s3::response::StatObjectResponse).    
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::StatObjectResponse;
+    /// use minio::s3::types::S3Api;
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {    
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let resp: StatObjectResponse =
+    ///         client.stat_object("bucket-name", "object-name").send().await.unwrap();
+    ///     println!("stat of object '{}' are {:#?}", resp.object, resp);
+    /// }
+    /// ```
+    pub fn stat_object(self: &Arc<Self>, bucket: &str, object: &str) -> StatObject {
+        StatObject::new(self, bucket.to_owned(), object.to_owned())
     }
 }

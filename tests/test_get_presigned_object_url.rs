@@ -28,6 +28,8 @@ async fn get_presigned_object_url() {
     let resp: GetPresignedObjectUrlResponse = ctx
         .client
         .get_presigned_object_url(&bucket_name, &object_name, Method::GET)
+        .send()
+        .await
         .unwrap();
     assert!(resp.url.contains("X-Amz-Signature="));
     assert_eq!(resp.bucket, bucket_name);

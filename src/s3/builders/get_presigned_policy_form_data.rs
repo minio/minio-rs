@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::s3::Client;
+use crate::s3::creds::Credentials;
 use crate::s3::error::Error;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::utils::{
@@ -21,27 +22,29 @@ use crate::s3::utils::{
 };
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Argument for [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API
 pub struct GetPresignedPolicyFormData {
-    client: Client,
+    client: Arc<Client>,
     policy: PostPolicy,
 }
 
 impl GetPresignedPolicyFormData {
-    pub fn new(client: &Client, policy: PostPolicy) -> Self {
+    pub fn new(client: &Arc<Client>, policy: PostPolicy) -> Self {
         Self {
-            client: client.clone(),
+            client: Arc::clone(client),
             policy,
         }
     }
 
-    pub fn compute(&self) -> Result<HashMap<String, String>, Error> {
+    pub async fn send(self) -> Result<HashMap<String, String>, Error> {
+        // NOTE: this send function is async to be comparable with other functions...
         let region: String = self
             .client
             .get_region_cached(&self.policy.bucket, &self.policy.region)?;
 
-        let creds = self.client.provider.as_ref().unwrap().fetch();
+        let creds: Credentials = self.client.provider.as_ref().unwrap().fetch();
         self.policy.form_data(
             creds.access_key,
             creds.secret_key,
@@ -75,12 +78,12 @@ impl PostPolicy {
     ///
     /// # Examples
     ///
-    /// ```ignore
-    /// use minio::s3::args::*;
+    /// ```
     /// use minio::s3::utils::*;
     /// use chrono::Duration;
+    /// use minio::s3::builders::PostPolicy;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let policy = PostPolicy::new("my-bucket", expiration).unwrap();
+    /// let policy = PostPolicy::new("bucket-name", expiration).unwrap();
     /// ```
     pub fn new(bucket_name: &str, expiration: UtcTime) -> Result<PostPolicy, Error> {
         check_bucket_name(bucket_name, true)?;
@@ -125,15 +128,15 @@ impl PostPolicy {
     /// Adds equals condition for given element and value
     /// # Examples
     ///
-    /// ```ignore
-    /// use minio::s3::args::*;
+    /// ```
     /// use minio::s3::utils::*;
     /// use chrono::Duration;
+    /// use minio::s3::builders::PostPolicy;
     /// let expiration = utc_now() + Duration::days(7);
     /// let mut policy = PostPolicy::new("my-bucket", expiration).unwrap();
     ///
-    /// // Add condition that 'key' (object name) equals to 'my-objectname'
-    /// policy.add_equals_condition("key", "my-object");
+    /// // Add condition that 'key' (object name) equals to 'bucket-name'
+    /// policy.add_equals_condition("key", "bucket-name").unwrap();
     /// ```
     pub fn add_equals_condition(&mut self, element: &str, value: &str) -> Result<(), Error> {
         if element.is_empty() {
@@ -161,13 +164,13 @@ impl PostPolicy {
     /// Removes equals condition for given element
     /// # Examples
     ///
-    /// ```ignore
-    /// use minio::s3::args::*;
+    /// ```
     /// use minio::s3::utils::*;
     /// use chrono::Duration;
+    /// use minio::s3::builders::PostPolicy;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("my-bucket", expiration).unwrap();
-    /// policy.add_equals_condition("key", "my-object");
+    /// let mut policy = PostPolicy::new("bucket-name", expiration).unwrap();
+    /// policy.add_equals_condition("key", "bucket-name");
     ///
     /// policy.remove_equals_condition("key");
     /// ```
@@ -178,15 +181,15 @@ impl PostPolicy {
     /// Adds starts-with condition for given element and value
     /// # Examples
     ///
-    /// ```ignore
-    /// use minio::s3::args::*;
+    /// ```
     /// use minio::s3::utils::*;
     /// use chrono::Duration;
+    /// use minio::s3::builders::PostPolicy;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("my-bucket", expiration).unwrap();
+    /// let mut policy = PostPolicy::new("bucket-name", expiration).unwrap();
     ///
     /// // Add condition that 'Content-Type' starts with 'image/'
-    /// policy.add_starts_with_condition("Content-Type", "image/");
+    /// policy.add_starts_with_condition("Content-Type", "image/").unwrap();
     /// ```
     pub fn add_starts_with_condition(&mut self, element: &str, value: &str) -> Result<(), Error> {
         if element.is_empty() {
@@ -217,13 +220,13 @@ impl PostPolicy {
     /// Removes starts-with condition for given element
     /// # Examples
     ///
-    /// ```ignore
-    /// use minio::s3::args::*;
+    /// ```
     /// use minio::s3::utils::*;
     /// use chrono::Duration;
+    /// use minio::s3::builders::PostPolicy;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("my-bucket", expiration).unwrap();
-    /// policy.add_starts_with_condition("Content-Type", "image/");
+    /// let mut policy = PostPolicy::new("bucket-name", expiration).unwrap();
+    /// policy.add_starts_with_condition("Content-Type", "image/").unwrap();
     ///
     /// policy.remove_starts_with_condition("Content-Type");
     /// ```
@@ -234,15 +237,16 @@ impl PostPolicy {
     /// Adds content-length range condition with given lower and upper limits
     /// # Examples
     ///
-    /// ```ignore
-    /// use minio::s3::args::*;
+    /// ```
     /// use minio::s3::utils::*;
     /// use chrono::Duration;
+    /// use minio::s3::builders::PostPolicy;
+    ///
     /// let expiration = utc_now() + Duration::days(7);
     /// let mut policy = PostPolicy::new("my-bucket", expiration).unwrap();
     ///
     /// // Add condition that 'content-length-range' is between 64kiB to 10MiB
-    /// policy.add_content_length_range_condition(64 * 1024, 10 * 1024 * 1024);
+    /// policy.add_content_length_range_condition(64 * 1024, 10 * 1024 * 1024).unwrap();
     /// ```
     pub fn add_content_length_range_condition(
         &mut self,
@@ -330,16 +334,13 @@ impl PostPolicy {
         let signature = post_presign_v4(&encoded_policy, &secret_key, date, &region);
 
         let mut data: HashMap<String, String> = HashMap::new();
-        data.insert(
-            String::from("x-amz-algorithm"),
-            String::from(PostPolicy::ALGORITHM),
-        );
-        data.insert(String::from("x-amz-credential"), credential);
-        data.insert(String::from("x-amz-date"), amz_date);
-        data.insert(String::from("policy"), encoded_policy);
-        data.insert(String::from("x-amz-signature"), signature);
+        data.insert("x-amz-algorithm".into(), PostPolicy::ALGORITHM.to_string());
+        data.insert("x-amz-credential".into(), credential);
+        data.insert("x-amz-date".into(), amz_date);
+        data.insert("policy".into(), encoded_policy);
+        data.insert("x-amz-signature".into(), signature);
         if let Some(v) = session_token {
-            data.insert(String::from("x-amz-security-token"), v);
+            data.insert("x-amz-security-token".into(), v);
         }
 
         Ok(data)

@@ -17,10 +17,40 @@
 
 use super::Client;
 use crate::s3::builders::SetObjectLockConfig;
+use std::sync::Arc;
 
 impl Client {
-    /// Create a SetObjectLockConfig request builder.
-    pub fn set_object_lock_config(&self, bucket: &str) -> SetObjectLockConfig {
-        SetObjectLockConfig::new(bucket).client(self)
+    /// Creates a [`SetObjectLockConfig`] request builder.
+    ///
+    /// To execute the request, call [`SetObjectLockConfig::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`SetObjectLockConfigResponse`](crate::s3::response::SetObjectLockConfigResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::{MakeBucketResponse, SetObjectLockConfigResponse};
+    /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let bucket_name = "bucket-name";
+    ///
+    ///     let resp: MakeBucketResponse =
+    ///         client.make_bucket(&bucket_name).object_lock(true).send().await.unwrap();
+    ///     println!("created bucket '{}' with object locking enabled", resp.bucket);
+    ///
+    ///     const DURATION_DAYS: i32 = 7;
+    ///     let config = ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();
+    ///
+    ///     let resp: SetObjectLockConfigResponse =
+    ///         client.set_object_lock_config(&bucket_name).config(config).send().await.unwrap();
+    ///     println!("configured object locking for bucket '{}'", resp.bucket);
+    /// }
+    /// ```
+    pub fn set_object_lock_config(self: &Arc<Self>, bucket: &str) -> SetObjectLockConfig {
+        SetObjectLockConfig::new(self, bucket.to_owned())
     }
 }

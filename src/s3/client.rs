@@ -224,7 +224,7 @@ impl Client {
         provider: Option<Box<(dyn Provider + Send + Sync + 'static)>>,
         ssl_cert_file: Option<&Path>,
         ignore_cert_check: Option<bool>,
-    ) -> Result<Client, Error> {
+    ) -> Result<Self, Error> {
         ClientBuilder::new(base_url)
             .provider(provider)
             .ssl_cert_file(ssl_cert_file)
@@ -594,7 +594,7 @@ impl Client {
     }
 
     pub(crate) async fn calculate_part_count(
-        &self,
+        self: &Arc<Self>,
         sources: &mut [ComposeSource],
     ) -> Result<u16, Error> {
         let mut object_size = 0_u64;

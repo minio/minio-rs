@@ -15,7 +15,9 @@
 use async_trait::async_trait;
 use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
+use std::sync::Arc;
 
+use crate::s3::utils::insert;
 use crate::s3::{
     client::Client,
     error::Error,
@@ -29,14 +31,14 @@ use crate::s3::{
 
 fn add_common_list_objects_query_params(
     query_params: &mut Multimap,
-    delimiter: Option<&str>,
+    delimiter: Option<String>,
     disable_url_encoding: bool,
     max_keys: Option<u16>,
-    prefix: Option<&str>,
+    prefix: Option<String>,
 ) {
-    query_params.insert("delimiter".into(), delimiter.unwrap_or("").to_string());
+    query_params.insert("delimiter".into(), delimiter.unwrap_or("".into()));
     query_params.insert("max-keys".into(), max_keys.unwrap_or(1000).to_string());
-    query_params.insert("prefix".into(), prefix.unwrap_or("").to_string());
+    query_params.insert("prefix".into(), prefix.unwrap_or("".into()));
     if !disable_url_encoding {
         query_params.insert("encoding-type".into(), "url".into());
     }
@@ -58,7 +60,7 @@ fn delim_helper(delim: Option<String>, recursive: bool) -> Option<String> {
 /// Argument for ListObjectsV1 S3 API.
 #[derive(Clone, Debug, Default)]
 struct ListObjectsV1 {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -112,23 +114,22 @@ impl S3Api for ListObjectsV1 {
 impl ToS3Request for ListObjectsV1 {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         {
             add_common_list_objects_query_params(
                 &mut query_params,
-                self.delimiter.as_deref(),
+                self.delimiter,
                 self.disable_url_encoding,
                 self.max_keys,
-                self.prefix.as_deref(),
+                self.prefix,
             );
             if let Some(v) = self.marker {
                 query_params.insert("marker".into(), v);
             }
         }
 
-        Ok(S3Request::new(client, Method::GET)
+        Ok(S3Request::new(self.client, Method::GET)
             .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(query_params)
@@ -159,7 +160,7 @@ impl From<ListObjects> for ListObjectsV1 {
 /// Argument for ListObjectsV2 S3 API.
 #[derive(Clone, Debug, Default)]
 struct ListObjectsV2 {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -216,17 +217,16 @@ impl S3Api for ListObjectsV2 {
 impl ToS3Request for ListObjectsV2 {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         {
             query_params.insert("list-type".into(), "2".into());
             add_common_list_objects_query_params(
                 &mut query_params,
-                self.delimiter.as_deref(),
+                self.delimiter,
                 self.disable_url_encoding,
                 self.max_keys,
-                self.prefix.as_deref(),
+                self.prefix,
             );
             if let Some(v) = self.continuation_token {
                 query_params.insert("continuation-token".into(), v);
@@ -242,7 +242,7 @@ impl ToS3Request for ListObjectsV2 {
             }
         }
 
-        Ok(S3Request::new(client, Method::GET)
+        Ok(S3Request::new(self.client, Method::GET)
             .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(query_params)
@@ -273,10 +273,10 @@ impl From<ListObjects> for ListObjectsV2 {
 
 // region: list-object-versions
 
-/// Argument for ListObjectVerions S3 API
+/// Argument for ListObjectVersions S3 API
 #[derive(Clone, Debug, Default)]
 struct ListObjectVersions {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -336,31 +336,28 @@ impl S3Api for ListObjectVersions {
 impl ToS3Request for ListObjectVersions {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
-        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        let mut query_params: Multimap = insert(self.extra_query_params, "versions");
         {
-            query_params.insert("versions".into(), String::new());
-
             add_common_list_objects_query_params(
                 &mut query_params,
-                self.delimiter.as_deref(),
+                self.delimiter,
                 self.disable_url_encoding,
                 self.max_keys,
-                self.prefix.as_deref(),
+                self.prefix,
             );
-            if let Some(v) = &self.key_marker {
-                query_params.insert("key-marker".into(), v.to_string());
+            if let Some(v) = self.key_marker {
+                query_params.insert("key-marker".into(), v);
             }
-            if let Some(v) = &self.version_id_marker {
-                query_params.insert("version-id-marker".into(), v.to_string());
+            if let Some(v) = self.version_id_marker {
+                query_params.insert("version-id-marker".into(), v);
             }
             if self.include_user_metadata {
-                query_params.insert("metadata".into(), String::from("true"));
+                query_params.insert("metadata".into(), "true".into());
             }
         }
 
-        Ok(S3Request::new(client, Method::GET)
+        Ok(S3Request::new(self.client, Method::GET)
             .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(query_params)
@@ -370,7 +367,7 @@ impl ToS3Request for ListObjectVersions {
 
 impl From<ListObjects> for ListObjectVersions {
     fn from(value: ListObjects) -> Self {
-        ListObjectVersions {
+        Self {
             client: value.client,
             extra_headers: value.extra_headers,
             extra_query_params: value.extra_query_params,
@@ -399,7 +396,7 @@ impl From<ListObjects> for ListObjectVersions {
 /// a stream of results. Pagination is automatically performed.
 #[derive(Clone, Debug, Default)]
 pub struct ListObjects {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     // Parameters common to all ListObjects APIs.
     extra_headers: Option<Multimap>,
@@ -449,16 +446,12 @@ impl ToStream for ListObjects {
 }
 
 impl ListObjects {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client: Arc::clone(client),
+            bucket,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {

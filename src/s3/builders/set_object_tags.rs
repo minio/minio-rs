@@ -22,11 +22,12 @@ use crate::s3::utils::{Multimap, check_bucket_name, check_object_name, insert};
 use bytes::Bytes;
 use http::Method;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Argument builder for [set_object_tags()](Client::set_object_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct SetObjectTags {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -39,15 +40,13 @@ pub struct SetObjectTags {
 }
 
 impl SetObjectTags {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client: Arc::clone(client),
+            bucket,
+            object,
             ..Default::default()
         }
-    }
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -62,11 +61,6 @@ impl SetObjectTags {
 
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
-        self
-    }
-
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
         self
     }
 
@@ -87,11 +81,9 @@ impl S3Api for SetObjectTags {
 
 impl ToS3Request for SetObjectTags {
     fn to_s3request(self) -> Result<S3Request, Error> {
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
-        {
-            check_bucket_name(&self.bucket, true)?;
-            check_object_name(&self.object)?;
-        }
+        check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
+
         let mut query_params: Multimap = insert(self.extra_query_params, "tagging");
         if let Some(v) = self.version_id {
             query_params.insert("versionId".into(), v);
@@ -118,7 +110,7 @@ impl ToS3Request for SetObjectTags {
         };
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(data)));
 
-        Ok(S3Request::new(client, Method::PUT)
+        Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(query_params)

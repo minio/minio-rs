@@ -15,19 +15,20 @@
 
 use async_std::future::timeout;
 use minio::s3::Client;
+use std::sync::Arc;
 use std::thread;
 
 /// Cleanup guard that removes the bucket when it is dropped
 pub struct CleanupGuard {
-    client: Client,
+    client: Arc<Client>,
     bucket_name: String,
 }
 
 impl CleanupGuard {
     #[allow(dead_code)]
-    pub fn new(client: &Client, bucket_name: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket_name: &str) -> Self {
         Self {
-            client: client.clone(),
+            client: Arc::clone(client),
             bucket_name: bucket_name.to_string(),
         }
     }

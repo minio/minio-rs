@@ -542,11 +542,11 @@ pub fn insert(data: Option<Multimap>, key: &str) -> Multimap {
 }
 
 pub fn take_bucket(opt_bucket: Option<String>) -> Result<String, Error> {
-    Ok(opt_bucket.ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?)
+    opt_bucket.ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))
 }
 
 pub fn take_object(opt_object: Option<String>) -> Result<String, Error> {
-    Ok(opt_object.ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?)
+    opt_object.ok_or_else(|| Error::InvalidObjectName("no object specified".into()))
 }
 
 pub fn take_version_id(query_params: Multimap) -> Option<String> {

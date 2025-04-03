@@ -17,10 +17,11 @@
 
 use super::Client;
 use crate::s3::builders::SetObjectTags;
+use std::sync::Arc;
 
 impl Client {
     /// Create a SetObjectTags request builder.
-    pub fn set_object_tags(&self, bucket: &str) -> SetObjectTags {
-        SetObjectTags::new(bucket).client(self)
+    pub fn set_object_tags(self: &Arc<Self>, bucket: &str, object: &str) -> SetObjectTags {
+        SetObjectTags::new(self, bucket.to_owned(), object.to_owned())
     }
 }

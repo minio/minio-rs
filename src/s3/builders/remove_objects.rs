@@ -20,12 +20,14 @@ use bytes::Bytes;
 use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
 use std::pin::Pin;
+use std::sync::Arc;
 use tokio_stream::iter as stream_iter;
 
-use crate::s3::utils::check_object_name;
+use crate::s3::response::DeleteError;
+use crate::s3::types::ListEntry;
+use crate::s3::utils::{check_object_name, insert};
 use crate::s3::{
     Client,
-    client_core::ClientCore,
     error::Error,
     response::{RemoveObjectResponse, RemoveObjectsResponse},
     types::{S3Api, S3Request, ToS3Request, ToStream},
@@ -44,7 +46,7 @@ pub struct ObjectToDelete {
 /// A key can be converted into a DeleteObject. The version_id is set to None.
 impl From<&str> for ObjectToDelete {
     fn from(key: &str) -> Self {
-        ObjectToDelete {
+        Self {
             key: key.to_owned(),
             version_id: None,
         }
@@ -54,7 +56,7 @@ impl From<&str> for ObjectToDelete {
 /// A tuple of key and version_id can be converted into a DeleteObject.
 impl From<(&str, &str)> for ObjectToDelete {
     fn from((key, version_id): (&str, &str)) -> Self {
-        ObjectToDelete {
+        Self {
             key: key.to_string(),
             version_id: Some(version_id.to_string()),
         }
@@ -64,19 +66,38 @@ impl From<(&str, &str)> for ObjectToDelete {
 /// A tuple of key and option version_id can be converted into a DeleteObject.
 impl From<(&str, Option<&str>)> for ObjectToDelete {
     fn from((key, version_id): (&str, Option<&str>)) -> Self {
-        ObjectToDelete {
+        Self {
             key: key.to_string(),
             version_id: version_id.map(|v| v.to_string()),
         }
     }
 }
+
+impl From<ListEntry> for ObjectToDelete {
+    fn from(entry: ListEntry) -> Self {
+        Self {
+            key: entry.name,
+            version_id: entry.version_id,
+        }
+    }
+}
+
+impl From<DeleteError> for ObjectToDelete {
+    fn from(entry: DeleteError) -> Self {
+        Self {
+            key: entry.object_name,
+            version_id: entry.version_id,
+        }
+    }
+}
+
 // endregion: object-to-delete
 
 // region: remove-object
 
 #[derive(Debug, Clone, Default)]
 pub struct RemoveObject {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -88,17 +109,13 @@ pub struct RemoveObject {
 }
 
 impl RemoveObject {
-    pub fn new(bucket: &str, object: impl Into<ObjectToDelete>) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: &str, object: impl Into<ObjectToDelete>) -> Self {
         Self {
-            bucket: bucket.to_string(),
+            client: Arc::clone(client),
+            bucket: bucket.to_owned(),
             object: object.into(),
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn bypass_governance_mode(mut self, bypass_governance_mode: bool) -> Self {
@@ -130,14 +147,13 @@ impl ToS3Request for RemoveObject {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object.key)?;
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         if let Some(v) = self.object.version_id {
             query_params.insert("versionId".into(), v);
         }
 
-        Ok(S3Request::new(client, Method::DELETE)
+        Ok(S3Request::new(self.client, Method::DELETE)
             .region(self.region)
             .bucket(Some(self.bucket))
             .object(Some(self.object.key))
@@ -151,7 +167,7 @@ impl ToS3Request for RemoveObject {
 // region: remove-object-api
 #[derive(Debug, Clone, Default)]
 pub struct RemoveObjectsApi {
-    client: Option<ClientCore>,
+    client: Arc<Client>,
 
     bucket: String,
     objects: Vec<ObjectToDelete>,
@@ -165,17 +181,13 @@ pub struct RemoveObjectsApi {
 }
 
 impl RemoveObjectsApi {
-    pub fn new(bucket: &str, objects: Vec<ObjectToDelete>) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: &str, objects: Vec<ObjectToDelete>) -> Self {
         RemoveObjectsApi {
-            bucket: bucket.to_string(),
+            client: Arc::clone(client),
+            bucket: bucket.to_owned(),
             objects,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &ClientCore) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn bypass_governance_mode(mut self, bypass_governance_mode: bool) -> Self {
@@ -207,6 +219,10 @@ impl RemoveObjectsApi {
     }
 }
 
+impl S3Api for RemoveObjectsApi {
+    type S3Response = RemoveObjectsResponse;
+}
+
 impl ToS3Request for RemoveObjectsApi {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
@@ -231,36 +247,21 @@ impl ToS3Request for RemoveObjectsApi {
         let data: Bytes = data.into();
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
-        if self.bypass_governance_mode {
-            headers.insert(
-                String::from("x-amz-bypass-governance-retention"),
-                String::from("true"),
-            );
+        {
+            if self.bypass_governance_mode {
+                headers.insert("x-amz-bypass-governance-retention".into(), "true".into());
+            }
+            headers.insert("Content-Type".into(), "application/xml".into());
+            headers.insert("Content-MD5".into(), md5sum_hash(data.as_ref()));
         }
-        headers.insert(
-            String::from("Content-Type"),
-            String::from("application/xml"),
-        );
-        headers.insert("Content-MD5".into(), md5sum_hash(data.as_ref()));
 
-        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
-        query_params.insert("delete".into(), String::new());
-
-        let client: ClientCore = self.client.ok_or(Error::NoClientProvided)?;
-        let client: Client = client.0;
-
-        let req = S3Request::new(client, Method::POST)
+        Ok(S3Request::new(self.client, Method::POST)
             .region(self.region)
             .bucket(Some(self.bucket))
-            .query_params(query_params)
+            .query_params(insert(self.extra_query_params, "delete"))
             .headers(headers)
-            .body(Some(data.into()));
-        Ok(req)
+            .body(Some(data.into())))
     }
-}
-
-impl S3Api for RemoveObjectsApi {
-    type S3Response = RemoveObjectsResponse;
 }
 
 // endregion: remove-object-api
@@ -272,13 +273,13 @@ pub struct DeleteObjects {
 
 impl DeleteObjects {
     pub fn from_stream(s: impl Stream<Item = ObjectToDelete> + Send + Sync + 'static) -> Self {
-        DeleteObjects { items: Box::pin(s) }
+        Self { items: Box::pin(s) }
     }
 }
 
 impl From<ObjectToDelete> for DeleteObjects {
     fn from(delete_object: ObjectToDelete) -> Self {
-        DeleteObjects::from_stream(stream_iter(std::iter::once(delete_object)))
+        Self::from_stream(stream_iter(std::iter::once(delete_object)))
     }
 }
 
@@ -287,7 +288,7 @@ where
     I: Iterator<Item = ObjectToDelete> + Send + Sync + 'static,
 {
     fn from(keys: I) -> Self {
-        DeleteObjects::from_stream(stream_iter(keys))
+        Self::from_stream(stream_iter(keys))
     }
 }
 
@@ -296,7 +297,7 @@ where
 // region: remove-objects
 
 pub struct RemoveObjects {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     bucket: String,
     objects: DeleteObjects,
@@ -310,11 +311,10 @@ pub struct RemoveObjects {
 }
 
 impl RemoveObjects {
-    pub fn new(bucket: &str, objects: impl Into<DeleteObjects>) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: &str, objects: impl Into<DeleteObjects>) -> Self {
         Self {
-            client: None,
-
-            bucket: bucket.to_string(),
+            client: Arc::clone(client),
+            bucket: bucket.to_owned(),
             objects: objects.into(),
 
             bypass_governance_mode: false,
@@ -324,11 +324,6 @@ impl RemoveObjects {
             extra_query_params: None,
             region: None,
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn bypass_governance_mode(mut self, bypass_governance_mode: bool) -> Self {
@@ -370,15 +365,15 @@ impl RemoveObjects {
         if objects.is_empty() {
             return Ok(None);
         }
-        let client_core = ClientCore::new(self.client.as_ref().ok_or(Error::NoClientProvided)?);
-        let request = RemoveObjectsApi::new(&self.bucket, objects)
-            .client(&client_core)
-            .bypass_governance_mode(self.bypass_governance_mode)
-            .verbose_mode(self.verbose_mode)
-            .extra_headers(self.extra_headers.clone())
-            .extra_query_params(self.extra_query_params.clone())
-            .region(self.region.clone());
-        Ok(Some(request))
+
+        Ok(Some(
+            RemoveObjectsApi::new(&self.client, &self.bucket, objects)
+                .bypass_governance_mode(self.bypass_governance_mode)
+                .verbose_mode(self.verbose_mode)
+                .extra_headers(self.extra_headers.clone())
+                .extra_query_params(self.extra_query_params.clone())
+                .region(self.region.clone()),
+        ))
     }
 }
 

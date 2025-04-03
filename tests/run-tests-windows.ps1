@@ -9,3 +9,5 @@ $Env:SERVER_REGION = ""
 
 # Run tests
 cargo test --features ring
+#cargo test --features ring -- :s3express:
+#cargo test --features ring -- :s3:

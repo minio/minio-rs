@@ -17,13 +17,12 @@
 
 pub mod builders;
 pub mod client;
-pub mod client_core;
 pub mod creds;
 pub mod error;
 pub mod http;
 mod object_content;
 pub mod response;
-mod segmented_bytes;
+pub mod segmented_bytes;
 pub mod signer;
 pub mod sse;
 pub mod types;

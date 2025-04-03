@@ -17,42 +17,38 @@
 
 use super::Client;
 use crate::s3::builders::ListObjects;
+use std::sync::Arc;
 
 impl Client {
+    /// Creates a [`ListObjects`] request builder.
+    ///
     /// List objects with version information optionally. This function handles
     /// pagination and returns a stream of results. Each result corresponds to
     /// the response of a single listing API call.
     ///
+    /// To execute the request, call [`ListObjects::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`ListObjectsResponse`](crate::s3::response::ListObjectsResponse).
+    ///
     /// # Example
     ///
-    /// ```rust,no_run
-    /// use minio::s3::client::{Client, ClientBuilder};
-    /// use minio::s3::creds::StaticProvider;
-    /// use minio::s3::http::BaseUrl;
-    /// use minio::s3::types::ToStream;
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::types::{ToStream, S3Api};
+    /// use std::sync::Arc;
     /// use futures_util::StreamExt;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let base_url: BaseUrl = "play.min.io".parse().unwrap();
-    ///     let static_provider = StaticProvider::new(
-    ///         "Q3AM3UQ867SPQQA43P2F",
-    ///         "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
-    ///         None,
-    ///     );
+    ///    let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
     ///
-    ///     let client = ClientBuilder::new(base_url)
-    ///         .provider(Some(Box::new(static_provider)))
-    ///         .build()
-    ///         .unwrap();
+    ///    let mut resp = client
+    ///        .list_objects("bucket-name")
+    ///        .recursive(true)
+    ///        .use_api_v1(false) // use v2
+    ///        .include_versions(true)
+    ///        .to_stream().await;
     ///
-    ///     // List all objects in a directory.
-    ///     let mut list_objects = client
-    ///         .list_objects("my-bucket")
-    ///         .recursive(true)
-    ///         .to_stream()
-    ///         .await;
-    ///     while let Some(result) = list_objects.next().await {
+    ///    while let Some(result) = resp.next().await {
     ///        match result {
     ///            Ok(resp) => {
     ///                for item in resp.contents {
@@ -61,9 +57,10 @@ impl Client {
     ///            }
     ///            Err(e) => println!("Error: {:?}", e),
     ///        }
-    ///     }
-    /// }
-    pub fn list_objects(&self, bucket: &str) -> ListObjects {
-        ListObjects::new(bucket).client(self)
+    ///    }
+    ///}
+    /// ```
+    pub fn list_objects(self: &Arc<Self>, bucket: &str) -> ListObjects {
+        ListObjects::new(self, bucket.to_owned())
     }
 }

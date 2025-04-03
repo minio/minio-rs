@@ -17,10 +17,31 @@
 
 use super::Client;
 use crate::s3::builders::GetBucketReplication;
+use std::sync::Arc;
 
 impl Client {
-    /// Create a GetBucketReplication request builder.
-    pub fn get_bucket_replication(&self, bucket: &str) -> GetBucketReplication {
-        GetBucketReplication::new(bucket).client(self)
+    /// Creates a [`GetBucketReplication`] request builder.
+    ///
+    /// To execute the request, call [`GetBucketReplication::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetBucketReplicationResponse`](crate::s3::response::GetBucketReplicationResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::GetBucketReplicationResponse;
+    /// use minio::s3::types::S3Api;
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let resp: GetBucketReplicationResponse =
+    ///         client.get_bucket_replication("bucket-name").send().await.unwrap();
+    ///     println!("retrieved bucket replication config '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
+    /// }
+    /// ```
+    pub fn get_bucket_replication(self: &Arc<Self>, bucket: &str) -> GetBucketReplication {
+        GetBucketReplication::new(self, bucket.to_owned())
     }
 }

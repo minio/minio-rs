@@ -24,7 +24,7 @@ pub fn rand_bucket_name() -> String {
 }
 
 pub fn rand_object_name() -> String {
-    Alphanumeric.sample_string(&mut rand::thread_rng(), 8)
+    Alphanumeric.sample_string(&mut rand::thread_rng(), 20)
 }
 
 pub async fn get_bytes_from_response(v: Result<reqwest::Response, Error>) -> bytes::Bytes {

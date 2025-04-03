@@ -15,13 +15,35 @@
 
 //! S3 APIs for downloading objects.
 
-use crate::s3::builders::GetObject;
-
 use super::Client;
+use crate::s3::builders::GetObject;
+use std::sync::Arc;
 
 impl Client {
-    /// Create a GetObject request builder.
-    pub fn get_object(&self, bucket: &str, object: &str) -> GetObject {
-        GetObject::new(bucket, object).client(self)
+    /// Creates a [`GetObject`] request builder.
+    ///
+    /// To execute the request, call [`GetObject::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetObjectResponse`](crate::s3::response::GetObjectResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::GetObjectResponse;
+    /// use minio::s3::types::S3Api;
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let resp: GetObjectResponse =
+    ///         client.get_object("bucket-name", "object-name").send().await.unwrap();
+    ///     let content_bytes = resp.content.to_segmented_bytes().await.unwrap().to_bytes();
+    ///     let content_str = String::from_utf8(content_bytes.to_vec()).unwrap();
+    ///     println!("retrieved content '{}'", content_str);
+    /// }
+    /// ```
+    pub fn get_object(self: &Arc<Self>, bucket: &str, object: &str) -> GetObject {
+        GetObject::new(self, bucket.to_owned(), object.to_owned())
     }
 }

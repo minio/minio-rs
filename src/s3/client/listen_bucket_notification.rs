@@ -15,18 +15,47 @@
 
 //! MinIO Extension API for S3 Buckets: ListenBucketNotification
 
-use crate::s3::builders::ListenBucketNotification;
-
 use super::Client;
+use crate::s3::builders::ListenBucketNotification;
+use std::sync::Arc;
 
 impl Client {
-    /// Listens for bucket notifications. This is MinIO extension API. This
-    /// function returns a tuple of `ListenBucketNotificationResponse` and a
-    /// stream of `NotificationRecords`. The former contains the HTTP headers
+    /// Creates a [`ListenBucketNotification`] request builder.
+    ///
+    /// To execute the request, call [`ListenBucketNotification::send()`](crate::s3::types::S3Api::send),
+    /// which returns a tuple of [`ListenBucketNotificationResponse`](crate::s3::response::ListenBucketNotificationResponse) and a
+    /// stream of [`NotificationRecords`](crate::s3::types::NotificationRecords). The former contains the HTTP headers
     /// returned by the server and the latter is a stream of notification
     /// records. In normal operation (when there are no errors), the stream
     /// never ends.
-    pub fn listen_bucket_notification(&self, bucket: &str) -> ListenBucketNotification {
-        ListenBucketNotification::new(bucket).client(self)
+    ///
+    /// # MinIO Extensions
+    ///
+    /// This function is only available in MinIO and not part of the AWS S3 API.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::types::{NotificationRecord, NotificationRecords, S3Api};
+    /// use futures_util::StreamExt;
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let (_resp, mut event_stream) = client
+    ///         .listen_bucket_notification("bucket-name")
+    ///         .send().await .unwrap();
+    ///
+    ///     while let Some(event) = event_stream.next().await {
+    ///         let event: NotificationRecords = event.unwrap();
+    ///         let record: Option<&NotificationRecord> = event.records.first();    
+    ///         println!("received a notification record {:#?}", record);
+    ///     }
+    /// }
+    /// ```
+    pub fn listen_bucket_notification(self: &Arc<Self>, bucket: &str) -> ListenBucketNotification {
+        ListenBucketNotification::new(self, bucket.to_owned())
     }
 }

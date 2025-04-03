@@ -421,12 +421,13 @@ impl BaseUrl {
             query: query.clone(),
         };
 
-        if bucket_name.is_none() {
-            self.build_list_buckets_url(&mut url, region);
-            return Ok(url);
-        }
-
-        let bucket = bucket_name.unwrap();
+        let bucket: &str = match bucket_name {
+            None => {
+                self.build_list_buckets_url(&mut url, region);
+                return Ok(url);
+            }
+            Some(v) => v,
+        };
 
         #[allow(clippy::nonminimal_bool)]
         let enforce_path_style = true &&

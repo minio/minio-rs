@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use http::Method;
+use std::sync::Arc;
 
 use crate::s3::response::ListBucketsResponse;
 use crate::s3::{
@@ -26,20 +27,18 @@ use crate::s3::{
 /// Argument builder for [list_buckets()](Client::list_buckets) API.
 #[derive(Clone, Debug, Default)]
 pub struct ListBuckets {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
 }
 
 impl ListBuckets {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
+    pub fn new(client: &Arc<Client>) -> Self {
+        Self {
+            client: Arc::clone(client),
+            ..Default::default()
+        }
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -59,9 +58,7 @@ impl S3Api for ListBuckets {
 
 impl ToS3Request for ListBuckets {
     fn to_s3request(self) -> Result<S3Request, Error> {
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
-
-        Ok(S3Request::new(client, Method::GET)
+        Ok(S3Request::new(self.client, Method::GET)
             .query_params(self.extra_query_params.unwrap_or_default())
             .headers(self.extra_headers.unwrap_or_default()))
     }

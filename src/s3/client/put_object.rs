@@ -24,55 +24,89 @@ use crate::s3::{
     },
     types::PartInfo,
 };
+use std::sync::Arc;
 
 impl Client {
-    /// Create a PutObject request builder. This is a lower-level API that
+    /// Creates a [`PutObject`] request builder. This is a lower-level API that
     /// performs a non-multipart object upload.
-    pub fn put_object(&self, bucket: &str, object: &str, data: SegmentedBytes) -> PutObject {
-        PutObject::new(bucket, object, data).client(self)
+    ///
+    /// To execute the request, call [`PutObject::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`PutObjectResponse`](crate::s3::response::PutObjectResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::PutObjectResponse;
+    /// use minio::s3::types::S3Api;
+    /// use minio::s3::segmented_bytes::SegmentedBytes;
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let data = SegmentedBytes::from("Hello world".to_string());
+    ///     let resp: PutObjectResponse =
+    ///         client.put_object("bucket-name", "object-name", data).send().await.unwrap();
+    ///     println!("successfully put object '{}'", resp.object);
+    /// }
+    /// ```
+    pub fn put_object(
+        self: &Arc<Self>,
+        bucket: &str,
+        object: &str,
+        data: SegmentedBytes,
+    ) -> PutObject {
+        PutObject::new(self, bucket, object, data)
     }
 
     /// Create a CreateMultipartUpload request builder.
-    pub fn create_multipart_upload(&self, bucket: &str, object: &str) -> CreateMultipartUpload {
-        CreateMultipartUpload::new(bucket, object).client(self)
+    pub fn create_multipart_upload(
+        self: &Arc<Self>,
+        bucket: &str,
+        object: &str,
+    ) -> CreateMultipartUpload {
+        CreateMultipartUpload::new(self, bucket, object)
     }
 
     pub fn abort_multipart_upload(
-        &self,
+        self: &Arc<Self>,
         bucket: &str,
         object: &str,
         upload_id: &str,
     ) -> AbortMultipartUpload {
-        AbortMultipartUpload::new(bucket, object, upload_id).client(self)
+        AbortMultipartUpload::new(self, bucket, object, upload_id)
     }
 
     pub fn complete_multipart_upload(
-        &self,
+        self: &Arc<Self>,
         bucket: &str,
         object: &str,
         upload_id: &str,
         parts: Vec<PartInfo>,
     ) -> CompleteMultipartUpload {
-        CompleteMultipartUpload::new(bucket, object, upload_id, parts).client(self)
+        CompleteMultipartUpload::new(self, bucket, object, upload_id, parts)
     }
 
     pub fn upload_part(
-        &self,
+        self: &Arc<Self>,
         bucket: &str,
         object: &str,
         upload_id: &str,
         part_number: u16,
         data: SegmentedBytes,
     ) -> UploadPart {
-        UploadPart::new(bucket, object, upload_id, part_number, data).client(self)
+        UploadPart::new(self, bucket, object, upload_id, part_number, data)
     }
 
+    /// Creates a PutObjectContent request builder to upload data to MinIO/S3.
+    /// The content is streamed, and this higher-level API handles multipart uploads transparently.
     pub fn put_object_content(
-        &self,
+        self: &Arc<Self>,
         bucket: &str,
         object: &str,
         content: impl Into<ObjectContent>,
     ) -> PutObjectContent {
-        PutObjectContent::new(bucket, object, content).client(self)
+        PutObjectContent::new(self, bucket, object, content)
     }
 }

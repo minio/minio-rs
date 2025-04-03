@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::Client;
 use crate::s3::builders::BucketCommon;
 use crate::s3::error::Error;
 use crate::s3::response::DeleteObjectLockConfigResponse;
@@ -36,7 +35,6 @@ impl S3Api for DeleteObjectLockConfig {
 impl ToS3Request for DeleteObjectLockConfig {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         let config = ObjectLockConfig {
             retention_mode: None,
@@ -47,7 +45,7 @@ impl ToS3Request for DeleteObjectLockConfig {
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
         //TODO consider const body
 
-        Ok(S3Request::new(client, Method::PUT)
+        Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(insert(self.extra_query_params, "object-lock"))

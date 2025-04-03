@@ -18,69 +18,95 @@
 use super::{Client, DEFAULT_REGION};
 use crate::s3::builders::GetRegion;
 use crate::s3::error::Error;
+use crate::s3::response::GetRegionResponse;
 use crate::s3::types::S3Api;
+use std::sync::Arc;
 use tokio::task;
 
 impl Client {
-    /// Create a GetRegion request builder.
-    pub fn get_region(&self, bucket: &str, region: Option<String>) -> GetRegion {
-        GetRegion::new(bucket).client(self).region(region)
+    /// Creates a [`GetRegion`] request builder.
+    ///
+    /// To execute the request, call [`GetRegion::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetRegionResponse`](crate::s3::response::GetRegionResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::GetRegionResponse;
+    /// use minio::s3::types::S3Api;
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let resp: GetRegionResponse =
+    ///         client.get_region("bucket-name").send().await.unwrap();
+    ///     println!("retrieved region '{:?}' for bucket '{}'", resp.region_response, resp.bucket);
+    /// }
+    /// ```
+    pub fn get_region(self: &Arc<Self>, bucket: &str) -> GetRegion {
+        GetRegion::new(self, bucket.to_owned())
     }
 
     /// Retrieves the region for the specified bucket name from the cache.
     /// If the region is not found in the cache, it is fetched via a call to S3 or MinIO
     /// and then stored in the cache for future lookups.
     pub async fn get_region_cached_async(
-        &self,
+        self: &Arc<Self>,
         bucket: &str,
-        region: &Option<String>,
+        region: &Option<String>, // the region as provided by the S3Request
     ) -> Result<String, Error> {
-        if let Some(r) = region {
-            if !self.base_url.region.is_empty() && (&self.base_url.region != r) {
+        // If a region is provided, validate it against the base_url region
+        if let Some(requested_region) = region {
+            if !self.base_url.region.is_empty() && (self.base_url.region != *requested_region) {
                 return Err(Error::RegionMismatch(
                     self.base_url.region.clone(),
-                    r.to_owned(),
+                    requested_region.clone(),
                 ));
             }
-            return Ok(r.to_owned());
+            return Ok(requested_region.clone());
         }
 
+        // If base_url has a region set, use it
         if !self.base_url.region.is_empty() {
             return Ok(self.base_url.region.clone());
         }
 
+        // If no bucket or provider is configured, fall back to default
         if bucket.is_empty() || self.provider.is_none() {
             return Ok(DEFAULT_REGION.to_owned());
         }
 
+        // Return cached region if available
         if let Some(v) = self.region_map.get(bucket) {
             return Ok(v.value().clone());
         }
 
-        // Fallback: Fetch and cache the region
-        let mut r: String = self
-            .get_region(bucket, region.clone())
-            .send()
-            .await?
-            .region_response;
+        // Otherwise, fetch the region and cache it
+        let resp: GetRegionResponse = self.get_region(bucket).send().await?;
 
-        if r.is_empty() {
-            r = DEFAULT_REGION.to_owned();
-        }
+        let resolved_region: String = if resp.region_response.is_empty() {
+            DEFAULT_REGION.to_owned()
+        } else {
+            resp.region_response
+        };
 
-        self.region_map.insert(bucket.to_owned(), r.clone());
-        Ok(r)
+        self.region_map
+            .insert(bucket.to_owned(), resolved_region.clone());
+        Ok(resolved_region)
     }
 
+    /// Retrieves the region for the specified bucket name from the cache.
+    /// If the region is not found in the cache, it is fetched via a call to S3 or MinIO
+    /// and then stored in the cache for future lookups.
     pub fn get_region_cached(
-        &self,
+        self: &Arc<Self>,
         bucket: &str,
         region: &Option<String>,
     ) -> Result<String, Error> {
         task::block_in_place(|| {
-            tokio::runtime::Runtime::new()
-                .unwrap()
-                .block_on(self.get_region_cached_async(bucket, region))
+            tokio::runtime::Runtime::new()?.block_on(self.get_region_cached_async(bucket, region))
         })
     }
 }

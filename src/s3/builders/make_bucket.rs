@@ -21,11 +21,12 @@ use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{Multimap, check_bucket_name};
 use http::Method;
+use std::sync::Arc;
 
 /// Argument builder for [make_bucket()](Client::make_bucket) API
 #[derive(Clone, Debug, Default)]
 pub struct MakeBucket {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -36,16 +37,12 @@ pub struct MakeBucket {
 }
 
 impl MakeBucket {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client: Arc::clone(client),
+            bucket,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -76,19 +73,18 @@ impl S3Api for MakeBucket {
 impl ToS3Request for MakeBucket {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         let region1: Option<&str> = self.region.as_deref();
-        let region2: Option<&str> = if client.base_url.region.is_empty() {
+        let region2: Option<&str> = if self.client.base_url.region.is_empty() {
             None
         } else {
-            Some(&*client.base_url.region)
+            Some(&self.client.base_url.region)
         };
 
         let region_str: String = match (region1, region2) {
             (None, None) => DEFAULT_REGION.to_string(),
             (Some(_), None) => self.region.unwrap(),
-            (None, Some(_)) => client.base_url.region.clone(),
+            (None, Some(_)) => self.client.base_url.region.clone(),
             (Some(r1), Some(r2)) if r1 == r2 => self.region.unwrap(), // Both are Some and equal
             (Some(r1), Some(r2)) => {
                 return Err(Error::RegionMismatch(r1.to_string(), r2.to_string()));
@@ -113,7 +109,7 @@ impl ToS3Request for MakeBucket {
             false => Some(SegmentedBytes::from(data)),
         };
 
-        Ok(S3Request::new(client, Method::PUT)
+        Ok(S3Request::new(self.client, Method::PUT)
             .region(Some(region_str))
             .bucket(Some(self.bucket))
             .query_params(self.extra_query_params.unwrap_or_default())

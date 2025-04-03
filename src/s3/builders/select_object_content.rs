@@ -23,11 +23,12 @@ use crate::s3::utils::{Multimap, check_bucket_name, check_object_name, insert, m
 use async_trait::async_trait;
 use bytes::Bytes;
 use http::Method;
+use std::sync::Arc;
 
 /// Argument builder for [bucket_exists()](Client::bucket_exists) API
 #[derive(Default)]
 pub struct SelectObjectContent {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -41,16 +42,13 @@ pub struct SelectObjectContent {
 }
 
 impl SelectObjectContent {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client: Arc::clone(client),
+            bucket,
+            object,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -65,11 +63,6 @@ impl SelectObjectContent {
 
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
-        self
-    }
-
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
         self
     }
 
@@ -96,16 +89,15 @@ impl S3Api for SelectObjectContent {
 #[async_trait]
 impl ToS3Request for SelectObjectContent {
     fn to_s3request(self) -> Result<S3Request, Error> {
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
 
-            if self.ssec.is_some() && !client.base_url.https {
+            if self.ssec.is_some() && !self.client.base_url.https {
                 return Err(Error::SseTlsRequired(None));
             }
         }
-        let region: String = client.get_region_cached(&self.bucket, &self.region)?;
+        let region: String = self.client.get_region_cached(&self.bucket, &self.region)?;
         let data = self.request.to_xml();
         let bytes: Bytes = data.into();
 
@@ -117,7 +109,7 @@ impl ToS3Request for SelectObjectContent {
 
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
 
-        Ok(S3Request::new(client, Method::POST)
+        Ok(S3Request::new(self.client, Method::POST)
             .region(Some(region))
             .bucket(Some(self.bucket))
             .query_params(query_params)

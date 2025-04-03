@@ -27,9 +27,7 @@ pub(crate) fn bench_set_object_tags(criterion: &mut Criterion) {
         criterion,
         || async { Ctx2::new_with_object(false).await },
         |ctx| {
-            SetObjectTags::new(&ctx.bucket)
-                .client(&ctx.client)
-                .object(ctx.object.clone())
+            SetObjectTags::new(&ctx.client, ctx.bucket.to_owned(), ctx.object.to_owned())
                 .tags(create_tags_example())
         },
     )
@@ -40,19 +38,16 @@ pub(crate) fn bench_get_object_tags(criterion: &mut Criterion) {
         criterion,
         || async {
             let ctx = Ctx2::new_with_object(false).await;
-            let _resp: SetObjectTagsResponse = SetObjectTags::new(&ctx.bucket)
-                .client(&ctx.client)
-                .object(ctx.object.clone())
+
+            let _resp: SetObjectTagsResponse = ctx
+                .client
+                .set_object_tags(&ctx.bucket, &ctx.object)
                 .tags(create_tags_example())
                 .send()
                 .await
                 .unwrap();
             ctx
         },
-        |ctx| {
-            GetObjectTags::new(&ctx.bucket)
-                .client(&ctx.client)
-                .object(ctx.object.clone())
-        },
+        |ctx| GetObjectTags::new(&ctx.client, ctx.bucket.to_owned(), ctx.object.to_owned()),
     )
 }

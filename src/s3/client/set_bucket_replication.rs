@@ -17,22 +17,32 @@
 
 use super::Client;
 use crate::s3::builders::SetBucketReplication;
+use std::sync::Arc;
 
 impl Client {
-    /// Returns argument for [set_bucket_replication()](crate::s3::client::Client::set_bucket_replication) API with given bucket name and configuration
+    /// Creates a [`SetBucketReplication`] request builder.
     ///
-    /// # Examples
+    /// To execute the request, call [`SetBucketReplication::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`SetBucketReplicationResponse`](crate::s3::response::SetBucketReplicationResponse).
     ///
-    /// ```ignore
+    /// # Example
+    ///
+    /// ```no_run
     /// use minio::s3::Client;
-    /// use minio::s3::types::*;
+    /// use minio::s3::builders::VersioningStatus;
+    /// use minio::s3::response::SetBucketReplicationResponse;
+    /// use minio::s3::types::{S3Api, AndOperator, Destination, Filter, ReplicationConfig, ReplicationRule};
+    /// use std::sync::Arc;
     /// use std::collections::HashMap;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// let mut tags: HashMap<String, String> = HashMap::new();  
+    /// let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     
+    ///     let mut tags: HashMap<String, String> = HashMap::new();  
     ///     tags.insert(String::from("key1"), String::from("value1"));
     ///     tags.insert(String::from("key2"), String::from("value2"));
+    ///
     ///     let mut rules: Vec<ReplicationRule> = Vec::new();
     ///     rules.push(ReplicationRule {
     ///         destination: Destination {
@@ -61,14 +71,15 @@ impl Client {
     ///         delete_replication_status: Some(false),
     ///         status: true,
     ///     });
-    ///     let client = Client::default();
-    ///     let _resp = client
-    ///         .set_bucket_replication("my-bucket-name")
+    ///
+    ///     let resp: SetBucketReplicationResponse = client
+    ///         .set_bucket_replication("bucket-name")
     ///         .replication_config(ReplicationConfig {role: None, rules})
-    ///         .send().await;
+    ///         .send().await.unwrap();
+    ///     println!("enabled versioning on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_replication(&self, bucket: &str) -> SetBucketReplication {
-        SetBucketReplication::new(bucket).client(self)
+    pub fn set_bucket_replication(self: &Arc<Self>, bucket: &str) -> SetBucketReplication {
+        SetBucketReplication::new(self, bucket.to_owned())
     }
 }

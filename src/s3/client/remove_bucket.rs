@@ -16,76 +16,88 @@
 //! S3 APIs for bucket objects.
 
 use super::Client;
-use crate::s3::builders::{ObjectToDelete, RemoveBucket};
+use crate::s3::builders::{ObjectToDelete, RemoveBucket, RemoveObject};
 use crate::s3::error::Error;
 use crate::s3::response::DeleteResult;
 use crate::s3::response::{
     DisableObjectLegalHoldResponse, RemoveBucketResponse, RemoveObjectResponse,
     RemoveObjectsResponse,
 };
-use crate::s3::types::{ListEntry, S3Api, ToStream};
+use crate::s3::types::{S3Api, ToStream};
 use futures::StreamExt;
+use std::sync::Arc;
 
 impl Client {
-    /// Create a RemoveBucket request builder.
-    pub fn remove_bucket(&self, bucket: &str) -> RemoveBucket {
-        RemoveBucket::new(bucket).client(self)
+    /// Creates a [`RemoveBucket`] request builder.
+    ///
+    /// To execute the request, call [`RemoveBucket::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`RemoveBucketResponse`](crate::s3::response::RemoveBucketResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::RemoveBucketResponse;
+    /// use minio::s3::types::S3Api;
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let resp: RemoveBucketResponse =
+    ///         client.remove_bucket("bucket-name").send().await.unwrap();
+    ///     println!("bucket '{}' in region '{}' is removed", resp.bucket, resp.region);
+    /// }
+    /// ```
+    pub fn remove_bucket(self: &Arc<Self>, bucket: &str) -> RemoveBucket {
+        RemoveBucket::new(self, bucket.to_owned())
     }
 
     /// Removes a bucket and also removes non-empty buckets by first removing all objects before
     /// deleting the bucket. Bypasses governance mode and legal hold.
     pub async fn remove_and_purge_bucket(
-        &self,
-        bucket_name: &str,
+        self: &Arc<Self>,
+        bucket: &str,
     ) -> Result<RemoveBucketResponse, Error> {
         let mut stream = self
-            .list_objects(bucket_name)
+            .list_objects(bucket)
             .include_versions(true)
             .to_stream()
             .await;
 
         while let Some(items) = stream.next().await {
-            let items: Vec<ListEntry> = items?.contents;
-            let mut to_delete: Vec<ObjectToDelete> = Vec::with_capacity(items.len());
-            for item in items {
-                to_delete.push(ObjectToDelete::from((
-                    item.name.as_ref(),
-                    item.version_id.as_deref(),
-                )))
-            }
             let mut resp = self
-                .remove_objects(bucket_name, to_delete.into_iter())
+                .remove_objects(
+                    bucket,
+                    items?.contents.into_iter().map(ObjectToDelete::from),
+                )
                 .bypass_governance_mode(true)
                 .to_stream()
                 .await;
 
             while let Some(item) = resp.next().await {
                 let res: RemoveObjectsResponse = item?;
-                for obj in res.result.iter() {
+                for obj in res.result.into_iter() {
                     match obj {
                         DeleteResult::Deleted(_) => {}
                         DeleteResult::Error(v) => {
                             // the object is not deleted. try to disable legal hold and try again.
                             let _resp: DisableObjectLegalHoldResponse = self
-                                .disable_object_legal_hold(bucket_name)
-                                .object(v.object_name.clone())
+                                .disable_object_legal_hold(bucket, &v.object_name)
                                 .version_id(v.version_id.clone())
                                 .send()
                                 .await?;
 
-                            let key: &str = &v.object_name;
-                            let version: Option<&str> = v.version_id.as_deref();
-                            let otd: ObjectToDelete = ObjectToDelete::from((key, version));
-                            let _resp: RemoveObjectResponse = self
-                                .remove_object(bucket_name, otd)
-                                .bypass_governance_mode(true)
-                                .send()
-                                .await?;
+                            let _resp: RemoveObjectResponse =
+                                RemoveObject::new(self, bucket, ObjectToDelete::from(v))
+                                    .bypass_governance_mode(true)
+                                    .send()
+                                    .await?;
                         }
                     }
                 }
             }
         }
-        self.remove_bucket(bucket_name).send().await
+        self.remove_bucket(bucket).send().await
     }
 }

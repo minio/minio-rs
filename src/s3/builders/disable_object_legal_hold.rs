@@ -21,11 +21,12 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{Multimap, check_bucket_name, check_object_name, insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
+use std::sync::Arc;
 
 /// Argument builder for [disable_object_legal_hold()](Client::disable_object_legal_hold) API
 #[derive(Clone, Debug, Default)]
 pub struct DisableObjectLegalHold {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -37,16 +38,13 @@ pub struct DisableObjectLegalHold {
 }
 
 impl DisableObjectLegalHold {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client: Arc::clone(client),
+            bucket,
+            object,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -56,11 +54,6 @@ impl DisableObjectLegalHold {
 
     pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
         self.extra_query_params = extra_query_params;
-        self
-    }
-
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
         self
     }
 
@@ -78,7 +71,6 @@ impl ToS3Request for DisableObjectLegalHold {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         let mut query_params: Multimap = insert(self.extra_query_params, "legal-hold");
@@ -91,7 +83,7 @@ impl ToS3Request for DisableObjectLegalHold {
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(PAYLOAD)));
         //TODO consider const body
 
-        Ok(S3Request::new(client, Method::PUT)
+        Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(query_params)

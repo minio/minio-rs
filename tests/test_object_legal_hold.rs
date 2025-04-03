@@ -52,8 +52,7 @@ async fn object_legal_hold() {
 
     let resp: DisableObjectLegalHoldResponse = ctx
         .client
-        .disable_object_legal_hold(&bucket_name)
-        .object(object_name.clone())
+        .disable_object_legal_hold(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -65,8 +64,7 @@ async fn object_legal_hold() {
 
     let resp: IsObjectLegalHoldEnabledResponse = ctx
         .client
-        .is_object_legal_hold_enabled(&bucket_name)
-        .object(object_name.clone())
+        .is_object_legal_hold_enabled(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -79,8 +77,7 @@ async fn object_legal_hold() {
 
     let resp: EnableObjectLegalHoldResponse = ctx
         .client
-        .enable_object_legal_hold(&bucket_name)
-        .object(object_name.clone())
+        .enable_object_legal_hold(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -92,8 +89,7 @@ async fn object_legal_hold() {
 
     let resp: IsObjectLegalHoldEnabledResponse = ctx
         .client
-        .is_object_legal_hold_enabled(&bucket_name)
-        .object(object_name.clone())
+        .is_object_legal_hold_enabled(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();

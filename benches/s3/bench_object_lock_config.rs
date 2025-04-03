@@ -25,9 +25,7 @@ pub(crate) fn bench_set_object_lock_config(criterion: &mut Criterion) {
         || async { Ctx2::new_with_object(true).await },
         |ctx| {
             let config = create_object_lock_config_example();
-            SetObjectLockConfig::new(&ctx.bucket)
-                .client(&ctx.client)
-                .config(config)
+            SetObjectLockConfig::new(&ctx.client, ctx.bucket.to_owned()).config(config)
         },
     )
 }
@@ -36,7 +34,7 @@ pub(crate) fn bench_get_object_lock_config(criterion: &mut Criterion) {
         "get_object_lock_config",
         criterion,
         || async { Ctx2::new_with_object(true).await },
-        |ctx| GetObjectLockConfig::new(&ctx.bucket).client(&ctx.client),
+        |ctx| GetObjectLockConfig::new(&ctx.client, ctx.bucket.to_owned()),
     )
 }
 pub(crate) fn bench_delete_object_lock_config(criterion: &mut Criterion) {
@@ -44,6 +42,6 @@ pub(crate) fn bench_delete_object_lock_config(criterion: &mut Criterion) {
         "delete_object_lock_config",
         criterion,
         || async { Ctx2::new_with_object(true).await },
-        |ctx| DeleteObjectLockConfig::new(&ctx.bucket).client(&ctx.client),
+        |ctx| DeleteObjectLockConfig::new(&ctx.client, ctx.bucket.to_owned()),
     )
 }

@@ -20,10 +20,12 @@ use crate::s3::response::GetPresignedObjectUrlResponse;
 use crate::s3::signer::presign_v4;
 use crate::s3::utils::{Multimap, UtcTime, check_bucket_name, check_object_name, utc_now};
 use http::Method;
+use std::sync::Arc;
 
 /// Argument for [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API
+#[derive(Clone, Debug, Default)]
 pub struct GetPresignedObjectUrl {
-    client: Client,
+    client: Arc<Client>,
 
     extra_query_params: Option<Multimap>,
     region: Option<String>,
@@ -37,29 +39,22 @@ pub struct GetPresignedObjectUrl {
 }
 
 impl GetPresignedObjectUrl {
-    pub fn new(
-        client: &Client,
-        bucket: String,
-        object: String,
-        method: Method,
-    ) -> Result<GetPresignedObjectUrl, Error> {
-        check_bucket_name(&bucket, true)?;
-        check_object_name(&object)?;
-
-        Ok(GetPresignedObjectUrl {
-            client: client.clone(),
-            extra_query_params: None,
-            region: None,
+    pub fn new(client: &Arc<Client>, bucket: String, object: String, method: Method) -> Self {
+        Self {
+            client: Arc::clone(client),
             bucket,
             object,
-            version_id: None,
             method,
             expiry_seconds: Some(DEFAULT_EXPIRY_SECONDS),
-            request_time: None,
-        })
+            ..Default::default()
+        }
     }
 
-    pub fn compute(self) -> Result<GetPresignedObjectUrlResponse, Error> {
+    pub async fn send(self) -> Result<GetPresignedObjectUrlResponse, Error> {
+        // NOTE: this send function is async to be comparable with other functions...
+        check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
+
         let region: String = self.client.get_region_cached(&self.bucket, &self.region)?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();

@@ -23,11 +23,12 @@ use crate::s3::utils::{
 };
 use bytes::Bytes;
 use http::Method;
+use std::sync::Arc;
 
 /// Argument builder for [set_object_retention()](Client::set_object_retention) API
 #[derive(Clone, Debug, Default)]
 pub struct SetObjectRetention {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -42,17 +43,13 @@ pub struct SetObjectRetention {
 }
 
 impl SetObjectRetention {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
-            bypass_governance_mode: false,
+            client: Arc::clone(client),
+            bucket,
+            object,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -67,11 +64,6 @@ impl SetObjectRetention {
 
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
-        self
-    }
-
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
         self
     }
 
@@ -102,7 +94,6 @@ impl S3Api for SetObjectRetention {
 
 impl ToS3Request for SetObjectRetention {
     fn to_s3request(self) -> Result<S3Request, Error> {
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
@@ -112,15 +103,6 @@ impl ToS3Request for SetObjectRetention {
                     "both mode and retain_until_date must be set or unset",
                 )));
             }
-        }
-        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
-        if self.bypass_governance_mode {
-            headers.insert("x-amz-bypass-governance-retention".into(), "true".into());
-        }
-
-        let mut query_params: Multimap = insert(self.extra_query_params, "retention");
-        if let Some(v) = self.version_id {
-            query_params.insert("versionId".into(), v);
         }
 
         let data: String = {
@@ -138,16 +120,24 @@ impl ToS3Request for SetObjectRetention {
             data.push_str("</Retention>");
             data
         };
+
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
+        if self.bypass_governance_mode {
+            headers.insert("x-amz-bypass-governance-retention".into(), "true".into());
+        }
         headers.insert("Content-MD5".into(), md5sum_hash(data.as_ref()));
 
-        let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(data)));
+        let mut query_params: Multimap = insert(self.extra_query_params, "retention");
+        if let Some(v) = self.version_id {
+            query_params.insert("versionId".into(), v);
+        }
 
-        Ok(S3Request::new(client, Method::PUT)
+        Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(query_params)
             .headers(headers)
             .object(Some(self.object))
-            .body(body))
+            .body(Some(SegmentedBytes::from(Bytes::from(data)))))
     }
 }

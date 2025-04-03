@@ -28,11 +28,12 @@ use http::Method;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::Arc;
 use xmltree::Element;
 
 #[derive(Clone, Default, Debug)]
 pub struct S3Request {
-    pub(crate) client: Client,
+    pub(crate) client: Arc<Client>,
 
     method: Method,
     region: Option<String>,
@@ -47,8 +48,8 @@ pub struct S3Request {
 }
 
 impl S3Request {
-    pub fn new(client: Client, method: Method) -> S3Request {
-        S3Request {
+    pub fn new(client: Arc<Client>, method: Method) -> Self {
+        Self {
             client,
             method,
             ..Default::default()
@@ -810,14 +811,12 @@ impl SseConfig {
         data.push_str("<SSEAlgorithm>");
         data.push_str(&self.sse_algorithm);
         data.push_str("</SSEAlgorithm>");
-        match &self.kms_master_key_id {
-            Some(v) => {
-                data.push_str("<KMSMasterKeyID>");
-                data.push_str(v);
-                data.push_str("</KMSMasterKeyID>");
-            }
-            _ => {}
+        if let Some(v) = &self.kms_master_key_id {
+            data.push_str("<KMSMasterKeyID>");
+            data.push_str(v);
+            data.push_str("</KMSMasterKeyID>");
         }
+
         data.push_str(
             "</ApplyServerSideEncryptionByDefault></Rule></ServerSideEncryptionConfiguration>",
         );
@@ -1622,9 +1621,9 @@ pub struct AccessControlTranslation {
 }
 
 impl AccessControlTranslation {
-    pub fn new() -> AccessControlTranslation {
-        AccessControlTranslation {
-            owner: String::from("Destination"),
+    pub fn new() -> Self {
+        Self {
+            owner: "Destination".to_string(),
         }
     }
 }
@@ -1649,8 +1648,8 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    pub fn new(status: bool) -> Metrics {
-        Metrics {
+    pub fn new(status: bool) -> Self {
+        Self {
             event_threshold_minutes: Some(15),
             status,
         }
@@ -1665,8 +1664,8 @@ pub struct ReplicationTime {
 }
 
 impl ReplicationTime {
-    pub fn new(status: bool) -> ReplicationTime {
-        ReplicationTime {
+    pub fn new(status: bool) -> Self {
+        Self {
             time_minutes: Some(15),
             status,
         }
@@ -2013,13 +2012,9 @@ pub struct ObjectLockConfig {
 }
 
 impl ObjectLockConfig {
-    pub fn new(
-        mode: RetentionMode,
-        days: Option<i32>,
-        years: Option<i32>,
-    ) -> Result<ObjectLockConfig, Error> {
+    pub fn new(mode: RetentionMode, days: Option<i32>, years: Option<i32>) -> Result<Self, Error> {
         if days.is_some() ^ years.is_some() {
-            return Ok(ObjectLockConfig {
+            return Ok(Self {
                 retention_mode: Some(mode),
                 retention_duration_days: days,
                 retention_duration_years: years,

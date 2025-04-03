@@ -20,15 +20,16 @@ use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::S3Api;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct TestContext {
+    pub client: Arc<Client>,
     pub base_url: BaseUrl,
     pub access_key: String,
     pub secret_key: String,
     pub ignore_cert_check: Option<bool>,
     pub ssl_cert_file: Option<PathBuf>,
-    pub client: Client,
 }
 
 impl TestContext {
@@ -57,21 +58,23 @@ impl TestContext {
             }
 
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
-            let client = Client::new(
-                base_url.clone(),
-                Some(Box::new(static_provider)),
-                ssl_cert_file,
-                Some(ignore_cert_check),
-            )
-            .unwrap();
+            let client = Arc::new(
+                Client::new(
+                    base_url.clone(),
+                    Some(Box::new(static_provider)),
+                    ssl_cert_file,
+                    Some(ignore_cert_check),
+                )
+                .unwrap(),
+            );
 
             Self {
+                client,
                 base_url,
                 access_key,
                 secret_key,
                 ignore_cert_check: Some(ignore_cert_check),
                 ssl_cert_file: ssl_cert_file.map(PathBuf::from),
-                client,
             }
         } else {
             const DEFAULT_SERVER_ENDPOINT: &str = "https://play.min.io/";
@@ -114,21 +117,23 @@ impl TestContext {
             base_url.region = region;
 
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
-            let client = Client::new(
-                base_url.clone(),
-                Some(Box::new(static_provider)),
-                Some(&*ssl_cert_file),
-                Some(ignore_cert_check),
-            )
-            .unwrap();
+            let client = Arc::new(
+                Client::new(
+                    base_url.clone(),
+                    Some(Box::new(static_provider)),
+                    Some(&*ssl_cert_file),
+                    Some(ignore_cert_check),
+                )
+                .unwrap(),
+            );
 
             Self {
+                client,
                 base_url,
                 access_key,
                 secret_key,
                 ignore_cert_check: Some(ignore_cert_check),
                 ssl_cert_file: Some(ssl_cert_file),
-                client,
             }
         }
     }
@@ -144,7 +149,7 @@ impl TestContext {
     /// - `CleanupGuard` - A guard that automatically deletes the bucket when dropped.
     ///
     /// # Example
-    /// ```rust
+    /// ```ignore
     /// let (bucket_name, guard) = client.create_bucket_helper().await;
     /// println!("Created temporary bucket: {}", bucket_name);
     /// // The bucket will be removed when `guard` is dropped.

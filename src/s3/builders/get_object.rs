@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use http::Method;
+use std::sync::Arc;
 
 use crate::s3::utils::check_object_name;
 use crate::s3::{
@@ -28,7 +29,7 @@ use crate::s3::{
 /// Argument builder for [list_objects()](Client::get_object) API.
 #[derive(Debug, Clone, Default)]
 pub struct GetObject {
-    client: Option<Client>,
+    client: Arc<Client>,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -48,17 +49,13 @@ pub struct GetObject {
 }
 
 impl GetObject {
-    pub fn new(bucket: &str, object: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
         Self {
-            bucket: bucket.to_string(),
-            object: object.to_string(),
+            client: Arc::clone(client),
+            bucket,
+            object,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -123,11 +120,10 @@ impl S3Api for GetObject {
 
 impl ToS3Request for GetObject {
     fn to_s3request(self) -> Result<S3Request, Error> {
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
-            if self.ssec.is_some() && !client.is_secure() {
+            if self.ssec.is_some() && !self.client.is_secure() {
                 return Err(Error::SseTlsRequired(None));
             }
         }
@@ -178,7 +174,7 @@ impl ToS3Request for GetObject {
             query_params.insert("versionId".into(), v);
         }
 
-        Ok(S3Request::new(client, Method::GET)
+        Ok(S3Request::new(self.client, Method::GET)
             .region(self.region)
             .bucket(Some(self.bucket))
             .object(Some(self.object))

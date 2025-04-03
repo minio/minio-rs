@@ -15,15 +15,51 @@
 
 use crate::s3::Client;
 use crate::s3::builders::{GetPresignedPolicyFormData, PostPolicy};
-use crate::s3::error::Error;
-use std::collections::HashMap;
+use std::sync::Arc;
 
 impl Client {
-    /// Create a GetPresignedObjectURL builder.
+    /// Create a GetPresignedPolicyFormData builder.
+    /// Creates a [`GetPresignedPolicyFormData`] request builder.
+    ///
+    /// To execute the request, call [`GetPresignedPolicyFormData::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetPresignedPolicyFormDataResponse`](crate::s3::response::GetPresignedPolicyFormDataResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use http::Method;
+    /// use std::collections::HashMap;
+    /// use std::sync::Arc;
+    /// use chrono::{DateTime, Utc};
+    /// use minio::s3::Client;
+    /// use minio::s3::types::S3Api;
+    /// use minio::s3::builders::PostPolicy;
+    /// use minio::s3::utils::utc_now;
+    ///
+    /// pub fn create_post_policy_example(bucket_name: &str, object_name: &str) -> PostPolicy {
+    /// let expiration: DateTime<Utc> = utc_now() + chrono::Duration::days(5);
+    ///
+    ///     let mut policy = PostPolicy::new(&bucket_name, expiration).unwrap();
+    ///     policy.add_equals_condition("key", &object_name).unwrap();
+    ///     policy
+    ///         .add_content_length_range_condition(1024 * 1024, 4 * 1024 * 1024)
+    ///         .unwrap();
+    ///     policy
+    /// }
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let policy: PostPolicy = create_post_policy_example("bucket-name", "object-name");
+    ///     let resp: HashMap<String, String> = client.get_presigned_post_form_data(policy)
+    ///         .send().await.unwrap();
+    ///     println!("presigned post form data: '{:?}'", resp);
+    /// }
+    /// ```
     pub fn get_presigned_post_form_data(
-        &self,
+        self: &Arc<Self>,
         policy: PostPolicy,
-    ) -> Result<HashMap<String, String>, Error> {
-        GetPresignedPolicyFormData::new(self, policy).compute()
+    ) -> GetPresignedPolicyFormData {
+        GetPresignedPolicyFormData::new(self, policy)
     }
 }

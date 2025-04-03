@@ -43,19 +43,22 @@ impl FromS3Response for GetRegionResponse {
         let mut resp = resp?;
 
         let headers: HeaderMap = mem::take(resp.headers_mut());
-        let body = resp.bytes().await?;
-        let root = Element::parse(body.reader())?;
+        let region_response: String = {
+            let body = resp.bytes().await?;
+            let root = Element::parse(body.reader())?;
 
-        let mut location = root.get_text().unwrap_or_default().to_string();
-        if location.is_empty() {
-            location = String::from(DEFAULT_REGION);
-        }
+            let mut location = root.get_text().unwrap_or_default().to_string();
+            if location.is_empty() {
+                location = String::from(DEFAULT_REGION);
+            }
+            location
+        };
 
         Ok(Self {
             headers,
             region: req.inner_region,
             bucket: take_bucket(req.bucket)?,
-            region_response: location,
+            region_response,
         })
     }
 }

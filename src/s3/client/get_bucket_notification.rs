@@ -17,10 +17,31 @@
 
 use super::Client;
 use crate::s3::builders::GetBucketNotification;
+use std::sync::Arc;
 
 impl Client {
-    /// Create a GetBucketNotification request builder.
-    pub fn get_bucket_notification(&self, bucket: &str) -> GetBucketNotification {
-        GetBucketNotification::new(bucket).client(self)
+    /// Creates a [`GetBucketNotification`] request builder.
+    ///
+    /// To execute the request, call [`GetBucketNotification::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetBucketNotificationResponse`](crate::s3::response::GetBucketNotificationResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::GetBucketNotificationResponse;
+    /// use minio::s3::types::S3Api;
+    /// use std::sync::Arc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let resp: GetBucketNotificationResponse =
+    ///         client.get_bucket_notification("bucket-name").send().await.unwrap();
+    ///     println!("retrieved bucket notification config '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
+    /// }
+    /// ```
+    pub fn get_bucket_notification(self: &Arc<Self>, bucket: &str) -> GetBucketNotification {
+        GetBucketNotification::new(self, bucket.to_owned())
     }
 }

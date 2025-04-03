@@ -18,48 +18,59 @@
 use super::Client;
 use crate::s3::builders::SelectObjectContent;
 use crate::s3::types::SelectRequest;
+use std::sync::Arc;
 
 impl Client {
-    /// Create a SelectObjectContent request builder.
+    /// Creates a [`SelectObjectContent`] request builder.
     ///
-    /// Returns argument for [select_object_content()](crate::s3::client::Client::select_object_content) API with given bucket name, object name and callback function for results.
+    /// To execute the request, call [`SelectObjectContent::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`SelectObjectContentResponse`](crate::s3::response::SelectObjectContentResponse).
     ///
-    /// # Examples
+    /// # Example
     ///
-    /// ```ignore TODO
-    /// use minio::s3::args::*;
-    /// use minio::s3::types::*;
-    /// let request = SelectRequest::new_csv_input_output(
-    ///     "select * from S3Object",
-    ///     CsvInputSerialization {
-    ///         compression_type: None,
-    ///         allow_quoted_record_delimiter: false,
-    ///         comments: None,
-    ///         field_delimiter: None,
-    ///         file_header_info: Some(FileHeaderInfo::USE),
-    ///         quote_character: None,
-    ///         quote_escape_character: None,
-    ///         record_delimiter: None,
-    ///     },
-    ///     CsvOutputSerialization {
-    ///         field_delimiter: None,
-    ///         quote_character: None,
-    ///         quote_escape_character: None,
-    ///         quote_fields: Some(QuoteFields::ASNEEDED),
-    ///         record_delimiter: None,
-    ///     },
-    /// ).unwrap();
-    /// let args = SelectObjectContentArgs::new("my-bucket", "my-object", &request).unwrap();
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::SelectObjectContentResponse;
+    /// use minio::s3::types::S3Api;
+    /// use std::sync::Arc;
+    /// use minio::s3::types::{SelectRequest, CsvInputSerialization, CsvOutputSerialization, FileHeaderInfo, QuoteFields};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let request = SelectRequest::new_csv_input_output(
+    ///         "select * from S3Object",
+    ///         CsvInputSerialization {
+    ///             compression_type: None,
+    ///             allow_quoted_record_delimiter: false,
+    ///             comments: None,
+    ///             field_delimiter: None,
+    ///             file_header_info: Some(FileHeaderInfo::USE),
+    ///             quote_character: None,
+    ///             quote_escape_character: None,
+    ///             record_delimiter: None,
+    ///         },
+    ///         CsvOutputSerialization {
+    ///             field_delimiter: None,
+    ///             quote_character: None,
+    ///             quote_escape_character: None,
+    ///             quote_fields: Some(QuoteFields::ASNEEDED),
+    ///             record_delimiter: None,
+    ///         },
+    ///     ).unwrap();
+    ///
+    ///     let resp: SelectObjectContentResponse = client
+    ///         .select_object_content("bucket-name", "object-name", request)
+    ///         .send().await.unwrap();
+    ///     println!("the progress: '{:?}'", resp.progress);
+    /// }
     /// ```
     pub fn select_object_content(
-        &self,
-        bucket_name: &str,
-        object_name: &str,
+        self: &Arc<Self>,
+        bucket: &str,
+        object: &str,
         request: SelectRequest,
     ) -> SelectObjectContent {
-        SelectObjectContent::new(bucket_name)
-            .client(self)
-            .object(object_name.to_owned())
-            .request(request)
+        SelectObjectContent::new(self, bucket.to_owned(), object.to_owned()).request(request)
     }
 }

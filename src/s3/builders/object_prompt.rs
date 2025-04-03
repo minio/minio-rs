@@ -25,10 +25,11 @@ use crate::s3::{
 use bytes::Bytes;
 use http::Method;
 use serde_json::json;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Default)]
 pub struct ObjectPrompt {
-    client: Option<Client>,
+    client: Arc<Client>,
     bucket: String,
     object: String,
     prompt: String,
@@ -43,19 +44,14 @@ pub struct ObjectPrompt {
 
 // builder interface
 impl ObjectPrompt {
-    pub fn new(bucket: &str, object: &str, prompt: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String, prompt: String) -> Self {
         ObjectPrompt {
-            client: None,
-            bucket: bucket.to_owned(),
-            object: object.to_owned(),
-            prompt: prompt.to_owned(),
+            client: Arc::clone(client),
+            bucket,
+            object,
+            prompt,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn lambda_arn(mut self, lambda_arn: &str) -> Self {
@@ -95,7 +91,7 @@ impl S3Api for ObjectPrompt {
 
 impl ToS3Request for ObjectPrompt {
     fn to_s3request(self) -> Result<S3Request, Error> {
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
+        let client = Arc::clone(&self.client);
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
@@ -122,7 +118,7 @@ impl ToS3Request for ObjectPrompt {
         let prompt_body = json!({ "prompt": self.prompt });
         let body: SegmentedBytes = SegmentedBytes::from(Bytes::from(prompt_body.to_string()));
 
-        Ok(S3Request::new(client, Method::POST)
+        Ok(S3Request::new(self.client, Method::POST)
             .region(self.region)
             .bucket(Some(self.bucket))
             .object(Some(self.object))

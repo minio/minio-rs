@@ -20,7 +20,9 @@ use std::any::Any;
 
 /// Base server side encryption
 pub trait Sse: std::fmt::Debug + Send + Sync {
+    /// Regular headers
     fn headers(&self) -> utils::Multimap;
+    /// Headers for copy operation
     fn copy_headers(&self) -> utils::Multimap;
     fn tls_required(&self) -> bool;
     fn as_any(&self) -> &dyn Any;
@@ -34,39 +36,39 @@ pub struct SseCustomerKey {
 }
 
 impl SseCustomerKey {
-    pub fn new(key: &str) -> SseCustomerKey {
-        let b64key = utils::b64encode(key);
-        let md5key = utils::md5sum_hash(key.as_bytes());
+    pub fn new(key: &str) -> Self {
+        let b64key: String = utils::b64encode(key);
+        let md5key: String = utils::md5sum_hash(key.as_bytes());
 
-        let mut headers = utils::Multimap::new();
+        let mut headers = utils::Multimap::with_capacity(3);
         headers.insert(
-            String::from("X-Amz-Server-Side-Encryption-Customer-Algorithm"),
-            String::from("AES256"),
+            "X-Amz-Server-Side-Encryption-Customer-Algorithm".into(),
+            "AES256".into(),
         );
         headers.insert(
-            String::from("X-Amz-Server-Side-Encryption-Customer-Key"),
+            "X-Amz-Server-Side-Encryption-Customer-Key".into(),
             b64key.clone(),
         );
         headers.insert(
-            String::from("X-Amz-Server-Side-Encryption-Customer-Key-MD5"),
+            "X-Amz-Server-Side-Encryption-Customer-Key-MD5".into(),
             md5key.clone(),
         );
 
-        let mut copy_headers = utils::Multimap::new();
+        let mut copy_headers = utils::Multimap::with_capacity(3);
         copy_headers.insert(
-            String::from("X-Amz-Copy-Source-Server-Side-Encryption-Customer-Algorithm"),
-            String::from("AES256"),
+            "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Algorithm".into(),
+            "AES256".into(),
         );
         copy_headers.insert(
-            String::from("X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key"),
+            "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key".into(),
             b64key,
         );
         copy_headers.insert(
-            String::from("X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5"),
+            "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5".into(),
             md5key,
         );
 
-        SseCustomerKey {
+        Self {
             headers,
             copy_headers,
         }
@@ -99,18 +101,16 @@ pub struct SseKms {
 
 impl SseKms {
     pub fn new(key: &str, context: Option<&str>) -> SseKms {
-        let mut headers = utils::Multimap::new();
+        let mut headers = utils::Multimap::with_capacity(3);
+
         headers.insert(
-            String::from("X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id"),
-            key.to_string(),
+            "X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id".into(),
+            key.to_owned(),
         );
-        headers.insert(
-            String::from("X-Amz-Server-Side-Encryption"),
-            String::from("aws:kms"),
-        );
+        headers.insert("X-Amz-Server-Side-Encryption".into(), "aws:kms".into());
         if let Some(v) = context {
             headers.insert(
-                String::from("X-Amz-Server-Side-Encryption-Context"),
+                "X-Amz-Server-Side-Encryption-Context".into(),
                 utils::b64encode(v),
             );
         }
@@ -125,7 +125,7 @@ impl Sse for SseKms {
     }
 
     fn copy_headers(&self) -> utils::Multimap {
-        utils::Multimap::new()
+        utils::Multimap::with_capacity(0)
     }
 
     fn tls_required(&self) -> bool {
@@ -144,14 +144,11 @@ pub struct SseS3 {
 }
 
 impl SseS3 {
-    pub fn new() -> SseS3 {
+    pub fn new() -> Self {
         let mut headers = utils::Multimap::new();
-        headers.insert(
-            String::from("X-Amz-Server-Side-Encryption"),
-            String::from("AES256"),
-        );
+        headers.insert("X-Amz-Server-Side-Encryption".into(), "AES256".into());
 
-        SseS3 { headers }
+        Self { headers }
     }
 }
 
@@ -167,7 +164,7 @@ impl Sse for SseS3 {
     }
 
     fn copy_headers(&self) -> utils::Multimap {
-        utils::Multimap::new()
+        utils::Multimap::with_capacity(0)
     }
 
     fn tls_required(&self) -> bool {

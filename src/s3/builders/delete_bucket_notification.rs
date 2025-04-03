@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::Client;
 use crate::s3::builders::BucketCommon;
 use crate::s3::error::Error;
 use crate::s3::response::DeleteBucketNotificationResponse;
@@ -36,7 +35,6 @@ impl S3Api for DeleteBucketNotification {
 impl ToS3Request for DeleteBucketNotification {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
-        let client: Client = self.client.ok_or(Error::NoClientProvided)?;
 
         const CONFIG: NotificationConfig = NotificationConfig {
             cloud_func_config_list: None,
@@ -47,7 +45,7 @@ impl ToS3Request for DeleteBucketNotification {
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
         //TODO consider const body
 
-        Ok(S3Request::new(client, Method::PUT)
+        Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(insert(self.extra_query_params, "notification"))

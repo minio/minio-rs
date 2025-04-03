@@ -17,10 +17,11 @@
 
 use super::Client;
 use crate::s3::builders::SetBucketEncryption;
+use std::sync::Arc;
 
 impl Client {
     /// Create a SetBucketEncryption request builder.
-    pub fn set_bucket_encryption(&self, bucket: &str) -> SetBucketEncryption {
-        SetBucketEncryption::new(bucket).client(self)
+    pub fn set_bucket_encryption(self: &Arc<Self>, bucket: &str) -> SetBucketEncryption {
+        SetBucketEncryption::new(self, bucket.to_owned())
     }
 }
