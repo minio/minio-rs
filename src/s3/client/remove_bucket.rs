@@ -88,11 +88,14 @@ impl Client {
                                 .send()
                                 .await?;
 
-                            let _resp: RemoveObjectResponse =
-                                RemoveObject::new(self, bucket, ObjectToDelete::from(v))
-                                    .bypass_governance_mode(true)
-                                    .send()
-                                    .await?;
+                            let _resp: RemoveObjectResponse = RemoveObject::new(
+                                self,
+                                bucket.to_string(),
+                                ObjectToDelete::from(v),
+                            )
+                            .bypass_governance_mode(true)
+                            .send()
+                            .await?;
                         }
                     }
                 }

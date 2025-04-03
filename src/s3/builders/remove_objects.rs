@@ -109,10 +109,10 @@ pub struct RemoveObject {
 }
 
 impl RemoveObject {
-    pub fn new(client: &Arc<Client>, bucket: &str, object: impl Into<ObjectToDelete>) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: impl Into<ObjectToDelete>) -> Self {
         Self {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
+            bucket,
             object: object.into(),
             ..Default::default()
         }
@@ -181,10 +181,10 @@ pub struct RemoveObjectsApi {
 }
 
 impl RemoveObjectsApi {
-    pub fn new(client: &Arc<Client>, bucket: &str, objects: Vec<ObjectToDelete>) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, objects: Vec<ObjectToDelete>) -> Self {
         RemoveObjectsApi {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
+            bucket,
             objects,
             ..Default::default()
         }
@@ -311,10 +311,10 @@ pub struct RemoveObjects {
 }
 
 impl RemoveObjects {
-    pub fn new(client: &Arc<Client>, bucket: &str, objects: impl Into<DeleteObjects>) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, objects: impl Into<DeleteObjects>) -> Self {
         Self {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
+            bucket,
             objects: objects.into(),
 
             bypass_governance_mode: false,
@@ -367,7 +367,7 @@ impl RemoveObjects {
         }
 
         Ok(Some(
-            RemoveObjectsApi::new(&self.client, &self.bucket, objects)
+            RemoveObjectsApi::new(&self.client, self.bucket.clone(), objects)
                 .bypass_governance_mode(self.bypass_governance_mode)
                 .verbose_mode(self.verbose_mode)
                 .extra_headers(self.extra_headers.clone())

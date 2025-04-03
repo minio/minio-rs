@@ -70,6 +70,9 @@ pub fn uint32(mut data: &[u8]) -> Result<u32, std::io::Error> {
     data.read_u32::<BigEndian>()
 }
 
+/// sha256 hash of empty data
+pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
 /// Gets hex encoded SHA256 hash of given data
 pub fn sha256_hash(data: &[u8]) -> String {
     #[cfg(feature = "ring")]
@@ -103,17 +106,20 @@ pub fn sha256_hash_sb(sb: &SegmentedBytes) -> String {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::s3::utils::SegmentedBytes;
+    use crate::s3::utils::sha256_hash_sb;
+
+    #[test]
+    fn test_empty_sha256_segmented_bytes() {
+        assert_eq!(super::EMPTY_SHA256, sha256_hash_sb(&SegmentedBytes::new()));
+    }
+}
+
 /// Gets bas64 encoded MD5 hash of given data
 pub fn md5sum_hash(data: &[u8]) -> String {
     b64encode(md5compute(data).as_slice())
-}
-
-pub fn md5sum_hash_sb(sb: &SegmentedBytes) -> String {
-    let mut hasher = md5::Context::new();
-    for data in sb.iter() {
-        hasher.consume(data);
-    }
-    b64encode(hasher.compute().as_slice())
 }
 
 /// Gets current UTC time

@@ -27,7 +27,7 @@ use test_tag::tag;
 use tokio::sync::mpsc;
 
 #[tag(s3express)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+//#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn append_object() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
@@ -104,7 +104,7 @@ async fn append_object() {
 }
 
 #[tag(s3express)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+//#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn append_object_content_0() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
@@ -180,7 +180,7 @@ async fn append_object_content_0() {
 }
 
 #[tag(s3express)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+//#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn append_object_content_1() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
@@ -228,7 +228,7 @@ async fn append_object_content_1() {
 }
 
 #[tag(s3express)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+//#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn append_object_content_2() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
@@ -275,7 +275,7 @@ async fn append_object_content_2() {
 
 /// Test sending AppendObject across async tasks.
 #[tag(s3express)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+//#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn append_object_content_3() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;

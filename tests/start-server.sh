@@ -1,6 +1,5 @@
 #!/bin/bash
 
-group=$1
 set -x
 set -e
 
@@ -12,7 +11,7 @@ cp ./tests/public.crt ./tests/private.key /tmp/certs/
 (MINIO_CI_CD=true \
     MINIO_NOTIFY_WEBHOOK_ENABLE_miniojavatest=on \
     MINIO_NOTIFY_WEBHOOK_ENDPOINT_miniojavatest=http://example.org/ \
-    ./minio server /tmp/test-xl/{1...4}/ --certs-dir /tmp/certs/ --proto=$group &)
+    ./minio server /tmp/test-xl/{1...4}/ --certs-dir /tmp/certs/ &)
 
 sleep 10
 

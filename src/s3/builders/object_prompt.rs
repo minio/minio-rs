@@ -91,15 +91,14 @@ impl S3Api for ObjectPrompt {
 
 impl ToS3Request for ObjectPrompt {
     fn to_s3request(self) -> Result<S3Request, Error> {
-        let client = Arc::clone(&self.client);
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
 
-            if client.is_aws_host() {
+            if self.client.is_aws_host() {
                 return Err(Error::UnsupportedApi(String::from("ObjectPrompt")));
             }
-            if self.ssec.is_some() && !client.is_secure() {
+            if self.ssec.is_some() && !self.client.is_secure() {
                 return Err(Error::SseTlsRequired(None));
             }
         }

@@ -48,10 +48,12 @@ pub struct UploadPartCopy {
 }
 
 impl UploadPartCopy {
-    pub fn new(client: &Arc<Client>, bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String, upload_id: String) -> Self {
         Self {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
+            bucket,
+            object,
+            upload_id,
             ..Default::default()
         }
     }
@@ -68,16 +70,6 @@ impl UploadPartCopy {
 
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
-        self
-    }
-
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
-        self
-    }
-
-    pub fn upload_id(mut self, upload_id: String) -> Self {
-        self.upload_id = upload_id;
         self
     }
 
@@ -154,10 +146,11 @@ pub struct CopyObjectInternal {
 }
 
 impl CopyObjectInternal {
-    pub fn new(client: &Arc<Client>, bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
         Self {
             client: client.clone(),
-            bucket: bucket.to_owned(),
+            bucket,
+            object,
             ..Default::default()
         }
     }
@@ -174,11 +167,6 @@ impl CopyObjectInternal {
 
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
-        self
-    }
-
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
         self
     }
 
@@ -280,10 +268,10 @@ impl ToS3Request for CopyObjectInternal {
             if self.legal_hold {
                 headers.insert("x-amz-object-lock-legal-hold".into(), "ON".into());
             }
-            if let Some(v) = &self.metadata_directive {
+            if let Some(v) = self.metadata_directive {
                 headers.insert("x-amz-metadata-directive".into(), v.to_string());
             }
-            if let Some(v) = &self.tagging_directive {
+            if let Some(v) = self.tagging_directive {
                 headers.insert("x-amz-tagging-directive".into(), v.to_string());
             }
 
@@ -299,7 +287,7 @@ impl ToS3Request for CopyObjectInternal {
 
             let range = self.source.get_range_value();
             if !range.is_empty() {
-                headers.insert(String::from("x-amz-copy-source-range"), range);
+                headers.insert("x-amz-copy-source-range".into(), range);
             }
 
             if let Some(v) = self.source.match_etag {
@@ -363,10 +351,11 @@ pub struct CopyObject {
 }
 
 impl CopyObject {
-    pub fn new(client: &Arc<Client>, bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
         Self {
             client: client.clone(),
-            bucket: bucket.to_owned(),
+            bucket,
+            object,
             ..Default::default()
         }
     }
@@ -383,11 +372,6 @@ impl CopyObject {
 
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
-        self
-    }
-
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
         self
     }
 
@@ -431,21 +415,21 @@ impl CopyObject {
 }
 
 impl CopyObject {
-    pub async fn run(self) -> Result<CopyObjectResponse, Error> {
-        let client = Arc::clone(&self.client);
+    pub async fn send(self) -> Result<CopyObjectResponse, Error> {
         {
             if let Some(v) = &self.sse {
-                if v.tls_required() && !client.base_url.https {
+                if v.tls_required() && !self.client.base_url.https {
                     return Err(Error::SseTlsRequired(None));
                 }
             }
-            if self.source.ssec.is_some() && !client.base_url.https {
+            if self.source.ssec.is_some() && !self.client.base_url.https {
                 return Err(Error::SseTlsRequired(None));
             }
         }
         let source = self.source.clone();
 
-        let stat_resp: StatObjectResponse = client
+        let stat_resp: StatObjectResponse = self
+            .client
             .stat_object(&source.bucket, &source.object)
             .extra_headers(source.extra_headers)
             .extra_query_params(source.extra_query_params)
@@ -499,7 +483,8 @@ impl CopyObject {
             };
             let sources: Vec<ComposeSource> = vec![src];
 
-            let resp: ComposeObjectResponse = client
+            let resp: ComposeObjectResponse = self
+                .client
                 .compose_object(&self.source.bucket, &self.source.object, sources)
                 .extra_headers(self.extra_headers)
                 .extra_query_params(self.extra_query_params)
@@ -510,7 +495,7 @@ impl CopyObject {
                 .tags(self.tags)
                 .retention(self.retention)
                 .legal_hold(self.legal_hold)
-                .run()
+                .send()
                 .await?;
 
             Ok(CopyObjectResponse {
@@ -522,12 +507,12 @@ impl CopyObject {
                 version_id: resp.version_id,
             })
         } else {
-            let resp: CopyObjectInternalResponse = client
-                .copy_object_internal(&self.bucket)
+            let resp: CopyObjectInternalResponse = self
+                .client
+                .copy_object_internal(&self.bucket, &self.object)
                 .extra_headers(self.extra_headers)
                 .extra_query_params(self.extra_query_params)
                 .region(self.region)
-                .object(self.object)
                 .headers(self.headers.unwrap_or_default())
                 .user_metadata(self.user_metadata)
                 .sse(self.sse)
@@ -572,10 +557,11 @@ pub struct ComposeObjectInternal {
 }
 
 impl ComposeObjectInternal {
-    pub fn new(client: &Arc<Client>, bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
         Self {
             client: client.clone(),
-            bucket: bucket.to_owned(),
+            bucket,
+            object,
             ..Default::default()
         }
     }
@@ -592,11 +578,6 @@ impl ComposeObjectInternal {
 
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
-        self
-    }
-
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
         self
     }
 
@@ -638,13 +619,11 @@ impl ComposeObjectInternal {
 
 impl ComposeObjectInternal {
     #[async_recursion]
-    pub async fn run(self) -> (Result<ComposeObjectResponse, Error>, String) {
+    pub async fn send(self) -> (Result<ComposeObjectResponse, Error>, String) {
         let mut upload_id = String::new();
 
-        let client = Arc::clone(&self.client);
-
         let mut sources = self.sources;
-        let part_count: u16 = match client.calculate_part_count(&mut sources).await {
+        let part_count: u16 = match self.client.calculate_part_count(&mut sources).await {
             Ok(v) => v,
             Err(e) => return (Err(e), upload_id),
         };
@@ -654,9 +633,9 @@ impl ComposeObjectInternal {
             // the provided data contains one part: no need to use multipart upload,
             // use copy_object instead
 
-            let resp: CopyObjectResponse = match client
-                .copy_object(&self.bucket)
-                .object(self.object)
+            let resp: CopyObjectResponse = match self
+                .client
+                .copy_object(&self.bucket, &self.object)
                 .extra_headers(self.extra_headers)
                 .extra_query_params(self.extra_query_params)
                 .region(self.region)
@@ -666,7 +645,7 @@ impl ComposeObjectInternal {
                 .tags(self.tags)
                 .retention(self.retention)
                 .legal_hold(self.legal_hold)
-                .run()
+                .send()
                 .await
             {
                 Ok(v) => v,
@@ -694,7 +673,8 @@ impl ComposeObjectInternal {
                 self.retention,
                 self.legal_hold,
             );
-            let cmu: CreateMultipartUploadResponse = match client
+            let cmu: CreateMultipartUploadResponse = match self
+                .client
                 .create_multipart_upload(&self.bucket, &self.object)
                 .extra_query_params(self.extra_query_params.clone())
                 .region(self.region.clone())
@@ -746,12 +726,10 @@ impl ComposeObjectInternal {
                         );
                     }
 
-                    let client_clone = Arc::clone(&self.client);
-                    let resp: UploadPartCopyResponse = match client_clone
-                        .upload_part_copy(&self.bucket)
+                    let resp: UploadPartCopyResponse = match self
+                        .client
+                        .upload_part_copy(&self.bucket, &self.object, &upload_id)
                         .region(self.region.clone())
-                        .object(self.object.clone())
-                        .upload_id(upload_id.clone())
                         .part_number(part_number)
                         .headers(headers)
                         .send()
@@ -782,12 +760,10 @@ impl ComposeObjectInternal {
                             format!("bytes={}-{}", offset, end_bytes),
                         );
 
-                        let client_clone = Arc::clone(&self.client);
-                        let resp: UploadPartCopyResponse = match client_clone
-                            .upload_part_copy(&self.bucket)
+                        let resp: UploadPartCopyResponse = match self
+                            .client
+                            .upload_part_copy(&self.bucket, &self.object, &upload_id)
                             .region(self.region.clone())
-                            .object(self.object.clone())
-                            .upload_id(upload_id.to_owned())
                             .part_number(part_number)
                             .headers(headers_copy)
                             .send()
@@ -809,7 +785,8 @@ impl ComposeObjectInternal {
                 }
             }
 
-            let resp = client
+            let resp = self
+                .client
                 .complete_multipart_upload(&self.bucket, &self.object, &upload_id, parts)
                 .region(self.region)
                 .send()
@@ -853,10 +830,11 @@ pub struct ComposeObject {
 }
 
 impl ComposeObject {
-    pub fn new(client: &Arc<Client>, bucket: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
         Self {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
+            bucket,
+            object,
             ..Default::default()
         }
     }
@@ -873,11 +851,6 @@ impl ComposeObject {
 
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
-        self
-    }
-
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
         self
     }
 
@@ -918,12 +891,10 @@ impl ComposeObject {
 }
 
 impl ComposeObject {
-    pub async fn run(self) -> Result<ComposeObjectResponse, Error> {
-        let client = Arc::clone(&self.client);
-
+    pub async fn send(self) -> Result<ComposeObjectResponse, Error> {
         {
             if let Some(v) = &self.sse {
-                if v.tls_required() && !client.base_url.https {
+                if v.tls_required() && !self.client.base_url.https {
                     return Err(Error::SseTlsRequired(None));
                 }
             }
@@ -931,12 +902,12 @@ impl ComposeObject {
         let object: String = self.object.clone();
         let bucket: String = self.bucket.clone();
 
-        let (res, upload_id): (Result<ComposeObjectResponse, Error>, String) = client
-            .compose_object_internal(&self.bucket)
+        let (res, upload_id): (Result<ComposeObjectResponse, Error>, String) = self
+            .client
+            .compose_object_internal(&self.bucket, &self.object)
             .extra_headers(self.extra_headers)
             .extra_query_params(self.extra_query_params)
             .region(self.region)
-            .object(self.object)
             .headers(self.headers)
             .user_metadata(self.user_metadata)
             .sse(self.sse)
@@ -944,14 +915,15 @@ impl ComposeObject {
             .retention(self.retention)
             .legal_hold(self.legal_hold)
             .sources(self.sources)
-            .run()
+            .send()
             .await;
 
         match res {
             Ok(v) => Ok(v),
             Err(e) => {
                 if !upload_id.is_empty() {
-                    let _resp: AbortMultipartUploadResponse = client
+                    let _resp: AbortMultipartUploadResponse = self
+                        .client
                         .abort_multipart_upload(&bucket, &object, &upload_id)
                         .send()
                         .await?;

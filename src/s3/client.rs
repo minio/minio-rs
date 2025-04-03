@@ -17,15 +17,16 @@
 
 use std::fs::File;
 use std::io::prelude::*;
+use std::mem;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::s3::creds::Provider;
 use crate::s3::error::{Error, ErrorResponse};
-use crate::s3::http::{BaseUrl, Url};
+use crate::s3::http::BaseUrl;
 use crate::s3::response::*;
 use crate::s3::signer::sign_v4_s3;
-use crate::s3::utils::{Multimap, md5sum_hash_sb, sha256_hash_sb, to_amz_date, utc_now};
+use crate::s3::utils::{EMPTY_SHA256, Multimap, sha256_hash_sb, to_amz_date, utc_now};
 
 use crate::s3::builders::ComposeSource;
 use crate::s3::segmented_bytes::SegmentedBytes;
@@ -91,6 +92,7 @@ pub const MAX_PART_SIZE: u64 = 5_368_709_120; // 5 GiB
 pub const MAX_OBJECT_SIZE: u64 = 5_497_558_138_880; // 5 TiB
 pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 pub const DEFAULT_EXPIRY_SECONDS: u32 = 604_800; // 7 days
+
 /// Client Builder manufactures a Client using given parameters.
 #[derive(Debug, Default)]
 pub struct ClientBuilder {
@@ -180,10 +182,8 @@ impl ClientBuilder {
             }
         }
 
-        let client = builder.build()?;
-
         Ok(Client {
-            client,
+            client: builder.build()?,
             base_url: self.base_url,
             provider: self.provider,
             region_map: Arc::default(),
@@ -212,13 +212,14 @@ impl Client {
     /// use minio::s3::client::Client;
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
+    ///
     /// let base_url: BaseUrl = "play.min.io".parse().unwrap();
     /// let static_provider = StaticProvider::new(
     ///     "Q3AM3UQ867SPQQA43P2F",
     ///     "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
     ///     None,
     /// );
-    /// let client = Client::new(base_url.clone(), Some(Box::new(static_provider)), None, None).unwrap();
+    /// let client = Client::new(base_url, Some(Box::new(static_provider)), None, None).unwrap();
     /// ```
     pub fn new(
         base_url: BaseUrl,
@@ -239,75 +240,6 @@ impl Client {
 
     pub fn is_secure(&self) -> bool {
         self.base_url.https
-    }
-
-    fn build_headers(
-        &self,
-        headers: &mut Multimap,
-        query_params: &Multimap,
-        region: &str,
-        url: &Url,
-        method: &Method,
-        data: Option<&SegmentedBytes>,
-    ) {
-        headers.insert(String::from("Host"), url.host_header_value());
-
-        let mut md5sum = String::new();
-        let mut sha256 = String::new();
-        match *method {
-            Method::PUT | Method::POST => {
-                let empty_sb = SegmentedBytes::new();
-                let data = data.unwrap_or(&empty_sb);
-                headers.insert(String::from("Content-Length"), data.len().to_string());
-                if !headers.contains_key("Content-Type") {
-                    headers.insert(
-                        String::from("Content-Type"),
-                        String::from("application/octet-stream"),
-                    );
-                }
-                if self.provider.is_some() {
-                    sha256 = sha256_hash_sb(data);
-                } else if !headers.contains_key("Content-MD5") {
-                    md5sum = md5sum_hash_sb(data);
-                }
-            }
-            _ => {
-                if self.provider.is_some() {
-                    sha256 = String::from(
-                        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-                    );
-                }
-            }
-        };
-        if !md5sum.is_empty() {
-            headers.insert("Content-MD5".into(), md5sum);
-        }
-        if !sha256.is_empty() {
-            headers.insert(String::from("x-amz-content-sha256"), sha256.clone());
-        }
-        let date = utc_now();
-        headers.insert(String::from("x-amz-date"), to_amz_date(date));
-
-        if let Some(p) = &self.provider {
-            let creds = p.fetch();
-            if creds.session_token.is_some() {
-                headers.insert(
-                    String::from("X-Amz-Security-Token"),
-                    creds.session_token.unwrap(),
-                );
-            }
-            sign_v4_s3(
-                method,
-                &url.path,
-                region,
-                headers,
-                query_params,
-                &creds.access_key,
-                &creds.secret_key,
-                &sha256,
-                date,
-            );
-        }
     }
 
     fn handle_redirect_response(
@@ -352,9 +284,9 @@ impl Client {
 
     fn get_error_response(
         &self,
-        body: &mut Bytes,
+        body: Bytes,
         status_code: u16,
-        header_map: &reqwest::header::HeaderMap,
+        headers: reqwest::header::HeaderMap,
         method: &Method,
         resource: &str,
         bucket_name: Option<&str>,
@@ -362,7 +294,7 @@ impl Client {
         retry: bool,
     ) -> Error {
         if !body.is_empty() {
-            return match header_map.get("Content-Type") {
+            return match headers.get("Content-Type") {
                 Some(v) => match v.to_str() {
                     Ok(s) => match s.to_lowercase().contains("application/xml") {
                         true => match ErrorResponse::parse(body) {
@@ -381,52 +313,43 @@ impl Client {
             301 | 307 | 400 => match self.handle_redirect_response(
                 status_code,
                 method,
-                header_map,
+                &headers,
                 bucket_name,
                 retry,
             ) {
                 Ok(v) => v,
                 Err(e) => return e,
             },
-            403 => (String::from("AccessDenied"), String::from("Access denied")),
+            403 => ("AccessDenied".into(), "Access denied".into()),
             404 => match object_name {
-                Some(_) => (
-                    String::from("NoSuchKey"),
-                    String::from("Object does not exist"),
-                ),
+                Some(_) => ("NoSuchKey".into(), "Object does not exist".into()),
                 _ => match bucket_name {
-                    Some(_) => (
-                        String::from("NoSuchBucket"),
-                        String::from("Bucket does not exist"),
-                    ),
+                    Some(_) => ("NoSuchBucket".into(), "Bucket does not exist".into()),
                     _ => (
-                        String::from("ResourceNotFound"),
-                        String::from("Request resource not found"),
+                        "ResourceNotFound".into(),
+                        "Request resource not found".into(),
                     ),
                 },
             },
             405 => (
-                String::from("MethodNotAllowed"),
-                String::from("The specified method is not allowed against this resource"),
+                "MethodNotAllowed".into(),
+                "The specified method is not allowed against this resource".into(),
             ),
             409 => match bucket_name {
-                Some(_) => (
-                    String::from("NoSuchBucket"),
-                    String::from("Bucket does not exist"),
-                ),
+                Some(_) => ("NoSuchBucket".into(), "Bucket does not exist".into()),
                 _ => (
-                    String::from("ResourceConflict"),
-                    String::from("Request resource conflicts"),
+                    "ResourceConflict".into(),
+                    "Request resource conflicts".into(),
                 ),
             },
             501 => (
-                String::from("MethodNotAllowed"),
-                String::from("The specified method is not allowed against this resource"),
+                "MethodNotAllowed".into(),
+                "The specified method is not allowed against this resource".into(),
             ),
             _ => return Error::ServerError(status_code),
         };
 
-        let request_id = match header_map.get("x-amz-request-id") {
+        let request_id = match headers.get("x-amz-request-id") {
             Some(v) => match v.to_str() {
                 Ok(s) => s.to_string(),
                 Err(e) => return Error::StrError(e),
@@ -434,7 +357,7 @@ impl Client {
             _ => String::new(),
         };
 
-        let host_id = match header_map.get("x-amz-id-2") {
+        let host_id = match headers.get("x-amz-id-2") {
             Some(v) => match v.to_str() {
                 Ok(s) => s.to_string(),
                 Err(e) => return Error::StrError(e),
@@ -467,8 +390,55 @@ impl Client {
         let url =
             self.base_url
                 .build_url(method, region, query_params, bucket_name, object_name)?;
-        self.build_headers(headers, query_params, region, &url, method, body);
 
+        {
+            headers.insert("Host".into(), url.host_header_value());
+
+            let mut sha256 = String::new();
+            match *method {
+                Method::PUT | Method::POST => {
+                    let len: usize = body.as_ref().map_or(0, |x| x.len());
+                    headers.insert("Content-Length".into(), len.to_string());
+                    if !headers.contains_key("Content-Type") {
+                        headers.insert("Content-Type".into(), "application/octet-stream".into());
+                    }
+                    if self.provider.is_some() {
+                        sha256 = match body {
+                            None => EMPTY_SHA256.into(),
+                            Some(v) => sha256_hash_sb(v),
+                        };
+                    }
+                }
+                _ => {
+                    if self.provider.is_some() {
+                        sha256 = EMPTY_SHA256.into();
+                    }
+                }
+            };
+            if !sha256.is_empty() {
+                headers.insert("x-amz-content-sha256".into(), sha256.clone());
+            }
+            let date = utc_now();
+            headers.insert("x-amz-date".into(), to_amz_date(date));
+
+            if let Some(p) = &self.provider {
+                let creds = p.fetch();
+                if creds.session_token.is_some() {
+                    headers.insert("X-Amz-Security-Token".into(), creds.session_token.unwrap());
+                }
+                sign_v4_s3(
+                    method,
+                    &url.path,
+                    region,
+                    headers,
+                    query_params,
+                    &creds.access_key,
+                    &creds.secret_key,
+                    &sha256,
+                    date,
+                );
+            }
+        }
         let mut req = self.client.request(method.clone(), url.to_string());
 
         for (key, values) in headers.iter_all() {
@@ -495,13 +465,14 @@ impl Client {
             return Ok(resp);
         }
 
+        let mut resp = resp;
         let status_code = resp.status().as_u16();
-        let header_map = resp.headers().clone();
-        let mut body = resp.bytes().await?;
+        let headers: reqwest::header::HeaderMap = mem::take(resp.headers_mut());
+        let body: Bytes = resp.bytes().await?;
         let e = self.get_error_response(
-            &mut body,
+            body,
             status_code,
-            &header_map,
+            headers,
             method,
             &url.path,
             bucket_name,
@@ -524,29 +495,6 @@ impl Client {
     }
 
     pub async fn execute(
-        &self,
-        method: Method,
-        region: &str,
-        headers: &mut Multimap,
-        query_params: &Multimap,
-        bucket_name: Option<&str>,
-        object_name: Option<&str>,
-        data: Option<Bytes>,
-    ) -> Result<reqwest::Response, Error> {
-        let sb = data.map(SegmentedBytes::from);
-        self.execute2(
-            method,
-            region,
-            headers,
-            query_params,
-            &bucket_name,
-            &object_name,
-            sb.as_ref(),
-        )
-        .await
-    }
-
-    pub async fn execute2(
         &self,
         method: Method,
         region: &str,

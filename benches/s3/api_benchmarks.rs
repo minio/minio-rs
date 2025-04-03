@@ -21,13 +21,14 @@ mod bench_bucket_replication;
 mod bench_bucket_tags;
 mod bench_bucket_versioning;
 mod bench_list_bucket;
+mod bench_object_append;
+mod bench_object_copy;
 mod bench_object_legal_hold;
 mod bench_object_lock_config;
+mod bench_object_put;
 mod bench_object_retention;
 mod bench_object_tags;
 mod common_benches;
-
-mod bench_object_copy;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::time::Duration;
@@ -43,9 +44,12 @@ use crate::bench_bucket_tags::*;
 use crate::bench_bucket_versioning::*;
 use crate::bench_list_bucket::*;
 #[allow(unused_imports)]
+use crate::bench_object_append::bench_object_append;
+#[allow(unused_imports)]
 use crate::bench_object_copy::*;
 use crate::bench_object_legal_hold::*;
 use crate::bench_object_lock_config::*;
+use crate::bench_object_put::bench_object_put;
 use crate::bench_object_retention::*;
 use crate::bench_object_tags::*;
 
@@ -83,7 +87,9 @@ criterion_group!(
         bench_get_bucket_versioning,
         //
         bench_list_buckets,
-        //bench_object_copy, //TODO first refactor object_copy
+        bench_object_copy_internal,
+        //bench_object_append, // TODO: add support to switch on/off s3-express
+        bench_object_put,
         //
         bench_enable_object_legal_hold,
         bench_disable_object_legal_hold,

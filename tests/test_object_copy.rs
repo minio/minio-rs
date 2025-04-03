@@ -42,10 +42,9 @@ async fn copy_object() {
 
     let resp: CopyObjectResponse = ctx
         .client
-        .copy_object(&bucket_name)
-        .object(object_name_dst.clone())
+        .copy_object(&bucket_name, &object_name_dst)
         .source(CopySource::new(&bucket_name, &object_name_src).unwrap())
-        .run()
+        .send()
         .await
         .unwrap();
     assert_eq!(resp.bucket, bucket_name);

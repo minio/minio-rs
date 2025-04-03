@@ -25,7 +25,7 @@ use test_tag::tag;
 const SQS_ARN: &str = "arn:minio:sqs::miniojavatest:webhook";
 
 #[tag(s3, s3express)]
-//#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn test_bucket_notification() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;

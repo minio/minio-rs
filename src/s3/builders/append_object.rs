@@ -45,11 +45,18 @@ pub struct AppendObject {
 }
 
 impl AppendObject {
-    pub fn new(client: &Arc<Client>, bucket: &str, object: &str, data: SegmentedBytes) -> Self {
+    pub fn new(
+        client: &Arc<Client>,
+        bucket: String,
+        object: String,
+        data: SegmentedBytes,
+        offset_bytes: u64,
+    ) -> Self {
         AppendObject {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
-            object: object.to_owned(),
+            bucket,
+            object,
+            offset_bytes,
             data,
             ..Default::default()
         }
@@ -62,11 +69,6 @@ impl AppendObject {
 
     pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
         self.extra_query_params = extra_query_params;
-        self
-    }
-
-    pub fn offset_bytes(mut self, offset_bytes: u64) -> Self {
-        self.offset_bytes = offset_bytes;
         self
     }
 }
@@ -135,14 +137,14 @@ pub struct AppendObjectContent {
 impl AppendObjectContent {
     pub fn new(
         client: &Arc<Client>,
-        bucket: &str,
-        object: &str,
+        bucket: String,
+        object: String,
         content: impl Into<ObjectContent>,
     ) -> Self {
         AppendObjectContent {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
-            object: object.to_owned(),
+            bucket,
+            object,
             input_content: content.into(),
             extra_headers: None,
             extra_query_params: None,

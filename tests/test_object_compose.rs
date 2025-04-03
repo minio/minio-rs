@@ -52,7 +52,7 @@ async fn compose_object() {
     let resp: ComposeObjectResponse = ctx
         .client
         .compose_object(&bucket_name, &object_name_dst, sources)
-        .run()
+        .send()
         .await
         .unwrap();
     assert_eq!(resp.bucket, bucket_name);

@@ -31,7 +31,13 @@ impl Client {
         data: SegmentedBytes,
         offset_bytes: u64,
     ) -> AppendObject {
-        AppendObject::new(self, bucket, object, data).offset_bytes(offset_bytes)
+        AppendObject::new(
+            self,
+            bucket.to_owned(),
+            object.to_owned(),
+            data,
+            offset_bytes,
+        )
     }
 
     /// Creates an AppendObjectContent request builder to append data to the end of an existing
@@ -43,6 +49,6 @@ impl Client {
         object: &str,
         content: impl Into<ObjectContent>,
     ) -> AppendObjectContent {
-        AppendObjectContent::new(self, bucket, object, content)
+        AppendObjectContent::new(self, bucket.to_owned(), object.to_owned(), content)
     }
 }

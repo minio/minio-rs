@@ -56,11 +56,11 @@ pub struct CreateMultipartUpload {
 }
 
 impl CreateMultipartUpload {
-    pub fn new(client: &Arc<Client>, bucket: &str, object: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
         CreateMultipartUpload {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
-            object: object.to_owned(),
+            bucket,
+            object,
             ..Default::default()
         }
     }
@@ -160,12 +160,12 @@ pub struct AbortMultipartUpload {
 }
 
 impl AbortMultipartUpload {
-    pub fn new(client: &Arc<Client>, bucket: &str, object: &str, upload_id: &str) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String, upload_id: String) -> Self {
         Self {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
-            object: object.to_owned(),
-            upload_id: upload_id.to_owned(),
+            bucket,
+            object,
+            upload_id,
             ..Default::default()
         }
     }
@@ -197,10 +197,7 @@ impl ToS3Request for AbortMultipartUpload {
 
         let headers: Multimap = self.extra_headers.unwrap_or_default();
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
-        query_params.insert(
-            String::from("uploadId"),
-            urlencode(&self.upload_id).to_string(),
-        );
+        query_params.insert("uploadId".into(), urlencode(&self.upload_id).to_string());
 
         Ok(S3Request::new(self.client, Method::DELETE)
             .region(self.region)
@@ -238,16 +235,16 @@ impl S3Api for CompleteMultipartUpload {
 impl CompleteMultipartUpload {
     pub fn new(
         client: &Arc<Client>,
-        bucket: &str,
-        object: &str,
-        upload_id: &str,
+        bucket: String,
+        object: String,
+        upload_id: String,
         parts: Vec<PartInfo>,
     ) -> Self {
         Self {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
-            object: object.to_owned(),
-            upload_id: upload_id.to_owned(),
+            bucket,
+            object,
+            upload_id,
             parts,
             ..Default::default()
         }
@@ -348,17 +345,17 @@ pub struct UploadPart {
 impl UploadPart {
     pub fn new(
         client: &Arc<Client>,
-        bucket: &str,
-        object: &str,
-        upload_id: &str,
+        bucket: String,
+        object: String,
+        upload_id: String,
         part_number: u16,
         data: SegmentedBytes,
     ) -> Self {
         Self {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
-            object: object.to_owned(),
-            upload_id: Some(upload_id.to_owned()),
+            bucket,
+            object,
+            upload_id: Some(upload_id),
             part_number: Some(part_number),
             data,
             ..Default::default()
@@ -463,11 +460,11 @@ impl ToS3Request for UploadPart {
 pub struct PutObject(UploadPart);
 
 impl PutObject {
-    pub fn new(client: &Arc<Client>, bucket: &str, object: &str, data: SegmentedBytes) -> Self {
+    pub fn new(client: &Arc<Client>, bucket: String, object: String, data: SegmentedBytes) -> Self {
         PutObject(UploadPart {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
-            object: object.to_owned(),
+            bucket,
+            object,
             data,
             ..Default::default()
         })
@@ -514,14 +511,14 @@ impl PutObject {
     }
 }
 
+impl S3Api for PutObject {
+    type S3Response = PutObjectResponse;
+}
+
 impl ToS3Request for PutObject {
     fn to_s3request(self) -> Result<S3Request, Error> {
         self.0.to_s3request()
     }
-}
-
-impl S3Api for PutObject {
-    type S3Response = PutObjectResponse;
 }
 
 // endregion: put-object
@@ -559,14 +556,14 @@ pub struct PutObjectContent {
 impl PutObjectContent {
     pub fn new(
         client: &Arc<Client>,
-        bucket: &str,
-        object: &str,
+        bucket: String,
+        object: String,
         content: impl Into<ObjectContent>,
     ) -> Self {
         Self {
             client: Arc::clone(client),
-            bucket: bucket.to_owned(),
-            object: object.to_owned(),
+            bucket,
+            object,
             input_content: content.into(),
             extra_headers: None,
             extra_query_params: None,
@@ -651,10 +648,8 @@ impl PutObjectContent {
         self.part_size = Size::Known(part_size);
         self.part_count = expected_parts;
 
-        let client = Arc::clone(&self.client);
-
         if let Some(v) = &self.sse {
-            if v.tls_required() && !client.is_secure() {
+            if v.tls_required() && !self.client.is_secure() {
                 return Err(Error::SseTlsRequired(None));
             }
         }
@@ -674,7 +669,7 @@ impl PutObjectContent {
             let size = seg_bytes.len() as u64;
 
             let res: PutObjectResponse = PutObject(UploadPart {
-                client,
+                client: Arc::clone(&self.client),
                 extra_headers: self.extra_headers.clone(),
                 extra_query_params: self.extra_query_params.clone(),
                 bucket: self.bucket.clone(),
@@ -713,7 +708,7 @@ impl PutObjectContent {
 
             // Otherwise, we start a multipart upload.
             let create_mpu_resp: CreateMultipartUploadResponse = CreateMultipartUpload {
-                client: Arc::clone(&client),
+                client: Arc::clone(&self.client),
                 extra_headers: self.extra_headers.clone(),
                 extra_query_params: self.extra_query_params.clone(),
                 region: self.region.clone(),
@@ -729,6 +724,7 @@ impl PutObjectContent {
             .send()
             .await?;
 
+            let client = Arc::clone(&self.client);
             let mpu_res = self
                 .send_mpu(
                     part_size,
@@ -737,16 +733,13 @@ impl PutObjectContent {
                     seg_bytes,
                 )
                 .await;
+
             if mpu_res.is_err() {
                 // If we failed to complete the multipart upload, we should abort it.
-                let _ = AbortMultipartUpload::new(
-                    &client,
-                    &bucket,
-                    &object,
-                    &create_mpu_resp.upload_id,
-                )
-                .send()
-                .await;
+                let _ =
+                    AbortMultipartUpload::new(&client, bucket, object, create_mpu_resp.upload_id)
+                        .send()
+                        .await;
             }
             mpu_res
         }

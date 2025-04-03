@@ -29,7 +29,7 @@ use ring::hmac;
 use sha2::Sha256;
 
 /// Returns HMAC hash for given key and data
-pub fn hmac_hash(key: &[u8], data: &[u8]) -> Vec<u8> {
+fn hmac_hash(key: &[u8], data: &[u8]) -> Vec<u8> {
     #[cfg(feature = "ring")]
     {
         let key = hmac::Key::new(hmac::HMAC_SHA256, key);
@@ -45,12 +45,12 @@ pub fn hmac_hash(key: &[u8], data: &[u8]) -> Vec<u8> {
 }
 
 /// Returns hex encoded HMAC hash for given key and data
-pub fn hmac_hash_hex(key: &[u8], data: &[u8]) -> String {
+fn hmac_hash_hex(key: &[u8], data: &[u8]) -> String {
     hexencode(hmac_hash(key, data))
 }
 
 /// Returns scope value of given date, region and service name
-pub fn get_scope(date: UtcTime, region: &str, service_name: &str) -> String {
+fn get_scope(date: UtcTime, region: &str, service_name: &str) -> String {
     format!(
         "{}/{}/{}/aws4_request",
         to_signer_date(date),
@@ -60,7 +60,7 @@ pub fn get_scope(date: UtcTime, region: &str, service_name: &str) -> String {
 }
 
 /// Returns hex encoded SHA256 hash of canonical request
-pub fn get_canonical_request_hash(
+fn get_canonical_request_hash(
     method: &Method,
     uri: &str,
     query_string: &str,
@@ -83,7 +83,7 @@ pub fn get_canonical_request_hash(
 }
 
 /// Returns string-to-sign value of given date, scope and canonical request hash
-pub fn get_string_to_sign(date: UtcTime, scope: &str, canonical_request_hash: &str) -> String {
+fn get_string_to_sign(date: UtcTime, scope: &str, canonical_request_hash: &str) -> String {
     format!(
         "AWS4-HMAC-SHA256\n{}\n{}\n{}",
         to_amz_date(date),
@@ -93,12 +93,7 @@ pub fn get_string_to_sign(date: UtcTime, scope: &str, canonical_request_hash: &s
 }
 
 /// Returns signing key of given secret key, date, region and service name
-pub fn get_signing_key(
-    secret_key: &str,
-    date: UtcTime,
-    region: &str,
-    service_name: &str,
-) -> Vec<u8> {
+fn get_signing_key(secret_key: &str, date: UtcTime, region: &str, service_name: &str) -> Vec<u8> {
     let mut key: Vec<u8> = b"AWS4".to_vec();
     key.extend(secret_key.as_bytes());
 
@@ -109,12 +104,12 @@ pub fn get_signing_key(
 }
 
 /// Returns signature value for given signing key and string-to-sign
-pub fn get_signature(signing_key: &[u8], string_to_sign: &[u8]) -> String {
+fn get_signature(signing_key: &[u8], string_to_sign: &[u8]) -> String {
     hmac_hash_hex(signing_key, string_to_sign)
 }
 
 /// Returns authorization value for given access key, scope, signed headers and signature
-pub fn get_authorization(
+fn get_authorization(
     access_key: &str,
     scope: &str,
     signed_headers: &str,
@@ -127,7 +122,7 @@ pub fn get_authorization(
 }
 
 /// Signs and updates headers for given parameters
-pub fn sign_v4(
+fn sign_v4(
     service_name: &str,
     method: &Method,
     uri: &str,
@@ -172,32 +167,6 @@ pub fn sign_v4_s3(
 ) {
     sign_v4(
         "s3",
-        method,
-        uri,
-        region,
-        headers,
-        query_params,
-        access_key,
-        secret_key,
-        content_sha256,
-        date,
-    )
-}
-
-/// Signs and updates headers for given parameters for STS request
-pub fn sign_v4_sts(
-    method: &Method,
-    uri: &str,
-    region: &str,
-    headers: &mut Multimap,
-    query_params: &Multimap,
-    access_key: &str,
-    secret_key: &str,
-    content_sha256: &str,
-    date: UtcTime,
-) {
-    sign_v4(
-        "sts",
         method,
         uri,
         region,

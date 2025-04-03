@@ -34,7 +34,7 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
-    pub fn parse(body: &mut Bytes) -> Result<ErrorResponse, Error> {
+    pub fn parse(body: Bytes) -> Result<ErrorResponse, Error> {
         let root = match Element::parse(body.reader()) {
             Ok(v) => v,
             Err(e) => return Err(Error::XmlParseError(e)),

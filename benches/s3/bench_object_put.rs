@@ -16,19 +16,28 @@
 use crate::common_benches::{Ctx2, benchmark_s3_api};
 
 use criterion::Criterion;
-use minio::s3::builders::{CopyObjectInternal, CopySource};
+use minio::s3::builders::{ObjectContent, PutObject};
+use minio::s3::segmented_bytes::SegmentedBytes;
+use minio_common::rand_src::RandSrc;
 use minio_common::utils::rand_object_name;
+use tokio::task;
 
-pub(crate) fn bench_object_copy_internal(criterion: &mut Criterion) {
+pub(crate) fn bench_object_put(criterion: &mut Criterion) {
     benchmark_s3_api(
-        "object_copy_internal",
+        "object_put",
         criterion,
-        || async { Ctx2::new_with_object(false).await },
+        || async { Ctx2::new().await },
         |ctx| {
-            let object_name_src = &ctx.object;
-            let object_name_dst = rand_object_name();
-            CopyObjectInternal::new(&ctx.client, ctx.bucket.clone(), object_name_dst)
-                .source(CopySource::new(&ctx.bucket, object_name_src).unwrap())
+            let object_name: String = rand_object_name();
+            let size = 1024 * 1024_u64; // 1MB
+            let object_content = ObjectContent::new_from_stream(RandSrc::new(size), Some(size));
+
+            let data: SegmentedBytes = task::block_in_place(|| {
+                tokio::runtime::Runtime::new()?.block_on(object_content.to_segmented_bytes())
+            })
+            .unwrap();
+
+            PutObject::new(&ctx.client, ctx.bucket.clone(), object_name, data)
         },
     )
 }

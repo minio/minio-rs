@@ -95,11 +95,10 @@ impl S3Request {
     }
 
     /// Execute the request, returning the response. Only used in [`S3Api::send()`]
-    /// Note: this fn *consumes* the body, so it should be called only once.
-    pub(crate) async fn execute(&mut self) -> Result<reqwest::Response, Error> {
+    pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
         self.inner_region = self.compute_inner_region()?;
         self.client
-            .execute2(
+            .execute(
                 self.method.clone(),
                 &self.inner_region,
                 &mut self.headers,

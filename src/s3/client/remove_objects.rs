@@ -51,7 +51,7 @@ impl Client {
         bucket: &str,
         object: impl Into<ObjectToDelete>,
     ) -> RemoveObject {
-        RemoveObject::new(self, bucket, object)
+        RemoveObject::new(self, bucket.to_owned(), object)
     }
 
     pub fn remove_objects(
@@ -59,7 +59,7 @@ impl Client {
         bucket: &str,
         objects: impl Into<DeleteObjects>,
     ) -> RemoveObjects {
-        RemoveObjects::new(self, bucket, objects)
+        RemoveObjects::new(self, bucket.to_owned(), objects)
     }
 
     /// Creates a builder to execute
@@ -70,6 +70,6 @@ impl Client {
         bucket: &str,
         object: Vec<ObjectToDelete>,
     ) -> RemoveObjectsApi {
-        RemoveObjectsApi::new(self, bucket, object)
+        RemoveObjectsApi::new(self, bucket.to_owned(), object)
     }
 }

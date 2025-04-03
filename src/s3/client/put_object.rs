@@ -57,7 +57,7 @@ impl Client {
         object: &str,
         data: SegmentedBytes,
     ) -> PutObject {
-        PutObject::new(self, bucket, object, data)
+        PutObject::new(self, bucket.to_owned(), object.to_owned(), data)
     }
 
     /// Create a CreateMultipartUpload request builder.
@@ -66,7 +66,7 @@ impl Client {
         bucket: &str,
         object: &str,
     ) -> CreateMultipartUpload {
-        CreateMultipartUpload::new(self, bucket, object)
+        CreateMultipartUpload::new(self, bucket.to_owned(), object.to_owned())
     }
 
     pub fn abort_multipart_upload(
@@ -75,7 +75,12 @@ impl Client {
         object: &str,
         upload_id: &str,
     ) -> AbortMultipartUpload {
-        AbortMultipartUpload::new(self, bucket, object, upload_id)
+        AbortMultipartUpload::new(
+            self,
+            bucket.to_owned(),
+            object.to_owned(),
+            upload_id.to_owned(),
+        )
     }
 
     pub fn complete_multipart_upload(
@@ -85,7 +90,13 @@ impl Client {
         upload_id: &str,
         parts: Vec<PartInfo>,
     ) -> CompleteMultipartUpload {
-        CompleteMultipartUpload::new(self, bucket, object, upload_id, parts)
+        CompleteMultipartUpload::new(
+            self,
+            bucket.to_owned(),
+            object.to_owned(),
+            upload_id.to_owned(),
+            parts,
+        )
     }
 
     pub fn upload_part(
@@ -96,7 +107,14 @@ impl Client {
         part_number: u16,
         data: SegmentedBytes,
     ) -> UploadPart {
-        UploadPart::new(self, bucket, object, upload_id, part_number, data)
+        UploadPart::new(
+            self,
+            bucket.to_owned(),
+            object.to_owned(),
+            upload_id.to_owned(),
+            part_number,
+            data,
+        )
     }
 
     /// Creates a PutObjectContent request builder to upload data to MinIO/S3.
@@ -107,6 +125,6 @@ impl Client {
         object: &str,
         content: impl Into<ObjectContent>,
     ) -> PutObjectContent {
-        PutObjectContent::new(self, bucket, object, content)
+        PutObjectContent::new(self, bucket.to_owned(), object.to_owned(), content)
     }
 }
