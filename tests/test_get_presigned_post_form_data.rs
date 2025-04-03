@@ -18,7 +18,9 @@ use minio_common::example::create_post_policy_example;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use std::collections::HashMap;
+use test_tag::tag;
 
+#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn get_presigned_post_form_data() {
     let ctx = TestContext::new_from_env();

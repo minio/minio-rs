@@ -18,6 +18,7 @@ use minio::s3::types::ToStream;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use std::collections::HashSet;
+use test_tag::tag;
 use tokio_stream::StreamExt;
 
 async fn list_objects(use_api_v1: bool, include_versions: bool, unsorted: bool) {
@@ -46,6 +47,7 @@ async fn list_objects(use_api_v1: bool, include_versions: bool, unsorted: bool) 
         .list_objects(&bucket_name)
         .use_api_v1(use_api_v1)
         .include_versions(include_versions)
+        .unsorted(unsorted)
         .to_stream()
         .await;
 
@@ -75,22 +77,32 @@ async fn list_objects(use_api_v1: bool, include_versions: bool, unsorted: bool) 
     assert_eq!(names_set_after, names_set_before);
 }
 
+#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_objects_v1_no_versions_sorted() {
     list_objects(true, false, false).await;
 }
 
+#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_objects_v1_with_versions_sorted() {
     list_objects(true, true, false).await;
 }
 
+#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_objects_v2_no_versions_sorted() {
     list_objects(false, false, false).await;
 }
 
+#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_objects_v2_with_versions_sorted() {
     list_objects(false, true, false).await;
+}
+
+#[tag(s3express)]
+//#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn list_objects_v2_no_versions_unsorted() {
+    list_objects(false, false, true).await;
 }

@@ -17,7 +17,9 @@ use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::BucketExistsResponse;
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
+use test_tag::tag;
 
+#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn bucket_exists() {
     let ctx = TestContext::new_from_env();

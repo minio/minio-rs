@@ -24,7 +24,9 @@ use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use std::collections::HashMap;
+use test_tag::tag;
 
+#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn object_tags() {
     let ctx = TestContext::new_from_env();

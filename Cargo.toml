@@ -62,6 +62,7 @@ async-std = { version = "1.13.1", features = ["attributes", "tokio1"] }
 clap = { version = "4.5.35", features = ["derive"] }
 quickcheck = "1.0.3"
 criterion = "0.5.1"
+test-tag = "0.1.4"
 
 [lib]
 name = "minio"

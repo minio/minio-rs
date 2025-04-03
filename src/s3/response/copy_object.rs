@@ -24,6 +24,7 @@ use xmltree::Element;
 
 #[derive(Clone, Debug)]
 pub struct UploadPartCopyResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -66,6 +67,7 @@ impl FromS3Response for UploadPartCopyResponse {
 
 #[derive(Clone, Debug)]
 pub struct CopyObjectInternalResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -117,6 +119,7 @@ impl FromS3Response for CopyObjectInternalResponse {
 /// API
 #[derive(Clone, Debug)]
 pub struct CopyObjectResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,

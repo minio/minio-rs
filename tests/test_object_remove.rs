@@ -18,8 +18,10 @@ use minio::s3::response::PutObjectContentResponse;
 use minio::s3::types::ToStream;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
+use test_tag::tag;
 use tokio_stream::StreamExt;
 
+#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn remove_objects() {
     let ctx = TestContext::new_from_env();

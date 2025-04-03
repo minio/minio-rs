@@ -29,6 +29,7 @@ use crate::s3::{
 
 #[derive(Debug, Clone)]
 pub struct RemoveObjectResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     /// Value of the `x-amz-delete-marker` header.
     pub is_delete_marker: bool,
@@ -87,6 +88,7 @@ pub struct DeletedObject {
 /// form of a stream.
 #[derive(Clone, Debug)]
 pub struct RemoveObjectsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub result: Vec<DeleteResult>,
 }

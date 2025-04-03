@@ -29,6 +29,7 @@ use std::mem;
 #[derive(Debug)]
 /// Response of [stat_object()](crate::s3::client::Client::stat_object) API
 pub struct StatObjectResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,

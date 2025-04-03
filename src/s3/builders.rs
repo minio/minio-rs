@@ -15,6 +15,7 @@
 
 //! Argument builders for [minio::s3::client::Client](crate::s3::client::Client) APIs
 
+mod append_object;
 mod bucket_common;
 mod bucket_exists;
 mod copy_object;
@@ -65,6 +66,7 @@ mod set_object_tags;
 mod stat_object;
 
 pub use crate::s3::object_content::*;
+pub use append_object::*;
 pub use bucket_common::*;
 pub use bucket_exists::*;
 pub use copy_object::*;

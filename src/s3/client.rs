@@ -34,6 +34,7 @@ use dashmap::DashMap;
 use hyper::http::Method;
 use reqwest::Body;
 
+mod append_object;
 mod bucket_exists;
 mod copy_object;
 mod delete_bucket_encryption;

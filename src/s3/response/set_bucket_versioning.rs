@@ -23,6 +23,7 @@ use std::mem;
 /// Response of [set_bucket_versioning()](crate::s3::client::Client::set_bucket_versioning) API
 #[derive(Debug)]
 pub struct SetBucketVersioningResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,

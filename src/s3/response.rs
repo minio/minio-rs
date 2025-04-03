@@ -15,6 +15,7 @@
 
 //! Responses for [minio::s3::client::Client](crate::s3::client::Client) APIs
 
+mod append_object;
 mod bucket_exists;
 mod copy_object;
 mod delete_bucket_encryption;
@@ -62,6 +63,7 @@ mod set_object_retention;
 mod set_object_tags;
 mod stat_object;
 
+pub use append_object::AppendObjectResponse;
 pub use bucket_exists::BucketExistsResponse;
 pub use copy_object::*;
 pub use delete_bucket_encryption::DeleteBucketEncryptionResponse;

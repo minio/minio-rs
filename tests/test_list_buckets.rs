@@ -17,7 +17,9 @@ use minio::s3::response::ListBucketsResponse;
 use minio::s3::types::S3Api;
 use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::test_context::TestContext;
+use test_tag::tag;
 
+#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_buckets() {
     const N_BUCKETS: usize = 3;

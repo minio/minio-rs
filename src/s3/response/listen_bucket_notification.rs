@@ -30,6 +30,7 @@ use crate::s3::{
 /// API
 #[derive(Debug)]
 pub struct ListenBucketNotificationResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,

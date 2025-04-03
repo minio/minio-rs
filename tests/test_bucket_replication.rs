@@ -24,7 +24,9 @@ use minio_common::example::{
     create_bucket_policy_config_example_for_replication, create_bucket_replication_config_example,
 };
 use minio_common::test_context::TestContext;
+use test_tag::tag;
 
+#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_bucket_replication() {
     let ctx = TestContext::new_from_env();
@@ -85,9 +87,9 @@ async fn set_get_delete_bucket_replication() {
         }
     }
 
-    let config: ReplicationConfig = create_bucket_replication_config_example(&bucket_name2);
-
     if false {
+        let config: ReplicationConfig = create_bucket_replication_config_example(&bucket_name2);
+
         //TODO setup permissions that allow replication
         // TODO panic: called `Result::unwrap()` on an `Err` value: S3Error(ErrorResponse { code: "XMinioAdminRemoteTargetNotFoundError", message: "The remote target does not exist",
         let resp: SetBucketReplicationResponse = ctx
@@ -97,7 +99,7 @@ async fn set_get_delete_bucket_replication() {
             .send()
             .await
             .unwrap();
-        println!("response of setting replication: resp={:?}", resp);
+        //println!("response of setting replication: resp={:?}", resp);
         assert_eq!(resp.bucket, bucket_name);
         assert_eq!(resp.region, DEFAULT_REGION);
 
@@ -121,11 +123,11 @@ async fn set_get_delete_bucket_replication() {
         println!("response of deleting replication: resp={:?}", resp);
     }
 
-    let resp: GetBucketVersioningResponse = ctx
+    let _resp: GetBucketVersioningResponse = ctx
         .client
         .get_bucket_versioning(&bucket_name)
         .send()
         .await
         .unwrap();
-    println!("response of getting replication: resp={:?}", resp);
+    //println!("response of getting replication: resp={:?}", resp);
 }

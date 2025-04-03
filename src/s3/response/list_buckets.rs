@@ -25,6 +25,7 @@ use xmltree::Element;
 /// Response of [list_buckets()](crate::s3::client::Client::list_buckets) API
 #[derive(Debug, Clone)]
 pub struct ListBucketsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub buckets: Vec<Bucket>,
 }

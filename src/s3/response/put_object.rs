@@ -29,6 +29,7 @@ use crate::s3::{
 /// Response of [put_object_api()](crate::s3::client::Client::put_object) API
 #[derive(Debug, Clone)]
 pub struct PutObjectResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub bucket: String,
     pub object: String,
@@ -70,6 +71,7 @@ impl FromS3Response for PutObjectResponse {
 
 #[derive(Debug, Clone)]
 pub struct CreateMultipartUploadResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -115,6 +117,7 @@ pub type UploadPartResponse = PutObjectResponse;
 
 #[derive(Debug, Clone)]
 pub struct PutObjectContentResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub bucket: String,
     pub object: String,

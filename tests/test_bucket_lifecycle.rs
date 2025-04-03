@@ -20,7 +20,9 @@ use minio::s3::response::{
 use minio::s3::types::{LifecycleConfig, S3Api};
 use minio_common::example::create_bucket_lifecycle_config_examples;
 use minio_common::test_context::TestContext;
+use test_tag::tag;
 
+#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_bucket_lifecycle() {
     let ctx = TestContext::new_from_env();

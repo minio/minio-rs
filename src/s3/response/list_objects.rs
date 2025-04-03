@@ -188,6 +188,7 @@ fn parse_list_objects_common_prefixes(
 /// Response of [list_objects_v1()](crate::s3::client::Client::list_objects_v1) S3 API
 #[derive(Clone, Debug)]
 pub struct ListObjectsV1Response {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub name: String,
     pub encoding_type: Option<String>,
@@ -241,6 +242,7 @@ impl FromS3Response for ListObjectsV1Response {
 /// Response of [list_objects_v2()](crate::s3::client::Client::list_objects_v2) S3 API
 #[derive(Clone, Debug)]
 pub struct ListObjectsV2Response {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub name: String,
     pub encoding_type: Option<String>,
@@ -301,6 +303,7 @@ impl FromS3Response for ListObjectsV2Response {
 /// Response of [list_object_versions()](crate::s3::client::Client::list_object_versions) S3 API
 #[derive(Clone, Debug)]
 pub struct ListObjectVersionsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub name: String,
     pub encoding_type: Option<String>,
@@ -357,6 +360,7 @@ impl FromS3Response for ListObjectVersionsResponse {
 /// Response of [list_objects()](crate::s3::client::Client::list_objects) API
 #[derive(Clone, Debug, Default)]
 pub struct ListObjectsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub name: String,
     pub encoding_type: Option<String>,

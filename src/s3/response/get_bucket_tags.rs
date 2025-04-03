@@ -28,6 +28,7 @@ use xmltree::Element;
 /// API
 #[derive(Clone, Debug)]
 pub struct GetBucketTagsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,

@@ -18,7 +18,9 @@ use minio::s3::response::{DeleteBucketTagsResponse, GetBucketTagsResponse, SetBu
 use minio::s3::types::S3Api;
 use minio_common::example::create_tags_example;
 use minio_common::test_context::TestContext;
+use test_tag::tag;
 
+#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn set_get_delete_bucket_tags() {
     let ctx = TestContext::new_from_env();

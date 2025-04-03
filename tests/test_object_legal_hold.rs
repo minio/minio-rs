@@ -23,7 +23,9 @@ use minio::s3::types::S3Api;
 use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::test_context::TestContext;
 use minio_common::utils::{rand_bucket_name, rand_object_name};
+use test_tag::tag;
 
+#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn object_legal_hold() {
     let ctx = TestContext::new_from_env();

@@ -23,6 +23,7 @@ use std::mem;
 /// Response of [set_bucket_notification()](crate::s3::client::Client::set_bucket_notification) API
 #[derive(Debug)]
 pub struct SetBucketNotificationResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
