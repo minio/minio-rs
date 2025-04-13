@@ -58,7 +58,9 @@ impl Drop for CleanupGuard {
                         Ok(_) => {
                             //println!("Bucket {} removed successfully", bucket_name),
                         }
-                        Err(e) => println!("Error removing bucket {}: {:?}", bucket_name, e),
+                        Err(_e) => {
+                            //println!("Error removing bucket {}: {:?}", bucket_name, e)
+                        }
                     },
                     Err(_) => println!("Timeout after 60s while removing bucket {}", bucket_name),
                 }

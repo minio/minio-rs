@@ -16,9 +16,10 @@
 use chrono::{DateTime, Utc};
 use minio::s3::builders::PostPolicy;
 use minio::s3::types::{
-    AndOperator, Destination, Filter, LifecycleConfig, LifecycleRule, NotificationConfig,
-    ObjectLockConfig, PrefixFilterRule, QueueConfig, ReplicationConfig, ReplicationRule,
-    RetentionMode, SuffixFilterRule,
+    AndOperator, CsvInputSerialization, CsvOutputSerialization, Destination, FileHeaderInfo,
+    Filter, LifecycleConfig, LifecycleRule, NotificationConfig, ObjectLockConfig, PrefixFilterRule,
+    QueueConfig, QuoteFields, ReplicationConfig, ReplicationRule, RetentionMode, SelectRequest,
+    SuffixFilterRule,
 };
 use minio::s3::utils::utc_now;
 use std::collections::HashMap;
@@ -194,4 +195,39 @@ pub fn create_post_policy_example(bucket_name: &str, object_name: &str) -> PostP
         .add_content_length_range_condition(1024 * 1024, 4 * 1024 * 1024)
         .unwrap();
     policy
+}
+/// return (body, data)
+pub fn create_select_content_data() -> (String, String) {
+    let mut data = String::new();
+    data.push_str("1997,Ford,E350,\"ac, abs, moon\",3000.00\n");
+    data.push_str("1999,Chevy,\"Venture \"\"Extended Edition\"\"\",,4900.00\n");
+    data.push_str("1999,Chevy,\"Venture \"\"Extended Edition, Very Large\"\"\",,5000.00\n");
+    data.push_str("1996,Jeep,Grand Cherokee,\"MUST SELL!\n");
+    data.push_str("air, moon roof, loaded\",4799.00\n");
+    let body = String::from("Year,Make,Model,Description,Price\n") + &data;
+    (body, data)
+}
+pub fn create_select_content_request() -> SelectRequest {
+    let request = SelectRequest::new_csv_input_output(
+        "select * from S3Object",
+        CsvInputSerialization {
+            compression_type: None,
+            allow_quoted_record_delimiter: false,
+            comments: None,
+            field_delimiter: None,
+            file_header_info: Some(FileHeaderInfo::USE),
+            quote_character: None,
+            quote_escape_character: None,
+            record_delimiter: None,
+        },
+        CsvOutputSerialization {
+            field_delimiter: None,
+            quote_character: None,
+            quote_escape_character: None,
+            quote_fields: Some(QuoteFields::ASNEEDED),
+            record_delimiter: None,
+        },
+    )
+    .unwrap();
+    request
 }

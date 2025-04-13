@@ -21,10 +21,12 @@ use crate::s3::{
 };
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
+use http::HeaderMap;
 use std::mem;
 
 pub struct GetObjectResponse {
-    pub headers: http::HeaderMap,
+    /// Set of HTTP headers returned by the server.
+    pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
     pub object: String,

@@ -27,6 +27,7 @@ use xmltree::Element;
 /// [select_object_content()](crate::s3::client::Client::select_object_content)
 /// API
 /// Response of [select_object_content()](crate::s3::client::Client::select_object_content) API
+#[derive(Debug)]
 pub struct SelectObjectContentResponse {
     /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,

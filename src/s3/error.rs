@@ -18,13 +18,71 @@
 extern crate alloc;
 use crate::s3::utils::get_default_text;
 use bytes::{Buf, Bytes};
+use http::HeaderMap;
 use std::fmt;
 use xmltree::Element;
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum ErrorCode {
+    #[default]
+    NoError,
+
+    PermanentRedirect,
+    Redirect,
+    BadRequest,
+    RetryHead,
+    NoSuchBucket,
+    NoSuchBucketPolicy,
+    ReplicationConfigurationNotFoundError,
+    ServerSideEncryptionConfigurationNotFoundError,
+    NoSuchTagSet,
+    NoSuchObjectLockConfiguration,
+    NoSuchKey,
+    ResourceNotFound,
+    MethodNotAllowed,
+    ResourceConflict,
+    AccessDenied,
+    NotSupported,
+    BucketNotEmpty,
+
+    OtherError(String),
+}
+
+impl ErrorCode {
+    pub fn parse(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "permanentredirect" => ErrorCode::PermanentRedirect,
+            "redirect" => ErrorCode::Redirect,
+            "badrequest" => ErrorCode::BadRequest,
+            "retryhead" => ErrorCode::RetryHead,
+            "nosuchbucket" => ErrorCode::NoSuchBucket,
+            "nosuchbucketpolicy" => ErrorCode::NoSuchBucketPolicy,
+            "replicationconfigurationnotfounderror" => {
+                ErrorCode::ReplicationConfigurationNotFoundError
+            }
+            "serversideencryptionconfigurationnotfounderror" => {
+                ErrorCode::ServerSideEncryptionConfigurationNotFoundError
+            }
+            "nosuchtagset" => ErrorCode::NoSuchTagSet,
+            "nosuchobjectlockconfiguration" => ErrorCode::NoSuchObjectLockConfiguration,
+            "nosuchkey" => ErrorCode::NoSuchKey,
+            "resourcenotfound" => ErrorCode::ResourceNotFound,
+            "methodnotallowed" => ErrorCode::MethodNotAllowed,
+            "resourceconflict" => ErrorCode::ResourceConflict,
+            "accessdenied" => ErrorCode::AccessDenied,
+            "notsupported" => ErrorCode::NotSupported,
+            "bucketnotempty" => ErrorCode::BucketNotEmpty,
+            v => ErrorCode::OtherError(v.to_owned()),
+        }
+    }
+}
 
 #[derive(Clone, Debug, Default)]
 /// Error response for S3 operations
 pub struct ErrorResponse {
-    pub code: String,
+    /// Headers as returned by the server.
+    pub headers: HeaderMap,
+    pub code: ErrorCode,
     pub message: String,
     pub resource: String,
     pub request_id: String,
@@ -34,14 +92,15 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
-    pub fn parse(body: Bytes) -> Result<ErrorResponse, Error> {
+    pub fn parse(body: Bytes, headers: HeaderMap) -> Result<Self, Error> {
         let root = match Element::parse(body.reader()) {
             Ok(v) => v,
             Err(e) => return Err(Error::XmlParseError(e)),
         };
 
-        Ok(ErrorResponse {
-            code: get_default_text(&root, "Code"),
+        Ok(Self {
+            headers,
+            code: ErrorCode::parse(&get_default_text(&root, "Code")),
             message: get_default_text(&root, "Message"),
             resource: get_default_text(&root, "Resource"),
             request_id: get_default_text(&root, "RequestId"),
@@ -127,7 +186,7 @@ pub enum Error {
 impl std::error::Error for Error {}
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::TimeParseError(e) => write!(f, "{}", e),
             Error::InvalidUrl(e) => write!(f, "{}", e),
@@ -186,7 +245,7 @@ impl fmt::Display for Error {
             Error::RegionMismatch(br, r) => write!(f, "region must be {}, but passed {}", br, r),
             Error::S3Error(er) => write!(
                 f,
-                "s3 operation failed; code: {}, message: {}, resource: {}, request_id: {}, host_id: {}, bucket_name: {}, object_name: {}",
+                "s3 operation failed; code: {:?}, message: {}, resource: {}, request_id: {}, host_id: {}, bucket_name: {}, object_name: {}",
                 er.code,
                 er.message,
                 er.resource,
@@ -298,19 +357,6 @@ impl fmt::Display for Error {
             Error::NoSuchObjectLockConfiguration => write!(f, "no such object lock"),
             Error::NoSuchBucketPolicy => write!(f, "no such bucket policy"),
             Error::NoSuchBucket => write!(f, "no such bucket"),
-        }
-    }
-}
-
-impl Error {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Error::NoSuchTagSet => "NoSuchTagSet",
-            Error::ReplicationConfigurationNotFoundError => "ReplicationConfigurationNotFoundError",
-            Error::NoSuchObjectLockConfiguration => "NoSuchObjectLockConfiguration",
-            Error::NoSuchBucketPolicy => "NoSuchBucketPolicy",
-            Error::NoSuchBucket => "NoSuchBucket",
-            _ => "TODO",
         }
     }
 }

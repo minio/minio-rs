@@ -18,9 +18,7 @@ use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::GetPresignedObjectUrlResponse;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
-use test_tag::tag;
 
-#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn get_presigned_object_url() {
     let ctx = TestContext::new_from_env();

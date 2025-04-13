@@ -27,7 +27,6 @@ use sha2::{Digest, Sha256};
 use std::io::Read;
 use std::path::PathBuf;
 use std::{fs, io};
-use test_tag::tag;
 
 fn get_hash(filename: &String) -> String {
     #[cfg(feature = "ring")]
@@ -48,7 +47,6 @@ fn get_hash(filename: &String) -> String {
     }
 }
 
-#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn upload_download_object() {
     let ctx = TestContext::new_from_env();

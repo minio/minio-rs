@@ -15,6 +15,7 @@
 
 use minio::s3::builders::VersioningStatus;
 use minio::s3::client::DEFAULT_REGION;
+use minio::s3::error::{Error, ErrorCode};
 use minio::s3::response::{
     DeleteBucketReplicationResponse, GetBucketReplicationResponse, GetBucketVersioningResponse,
     SetBucketPolicyResponse, SetBucketReplicationResponse, SetBucketVersioningResponse,
@@ -24,12 +25,14 @@ use minio_common::example::{
     create_bucket_policy_config_example_for_replication, create_bucket_replication_config_example,
 };
 use minio_common::test_context::TestContext;
-use test_tag::tag;
 
-#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn set_get_delete_bucket_replication() {
+async fn bucket_replication_s3() {
     let ctx = TestContext::new_from_env();
+    if ctx.client.is_minio_express() {
+        println!("Skipping test because it is running in MinIO Express mode");
+        return;
+    }
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
     let ctx2 = TestContext::new_from_env();
@@ -122,7 +125,6 @@ async fn set_get_delete_bucket_replication() {
             .unwrap();
         println!("response of deleting replication: resp={:?}", resp);
     }
-
     let _resp: GetBucketVersioningResponse = ctx
         .client
         .get_bucket_versioning(&bucket_name)
@@ -130,4 +132,45 @@ async fn set_get_delete_bucket_replication() {
         .await
         .unwrap();
     //println!("response of getting replication: resp={:?}", resp);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn bucket_replication_s3express() {
+    let ctx = TestContext::new_from_env();
+
+    if !ctx.client.is_minio_express() {
+        println!("Skipping test because it is NOT running in MinIO Express mode");
+        return;
+    }
+    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+
+    let config: ReplicationConfig = create_bucket_replication_config_example(&bucket_name);
+
+    let resp: Result<SetBucketReplicationResponse, Error> = ctx
+        .client
+        .set_bucket_replication(&bucket_name)
+        .replication_config(config.clone())
+        .send()
+        .await;
+    match resp {
+        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
+        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+    }
+
+    let resp: Result<GetBucketReplicationResponse, Error> =
+        ctx.client.get_bucket_replication(&bucket_name).send().await;
+    match resp {
+        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
+        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+    }
+
+    let resp: Result<DeleteBucketReplicationResponse, Error> = ctx
+        .client
+        .delete_bucket_replication(&bucket_name)
+        .send()
+        .await;
+    match resp {
+        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
+        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+    }
 }

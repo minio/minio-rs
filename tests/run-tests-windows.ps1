@@ -8,12 +8,7 @@ $Env:IGNORE_CERT_CHECK = "false"
 $Env:SERVER_REGION = ""
 
 # Run tests
-
-# run all s3-express tests
-#cargo test -- :s3express:
-
-# run all s3 tests
-cargo test -- :s3:
+cargo test
 
 # run one specific test and show stdout
-# cargo test --test test_get_presigned_object_url -- --nocapture
+# cargo test --test test_bucket_exists -- --nocapture

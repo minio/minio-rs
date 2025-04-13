@@ -18,12 +18,21 @@ use minio::s3::types::ToStream;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use std::collections::HashSet;
-use test_tag::tag;
 use tokio_stream::StreamExt;
 
-async fn list_objects(use_api_v1: bool, include_versions: bool, unsorted: bool) {
+async fn list_objects(use_api_v1: bool, include_versions: bool, unsorted: bool, express: bool) {
     const N_OBJECTS: usize = 100;
     let ctx = TestContext::new_from_env();
+
+    let is_express = ctx.client.is_minio_express();
+    if is_express && !express {
+        println!("Skipping test because it is running in MinIO Express mode");
+        return;
+    } else if !is_express && express {
+        println!("Skipping test because it is NOT running in MinIO Express mode");
+        return;
+    }
+
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
     let mut names_set_before: HashSet<String> = HashSet::new();
@@ -77,32 +86,27 @@ async fn list_objects(use_api_v1: bool, include_versions: bool, unsorted: bool) 
     assert_eq!(names_set_after, names_set_before);
 }
 
-#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_objects_v1_no_versions_sorted() {
-    list_objects(true, false, false).await;
+    list_objects(true, false, false, false).await;
 }
 
-#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_objects_v1_with_versions_sorted() {
-    list_objects(true, true, false).await;
+    list_objects(true, true, false, false).await;
 }
 
-#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_objects_v2_no_versions_sorted() {
-    list_objects(false, false, false).await;
+    list_objects(false, false, false, false).await;
 }
 
-#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_objects_v2_with_versions_sorted() {
-    list_objects(false, true, false).await;
+    list_objects(false, true, false, false).await;
 }
 
-#[tag(s3express)]
 //#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn list_objects_v2_no_versions_unsorted() {
-    list_objects(false, false, true).await;
+    list_objects(false, false, true, true).await;
 }

@@ -15,16 +15,14 @@
 
 use http::header;
 use minio::s3::builders::ObjectContent;
-use minio::s3::error::Error;
+use minio::s3::error::{Error, ErrorCode};
 use minio::s3::response::{PutObjectContentResponse, RemoveObjectResponse, StatObjectResponse};
 use minio::s3::types::S3Api;
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
-use test_tag::tag;
 use tokio::sync::mpsc;
 
-#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn put_object() {
     let ctx = TestContext::new_from_env();
@@ -63,13 +61,12 @@ async fn put_object() {
         .await;
     match resp.err().unwrap() {
         Error::S3Error(er) => {
-            assert_eq!(er.code, "NoSuchKey")
+            assert_eq!(er.code, ErrorCode::NoSuchKey)
         }
         e => panic!("Unexpected error {:?}", e),
     }
 }
 
-#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn put_object_multipart() {
     let ctx = TestContext::new_from_env();
@@ -103,7 +100,6 @@ async fn put_object_multipart() {
         .unwrap();
 }
 
-#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn put_object_content_1() {
     let ctx = TestContext::new_from_env();
@@ -147,7 +143,6 @@ async fn put_object_content_1() {
     }
 }
 
-#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn put_object_content_2() {
     let ctx = TestContext::new_from_env();
@@ -188,7 +183,6 @@ async fn put_object_content_2() {
 }
 
 /// Test sending PutObject across async tasks.
-#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn put_object_content_3() {
     let ctx = TestContext::new_from_env();

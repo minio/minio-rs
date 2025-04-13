@@ -15,15 +15,18 @@
 
 use minio::s3::builders::VersioningStatus;
 use minio::s3::client::DEFAULT_REGION;
+use minio::s3::error::{Error, ErrorCode};
 use minio::s3::response::{GetBucketVersioningResponse, SetBucketVersioningResponse};
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
-use test_tag::tag;
 
-#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn set_get_bucket_versioning() {
+async fn bucket_versioning_s3() {
     let ctx = TestContext::new_from_env();
+    if ctx.client.is_minio_express() {
+        println!("Skipping test because it is running in MinIO Express mode");
+        return;
+    }
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
     let resp: SetBucketVersioningResponse = ctx
@@ -65,4 +68,32 @@ async fn set_get_bucket_versioning() {
     assert_eq!(resp.status, Some(VersioningStatus::Suspended));
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn bucket_versioning_s3express() {
+    let ctx = TestContext::new_from_env();
+    if !ctx.client.is_minio_express() {
+        println!("Skipping test because it is NOT running in MinIO Express mode");
+        return;
+    }
+    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+
+    let resp: Result<SetBucketVersioningResponse, Error> = ctx
+        .client
+        .set_bucket_versioning(&bucket_name)
+        .versioning_status(VersioningStatus::Enabled)
+        .send()
+        .await;
+    match resp {
+        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
+        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+    }
+
+    let resp: Result<GetBucketVersioningResponse, Error> =
+        ctx.client.get_bucket_versioning(&bucket_name).send().await;
+    match resp {
+        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
+        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+    }
 }

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ErrorCode};
 use crate::s3::types::{FromS3Response, S3Request};
 use crate::s3::utils::{get_default_text, take_bucket, take_object, take_version_id};
 use async_trait::async_trait;
@@ -57,11 +57,9 @@ impl FromS3Response for IsObjectLegalHoldEnabledResponse {
                     enabled: get_default_text(&root, "Status") == "ON",
                 })
             }
-            Err(Error::S3Error(ref err))
-                if err.code == Error::NoSuchObjectLockConfiguration.as_str() =>
-            {
+            Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchObjectLockConfiguration => {
                 Ok(Self {
-                    headers: HeaderMap::new(),
+                    headers: e.headers,
                     region: req.inner_region,
                     bucket: take_bucket(req.bucket)?,
                     object: take_object(req.object)?,

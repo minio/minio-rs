@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ErrorCode};
 use crate::s3::types::{FromS3Response, S3Request, SseConfig};
 use crate::s3::utils::{get_option_text, get_text, take_bucket};
 use async_trait::async_trait;
@@ -66,11 +66,11 @@ impl FromS3Response for GetBucketEncryptionResponse {
                     },
                 })
             }
-            Err(Error::S3Error(ref err))
-                if err.code == "ServerSideEncryptionConfigurationNotFoundError" =>
+            Err(Error::S3Error(e))
+                if e.code == ErrorCode::ServerSideEncryptionConfigurationNotFoundError =>
             {
                 Ok(Self {
-                    headers: HeaderMap::new(),
+                    headers: e.headers,
                     region: req.inner_region,
                     bucket: take_bucket(req.bucket)?,
                     config: Default::default(),

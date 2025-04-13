@@ -227,7 +227,7 @@ impl AppendObjectContent {
             .stat_object(&self.bucket, &self.object)
             .send()
             .await?;
-        println!("statObjectResponse={:#?}", resp);
+        //println!("statObjectResponse={:#?}", resp);
 
         let current_file_size = resp.size;
 

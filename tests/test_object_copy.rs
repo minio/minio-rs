@@ -19,12 +19,15 @@ use minio::s3::types::S3Api;
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
-use test_tag::tag;
 
-#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn copy_object() {
     let ctx = TestContext::new_from_env();
+    if ctx.client.is_minio_express() {
+        println!("Skipping test because it is running in MinIO Express mode");
+        return;
+    }
+
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
     let object_name_src: String = rand_object_name();
     let object_name_dst: String = rand_object_name();

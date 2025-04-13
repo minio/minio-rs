@@ -21,12 +21,15 @@ use minio::s3::types::{ObjectLockConfig, RetentionMode, S3Api};
 use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_bucket_name;
-use test_tag::tag;
 
-#[tag(s3)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn set_get_delete_object_lock_config() {
+async fn object_lock_config() {
     let ctx = TestContext::new_from_env();
+    if ctx.client.is_minio_express() {
+        println!("Skipping test because it is running in MinIO Express mode");
+        return;
+    }
+
     let bucket_name: String = rand_bucket_name();
     ctx.client
         .make_bucket(&bucket_name)

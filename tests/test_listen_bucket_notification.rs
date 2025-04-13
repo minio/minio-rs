@@ -20,11 +20,9 @@ use minio::s3::types::{NotificationRecord, NotificationRecords, S3Api};
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
-use test_tag::tag;
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 
-#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn listen_bucket_notification() {
     let ctx = TestContext::new_from_env();

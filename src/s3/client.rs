@@ -19,21 +19,25 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use crate::s3::creds::Provider;
-use crate::s3::error::{Error, ErrorResponse};
+use crate::s3::error::{Error, ErrorCode, ErrorResponse};
 use crate::s3::http::BaseUrl;
 use crate::s3::response::*;
 use crate::s3::signer::sign_v4_s3;
 use crate::s3::utils::{EMPTY_SHA256, Multimap, sha256_hash_sb, to_amz_date, utc_now};
 
-use crate::s3::builders::ComposeSource;
+use crate::s3::builders::{BucketExists, ComposeSource};
 use crate::s3::segmented_bytes::SegmentedBytes;
 use bytes::Bytes;
 use dashmap::DashMap;
+use http::HeaderMap;
 use hyper::http::Method;
+use rand::Rng;
+use rand::distributions::Alphanumeric;
 use reqwest::Body;
+use tokio::task;
 
 mod append_object;
 mod bucket_exists;
@@ -186,7 +190,7 @@ impl ClientBuilder {
             client: builder.build()?,
             base_url: self.base_url,
             provider: self.provider,
-            region_map: Arc::default(),
+            ..Default::default()
         })
     }
 }
@@ -200,7 +204,8 @@ pub struct Client {
     client: reqwest::Client,
     pub(crate) base_url: BaseUrl,
     pub(crate) provider: Option<Arc<Box<(dyn Provider + Send + Sync + 'static)>>>,
-    pub(crate) region_map: Arc<DashMap<String, String>>,
+    pub(crate) region_map: DashMap<String, String>,
+    express: OnceLock<bool>,
 }
 
 impl Client {
@@ -234,12 +239,51 @@ impl Client {
             .build()
     }
 
+    /// Returns whether is client uses an AWS host.
     pub fn is_aws_host(&self) -> bool {
         self.base_url.is_aws_host()
     }
 
+    /// Returns whether this client is configured to use HTTPS.
     pub fn is_secure(&self) -> bool {
         self.base_url.https
+    }
+
+    /// Returns whether this client is configured to use the express endpoint and is minio enterprise.
+    pub fn is_minio_express(self: &Arc<Self>) -> bool {
+        if self.express.get().is_some() {
+            self.express.get().unwrap().clone()
+        } else {
+            task::block_in_place(|| match tokio::runtime::Runtime::new() {
+                Ok(rt) => {
+                    let bucket_name: String = rand::thread_rng()
+                        .sample_iter(&Alphanumeric)
+                        .take(20)
+                        .map(char::from)
+                        .collect::<String>()
+                        .to_lowercase();
+
+                    let express = rt.block_on(async {
+                        match BucketExists::new(self, bucket_name).send().await {
+                            Ok(v) => {
+                                if let Some(server) = v.headers.get("server") {
+                                    if let Ok(s) = server.to_str() {
+                                        return s == "MinIO Enterprise/S3express";
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                println!("is_express_internal: error: {e}\nassume false");
+                            }
+                        }
+                        false
+                    });
+                    self.express.set(express).unwrap_or_default();
+                    express
+                }
+                Err(_) => false,
+            })
+        }
     }
 
     fn handle_redirect_response(
@@ -249,18 +293,15 @@ impl Client {
         header_map: &reqwest::header::HeaderMap,
         bucket_name: Option<&str>,
         retry: bool,
-    ) -> Result<(String, String), Error> {
+    ) -> Result<(ErrorCode, String), Error> {
         let (mut code, mut message) = match status_code {
-            301 => (
-                String::from("PermanentRedirect"),
-                String::from("Moved Permanently"),
-            ),
-            307 => (String::from("Redirect"), String::from("Temporary redirect")),
-            400 => (String::from("BadRequest"), String::from("Bad request")),
-            _ => (String::new(), String::new()),
+            301 => (ErrorCode::PermanentRedirect, "Moved Permanently".into()),
+            307 => (ErrorCode::Redirect, "Temporary redirect".into()),
+            400 => (ErrorCode::BadRequest, "Bad request".into()),
+            _ => (ErrorCode::NoError, String::new()),
         };
 
-        let region = match header_map.get("x-amz-bucket-region") {
+        let region: &str = match header_map.get("x-amz-bucket-region") {
             Some(v) => v.to_str()?,
             _ => "",
         };
@@ -270,10 +311,10 @@ impl Client {
             message.push_str(region);
         }
 
-        if retry && !region.is_empty() && method == Method::HEAD {
+        if retry && !region.is_empty() && (method == Method::HEAD) {
             if let Some(v) = bucket_name {
                 if self.region_map.contains_key(v) {
-                    code = String::from("RetryHead");
+                    code = ErrorCode::RetryHead;
                     message = String::new();
                 }
             }
@@ -285,8 +326,8 @@ impl Client {
     fn get_error_response(
         &self,
         body: Bytes,
-        status_code: u16,
-        headers: reqwest::header::HeaderMap,
+        http_status_code: u16,
+        headers: HeaderMap,
         method: &Method,
         resource: &str,
         bucket_name: Option<&str>,
@@ -297,21 +338,21 @@ impl Client {
             return match headers.get("Content-Type") {
                 Some(v) => match v.to_str() {
                     Ok(s) => match s.to_lowercase().contains("application/xml") {
-                        true => match ErrorResponse::parse(body) {
+                        true => match ErrorResponse::parse(body, headers) {
                             Ok(v) => Error::S3Error(v),
                             Err(e) => e,
                         },
-                        false => Error::InvalidResponse(status_code, s.to_string()),
+                        false => Error::InvalidResponse(http_status_code, s.to_string()),
                     },
                     Err(e) => return Error::StrError(e),
                 },
-                _ => Error::InvalidResponse(status_code, String::new()),
+                _ => Error::InvalidResponse(http_status_code, String::new()),
             };
         }
 
-        let (code, message) = match status_code {
+        let (code, message) = match http_status_code {
             301 | 307 | 400 => match self.handle_redirect_response(
-                status_code,
+                http_status_code,
                 method,
                 &headers,
                 bucket_name,
@@ -320,36 +361,36 @@ impl Client {
                 Ok(v) => v,
                 Err(e) => return e,
             },
-            403 => ("AccessDenied".into(), "Access denied".into()),
+            403 => (ErrorCode::AccessDenied, "Access denied".into()),
             404 => match object_name {
-                Some(_) => ("NoSuchKey".into(), "Object does not exist".into()),
+                Some(_) => (ErrorCode::NoSuchKey, "Object does not exist".into()),
                 _ => match bucket_name {
-                    Some(_) => ("NoSuchBucket".into(), "Bucket does not exist".into()),
+                    Some(_) => (ErrorCode::NoSuchBucket, "Bucket does not exist".into()),
                     _ => (
-                        "ResourceNotFound".into(),
+                        ErrorCode::ResourceNotFound,
                         "Request resource not found".into(),
                     ),
                 },
             },
             405 => (
-                "MethodNotAllowed".into(),
+                ErrorCode::MethodNotAllowed,
                 "The specified method is not allowed against this resource".into(),
             ),
             409 => match bucket_name {
-                Some(_) => ("NoSuchBucket".into(), "Bucket does not exist".into()),
+                Some(_) => (ErrorCode::NoSuchBucket, "Bucket does not exist".into()),
                 _ => (
-                    "ResourceConflict".into(),
+                    ErrorCode::ResourceConflict.into(),
                     "Request resource conflicts".into(),
                 ),
             },
             501 => (
-                "MethodNotAllowed".into(),
+                ErrorCode::MethodNotAllowed.into(),
                 "The specified method is not allowed against this resource".into(),
             ),
-            _ => return Error::ServerError(status_code),
+            _ => return Error::ServerError(http_status_code),
         };
 
-        let request_id = match headers.get("x-amz-request-id") {
+        let request_id: String = match headers.get("x-amz-request-id") {
             Some(v) => match v.to_str() {
                 Ok(s) => s.to_string(),
                 Err(e) => return Error::StrError(e),
@@ -357,7 +398,7 @@ impl Client {
             _ => String::new(),
         };
 
-        let host_id = match headers.get("x-amz-id-2") {
+        let host_id: String = match headers.get("x-amz-id-2") {
             Some(v) => match v.to_str() {
                 Ok(s) => s.to_string(),
                 Err(e) => return Error::StrError(e),
@@ -366,6 +407,7 @@ impl Client {
         };
 
         Error::S3Error(ErrorResponse {
+            headers,
             code,
             message,
             resource: resource.to_string(),
@@ -376,7 +418,7 @@ impl Client {
         })
     }
 
-    pub async fn do_execute(
+    async fn execute_internal(
         &self,
         method: &Method,
         region: &str,
@@ -447,6 +489,31 @@ impl Client {
             }
         }
 
+        if false {
+            let mut header_strings: Vec<String> = headers
+                .iter_all()
+                .map(|(k, v)| format!("{}: {}", k, v.join(",")))
+                .collect();
+
+            // Sort headers alphabetically by name
+            header_strings.sort();
+
+            let body_str: String = String::from_utf8(
+                body.clone()
+                    .unwrap_or(&SegmentedBytes::new())
+                    .to_bytes()
+                    .to_vec(),
+            )?;
+
+            println!(
+                "S3 request: {} url={:?}; headers={:?}; body={}\n",
+                method,
+                url.path,
+                header_strings.join("; "),
+                body_str
+            );
+        }
+
         if *method == Method::PUT || *method == Method::POST {
             let mut bytes_vec = vec![];
             if let Some(body) = body {
@@ -461,6 +528,7 @@ impl Client {
         }
 
         let resp = req.send().await?;
+
         if resp.status().is_success() {
             return Ok(resp);
         }
@@ -468,8 +536,9 @@ impl Client {
         let mut resp = resp;
         let status_code = resp.status().as_u16();
         let headers: reqwest::header::HeaderMap = mem::take(resp.headers_mut());
+
         let body: Bytes = resp.bytes().await?;
-        let e = self.get_error_response(
+        let e: Error = self.get_error_response(
             body,
             status_code,
             headers,
@@ -482,7 +551,7 @@ impl Client {
 
         match e {
             Error::S3Error(ref er) => {
-                if er.code == "NoSuchBucket" || er.code == "RetryHead" {
+                if (er.code == ErrorCode::NoSuchBucket) || (er.code == ErrorCode::RetryHead) {
                     if let Some(v) = bucket_name {
                         self.region_map.remove(v);
                     }
@@ -504,8 +573,8 @@ impl Client {
         object_name: &Option<&str>,
         data: Option<&SegmentedBytes>,
     ) -> Result<reqwest::Response, Error> {
-        let res = self
-            .do_execute(
+        let resp: Result<reqwest::Response, Error> = self
+            .execute_internal(
                 &method,
                 region,
                 headers,
@@ -516,11 +585,11 @@ impl Client {
                 true,
             )
             .await;
-        match res {
+        match resp {
             Ok(r) => return Ok(r),
             Err(e) => match e {
                 Error::S3Error(ref er) => {
-                    if er.code != "RetryHead" {
+                    if er.code != ErrorCode::RetryHead {
                         return Err(e);
                     }
                 }
@@ -529,7 +598,7 @@ impl Client {
         };
 
         // Retry only once on RetryHead error.
-        self.do_execute(
+        self.execute_internal(
             &method,
             region,
             headers,

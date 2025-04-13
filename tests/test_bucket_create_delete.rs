@@ -18,11 +18,9 @@ use minio::s3::response::{BucketExistsResponse, MakeBucketResponse, RemoveBucket
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_bucket_name;
-use test_tag::tag;
 
-#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn create_delete_bucket() {
+async fn bucket_create_delete() {
     let ctx = TestContext::new_from_env();
     let bucket_name = rand_bucket_name();
 

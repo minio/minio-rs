@@ -17,10 +17,12 @@ use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
 use crate::s3::utils::{take_bucket, take_object};
 use async_trait::async_trait;
+use http::HeaderMap;
 use std::mem;
 
 pub struct ObjectPromptResponse {
-    pub headers: http::HeaderMap,
+    /// Set of HTTP headers returned by the server.
+    pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
     pub object: String,

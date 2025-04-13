@@ -20,11 +20,9 @@ use minio::s3::response::{
 use minio::s3::types::{NotificationConfig, S3Api};
 use minio_common::example::create_bucket_notification_config_example;
 use minio_common::test_context::TestContext;
-use test_tag::tag;
 
 const SQS_ARN: &str = "arn:minio:sqs::miniojavatest:webhook";
 
-#[tag(s3, s3express)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn test_bucket_notification() {
     let ctx = TestContext::new_from_env();

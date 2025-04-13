@@ -17,7 +17,7 @@
 
 use super::Client;
 use crate::s3::builders::{ObjectToDelete, RemoveBucket, RemoveObject};
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ErrorCode};
 use crate::s3::response::DeleteResult;
 use crate::s3::response::{
     DisableObjectLegalHoldResponse, RemoveBucketResponse, RemoveObjectResponse,
@@ -59,48 +59,76 @@ impl Client {
         self: &Arc<Self>,
         bucket: &str,
     ) -> Result<RemoveBucketResponse, Error> {
-        let mut stream = self
-            .list_objects(bucket)
-            .include_versions(true)
-            .to_stream()
-            .await;
+        if self.is_minio_express() {
+            let mut stream = self.list_objects(bucket).to_stream().await;
 
-        while let Some(items) = stream.next().await {
-            let mut resp = self
-                .remove_objects(
-                    bucket,
-                    items?.contents.into_iter().map(ObjectToDelete::from),
-                )
-                .bypass_governance_mode(true)
+            while let Some(items) = stream.next().await {
+                let _resp = self
+                    .remove_objects(
+                        bucket,
+                        items?.contents.into_iter().map(ObjectToDelete::from),
+                    )
+                    .to_stream()
+                    .await;
+            }
+        } else {
+            let mut stream = self
+                .list_objects(bucket)
+                .include_versions(true)
                 .to_stream()
                 .await;
 
-            while let Some(item) = resp.next().await {
-                let res: RemoveObjectsResponse = item?;
-                for obj in res.result.into_iter() {
-                    match obj {
-                        DeleteResult::Deleted(_) => {}
-                        DeleteResult::Error(v) => {
-                            // the object is not deleted. try to disable legal hold and try again.
-                            let _resp: DisableObjectLegalHoldResponse = self
-                                .disable_object_legal_hold(bucket, &v.object_name)
-                                .version_id(v.version_id.clone())
+            while let Some(items) = stream.next().await {
+                let mut resp = self
+                    .remove_objects(
+                        bucket,
+                        items?.contents.into_iter().map(ObjectToDelete::from),
+                    )
+                    .bypass_governance_mode(true)
+                    .to_stream()
+                    .await;
+
+                while let Some(item) = resp.next().await {
+                    let resp: RemoveObjectsResponse = item?;
+                    for obj in resp.result.into_iter() {
+                        match obj {
+                            DeleteResult::Deleted(_) => {}
+                            DeleteResult::Error(v) => {
+                                // the object is not deleted. try to disable legal hold and try again.
+                                let _resp: DisableObjectLegalHoldResponse = self
+                                    .disable_object_legal_hold(bucket, &v.object_name)
+                                    .version_id(v.version_id.clone())
+                                    .send()
+                                    .await?;
+
+                                let _resp: RemoveObjectResponse = RemoveObject::new(
+                                    self,
+                                    bucket.to_string(),
+                                    ObjectToDelete::from(v),
+                                )
+                                .bypass_governance_mode(true)
                                 .send()
                                 .await?;
-
-                            let _resp: RemoveObjectResponse = RemoveObject::new(
-                                self,
-                                bucket.to_string(),
-                                ObjectToDelete::from(v),
-                            )
-                            .bypass_governance_mode(true)
-                            .send()
-                            .await?;
+                            }
                         }
                     }
                 }
             }
         }
-        self.remove_bucket(bucket).send().await
+        match self.remove_bucket(bucket).send().await {
+            Ok(resp) => Ok(resp),
+            Err(Error::S3Error(e)) => {
+                if e.code == ErrorCode::NoSuchBucket {
+                    Ok(RemoveBucketResponse {
+                        headers: e.headers,
+                        bucket: e.bucket_name,
+                        region: String::new(),
+                    })
+                } else {
+                    Err(Error::S3Error(e))
+                }
+            }
+            Err(e) => Err(e),
+        }
     }
 }
