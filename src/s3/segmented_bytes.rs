@@ -62,6 +62,9 @@ impl SegmentedBytes {
     }
 
     /// Copy all the content into a single `Bytes` object.
+    ///
+    /// ⚠️ This function is slow and intended for testing/debugging only.
+    /// Do not use in performance-critical code.
     pub fn to_bytes(&self) -> Bytes {
         let mut buf = BytesMut::with_capacity(self.total_size);
         for segment in &self.segments {
@@ -86,15 +89,16 @@ impl Iterator for SegmentedBytesIntoIterator {
         if self.current_segment >= self.sb.segments.len() {
             return None;
         }
-        let segment = &self.sb.segments[self.current_segment];
+        let segment = &mut self.sb.segments[self.current_segment];
+
         if self.current_segment_index >= segment.len() {
             self.current_segment += 1;
             self.current_segment_index = 0;
             return self.next();
         }
-        let bytes = &segment[self.current_segment_index];
+        let bytes = segment.remove(self.current_segment_index);
         self.current_segment_index += 1;
-        Some(bytes.clone())
+        Some(bytes)
     }
 }
 
@@ -151,14 +155,20 @@ impl<'a> IntoIterator for &'a SegmentedBytes {
 
 impl From<Bytes> for SegmentedBytes {
     fn from(bytes: Bytes) -> Self {
-        let mut sb = SegmentedBytes::new();
-        sb.append(bytes);
-        sb
+        let total_size = bytes.len();
+        Self {
+            segments: vec![vec![bytes]],
+            total_size,
+        }
     }
 }
 
 impl From<String> for SegmentedBytes {
     fn from(s: String) -> Self {
-        SegmentedBytes::from(Bytes::from(s))
+        let total_size = s.len(); // take number of bytes in the string
+        Self {
+            segments: vec![vec![Bytes::from(s.into_bytes())]],
+            total_size,
+        }
     }
 }

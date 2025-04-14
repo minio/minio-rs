@@ -515,14 +515,14 @@ impl Client {
         }
 
         if *method == Method::PUT || *method == Method::POST {
-            let mut bytes_vec = vec![];
+            let mut bytes_vec: Vec<Bytes> = vec![];
             if let Some(body) = body {
                 bytes_vec = body.iter().collect();
             };
             let stream = futures_util::stream::iter(
                 bytes_vec
                     .into_iter()
-                    .map(|x| -> Result<_, std::io::Error> { Ok(x.clone()) }),
+                    .map(|x| -> Result<_, std::io::Error> { Ok(x) }),
             );
             req = req.body(Body::wrap_stream(stream));
         }
@@ -535,9 +535,9 @@ impl Client {
 
         let mut resp = resp;
         let status_code = resp.status().as_u16();
-        let headers: reqwest::header::HeaderMap = mem::take(resp.headers_mut());
-
+        let headers: HeaderMap = mem::take(resp.headers_mut());
         let body: Bytes = resp.bytes().await?;
+
         let e: Error = self.get_error_response(
             body,
             status_code,

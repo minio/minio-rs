@@ -149,7 +149,7 @@ async fn object_legal_hold_s3express() {
         .await;
     match resp {
         Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
-        v => panic!("Expected error UnsupportedApi: but got {:?}", v),
+        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 
     let resp: Result<EnableObjectLegalHoldResponse, Error> = ctx
@@ -159,6 +159,6 @@ async fn object_legal_hold_s3express() {
         .await;
     match resp {
         Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
-        v => panic!("Expected error UnsupportedApi: but got {:?}", v),
+        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 }

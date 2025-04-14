@@ -52,7 +52,7 @@ impl AppendObject {
         data: SegmentedBytes,
         offset_bytes: u64,
     ) -> Self {
-        AppendObject {
+        Self {
             client: Arc::clone(client),
             bucket,
             object,
@@ -141,7 +141,7 @@ impl AppendObjectContent {
         object: String,
         content: impl Into<ObjectContent>,
     ) -> Self {
-        AppendObjectContent {
+        Self {
             client: Arc::clone(client),
             bucket,
             object,
@@ -199,7 +199,7 @@ impl AppendObjectContent {
                 None => Multimap::new(),
             };
             headers.insert(
-                String::from("x-amz-write-offset-bytes"),
+                "x-amz-write-offset-bytes".into(),
                 self.offset_bytes.to_string(),
             );
             self.extra_query_params = Some(headers);
@@ -275,7 +275,7 @@ impl AppendObjectContent {
 
         let mut last_resp: Option<AppendObjectResponse> = None;
         let mut next_offset_bytes: u64 = object_size;
-        println!("initial offset_bytes: {}", next_offset_bytes);
+        //println!("initial offset_bytes: {}", next_offset_bytes);
 
         let mut first_part = Some(first_part);
         while !done {
@@ -320,7 +320,7 @@ impl AppendObjectContent {
                 offset_bytes: next_offset_bytes,
             };
             let resp: AppendObjectResponse = append_object.send().await?;
-            println!("AppendObjectResponse: object_size={:?}", resp.object_size);
+            //println!("AppendObjectResponse: object_size={:?}", resp.object_size);
 
             next_offset_bytes = resp.object_size;
 
