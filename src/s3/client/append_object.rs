@@ -24,6 +24,8 @@ use std::sync::Arc;
 impl Client {
     /// Creates an AppendObject request builder to append data to the end of an (existing) object.
     /// This is a lower-level API that performs a non-multipart object upload.
+    ///
+    /// 🛈 This operation is not supported for regular non-express buckets.
     pub fn append_object(
         self: &Arc<Self>,
         bucket: &str,

@@ -166,3 +166,11 @@ pub(crate) fn benchmark_s3_api<ApiType, GlobalSetupFuture>(
 
     group.finish();
 }
+
+pub(crate) fn skip_express_mode(bench_name: &str) -> bool {
+    let skip = TestContext::new_from_env().client.is_minio_express();
+    if skip {
+        println!("Skipping benchmark '{}' (MinIO Express mode)", bench_name);
+    }
+    skip
+}

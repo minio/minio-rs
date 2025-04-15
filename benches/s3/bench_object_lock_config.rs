@@ -13,12 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common_benches::{Ctx2, benchmark_s3_api};
+use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 use criterion::Criterion;
 use minio::s3::builders::{DeleteObjectLockConfig, GetObjectLockConfig, SetObjectLockConfig};
 use minio_common::example::create_object_lock_config_example;
 
 pub(crate) fn bench_set_object_lock_config(criterion: &mut Criterion) {
+    if skip_express_mode("bench_set_object_lock_config") {
+        return;
+    }
     benchmark_s3_api(
         "set_object_lock_config",
         criterion,
@@ -30,6 +33,9 @@ pub(crate) fn bench_set_object_lock_config(criterion: &mut Criterion) {
     )
 }
 pub(crate) fn bench_get_object_lock_config(criterion: &mut Criterion) {
+    if skip_express_mode("bench_get_object_lock_config") {
+        return;
+    }
     benchmark_s3_api(
         "get_object_lock_config",
         criterion,
@@ -38,6 +44,9 @@ pub(crate) fn bench_get_object_lock_config(criterion: &mut Criterion) {
     )
 }
 pub(crate) fn bench_delete_object_lock_config(criterion: &mut Criterion) {
+    if skip_express_mode("bench_delete_object_lock_config") {
+        return;
+    }
     benchmark_s3_api(
         "delete_object_lock_config",
         criterion,

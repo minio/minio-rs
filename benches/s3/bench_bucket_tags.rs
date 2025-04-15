@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common_benches::{Ctx2, benchmark_s3_api};
+use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 
 use criterion::Criterion;
 use minio::s3::builders::{DeleteBucketTags, GetBucketTags, SetBucketTags};
@@ -21,6 +21,9 @@ use minio::s3::types::S3Api;
 use minio_common::example::create_tags_example;
 
 pub(crate) fn bench_set_bucket_tags(criterion: &mut Criterion) {
+    if skip_express_mode("bench_set_bucket_tags") {
+        return;
+    }
     benchmark_s3_api(
         "set_bucket_tags",
         criterion,
@@ -29,6 +32,9 @@ pub(crate) fn bench_set_bucket_tags(criterion: &mut Criterion) {
     )
 }
 pub(crate) fn bench_get_bucket_tags(criterion: &mut Criterion) {
+    if skip_express_mode("bench_get_bucket_tags") {
+        return;
+    }
     benchmark_s3_api(
         "get_bucket_tags",
         criterion,
@@ -46,6 +52,9 @@ pub(crate) fn bench_get_bucket_tags(criterion: &mut Criterion) {
     )
 }
 pub(crate) fn bench_delete_bucket_tags(criterion: &mut Criterion) {
+    if skip_express_mode("bench_delete_bucket_tags") {
+        return;
+    }
     benchmark_s3_api(
         "delete_bucket_tags",
         criterion,

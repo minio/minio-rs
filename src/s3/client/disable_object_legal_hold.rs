@@ -25,6 +25,8 @@ impl Client {
     /// To execute the request, call [`DisableObjectLegalHold::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`DisableObjectLegalHoldResponse`](crate::s3::response::DisableObjectLegalHoldResponse).
     ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
     /// # Example
     ///
     /// ```no_run

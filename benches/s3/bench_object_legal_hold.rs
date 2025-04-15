@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common_benches::{Ctx2, benchmark_s3_api};
+use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 
 use criterion::Criterion;
 use minio::s3::builders::{
@@ -22,6 +22,9 @@ use minio::s3::builders::{
 use minio::s3::types::S3Api;
 
 pub(crate) fn bench_enable_object_legal_hold(criterion: &mut Criterion) {
+    if skip_express_mode("bench_enable_object_legal_hold") {
+        return;
+    }
     benchmark_s3_api(
         "enable_object_legal_hold",
         criterion,
@@ -30,6 +33,9 @@ pub(crate) fn bench_enable_object_legal_hold(criterion: &mut Criterion) {
     )
 }
 pub(crate) fn bench_disable_object_legal_hold(criterion: &mut Criterion) {
+    if skip_express_mode("bench_disable_object_legal_hold") {
+        return;
+    }
     benchmark_s3_api(
         "disable_object_legal_hold",
         criterion,
@@ -40,6 +46,9 @@ pub(crate) fn bench_disable_object_legal_hold(criterion: &mut Criterion) {
     )
 }
 pub(crate) fn bench_is_object_legal_hold(criterion: &mut Criterion) {
+    if skip_express_mode("bench_is_object_legal_hold") {
+        return;
+    }
     benchmark_s3_api(
         "is_object_legal_hold",
         criterion,

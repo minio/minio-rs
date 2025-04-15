@@ -25,6 +25,8 @@ impl Client {
     /// To execute the request, call [`SetBucketReplication::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`SetBucketReplicationResponse`](crate::s3::response::SetBucketReplicationResponse).
     ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
     /// # Example
     ///
     /// ```no_run

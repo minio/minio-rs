@@ -25,6 +25,8 @@ impl Client {
     /// To execute the request, call [`GetObjectRetention::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`GetObjectRetentionResponse`](crate::s3::response::GetObjectRetentionResponse).
     ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
     /// # Example
     ///
     /// ```no_run

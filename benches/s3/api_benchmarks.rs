@@ -58,9 +58,9 @@ criterion_group!(
     config = Criterion::default()
         .configure_from_args()
         .warm_up_time(Duration::from_secs_f32(0.01))
-        .sample_size(100)
+        .sample_size(1000)
         .nresamples(1001)
-        .measurement_time(Duration::from_secs_f32(0.5));
+        .measurement_time(Duration::from_secs_f32(10.0));
     targets =
         bench_bucket_exists,
         bench_set_bucket_lifecycle,

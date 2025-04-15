@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common_benches::{Ctx2, benchmark_s3_api};
+use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 
 use criterion::Criterion;
 use minio::s3::builders::{GetObjectRetention, SetObjectRetention};
@@ -22,6 +22,9 @@ use minio::s3::types::{RetentionMode, S3Api};
 use minio::s3::utils::utc_now;
 
 pub(crate) fn bench_set_object_retention(criterion: &mut Criterion) {
+    if skip_express_mode("bench_set_object_retention") {
+        return;
+    }
     benchmark_s3_api(
         "set_object_retention",
         criterion,
@@ -34,6 +37,9 @@ pub(crate) fn bench_set_object_retention(criterion: &mut Criterion) {
     )
 }
 pub(crate) fn bench_get_object_retention(criterion: &mut Criterion) {
+    if skip_express_mode("bench_get_object_retention") {
+        return;
+    }
     benchmark_s3_api(
         "get_object_retention",
         criterion,

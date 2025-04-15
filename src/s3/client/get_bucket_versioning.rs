@@ -25,6 +25,8 @@ impl Client {
     /// To execute the request, call [`GetBucketVersioning::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`GetBucketVersioningResponse`](crate::s3::response::GetBucketVersioningResponse).
     ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
     /// # Example
     ///
     /// ```no_run

@@ -26,6 +26,8 @@ impl Client {
     /// To execute the request, call [`SelectObjectContent::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`SelectObjectContentResponse`](crate::s3::response::SelectObjectContentResponse).
     ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
     /// # Example
     ///
     /// ```no_run

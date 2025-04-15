@@ -25,6 +25,8 @@ impl Client {
     /// To execute the request, call [`GetObjectLockConfig::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`GetObjectLockConfigResponse`](crate::s3::response::GetObjectLockConfigResponse).
     ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
     /// # Example
     ///
     /// ```no_run

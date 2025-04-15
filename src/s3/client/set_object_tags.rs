@@ -21,6 +21,9 @@ use std::sync::Arc;
 
 impl Client {
     /// Create a SetObjectTags request builder.
+    ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
     pub fn set_object_tags(self: &Arc<Self>, bucket: &str, object: &str) -> SetObjectTags {
         SetObjectTags::new(self, bucket.to_owned(), object.to_owned())
     }

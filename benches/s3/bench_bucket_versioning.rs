@@ -13,12 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common_benches::{Ctx2, benchmark_s3_api};
+use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 
 use criterion::Criterion;
 use minio::s3::builders::{GetBucketVersioning, SetBucketVersioning, VersioningStatus};
 
 pub(crate) fn bench_get_bucket_versioning(criterion: &mut Criterion) {
+    if skip_express_mode("bench_get_bucket_versioning") {
+        return;
+    }
     benchmark_s3_api(
         "get_bucket_versioning",
         criterion,
@@ -27,6 +30,9 @@ pub(crate) fn bench_get_bucket_versioning(criterion: &mut Criterion) {
     )
 }
 pub(crate) fn bench_set_bucket_versioning(criterion: &mut Criterion) {
+    if skip_express_mode("bench_set_bucket_versioning") {
+        return;
+    }
     benchmark_s3_api(
         "set_bucket_versioning",
         criterion,

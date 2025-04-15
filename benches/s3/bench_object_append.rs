@@ -20,9 +20,15 @@ use minio::s3::builders::AppendObject;
 use minio::s3::response::StatObjectResponse;
 use minio::s3::segmented_bytes::SegmentedBytes;
 use minio::s3::types::S3Api;
+use minio_common::test_context::TestContext;
 use tokio::task;
+
 #[allow(dead_code)]
 pub(crate) fn bench_object_append(criterion: &mut Criterion) {
+    if !TestContext::new_from_env().client.is_minio_express() {
+        println!("Skipping benchmark because it is NOT running in MinIO Express mode");
+        return;
+    }
     benchmark_s3_api(
         "object_append",
         criterion,

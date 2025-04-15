@@ -25,6 +25,8 @@ impl Client {
     /// To execute the request, call [`DeleteObjectTags::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`DeleteObjectTagsResponse`](crate::s3::response::DeleteObjectTagsResponse).
     ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
     /// # Example
     ///
     /// ```no_run

@@ -26,6 +26,8 @@ impl Client {
     /// To execute the request, call [`IsObjectLegalHoldEnabled::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`IsObjectLegalHoldEnabledResponse`](crate::s3::response::IsObjectLegalHoldEnabledResponse).
     ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
     /// # Example
     ///
     /// ```no_run
