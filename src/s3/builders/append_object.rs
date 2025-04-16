@@ -30,7 +30,7 @@ use std::sync::Arc;
 // region: append-object
 #[derive(Debug, Clone, Default)]
 pub struct AppendObject {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -47,14 +47,14 @@ pub struct AppendObject {
 
 impl AppendObject {
     pub fn new(
-        client: &Arc<Client>,
+        client: &Client,
         bucket: String,
         object: String,
         data: SegmentedBytes,
         offset_bytes: u64,
     ) -> Self {
         Self {
-            client: Arc::clone(client),
+            client: client.clone(),
             bucket,
             object,
             offset_bytes,
@@ -111,7 +111,7 @@ impl ToS3Request for AppendObject {
 ///
 /// It is a higher level API and handles multipart appends transparently.
 pub struct AppendObjectContent {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -134,13 +134,13 @@ pub struct AppendObjectContent {
 
 impl AppendObjectContent {
     pub fn new(
-        client: &Arc<Client>,
+        client: &Client,
         bucket: String,
         object: String,
         content: impl Into<ObjectContent>,
     ) -> Self {
         Self {
-            client: Arc::clone(client),
+            client: client.clone(),
             bucket,
             object,
             input_content: content.into(),

@@ -20,12 +20,11 @@ use minio::s3::Client;
 use minio::s3::builders::VersioningStatus;
 use minio::s3::response::{GetBucketVersioningResponse, SetBucketVersioningResponse};
 use minio::s3::types::S3Api;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
-    let client: Arc<Client> = create_client_on_play()?;
+    let client: Client = create_client_on_play()?;
 
     let bucket_name: &str = "versioning-rust-bucket";
     create_bucket_if_not_exists(bucket_name, &client).await?;

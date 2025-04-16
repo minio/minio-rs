@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::IsObjectLegalHoldEnabled;
-use std::sync::Arc;
 
 impl Client {
     /// Create a IsObjectLegalHoldEnabled request builder.
@@ -34,21 +33,21 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::IsObjectLegalHoldEnabledResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: IsObjectLegalHoldEnabledResponse =
     ///         client.is_object_legal_hold_enabled("bucket-name", "object-name").send().await.unwrap();
     ///     println!("legal hold of object '{}' in bucket '{}' is enabled: {}", resp.object, resp.bucket, resp.enabled);
     /// }
     /// ```
     pub fn is_object_legal_hold_enabled(
-        self: &Arc<Self>,
+        &self,
         bucket: &str,
         object: &str,
     ) -> IsObjectLegalHoldEnabled {
-        IsObjectLegalHoldEnabled::new(self, bucket.to_owned(), object.to_owned())
+        IsObjectLegalHoldEnabled::new(self.clone(), bucket.to_owned(), object.to_owned())
     }
 }

@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::SetBucketTags;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`SetBucketTags`] request builder.
@@ -34,12 +33,12 @@ impl Client {
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::SetBucketTagsResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     /// use std::collections::HashMap;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    /// let client: Client = Default::default(); // configure your client here
     ///
     ///     let mut tags: HashMap<String, String> = HashMap::new();
     ///     tags.insert(String::from("Project"), String::from("Project One"));
@@ -52,7 +51,7 @@ impl Client {
     ///     println!("set tags on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_tags(self: &Arc<Self>, bucket: &str) -> SetBucketTags {
-        SetBucketTags::new(self, bucket.to_owned())
+    pub fn set_bucket_tags(&self, bucket: &str) -> SetBucketTags {
+        SetBucketTags::new(self.clone(), bucket.to_owned())
     }
 }

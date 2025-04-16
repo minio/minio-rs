@@ -40,7 +40,7 @@ use std::{collections::HashMap, sync::Arc};
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct CreateMultipartUpload {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -57,9 +57,9 @@ pub struct CreateMultipartUpload {
 }
 
 impl CreateMultipartUpload {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
+    pub fn new(client: &Client, bucket: String, object: String) -> Self {
         CreateMultipartUpload {
-            client: Arc::clone(client),
+            client: client.clone(),
             bucket,
             object,
             ..Default::default()
@@ -149,7 +149,7 @@ impl ToS3Request for CreateMultipartUpload {
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct AbortMultipartUpload {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -161,9 +161,9 @@ pub struct AbortMultipartUpload {
 }
 
 impl AbortMultipartUpload {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String, upload_id: String) -> Self {
+    pub fn new(client: &Client, bucket: String, object: String, upload_id: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client: client.clone(),
             bucket,
             object,
             upload_id,
@@ -218,7 +218,7 @@ impl ToS3Request for AbortMultipartUpload {
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct CompleteMultipartUpload {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -235,14 +235,14 @@ impl S3Api for CompleteMultipartUpload {
 
 impl CompleteMultipartUpload {
     pub fn new(
-        client: &Arc<Client>,
+        client: &Client,
         bucket: String,
         object: String,
         upload_id: String,
         parts: Vec<PartInfo>,
     ) -> Self {
         Self {
-            client: Arc::clone(client),
+            client: client.clone(),
             bucket,
             object,
             upload_id,
@@ -320,7 +320,7 @@ impl ToS3Request for CompleteMultipartUpload {
 /// Argument for [upload_part()](Client::upload_part) S3 API
 #[derive(Debug, Clone, Default)]
 pub struct UploadPart {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -345,7 +345,7 @@ pub struct UploadPart {
 
 impl UploadPart {
     pub fn new(
-        client: &Arc<Client>,
+        client: &Client,
         bucket: String,
         object: String,
         upload_id: String,
@@ -353,7 +353,7 @@ impl UploadPart {
         data: SegmentedBytes,
     ) -> Self {
         Self {
-            client: Arc::clone(client),
+            client: client.clone(),
             bucket,
             object,
             upload_id: Some(upload_id),
@@ -461,9 +461,9 @@ impl ToS3Request for UploadPart {
 pub struct PutObject(UploadPart);
 
 impl PutObject {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String, data: SegmentedBytes) -> Self {
+    pub fn new(client: Client, bucket: String, object: String, data: SegmentedBytes) -> Self {
         PutObject(UploadPart {
-            client: Arc::clone(client),
+            client,
             bucket,
             object,
             data,
@@ -530,7 +530,7 @@ impl ToS3Request for PutObject {
 ///
 /// It is a higher level API and handles multipart uploads transparently.
 pub struct PutObjectContent {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -556,13 +556,13 @@ pub struct PutObjectContent {
 
 impl PutObjectContent {
     pub fn new(
-        client: &Arc<Client>,
+        client: &Client,
         bucket: String,
         object: String,
         content: impl Into<ObjectContent>,
     ) -> Self {
         Self {
-            client: Arc::clone(client),
+            client: client.clone(),
             bucket,
             object,
             input_content: content.into(),
@@ -670,7 +670,7 @@ impl PutObjectContent {
             let size = seg_bytes.len() as u64;
 
             let res: PutObjectResponse = PutObject(UploadPart {
-                client: Arc::clone(&self.client),
+                client: self.client.clone(),
                 extra_headers: self.extra_headers.clone(),
                 extra_query_params: self.extra_query_params.clone(),
                 bucket: self.bucket.clone(),
@@ -709,7 +709,7 @@ impl PutObjectContent {
 
             // Otherwise, we start a multipart upload.
             let create_mpu_resp: CreateMultipartUploadResponse = CreateMultipartUpload {
-                client: Arc::clone(&self.client),
+                client: self.client.clone(),
                 extra_headers: self.extra_headers.clone(),
                 extra_query_params: self.extra_query_params.clone(),
                 region: self.region.clone(),
@@ -725,7 +725,7 @@ impl PutObjectContent {
             .send()
             .await?;
 
-            let client = Arc::clone(&self.client);
+            let client = self.client.clone();
             let mpu_res = self
                 .send_mpu(
                     part_size,

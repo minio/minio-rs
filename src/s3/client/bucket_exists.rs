@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::BucketExists;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`BucketExists`] request builder.
@@ -31,17 +30,17 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::BucketExistsResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: BucketExistsResponse =
     ///         client.bucket_exists("bucket-name").send().await.unwrap();
     ///     println!("bucket '{}' exists: {}", resp.bucket, resp.exists);
     /// }
     /// ```
-    pub fn bucket_exists(self: &Arc<Self>, bucket: &str) -> BucketExists {
-        BucketExists::new(self, bucket.to_owned())
+    pub fn bucket_exists(&self, bucket: &str) -> BucketExists {
+        BucketExists::new(self.clone(), bucket.to_owned())
     }
 }

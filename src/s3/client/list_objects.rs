@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::ListObjects;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`ListObjects`] request builder.
@@ -34,12 +33,12 @@ impl Client {
     /// ```no_run
     /// use minio::s3::Client;
     /// use minio::s3::types::{ToStream, S3Api};
-    /// use std::sync::Arc;
+    ///
     /// use futures_util::StreamExt;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///    let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///    let client: Client = Default::default(); // configure your client here
     ///
     ///    let mut resp = client
     ///        .list_objects("bucket-name")
@@ -60,7 +59,7 @@ impl Client {
     ///    }
     ///}
     /// ```
-    pub fn list_objects(self: &Arc<Self>, bucket: &str) -> ListObjects {
-        ListObjects::new(self, bucket.to_owned())
+    pub fn list_objects(&self, bucket: &str) -> ListObjects {
+        ListObjects::new(self.clone(), bucket.to_owned())
     }
 }

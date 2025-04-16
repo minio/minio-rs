@@ -20,11 +20,10 @@ use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::S3Api;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct TestContext {
-    pub client: Arc<Client>,
+    pub client: Client,
     pub base_url: BaseUrl,
     pub access_key: String,
     pub secret_key: String,
@@ -58,15 +57,13 @@ impl TestContext {
             }
 
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
-            let client = Arc::new(
-                Client::new(
-                    base_url.clone(),
-                    Some(Box::new(static_provider)),
-                    ssl_cert_file,
-                    Some(ignore_cert_check),
-                )
-                .unwrap(),
-            );
+            let client = Client::new(
+                base_url.clone(),
+                Some(Box::new(static_provider)),
+                ssl_cert_file,
+                Some(ignore_cert_check),
+            )
+            .unwrap();
 
             Self {
                 client,
@@ -117,15 +114,13 @@ impl TestContext {
             base_url.region = region;
 
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
-            let client = Arc::new(
-                Client::new(
-                    base_url.clone(),
-                    Some(Box::new(static_provider)),
-                    Some(&*ssl_cert_file),
-                    Some(ignore_cert_check),
-                )
-                .unwrap(),
-            );
+            let client = Client::new(
+                base_url.clone(),
+                Some(Box::new(static_provider)),
+                Some(&*ssl_cert_file),
+                Some(ignore_cert_check),
+            )
+            .unwrap();
 
             Self {
                 client,

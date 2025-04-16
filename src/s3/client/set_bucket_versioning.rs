@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::SetBucketVersioning;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`SetBucketVersioning`] request builder.
@@ -34,11 +33,11 @@ impl Client {
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::SetBucketVersioningResponse;
     /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     
     ///     let resp: SetBucketVersioningResponse = client
     ///         .set_bucket_versioning("bucket-name")
@@ -47,7 +46,7 @@ impl Client {
     ///     println!("enabled versioning on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_versioning(self: &Arc<Self>, bucket: &str) -> SetBucketVersioning {
-        SetBucketVersioning::new(self, bucket.to_owned())
+    pub fn set_bucket_versioning(&self, bucket: &str) -> SetBucketVersioning {
+        SetBucketVersioning::new(self.clone(), bucket.to_owned())
     }
 }

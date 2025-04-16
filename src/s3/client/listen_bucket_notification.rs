@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::ListenBucketNotification;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`ListenBucketNotification`] request builder.
@@ -39,11 +38,11 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::types::{NotificationRecord, NotificationRecords, S3Api};
     /// use futures_util::StreamExt;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let (_resp, mut event_stream) = client
     ///         .listen_bucket_notification("bucket-name")
     ///         .send().await .unwrap();
@@ -55,7 +54,7 @@ impl Client {
     ///     }
     /// }
     /// ```
-    pub fn listen_bucket_notification(self: &Arc<Self>, bucket: &str) -> ListenBucketNotification {
-        ListenBucketNotification::new(self, bucket.to_owned())
+    pub fn listen_bucket_notification(&self, bucket: &str) -> ListenBucketNotification {
+        ListenBucketNotification::new(self.clone(), bucket.to_owned())
     }
 }

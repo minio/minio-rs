@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::GetObjectTags;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`GetObjectTags`] request builder.
@@ -33,17 +32,17 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetObjectTagsResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: GetObjectTagsResponse =
     ///         client.get_object_tags("bucket-name", "object-name").send().await.unwrap();
     ///     println!("retrieved object tags '{:?}' from object '{}' in bucket '{}' is enabled", resp.tags, resp.object, resp.bucket);
     /// }
     /// ```
-    pub fn get_object_tags(self: &Arc<Self>, bucket: &str, object: &str) -> GetObjectTags {
-        GetObjectTags::new(self, bucket.to_owned(), object.to_owned())
+    pub fn get_object_tags(&self, bucket: &str, object: &str) -> GetObjectTags {
+        GetObjectTags::new(self.clone(), bucket.to_owned(), object.to_owned())
     }
 }

@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::GetBucketLifecycle;
-use std::sync::Arc;
 
 impl Client {
     /// Create a GetBucketLifecycle request builder.
@@ -33,17 +32,17 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetBucketLifecycleResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: GetBucketLifecycleResponse =
     ///         client.get_bucket_lifecycle("bucket-name").send().await.unwrap();
     ///     println!("retrieved bucket lifecycle config '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
     /// }
     /// ```
-    pub fn get_bucket_lifecycle(self: &Arc<Self>, bucket: &str) -> GetBucketLifecycle {
-        GetBucketLifecycle::new(self, bucket.to_owned())
+    pub fn get_bucket_lifecycle(&self, bucket: &str) -> GetBucketLifecycle {
+        GetBucketLifecycle::new(self.clone(), bucket.to_owned())
     }
 }

@@ -188,10 +188,12 @@ impl ClientBuilder {
         }
 
         Ok(Client {
-            client: builder.build()?,
-            base_url: self.base_url,
-            provider: self.provider,
-            ..Default::default()
+            inner: Arc::new(ClientRef {
+                client: builder.build()?,
+                base_url: self.base_url,
+                provider: self.provider,
+                ..Default::default()
+            }),
         })
     }
 }
@@ -200,13 +202,9 @@ impl ClientBuilder {
 ///
 /// If credential provider is passed, all S3 operation requests are signed using
 /// AWS Signature Version 4; else they are performed anonymously.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct Client {
-    client: reqwest::Client,
-    pub(crate) base_url: BaseUrl,
-    pub(crate) provider: Option<Arc<Box<(dyn Provider + Send + Sync + 'static)>>>,
-    pub(crate) region_map: DashMap<String, String>,
-    express: OnceLock<bool>,
+    pub(crate) inner: Arc<ClientRef>,
 }
 
 impl Client {
@@ -242,18 +240,18 @@ impl Client {
 
     /// Returns whether is client uses an AWS host.
     pub fn is_aws_host(&self) -> bool {
-        self.base_url.is_aws_host()
+        self.inner.base_url.is_aws_host()
     }
 
     /// Returns whether this client is configured to use HTTPS.
     pub fn is_secure(&self) -> bool {
-        self.base_url.https
+        self.inner.base_url.https
     }
 
     /// Returns whether this client is configured to use the express endpoint and is minio enterprise.
-    pub fn is_minio_express(self: &Arc<Self>) -> bool {
-        if self.express.get().is_some() {
-            self.express.get().unwrap().clone()
+    pub fn is_minio_express(&self) -> bool {
+        if self.inner.express.get().is_some() {
+            self.inner.express.get().unwrap().clone()
         } else {
             task::block_in_place(|| match tokio::runtime::Runtime::new() {
                 Ok(rt) => {
@@ -265,7 +263,7 @@ impl Client {
                         .to_lowercase();
 
                     let express = rt.block_on(async {
-                        match BucketExists::new(self, bucket_name).send().await {
+                        match BucketExists::new(self.clone(), bucket_name).send().await {
                             Ok(v) => {
                                 if let Some(server) = v.headers.get("server") {
                                     if let Ok(s) = server.to_str() {
@@ -279,7 +277,7 @@ impl Client {
                         }
                         false
                     });
-                    self.express.set(express).unwrap_or_default();
+                    self.inner.express.set(express).unwrap_or_default();
                     express
                 }
                 Err(_) => false,
@@ -287,6 +285,110 @@ impl Client {
         }
     }
 
+    pub(crate) async fn calculate_part_count(
+        &self,
+        sources: &mut [ComposeSource],
+    ) -> Result<u16, Error> {
+        let mut object_size = 0_u64;
+        let mut i = 0;
+        let mut part_count = 0_u16;
+
+        let sources_len = sources.len();
+        for source in sources.iter_mut() {
+            if source.ssec.is_some() && !self.is_secure() {
+                return Err(Error::SseTlsRequired(Some(format!(
+                    "source {}/{}{}: ",
+                    source.bucket,
+                    source.object,
+                    source
+                        .version_id
+                        .as_ref()
+                        .map_or(String::new(), |v| String::from("?versionId=") + v)
+                ))));
+            }
+
+            i += 1;
+
+            let stat_resp: StatObjectResponse = self
+                .stat_object(&source.bucket, &source.object)
+                .extra_headers(source.extra_headers.clone())
+                .extra_query_params(source.extra_query_params.clone())
+                .region(source.region.clone())
+                .version_id(source.version_id.clone())
+                .match_etag(source.match_etag.clone())
+                .not_match_etag(source.not_match_etag.clone())
+                .modified_since(source.modified_since)
+                .unmodified_since(source.unmodified_since)
+                .send()
+                .await?;
+
+            source.build_headers(stat_resp.size, stat_resp.etag)?;
+
+            let mut size = stat_resp.size;
+            if let Some(l) = source.length {
+                size = l;
+            } else if let Some(o) = source.offset {
+                size -= o;
+            }
+
+            if (size < MIN_PART_SIZE) && (sources_len != 1) && (i != sources_len) {
+                return Err(Error::InvalidComposeSourcePartSize(
+                    source.bucket.clone(),
+                    source.object.clone(),
+                    source.version_id.clone(),
+                    size,
+                    MIN_PART_SIZE,
+                ));
+            }
+
+            object_size += size;
+            if object_size > MAX_OBJECT_SIZE {
+                return Err(Error::InvalidObjectSize(object_size));
+            }
+
+            if size > MAX_PART_SIZE {
+                let mut count = size / MAX_PART_SIZE;
+                let mut last_part_size = size - (count * MAX_PART_SIZE);
+                if last_part_size > 0 {
+                    count += 1;
+                } else {
+                    last_part_size = MAX_PART_SIZE;
+                }
+
+                if last_part_size < MIN_PART_SIZE && sources_len != 1 && i != sources_len {
+                    return Err(Error::InvalidComposeSourceMultipart(
+                        source.bucket.to_string(),
+                        source.object.to_string(),
+                        source.version_id.clone(),
+                        size,
+                        MIN_PART_SIZE,
+                    ));
+                }
+
+                part_count += count as u16;
+            } else {
+                part_count += 1;
+            }
+
+            if part_count > MAX_MULTIPART_COUNT {
+                return Err(Error::InvalidMultipartCount(MAX_MULTIPART_COUNT));
+            }
+        }
+
+        Ok(part_count)
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ClientRef {
+    client: reqwest::Client,
+    pub(crate) base_url: BaseUrl,
+    pub(crate) provider: Option<Arc<Box<(dyn Provider + Send + Sync + 'static)>>>,
+    pub(crate) region_map: DashMap<String, String>,
+    express: OnceLock<bool>,
+}
+
+impl ClientRef {
     fn handle_redirect_response(
         &self,
         status_code: u16,
@@ -604,98 +706,5 @@ impl Client {
             false,
         )
         .await
-    }
-
-    pub(crate) async fn calculate_part_count(
-        self: &Arc<Self>,
-        sources: &mut [ComposeSource],
-    ) -> Result<u16, Error> {
-        let mut object_size = 0_u64;
-        let mut i = 0;
-        let mut part_count = 0_u16;
-
-        let sources_len = sources.len();
-        for source in sources.iter_mut() {
-            if source.ssec.is_some() && !self.base_url.https {
-                return Err(Error::SseTlsRequired(Some(format!(
-                    "source {}/{}{}: ",
-                    source.bucket,
-                    source.object,
-                    source
-                        .version_id
-                        .as_ref()
-                        .map_or(String::new(), |v| String::from("?versionId=") + v)
-                ))));
-            }
-
-            i += 1;
-
-            let stat_resp: StatObjectResponse = self
-                .stat_object(&source.bucket, &source.object)
-                .extra_headers(source.extra_headers.clone())
-                .extra_query_params(source.extra_query_params.clone())
-                .region(source.region.clone())
-                .version_id(source.version_id.clone())
-                .match_etag(source.match_etag.clone())
-                .not_match_etag(source.not_match_etag.clone())
-                .modified_since(source.modified_since)
-                .unmodified_since(source.unmodified_since)
-                .send()
-                .await?;
-
-            source.build_headers(stat_resp.size, stat_resp.etag)?;
-
-            let mut size = stat_resp.size;
-            if let Some(l) = source.length {
-                size = l;
-            } else if let Some(o) = source.offset {
-                size -= o;
-            }
-
-            if (size < MIN_PART_SIZE) && (sources_len != 1) && (i != sources_len) {
-                return Err(Error::InvalidComposeSourcePartSize(
-                    source.bucket.clone(),
-                    source.object.clone(),
-                    source.version_id.clone(),
-                    size,
-                    MIN_PART_SIZE,
-                ));
-            }
-
-            object_size += size;
-            if object_size > MAX_OBJECT_SIZE {
-                return Err(Error::InvalidObjectSize(object_size));
-            }
-
-            if size > MAX_PART_SIZE {
-                let mut count = size / MAX_PART_SIZE;
-                let mut last_part_size = size - (count * MAX_PART_SIZE);
-                if last_part_size > 0 {
-                    count += 1;
-                } else {
-                    last_part_size = MAX_PART_SIZE;
-                }
-
-                if last_part_size < MIN_PART_SIZE && sources_len != 1 && i != sources_len {
-                    return Err(Error::InvalidComposeSourceMultipart(
-                        source.bucket.to_string(),
-                        source.object.to_string(),
-                        source.version_id.clone(),
-                        size,
-                        MIN_PART_SIZE,
-                    ));
-                }
-
-                part_count += count as u16;
-            } else {
-                part_count += 1;
-            }
-
-            if part_count > MAX_MULTIPART_COUNT {
-                return Err(Error::InvalidMultipartCount(MAX_MULTIPART_COUNT));
-            }
-        }
-
-        Ok(part_count)
     }
 }

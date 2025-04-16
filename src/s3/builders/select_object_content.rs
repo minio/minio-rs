@@ -24,12 +24,11 @@ use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash
 use async_trait::async_trait;
 use bytes::Bytes;
 use http::Method;
-use std::sync::Arc;
 
 /// Argument builder for [bucket_exists()](Client::bucket_exists) API
 #[derive(Default)]
 pub struct SelectObjectContent {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -43,9 +42,9 @@ pub struct SelectObjectContent {
 }
 
 impl SelectObjectContent {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             object,
             ..Default::default()
@@ -94,7 +93,7 @@ impl ToS3Request for SelectObjectContent {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
 
-            if self.ssec.is_some() && !self.client.base_url.https {
+            if self.ssec.is_some() && !self.client.inner.base_url.https {
                 return Err(Error::SseTlsRequired(None));
             }
         }

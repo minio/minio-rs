@@ -23,7 +23,6 @@ use minio::s3::http::BaseUrl;
 use minio::s3::response::ObjectPromptResponse;
 use minio::s3::types::S3Api;
 use std::path::Path;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -35,12 +34,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let static_provider = StaticProvider::new("admin", "admin", None);
 
-    let client = Arc::new(
-        ClientBuilder::new(base_url.clone())
-            .provider(Some(Box::new(static_provider)))
-            .ignore_cert_check(Some(true))
-            .build()?,
-    );
+    let client = ClientBuilder::new(base_url.clone())
+        .provider(Some(Box::new(static_provider)))
+        .ignore_cert_check(Some(true))
+        .build()?;
 
     let bucket_name: &str = "object-prompt-rust-bucket";
     create_bucket_if_not_exists(bucket_name, &client).await?;

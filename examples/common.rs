@@ -3,10 +3,9 @@ use minio::s3::http::BaseUrl;
 use minio::s3::response::BucketExistsResponse;
 use minio::s3::types::S3Api;
 use minio::s3::{Client, ClientBuilder};
-use std::sync::Arc;
 
 #[allow(dead_code)]
-pub fn create_client_on_play() -> Result<Arc<Client>, Box<dyn std::error::Error + Send + Sync>> {
+pub fn create_client_on_play() -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
     let base_url = "https://play.min.io".parse::<BaseUrl>()?;
     log::info!("Trying to connect to MinIO at: `{:?}`", base_url);
 
@@ -16,17 +15,15 @@ pub fn create_client_on_play() -> Result<Arc<Client>, Box<dyn std::error::Error 
         None,
     );
 
-    let client = Arc::new(
-        ClientBuilder::new(base_url.clone())
-            .provider(Some(Box::new(static_provider)))
-            .build()?,
-    );
+    let client = ClientBuilder::new(base_url.clone())
+        .provider(Some(Box::new(static_provider)))
+        .build()?;
     Ok(client)
 }
 
 pub async fn create_bucket_if_not_exists(
     bucket_name: &str,
-    client: &Arc<Client>,
+    client: &Client,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Check 'bucket_name' bucket exist or not.
     let resp: BucketExistsResponse = client.bucket_exists(bucket_name).send().await?;

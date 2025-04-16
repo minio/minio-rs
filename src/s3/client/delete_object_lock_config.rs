@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::DeleteObjectLockConfig;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`DeleteObjectLockConfig`] request builder.
@@ -33,11 +32,11 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::{DeleteObjectLockConfigResponse, MakeBucketResponse, SetObjectLockConfigResponse};
     /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let bucket_name = "bucket-name";
     ///
     ///     let resp: MakeBucketResponse =
@@ -56,7 +55,7 @@ impl Client {
     ///     println!("object locking of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```
-    pub fn delete_object_lock_config(self: &Arc<Self>, bucket: &str) -> DeleteObjectLockConfig {
-        DeleteObjectLockConfig::new(self, bucket.to_owned())
+    pub fn delete_object_lock_config(&self, bucket: &str) -> DeleteObjectLockConfig {
+        DeleteObjectLockConfig::new(self.clone(), bucket.to_owned())
     }
 }

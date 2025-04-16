@@ -23,12 +23,11 @@ use crate::s3::utils::{check_bucket_name, check_object_name, insert};
 use bytes::Bytes;
 use http::Method;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// Argument builder for [set_object_tags()](Client::set_object_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct SetObjectTags {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -41,9 +40,9 @@ pub struct SetObjectTags {
 }
 
 impl SetObjectTags {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             object,
             ..Default::default()

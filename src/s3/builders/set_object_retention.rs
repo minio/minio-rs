@@ -24,12 +24,11 @@ use crate::s3::utils::{
 };
 use bytes::Bytes;
 use http::Method;
-use std::sync::Arc;
 
 /// Argument builder for [set_object_retention()](Client::set_object_retention) API
 #[derive(Clone, Debug, Default)]
 pub struct SetObjectRetention {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -44,9 +43,9 @@ pub struct SetObjectRetention {
 }
 
 impl SetObjectRetention {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             object,
             ..Default::default()

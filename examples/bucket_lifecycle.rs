@@ -21,12 +21,11 @@ use minio::s3::response::{
     DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, SetBucketLifecycleResponse,
 };
 use minio::s3::types::{Filter, LifecycleConfig, LifecycleRule, S3Api};
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
-    let client: Arc<Client> = create_client_on_play()?;
+    let client: Client = create_client_on_play()?;
 
     let bucket_name: &str = "lifecycle-rust-bucket";
     create_bucket_if_not_exists(bucket_name, &client).await?;

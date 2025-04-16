@@ -25,7 +25,6 @@ use crate::s3::response::{
 };
 use crate::s3::types::{S3Api, ToStream};
 use futures::StreamExt;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`RemoveBucket`] request builder.
@@ -39,24 +38,24 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::RemoveBucketResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: RemoveBucketResponse =
     ///         client.remove_bucket("bucket-name").send().await.unwrap();
     ///     println!("bucket '{}' in region '{}' is removed", resp.bucket, resp.region);
     /// }
     /// ```
-    pub fn remove_bucket(self: &Arc<Self>, bucket: &str) -> RemoveBucket {
-        RemoveBucket::new(self, bucket.to_owned())
+    pub fn remove_bucket(&self, bucket: &str) -> RemoveBucket {
+        RemoveBucket::new(self.clone(), bucket.to_owned())
     }
 
     /// Removes a bucket and also removes non-empty buckets by first removing all objects before
     /// deleting the bucket. Bypasses governance mode and legal hold.
     pub async fn remove_and_purge_bucket(
-        self: &Arc<Self>,
+        &self,
         bucket: &str,
     ) -> Result<RemoveBucketResponse, Error> {
         if self.is_minio_express() {
@@ -102,7 +101,7 @@ impl Client {
                                     .await?;
 
                                 let _resp: RemoveObjectResponse = RemoveObject::new(
-                                    self,
+                                    self.clone(),
                                     bucket.to_string(),
                                     ObjectToDelete::from(v),
                                 )

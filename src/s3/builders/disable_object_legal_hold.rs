@@ -22,12 +22,11 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
-use std::sync::Arc;
 
 /// Argument builder for [disable_object_legal_hold()](Client::disable_object_legal_hold) API
 #[derive(Clone, Debug, Default)]
 pub struct DisableObjectLegalHold {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -39,9 +38,9 @@ pub struct DisableObjectLegalHold {
 }
 
 impl DisableObjectLegalHold {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
+    pub fn new(client: &Client, bucket: String, object: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client: client.clone(),
             bucket,
             object,
             ..Default::default()

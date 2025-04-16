@@ -22,12 +22,11 @@ use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::check_bucket_name;
 use http::Method;
-use std::sync::Arc;
 
 /// Argument builder for [make_bucket()](Client::make_bucket) API
 #[derive(Clone, Debug, Default)]
 pub struct MakeBucket {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -38,9 +37,9 @@ pub struct MakeBucket {
 }
 
 impl MakeBucket {
-    pub fn new(client: &Arc<Client>, bucket: String) -> Self {
+    pub fn new(client: Client, bucket: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             ..Default::default()
         }
@@ -76,16 +75,16 @@ impl ToS3Request for MakeBucket {
         check_bucket_name(&self.bucket, true)?;
 
         let region1: Option<&str> = self.region.as_deref();
-        let region2: Option<&str> = if self.client.base_url.region.is_empty() {
+        let region2: Option<&str> = if self.client.inner.base_url.region.is_empty() {
             None
         } else {
-            Some(&self.client.base_url.region)
+            Some(&self.client.inner.base_url.region)
         };
 
         let region_str: String = match (region1, region2) {
             (None, None) => DEFAULT_REGION.to_string(),
             (Some(_), None) => self.region.unwrap(),
-            (None, Some(_)) => self.client.base_url.region.clone(),
+            (None, Some(_)) => self.client.inner.base_url.region.clone(),
             (Some(r1), Some(r2)) if r1 == r2 => self.region.unwrap(), // Both are Some and equal
             (Some(r1), Some(r2)) => {
                 return Err(Error::RegionMismatch(r1.to_string(), r2.to_string()));

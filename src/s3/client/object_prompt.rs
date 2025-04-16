@@ -16,7 +16,6 @@
 //! S3 APIs for downloading objects.
 
 use crate::s3::builders::ObjectPrompt;
-use std::sync::Arc;
 
 use super::Client;
 
@@ -32,23 +31,18 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::ObjectPromptResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: ObjectPromptResponse = client
     ///         .object_prompt("bucket-name", "object-name", "What is it about?".to_string())
     ///         .send().await.unwrap();
     ///     println!("the prompt response is: '{}'", resp.prompt_response);
     /// }
     /// ```
-    pub fn object_prompt(
-        self: &Arc<Self>,
-        bucket: &str,
-        object: &str,
-        prompt: String,
-    ) -> ObjectPrompt {
-        ObjectPrompt::new(self, bucket.to_owned(), object.to_owned(), prompt)
+    pub fn object_prompt(&self, bucket: &str, object: &str, prompt: String) -> ObjectPrompt {
+        ObjectPrompt::new(self.clone(), bucket.to_owned(), object.to_owned(), prompt)
     }
 }

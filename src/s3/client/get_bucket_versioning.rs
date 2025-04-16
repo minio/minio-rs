@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::GetBucketVersioning;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`GetBucketVersioning`] request builder.
@@ -33,17 +32,17 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetBucketVersioningResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: GetBucketVersioningResponse =
     ///         client.get_bucket_versioning("bucket-name").send().await.unwrap();
     ///     println!("retrieved versioning status '{:?}' from bucket '{}' is enabled", resp.status, resp.bucket);
     /// }
     /// ```
-    pub fn get_bucket_versioning(self: &Arc<Self>, bucket: &str) -> GetBucketVersioning {
-        GetBucketVersioning::new(self, bucket.to_owned())
+    pub fn get_bucket_versioning(&self, bucket: &str) -> GetBucketVersioning {
+        GetBucketVersioning::new(self.clone(), bucket.to_owned())
     }
 }

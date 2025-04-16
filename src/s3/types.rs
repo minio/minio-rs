@@ -29,13 +29,13 @@ use http::Method;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::Arc;
+
 use xmltree::Element;
 
 #[derive(Clone, Default, Debug)]
 /// Generic S3Request
 pub struct S3Request {
-    pub(crate) client: Arc<Client>,
+    pub(crate) client: Client,
 
     method: Method,
     region: Option<String>,
@@ -50,7 +50,7 @@ pub struct S3Request {
 }
 
 impl S3Request {
-    pub fn new(client: Arc<Client>, method: Method) -> Self {
+    pub fn new(client: Client, method: Method) -> Self {
         Self {
             client,
             method,
@@ -99,6 +99,7 @@ impl S3Request {
     pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
         self.inner_region = self.compute_inner_region()?;
         self.client
+            .inner
             .execute(
                 self.method.clone(),
                 &self.inner_region,

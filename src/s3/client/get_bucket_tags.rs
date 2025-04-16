@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::GetBucketTags;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`GetBucketTags`] request builder.
@@ -33,17 +32,17 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetBucketTagsResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: GetBucketTagsResponse =
     ///         client.get_bucket_tags("bucket-name").send().await.unwrap();
     ///     println!("retrieved bucket tags '{:?}' from bucket '{}' is enabled", resp.tags, resp.bucket);
     /// }
     /// ```
-    pub fn get_bucket_tags(self: &Arc<Self>, bucket: &str) -> GetBucketTags {
-        GetBucketTags::new(self, bucket.to_owned())
+    pub fn get_bucket_tags(&self, bucket: &str) -> GetBucketTags {
+        GetBucketTags::new(self.clone(), bucket.to_owned())
     }
 }

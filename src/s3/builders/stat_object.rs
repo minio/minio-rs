@@ -15,7 +15,6 @@
 
 use async_trait::async_trait;
 use http::Method;
-use std::sync::Arc;
 
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::StatObjectResponse;
@@ -31,7 +30,7 @@ use crate::s3::{
 /// Argument builder for [list_objects()](Client::get_object) API.
 #[derive(Debug, Clone, Default)]
 pub struct StatObject {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -51,9 +50,9 @@ pub struct StatObject {
 }
 
 impl StatObject {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             object,
             ..Default::default()
@@ -126,7 +125,7 @@ impl ToS3Request for StatObject {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
-            if self.ssec.is_some() && !self.client.base_url.https {
+            if self.ssec.is_some() && !self.client.is_secure() {
                 return Err(Error::SseTlsRequired(None));
             }
         }

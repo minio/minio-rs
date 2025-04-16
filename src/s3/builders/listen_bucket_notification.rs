@@ -16,7 +16,6 @@
 use async_trait::async_trait;
 use futures_util::Stream;
 use http::Method;
-use std::sync::Arc;
 
 use crate::s3::multimap::Multimap;
 use crate::s3::{
@@ -32,7 +31,7 @@ use crate::s3::{
 /// API.
 #[derive(Clone, Debug, Default)]
 pub struct ListenBucketNotification {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -44,9 +43,9 @@ pub struct ListenBucketNotification {
 }
 
 impl ListenBucketNotification {
-    pub fn new(client: &Arc<Client>, bucket: String) -> Self {
+    pub fn new(client: Client, bucket: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             ..Default::default()
         }

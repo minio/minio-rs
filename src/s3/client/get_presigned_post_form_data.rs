@@ -15,7 +15,6 @@
 
 use crate::s3::Client;
 use crate::s3::builders::{GetPresignedPolicyFormData, PostPolicy};
-use std::sync::Arc;
 
 impl Client {
     /// Create a GetPresignedPolicyFormData builder.
@@ -29,7 +28,7 @@ impl Client {
     /// ```no_run
     /// use http::Method;
     /// use std::collections::HashMap;
-    /// use std::sync::Arc;
+    ///
     /// use chrono::{DateTime, Utc};
     /// use minio::s3::Client;
     /// use minio::s3::types::S3Api;
@@ -49,17 +48,14 @@ impl Client {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let policy: PostPolicy = create_post_policy_example("bucket-name", "object-name");
     ///     let resp: HashMap<String, String> = client.get_presigned_post_form_data(policy)
     ///         .send().await.unwrap();
     ///     println!("presigned post form data: '{:?}'", resp);
     /// }
     /// ```
-    pub fn get_presigned_post_form_data(
-        self: &Arc<Self>,
-        policy: PostPolicy,
-    ) -> GetPresignedPolicyFormData {
-        GetPresignedPolicyFormData::new(self, policy)
+    pub fn get_presigned_post_form_data(&self, policy: PostPolicy) -> GetPresignedPolicyFormData {
+        GetPresignedPolicyFormData::new(self.clone(), policy)
     }
 }

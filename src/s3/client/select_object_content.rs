@@ -18,7 +18,6 @@
 use super::Client;
 use crate::s3::builders::SelectObjectContent;
 use crate::s3::types::SelectRequest;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`SelectObjectContent`] request builder.
@@ -34,12 +33,12 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::SelectObjectContentResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     /// use minio::s3::types::{SelectRequest, CsvInputSerialization, CsvOutputSerialization, FileHeaderInfo, QuoteFields};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let request = SelectRequest::new_csv_input_output(
     ///         "select * from S3Object",
     ///         CsvInputSerialization {
@@ -68,11 +67,12 @@ impl Client {
     /// }
     /// ```
     pub fn select_object_content(
-        self: &Arc<Self>,
+        &self,
         bucket: &str,
         object: &str,
         request: SelectRequest,
     ) -> SelectObjectContent {
-        SelectObjectContent::new(self, bucket.to_owned(), object.to_owned()).request(request)
+        SelectObjectContent::new(self.clone(), bucket.to_owned(), object.to_owned())
+            .request(request)
     }
 }

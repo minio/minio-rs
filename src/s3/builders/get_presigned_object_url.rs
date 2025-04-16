@@ -21,12 +21,11 @@ use crate::s3::response::GetPresignedObjectUrlResponse;
 use crate::s3::signer::presign_v4;
 use crate::s3::utils::{UtcTime, check_bucket_name, check_object_name, utc_now};
 use http::Method;
-use std::sync::Arc;
 
 /// Argument for [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API
 #[derive(Clone, Debug, Default)]
 pub struct GetPresignedObjectUrl {
-    client: Arc<Client>,
+    client: Client,
 
     extra_query_params: Option<Multimap>,
     region: Option<String>,
@@ -40,9 +39,9 @@ pub struct GetPresignedObjectUrl {
 }
 
 impl GetPresignedObjectUrl {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String, method: Method) -> Self {
+    pub fn new(client: Client, bucket: String, object: String, method: Method) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             object,
             method,
@@ -61,7 +60,7 @@ impl GetPresignedObjectUrl {
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.add_version(self.version_id.clone());
 
-        let mut url = self.client.base_url.build_url(
+        let mut url = self.client.inner.base_url.build_url(
             &self.method,
             &region,
             &query_params,
@@ -69,7 +68,7 @@ impl GetPresignedObjectUrl {
             Some(&self.object),
         )?;
 
-        if let Some(p) = &self.client.provider {
+        if let Some(p) = &self.client.inner.provider {
             let creds = p.fetch();
             if let Some(t) = creds.session_token {
                 query_params.insert("X-Amz-Security-Token".into(), t);

@@ -20,7 +20,7 @@ use bytes::Bytes;
 use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
 use std::pin::Pin;
-use std::sync::Arc;
+
 use tokio_stream::iter as stream_iter;
 
 use crate::s3::multimap::{Multimap, MultimapExt};
@@ -98,7 +98,7 @@ impl From<DeleteError> for ObjectToDelete {
 
 #[derive(Debug, Clone, Default)]
 pub struct RemoveObject {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -110,9 +110,9 @@ pub struct RemoveObject {
 }
 
 impl RemoveObject {
-    pub fn new(client: &Arc<Client>, bucket: String, object: impl Into<ObjectToDelete>) -> Self {
+    pub fn new(client: Client, bucket: String, object: impl Into<ObjectToDelete>) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             object: object.into(),
             ..Default::default()
@@ -166,7 +166,7 @@ impl ToS3Request for RemoveObject {
 // region: remove-object-api
 #[derive(Debug, Clone, Default)]
 pub struct RemoveObjectsApi {
-    client: Arc<Client>,
+    client: Client,
 
     bucket: String,
     objects: Vec<ObjectToDelete>,
@@ -180,9 +180,9 @@ pub struct RemoveObjectsApi {
 }
 
 impl RemoveObjectsApi {
-    pub fn new(client: &Arc<Client>, bucket: String, objects: Vec<ObjectToDelete>) -> Self {
+    pub fn new(client: &Client, bucket: String, objects: Vec<ObjectToDelete>) -> Self {
         RemoveObjectsApi {
-            client: Arc::clone(client),
+            client: client.clone(),
             bucket,
             objects,
             ..Default::default()
@@ -296,7 +296,7 @@ where
 // region: remove-objects
 
 pub struct RemoveObjects {
-    client: Arc<Client>,
+    client: Client,
 
     bucket: String,
     objects: DeleteObjects,
@@ -310,9 +310,9 @@ pub struct RemoveObjects {
 }
 
 impl RemoveObjects {
-    pub fn new(client: &Arc<Client>, bucket: String, objects: impl Into<DeleteObjects>) -> Self {
+    pub fn new(client: Client, bucket: String, objects: impl Into<DeleteObjects>) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             objects: objects.into(),
 

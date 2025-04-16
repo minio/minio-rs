@@ -40,8 +40,9 @@ impl FromS3Response for MakeBucketResponse {
         let bucket: String = take_bucket(req.bucket)?;
         let mut resp = resp?;
 
-        if !req.client.region_map.contains_key(&bucket) {
+        if !req.client.inner.region_map.contains_key(&bucket) {
             req.client
+                .inner
                 .region_map
                 .insert(bucket.clone(), req.inner_region.clone());
         }

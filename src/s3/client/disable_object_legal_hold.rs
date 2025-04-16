@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::DisableObjectLegalHold;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`DisableObjectLegalHold`] request builder.
@@ -33,21 +32,17 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::DisableObjectLegalHoldResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: DisableObjectLegalHoldResponse =
     ///         client.disable_object_legal_hold("bucket-name", "object-name").send().await.unwrap();
     ///     println!("legal hold of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```
-    pub fn disable_object_legal_hold(
-        self: &Arc<Self>,
-        bucket: &str,
-        object: &str,
-    ) -> DisableObjectLegalHold {
+    pub fn disable_object_legal_hold(&self, bucket: &str, object: &str) -> DisableObjectLegalHold {
         DisableObjectLegalHold::new(self, bucket.to_owned(), object.to_owned())
     }
 }

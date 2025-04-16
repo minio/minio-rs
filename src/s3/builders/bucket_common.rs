@@ -14,14 +14,13 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use crate::s3::client::Client;
 use crate::s3::multimap::Multimap;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct BucketCommon<A> {
-    pub(crate) client: Arc<Client>,
+    pub(crate) client: Client,
 
     pub(crate) extra_headers: Option<Multimap>,
     pub(crate) extra_query_params: Option<Multimap>,
@@ -32,9 +31,9 @@ pub struct BucketCommon<A> {
 }
 
 impl<A: Default> BucketCommon<A> {
-    pub fn new(client: &Arc<Client>, bucket: String) -> BucketCommon<A> {
+    pub fn new(client: Client, bucket: String) -> BucketCommon<A> {
         BucketCommon {
-            client: Arc::clone(client),
+            client,
             bucket,
             ..Default::default()
         }

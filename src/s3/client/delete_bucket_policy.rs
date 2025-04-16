@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::DeleteBucketPolicy;
-use std::sync::Arc;
 
 impl Client {
     /// Create a DeleteBucketPolicy request builder.
@@ -32,17 +31,17 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::DeleteBucketPolicyResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: DeleteBucketPolicyResponse =
     ///         client.delete_bucket_policy("bucket-name").send().await.unwrap();
     ///     println!("policy of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```
-    pub fn delete_bucket_policy(self: &Arc<Self>, bucket: &str) -> DeleteBucketPolicy {
-        DeleteBucketPolicy::new(self, bucket.to_owned())
+    pub fn delete_bucket_policy(&self, bucket: &str) -> DeleteBucketPolicy {
+        DeleteBucketPolicy::new(self.clone(), bucket.to_owned())
     }
 }

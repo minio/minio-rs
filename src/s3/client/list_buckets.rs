@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::ListBuckets;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`ListBuckets`] request builder.
@@ -33,15 +32,16 @@ impl Client {
     /// use minio::s3::types::S3Api;
     /// use std::sync::Arc;
     ///
+    ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    /// let client: Client = Default::default(); // configure your client here
     ///     let resp: ListBucketsResponse =
     ///         client.list_buckets().send().await.unwrap();
     ///     println!("retrieved buckets '{:?}'", resp.buckets);
     /// }
     /// ```
-    pub fn list_buckets(self: &Arc<Self>) -> ListBuckets {
-        ListBuckets::new(self)
+    pub fn list_buckets(&self) -> ListBuckets {
+        ListBuckets::new(self.clone())
     }
 }

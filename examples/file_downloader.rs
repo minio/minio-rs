@@ -20,12 +20,11 @@ use minio::s3::Client;
 use minio::s3::builders::ObjectContent;
 use minio::s3::types::S3Api;
 use std::path::Path;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
-    let client: Arc<Client> = create_client_on_play()?;
+    let client: Client = create_client_on_play()?;
 
     let bucket_name: &str = "file-download-rust-bucket";
     let object_name: &str = "cat.png";

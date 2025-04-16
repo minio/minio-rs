@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::GetBucketEncryption;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`GetBucketEncryption`] request builder.
@@ -31,17 +30,17 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetBucketEncryptionResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: GetBucketEncryptionResponse =
     ///         client.get_bucket_encryption("bucket-name").send().await.unwrap();
     ///     println!("retrieved SseConfig '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
     /// }
     /// ```
-    pub fn get_bucket_encryption(self: &Arc<Self>, bucket: &str) -> GetBucketEncryption {
-        GetBucketEncryption::new(self, bucket.to_owned())
+    pub fn get_bucket_encryption(&self, bucket: &str) -> GetBucketEncryption {
+        GetBucketEncryption::new(self.clone(), bucket.to_owned())
     }
 }

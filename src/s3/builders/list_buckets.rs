@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use http::Method;
-use std::sync::Arc;
 
 use crate::s3::multimap::Multimap;
 use crate::s3::response::ListBucketsResponse;
@@ -27,16 +26,16 @@ use crate::s3::{
 /// Argument builder for [list_buckets()](Client::list_buckets) API.
 #[derive(Clone, Debug, Default)]
 pub struct ListBuckets {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
 }
 
 impl ListBuckets {
-    pub fn new(client: &Arc<Client>) -> Self {
+    pub fn new(client: Client) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             ..Default::default()
         }
     }

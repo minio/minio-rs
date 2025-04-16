@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::DeleteBucketEncryption;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`DeleteBucketEncryption`] request builder.
@@ -31,17 +30,17 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::DeleteBucketEncryptionResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: DeleteBucketEncryptionResponse =
     ///         client.delete_bucket_encryption("bucket-name").send().await.unwrap();
     ///     println!("bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```
-    pub fn delete_bucket_encryption(self: &Arc<Self>, bucket: &str) -> DeleteBucketEncryption {
-        DeleteBucketEncryption::new(self, bucket.to_owned())
+    pub fn delete_bucket_encryption(&self, bucket: &str) -> DeleteBucketEncryption {
+        DeleteBucketEncryption::new(self.clone(), bucket.to_owned())
     }
 }

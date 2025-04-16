@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::SetObjectRetention;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`SetObjectRetention`] request builder.
@@ -35,11 +34,11 @@ impl Client {
     /// use minio::s3::builders::ObjectToDelete;
     /// use minio::s3::types::{S3Api, RetentionMode};
     /// use minio::s3::utils::utc_now;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    /// let client: Client = Default::default(); // configure your client here
     ///     let retain_until_date = utc_now() + chrono::Duration::days(1);
     ///     let resp: SetObjectRetentionResponse = client
     ///         .set_object_retention("bucket-name", "object-name")
@@ -49,11 +48,7 @@ impl Client {
     ///     println!("set the object retention for object '{}'", resp.object);
     /// }
     /// ```
-    pub fn set_object_retention(
-        self: &Arc<Self>,
-        bucket: &str,
-        object: &str,
-    ) -> SetObjectRetention {
-        SetObjectRetention::new(self, bucket.to_owned(), object.to_owned())
+    pub fn set_object_retention(&self, bucket: &str, object: &str) -> SetObjectRetention {
+        SetObjectRetention::new(self.clone(), bucket.to_owned(), object.to_owned())
     }
 }

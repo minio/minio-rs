@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::DeleteBucketReplication;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`DeleteBucketReplication`] request builder.
@@ -33,17 +32,17 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::DeleteBucketReplicationResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: DeleteBucketReplicationResponse =
     ///         client.delete_bucket_replication("bucket-name").send().await.unwrap();
     ///     println!("replication of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```
-    pub fn delete_bucket_replication(self: &Arc<Self>, bucket: &str) -> DeleteBucketReplication {
-        DeleteBucketReplication::new(self, bucket.to_owned())
+    pub fn delete_bucket_replication(&self, bucket: &str) -> DeleteBucketReplication {
+        DeleteBucketReplication::new(self.clone(), bucket.to_owned())
     }
 }

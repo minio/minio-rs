@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::DeleteBucketTags;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`DeleteBucketTags`] request builder.
@@ -33,17 +32,17 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::DeleteBucketTagsResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: DeleteBucketTagsResponse =
     ///         client.delete_bucket_tags("bucket-name").send().await.unwrap();
     ///     println!("tags of bucket '{}' are deleted", resp.bucket);
     /// }
     /// ```
-    pub fn delete_bucket_tags(self: &Arc<Self>, bucket: &str) -> DeleteBucketTags {
-        DeleteBucketTags::new(self, bucket.to_owned())
+    pub fn delete_bucket_tags(&self, bucket: &str) -> DeleteBucketTags {
+        DeleteBucketTags::new(self.clone(), bucket.to_owned())
     }
 }

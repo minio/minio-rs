@@ -40,7 +40,7 @@ impl FromS3Response for RemoveBucketResponse {
         let bucket: String = take_bucket(req.bucket)?;
         let mut resp = resp?;
 
-        req.client.region_map.remove(&bucket);
+        req.client.inner.region_map.remove(&bucket);
 
         Ok(Self {
             headers: mem::take(resp.headers_mut()),

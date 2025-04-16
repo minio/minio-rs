@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::SetBucketReplication;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`SetBucketReplication`] request builder.
@@ -34,12 +33,12 @@ impl Client {
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::SetBucketReplicationResponse;
     /// use minio::s3::types::{S3Api, AndOperator, Destination, Filter, ReplicationConfig, ReplicationRule};
-    /// use std::sync::Arc;
+    ///
     /// use std::collections::HashMap;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    /// let client: Client = Default::default(); // configure your client here
     ///     
     ///     let mut tags: HashMap<String, String> = HashMap::new();  
     ///     tags.insert(String::from("key1"), String::from("value1"));
@@ -81,7 +80,7 @@ impl Client {
     ///     println!("enabled versioning on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_replication(self: &Arc<Self>, bucket: &str) -> SetBucketReplication {
-        SetBucketReplication::new(self, bucket.to_owned())
+    pub fn set_bucket_replication(&self, bucket: &str) -> SetBucketReplication {
+        SetBucketReplication::new(self.clone(), bucket.to_owned())
     }
 }

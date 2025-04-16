@@ -19,7 +19,6 @@ use super::Client;
 use crate::s3::builders::ObjectContent;
 use crate::s3::builders::{AppendObject, AppendObjectContent};
 use crate::s3::segmented_bytes::SegmentedBytes;
-use std::sync::Arc;
 
 impl Client {
     /// Creates an AppendObject request builder to append data to the end of an (existing) object.
@@ -27,7 +26,7 @@ impl Client {
     ///
     /// 🛈 This operation is not supported for regular non-express buckets.
     pub fn append_object(
-        self: &Arc<Self>,
+        &self,
         bucket: &str,
         object: &str,
         data: SegmentedBytes,
@@ -46,7 +45,7 @@ impl Client {
     /// object. The content is streamed and appended to MinIO/S3. This is a higher-level API that
     /// handles multipart appends transparently.
     pub fn append_object_content(
-        self: &Arc<Self>,
+        &self,
         bucket: &str,
         object: &str,
         content: impl Into<ObjectContent>,

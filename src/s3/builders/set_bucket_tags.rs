@@ -23,12 +23,11 @@ use crate::s3::utils::{check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// Argument builder for [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct SetBucketTags {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -39,9 +38,9 @@ pub struct SetBucketTags {
 }
 
 impl SetBucketTags {
-    pub fn new(client: &Arc<Client>, bucket: String) -> Self {
+    pub fn new(client: Client, bucket: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             ..Default::default()
         }

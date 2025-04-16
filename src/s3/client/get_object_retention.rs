@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::GetObjectRetention;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`GetObjectRetention`] request builder.
@@ -33,21 +32,17 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetObjectRetentionResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: GetObjectRetentionResponse =
     ///         client.get_object_retention("bucket-name", "object-name").send().await.unwrap();
     ///     println!("retrieved retention mode '{:?}' until '{:?}' from bucket '{}' is enabled", resp.retention_mode, resp.retain_until_date, resp.bucket);
     /// }
     /// ```
-    pub fn get_object_retention(
-        self: &Arc<Self>,
-        bucket: &str,
-        object: &str,
-    ) -> GetObjectRetention {
-        GetObjectRetention::new(self, bucket.to_owned(), object.to_owned())
+    pub fn get_object_retention(&self, bucket: &str, object: &str) -> GetObjectRetention {
+        GetObjectRetention::new(self.clone(), bucket.to_owned(), object.to_owned())
     }
 }

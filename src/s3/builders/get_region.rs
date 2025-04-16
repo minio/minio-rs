@@ -21,12 +21,11 @@ use crate::s3::response::GetRegionResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
-use std::sync::Arc;
 
 /// Argument builder for [get_region()](Client::get_region) API
 #[derive(Clone, Debug, Default)]
 pub struct GetRegion {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -34,9 +33,9 @@ pub struct GetRegion {
 }
 
 impl GetRegion {
-    pub fn new(client: &Arc<Client>, bucket: String) -> Self {
+    pub fn new(client: &Client, bucket: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client: client.clone(),
             bucket,
             ..Default::default()
         }

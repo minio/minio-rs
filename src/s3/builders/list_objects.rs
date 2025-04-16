@@ -15,7 +15,6 @@
 use async_trait::async_trait;
 use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
-use std::sync::Arc;
 
 use crate::s3::multimap::Multimap;
 use crate::s3::utils::insert;
@@ -61,7 +60,7 @@ fn delim_helper(delim: Option<String>, recursive: bool) -> Option<String> {
 /// Argument for ListObjectsV1 S3 API.
 #[derive(Clone, Debug, Default)]
 struct ListObjectsV1 {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -161,7 +160,7 @@ impl From<ListObjects> for ListObjectsV1 {
 /// Argument for ListObjectsV2 S3 API.
 #[derive(Clone, Debug, Default)]
 struct ListObjectsV2 {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -282,7 +281,7 @@ impl From<ListObjects> for ListObjectsV2 {
 /// Argument for ListObjectVersions S3 API
 #[derive(Clone, Debug, Default)]
 struct ListObjectVersions {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -407,7 +406,7 @@ impl From<ListObjects> for ListObjectVersions {
 /// a stream of results. Pagination is automatically performed.
 #[derive(Clone, Debug, Default)]
 pub struct ListObjects {
-    client: Arc<Client>,
+    client: Client,
 
     // Parameters common to all ListObjects APIs.
     extra_headers: Option<Multimap>,
@@ -458,9 +457,9 @@ impl ToStream for ListObjects {
 }
 
 impl ListObjects {
-    pub fn new(client: &Arc<Client>, bucket: String) -> Self {
+    pub fn new(client: Client, bucket: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             ..Default::default()
         }

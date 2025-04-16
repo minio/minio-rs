@@ -22,20 +22,16 @@ use crate::s3::utils::{
 };
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// Argument for [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API
 pub struct GetPresignedPolicyFormData {
-    client: Arc<Client>,
+    client: Client,
     policy: PostPolicy,
 }
 
 impl GetPresignedPolicyFormData {
-    pub fn new(client: &Arc<Client>, policy: PostPolicy) -> Self {
-        Self {
-            client: Arc::clone(client),
-            policy,
-        }
+    pub fn new(client: Client, policy: PostPolicy) -> Self {
+        Self { client, policy }
     }
 
     pub async fn send(self) -> Result<HashMap<String, String>, Error> {
@@ -44,7 +40,7 @@ impl GetPresignedPolicyFormData {
             .client
             .get_region_cached(&self.policy.bucket, &self.policy.region)?;
 
-        let creds: Credentials = self.client.provider.as_ref().unwrap().fetch();
+        let creds: Credentials = self.client.inner.provider.as_ref().unwrap().fetch();
         self.policy.form_data(
             creds.access_key,
             creds.secret_key,

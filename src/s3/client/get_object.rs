@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::GetObject;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`GetObject`] request builder.
@@ -31,11 +30,11 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetObjectResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: GetObjectResponse =
     ///         client.get_object("bucket-name", "object-name").send().await.unwrap();
     ///     let content_bytes = resp.content.to_segmented_bytes().await.unwrap().to_bytes();
@@ -43,7 +42,7 @@ impl Client {
     ///     println!("retrieved content '{}'", content_str);
     /// }
     /// ```
-    pub fn get_object(self: &Arc<Self>, bucket: &str, object: &str) -> GetObject {
-        GetObject::new(self, bucket.to_owned(), object.to_owned())
+    pub fn get_object(&self, bucket: &str, object: &str) -> GetObject {
+        GetObject::new(self.clone(), bucket.to_owned(), object.to_owned())
     }
 }

@@ -34,7 +34,7 @@ use std::sync::Arc;
 /// Argument builder for [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) API
 #[derive(Clone, Debug, Default)]
 pub struct UploadPartCopy {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -48,9 +48,9 @@ pub struct UploadPartCopy {
 }
 
 impl UploadPartCopy {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String, upload_id: String) -> Self {
+    pub fn new(client: &Client, bucket: String, object: String, upload_id: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client: client.clone(),
             bucket,
             object,
             upload_id,
@@ -123,7 +123,7 @@ impl ToS3Request for UploadPartCopy {
 
 #[derive(Clone, Debug, Default)]
 pub struct CopyObjectInternal {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -144,7 +144,7 @@ pub struct CopyObjectInternal {
 }
 
 impl CopyObjectInternal {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
+    pub fn new(client: &Client, bucket: String, object: String) -> Self {
         Self {
             client: client.clone(),
             bucket,
@@ -222,11 +222,11 @@ impl ToS3Request for CopyObjectInternal {
     fn to_s3request(self) -> Result<S3Request, Error> {
         {
             if let Some(v) = &self.sse {
-                if v.tls_required() && !self.client.base_url.https {
+                if v.tls_required() && !self.client.is_secure() {
                     return Err(Error::SseTlsRequired(None));
                 }
             }
-            if self.source.ssec.is_some() && !self.client.base_url.https {
+            if self.source.ssec.is_some() && !self.client.is_secure() {
                 return Err(Error::SseTlsRequired(None));
             }
         }
@@ -327,7 +327,7 @@ impl ToS3Request for CopyObjectInternal {
 /// Argument builder for [copy_object()](Client::copy_object_old) API
 #[derive(Clone, Debug, Default)]
 pub struct CopyObject {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -347,7 +347,7 @@ pub struct CopyObject {
 }
 
 impl CopyObject {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
+    pub fn new(client: &Client, bucket: String, object: String) -> Self {
         Self {
             client: client.clone(),
             bucket,
@@ -414,11 +414,11 @@ impl CopyObject {
     pub async fn send(self) -> Result<CopyObjectResponse, Error> {
         {
             if let Some(v) = &self.sse {
-                if v.tls_required() && !self.client.base_url.https {
+                if v.tls_required() && !self.client.is_secure() {
                     return Err(Error::SseTlsRequired(None));
                 }
             }
-            if self.source.ssec.is_some() && !self.client.base_url.https {
+            if self.source.ssec.is_some() && !self.client.is_secure() {
                 return Err(Error::SseTlsRequired(None));
             }
         }
@@ -535,7 +535,7 @@ impl CopyObject {
 
 #[derive(Clone, Debug, Default)]
 pub struct ComposeObjectInternal {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -553,7 +553,7 @@ pub struct ComposeObjectInternal {
 }
 
 impl ComposeObjectInternal {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
+    pub fn new(client: &Client, bucket: String, object: String) -> Self {
         Self {
             client: client.clone(),
             bucket,
@@ -808,7 +808,7 @@ impl ComposeObjectInternal {
 
 #[derive(Clone, Debug, Default)]
 pub struct ComposeObject {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -826,9 +826,9 @@ pub struct ComposeObject {
 }
 
 impl ComposeObject {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
+    pub fn new(client: &Client, bucket: String, object: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client: client.clone(),
             bucket,
             object,
             ..Default::default()
@@ -890,7 +890,7 @@ impl ComposeObject {
     pub async fn send(self) -> Result<ComposeObjectResponse, Error> {
         {
             if let Some(v) = &self.sse {
-                if v.tls_required() && !self.client.base_url.https {
+                if v.tls_required() && !self.client.is_secure() {
                     return Err(Error::SseTlsRequired(None));
                 }
             }

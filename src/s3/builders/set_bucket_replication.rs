@@ -22,12 +22,11 @@ use crate::s3::types::{ReplicationConfig, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
-use std::sync::Arc;
 
 /// Argument builder for [set_bucket_replication()](crate::s3::client::Client::set_bucket_replication) API
 #[derive(Clone, Debug, Default)]
 pub struct SetBucketReplication {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -38,9 +37,9 @@ pub struct SetBucketReplication {
 }
 
 impl SetBucketReplication {
-    pub fn new(client: &Arc<Client>, bucket: String) -> Self {
+    pub fn new(client: Client, bucket: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             ..Default::default()
         }

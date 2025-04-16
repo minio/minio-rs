@@ -22,12 +22,11 @@ use crate::s3::types::{LifecycleConfig, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
-use std::sync::Arc;
 
 /// Argument builder for [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API
 #[derive(Clone, Debug, Default)]
 pub struct SetBucketLifecycle {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -38,9 +37,9 @@ pub struct SetBucketLifecycle {
 }
 
 impl SetBucketLifecycle {
-    pub fn new(client: &Arc<Client>, bucket: String) -> Self {
+    pub fn new(client: Client, bucket: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             ..Default::default()
         }

@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::SetBucketNotification;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`SetBucketNotification`] request builder.
@@ -31,11 +30,11 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::types::{NotificationConfig, PrefixFilterRule, QueueConfig, S3Api, SuffixFilterRule};
     /// use minio::s3::response::SetBucketNotificationResponse;
-    /// use std::sync::Arc;
+    ///
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///
     ///     let config = NotificationConfig {
     ///         cloud_func_config_list: None,
@@ -63,7 +62,7 @@ impl Client {
     ///     println!("set bucket notification for bucket '{:?}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_notification(self: &Arc<Self>, bucket: &str) -> SetBucketNotification {
-        SetBucketNotification::new(self, bucket.to_owned())
+    pub fn set_bucket_notification(&self, bucket: &str) -> SetBucketNotification {
+        SetBucketNotification::new(self.clone(), bucket.to_owned())
     }
 }

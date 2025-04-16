@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::SetBucketPolicy;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`SetBucketPolicy`] request builder.
@@ -32,12 +31,12 @@ impl Client {
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::SetBucketPolicyResponse;
     /// use minio::s3::types::{S3Api, AndOperator, Destination, Filter, ReplicationConfig, ReplicationRule};
-    /// use std::sync::Arc;
+    ///
     /// use std::collections::HashMap;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     
     ///     let config = r#"{
     ///         "Version": "2012-10-17",
@@ -70,7 +69,7 @@ impl Client {
     ///     println!("set bucket replication policy on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_policy(self: &Arc<Self>, bucket: &str) -> SetBucketPolicy {
-        SetBucketPolicy::new(self, bucket.to_owned())
+    pub fn set_bucket_policy(&self, bucket: &str) -> SetBucketPolicy {
+        SetBucketPolicy::new(self.clone(), bucket.to_owned())
     }
 }

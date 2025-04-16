@@ -17,7 +17,6 @@
 
 use super::Client;
 use crate::s3::builders::SetBucketLifecycle;
-use std::sync::Arc;
 
 impl Client {
     /// Creates a [`SetBucketLifecycle`] request builder.
@@ -32,12 +31,12 @@ impl Client {
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::SetBucketLifecycleResponse;
     /// use minio::s3::types::{Filter, LifecycleConfig, LifecycleRule, S3Api};
-    /// use std::sync::Arc;
+    ///
     /// use std::collections::HashMap;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Arc<Client> = Arc::new(Default::default()); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///
     ///     let rules: Vec<LifecycleRule> = vec![LifecycleRule {
     ///         abort_incomplete_multipart_upload_days_after_initiation: None,
@@ -62,7 +61,7 @@ impl Client {
     ///     println!("set bucket replication policy on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_lifecycle(self: &Arc<Self>, bucket: &str) -> SetBucketLifecycle {
-        SetBucketLifecycle::new(self, bucket.to_owned())
+    pub fn set_bucket_lifecycle(&self, bucket: &str) -> SetBucketLifecycle {
+        SetBucketLifecycle::new(self.clone(), bucket.to_owned())
     }
 }

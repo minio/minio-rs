@@ -20,12 +20,11 @@ use crate::s3::response::GetObjectTagsResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, check_object_name, insert};
 use http::Method;
-use std::sync::Arc;
 
 /// Argument builder for [get_object_tags()](Client::get_object_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct GetObjectTags {
-    client: Arc<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -37,9 +36,9 @@ pub struct GetObjectTags {
 }
 
 impl GetObjectTags {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            client: Arc::clone(client),
+            client,
             bucket,
             object,
             ..Default::default()

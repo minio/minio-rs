@@ -26,11 +26,10 @@ use crate::s3::{
 use bytes::Bytes;
 use http::Method;
 use serde_json::json;
-use std::sync::Arc;
 
 #[derive(Debug, Clone, Default)]
 pub struct ObjectPrompt {
-    client: Arc<Client>,
+    client: Client,
     bucket: String,
     object: String,
     prompt: String,
@@ -45,9 +44,9 @@ pub struct ObjectPrompt {
 
 // builder interface
 impl ObjectPrompt {
-    pub fn new(client: &Arc<Client>, bucket: String, object: String, prompt: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String, prompt: String) -> Self {
         ObjectPrompt {
-            client: Arc::clone(client),
+            client,
             bucket,
             object,
             prompt,
