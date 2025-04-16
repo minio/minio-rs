@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::SseCustomerKey;
-use crate::s3::utils::{Multimap, MultimapExt, check_bucket_name, check_object_name};
+use crate::s3::utils::{check_bucket_name, check_object_name};
 use crate::s3::{
     client::Client,
     error::Error,

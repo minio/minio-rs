@@ -18,9 +18,10 @@
 use super::client::{Client, DEFAULT_REGION};
 use crate::s3::error::Error;
 use crate::s3::utils::{
-    Multimap, UtcTime, from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc,
+    UtcTime, from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc,
 };
 
+use crate::s3::multimap::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use async_trait::async_trait;
 use futures_util::Stream;

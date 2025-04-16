@@ -15,10 +15,8 @@
 
 //! Signature V4 for S3 API
 
-use crate::s3::utils::{
-    Multimap, UtcTime, get_canonical_headers, get_canonical_query_string, sha256_hash, to_amz_date,
-    to_signer_date,
-};
+use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::utils::{UtcTime, sha256_hash, to_amz_date, to_signer_date};
 use hex::encode as hexencode;
 #[cfg(not(feature = "ring"))]
 use hmac::{Hmac, Mac};
@@ -135,8 +133,8 @@ fn sign_v4(
     date: UtcTime,
 ) {
     let scope = get_scope(date, region, service_name);
-    let (signed_headers, canonical_headers) = get_canonical_headers(headers);
-    let canonical_query_string = get_canonical_query_string(query_params);
+    let (signed_headers, canonical_headers) = headers.get_canonical_headers();
+    let canonical_query_string = query_params.get_canonical_query_string();
     let canonical_request_hash = get_canonical_request_hash(
         method,
         uri,
@@ -150,7 +148,7 @@ fn sign_v4(
     let signature = get_signature(signing_key.as_slice(), string_to_sign.as_bytes());
     let authorization = get_authorization(access_key, &scope, &signed_headers, &signature);
 
-    headers.insert("Authorization".to_string(), authorization);
+    headers.add("Authorization", authorization);
 }
 
 /// Signs and updates headers for given parameters for S3 request
@@ -204,7 +202,7 @@ pub fn presign_v4(
     query_params.insert("X-Amz-Expires".into(), expires.to_string());
     query_params.insert("X-Amz-SignedHeaders".into(), signed_headers.to_string());
 
-    let canonical_query_string = get_canonical_query_string(query_params);
+    let canonical_query_string = query_params.get_canonical_query_string();
     let canonical_request_hash = get_canonical_request_hash(
         method,
         uri,

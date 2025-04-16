@@ -16,11 +16,10 @@
 use crate::s3::Client;
 use crate::s3::client::DEFAULT_EXPIRY_SECONDS;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::GetPresignedObjectUrlResponse;
 use crate::s3::signer::presign_v4;
-use crate::s3::utils::{
-    Multimap, MultimapExt, UtcTime, check_bucket_name, check_object_name, utc_now,
-};
+use crate::s3::utils::{UtcTime, check_bucket_name, check_object_name, utc_now};
 use http::Method;
 use std::sync::Arc;
 

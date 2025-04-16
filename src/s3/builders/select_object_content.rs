@@ -15,11 +15,12 @@
 
 use crate::s3::Client;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::SelectObjectContentResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::SseCustomerKey;
 use crate::s3::types::{S3Api, S3Request, SelectRequest, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, check_object_name, insert, md5sum_hash};
+use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
 use async_trait::async_trait;
 use bytes::Bytes;
 use http::Method;
@@ -102,10 +103,10 @@ impl ToS3Request for SelectObjectContent {
         let bytes: Bytes = data.into();
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
-        headers.insert("Content-MD5".into(), md5sum_hash(bytes.as_ref()));
+        headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
 
         let mut query_params: Multimap = insert(self.extra_query_params, "select");
-        query_params.insert("select-type".into(), "2".into());
+        query_params.add("select-type", "2");
 
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
 

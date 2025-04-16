@@ -16,7 +16,8 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::s3::{client::Client, utils::Multimap};
+use crate::s3::client::Client;
+use crate::s3::multimap::Multimap;
 
 #[derive(Clone, Debug, Default)]
 pub struct BucketCommon<A> {

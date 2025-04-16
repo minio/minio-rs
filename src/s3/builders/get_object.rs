@@ -16,14 +16,15 @@
 use http::Method;
 use std::sync::Arc;
 
-use crate::s3::utils::{MultimapExt, check_object_name};
+use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::utils::check_object_name;
 use crate::s3::{
     client::Client,
     error::Error,
     response::GetObjectResponse,
     sse::{Sse, SseCustomerKey},
     types::{S3Api, S3Request, ToS3Request},
-    utils::{Multimap, UtcTime, check_bucket_name, merge, to_http_header_value},
+    utils::{UtcTime, check_bucket_name, to_http_header_value},
 };
 
 /// Argument builder for [list_objects()](Client::get_object) API.
@@ -144,28 +145,28 @@ impl ToS3Request for GetObject {
                     if let Some(l) = length {
                         range.push_str(&(o + l - 1).to_string());
                     }
-                    headers.insert("Range".into(), range);
+                    headers.add("Range", range);
                 }
             }
 
             if let Some(v) = self.match_etag {
-                headers.insert("if-match".into(), v);
+                headers.add("if-match", v);
             }
 
             if let Some(v) = self.not_match_etag {
-                headers.insert("if-none-match".into(), v);
+                headers.add("if-none-match", v);
             }
 
             if let Some(v) = self.modified_since {
-                headers.insert("if-modified-since".into(), to_http_header_value(v));
+                headers.add("if-modified-since", to_http_header_value(v));
             }
 
             if let Some(v) = self.unmodified_since {
-                headers.insert("if-unmodified-since".into(), to_http_header_value(v));
+                headers.add("if-unmodified-since", to_http_header_value(v));
             }
 
             if let Some(v) = &self.ssec {
-                merge(&mut headers, v.headers());
+                headers.add_multimap(v.headers());
             }
         }
 

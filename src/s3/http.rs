@@ -18,8 +18,8 @@
 use super::utils::urlencode_object_key;
 use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::utils::match_hostname;
-use crate::s3::utils::{Multimap, to_query_string};
 use derivative::Derivative;
 use hyper::Uri;
 use hyper::http::Method;
@@ -82,7 +82,7 @@ impl fmt::Display for Url {
 
         if !self.query.is_empty() {
             f.write_str("?")?;
-            f.write_str(&to_query_string(&self.query))?;
+            f.write_str(&self.query.to_query_string())?;
         }
 
         Ok(())

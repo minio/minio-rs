@@ -16,6 +16,7 @@
 //! Various utility and helper functions
 
 use crate::s3::error::Error;
+use crate::s3::multimap::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use base64::engine::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -25,14 +26,13 @@ use crc::{CRC_32_ISO_HDLC, Crc};
 use hex::ToHex;
 use lazy_static::lazy_static;
 use md5::compute as md5compute;
-use multimap::MultiMap;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use regex::Regex;
 #[cfg(feature = "ring")]
 use ring::digest::{Context, SHA256};
 #[cfg(not(feature = "ring"))]
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 pub use urlencoding::decode as urldecode;
 pub use urlencoding::encode as urlencode;
 use xmltree::Element;
@@ -40,39 +40,9 @@ use xmltree::Element;
 /// Date and time with UTC timezone
 pub type UtcTime = DateTime<Utc>;
 
-/// Multimap for string key and string value
-pub type Multimap = MultiMap<String, String>;
-
-pub trait MultimapExt {
-    fn add_version(&mut self, version: Option<String>);
-    #[must_use]
-
-    fn take_version(self) -> Option<String>;
-}
-
-impl MultimapExt for Multimap {
-    fn add_version(&mut self, version: Option<String>) {
-        if let Some(v) = version {
-            self.insert("versionId".into(), v);
-        }
-    }
-    fn take_version(mut self) -> Option<String> {
-        self.remove("versionId").and_then(|mut v| v.pop())
-    }
-}
-
 /// Encodes data using base64 algorithm
 pub fn b64encode(input: impl AsRef<[u8]>) -> String {
     BASE64.encode(input)
-}
-
-/// Merges two multimaps.
-pub fn merge(m1: &mut Multimap, m2: impl IntoIterator<Item = (String, Vec<String>)>) {
-    for (key, values) in m2 {
-        for value in values {
-            m1.insert(key.clone(), value);
-        }
-    }
 }
 
 /// Computes CRC32 of given data.
@@ -105,7 +75,8 @@ pub fn sha256_hash_sb(sb: &SegmentedBytes) -> String {
     #[cfg(feature = "ring")]
     {
         let mut context = Context::new(&SHA256);
-        for data in sb.iter() { // Note: &SegmentedBytes.iter yields clones of Bytes, but those clones are cheap
+        for data in sb.iter() {
+            // Note: &SegmentedBytes.iter yields clones of Bytes, but those clones are cheap
             context.update(data.as_ref());
         }
         context.finish().encode_hex()
@@ -113,7 +84,8 @@ pub fn sha256_hash_sb(sb: &SegmentedBytes) -> String {
     #[cfg(not(feature = "ring"))]
     {
         let mut hasher = Sha256::new();
-        for data in sb.iter() { // Note: &SegmentedBytes.iter yields clones of Bytes, but those clones are cheap
+        for data in sb.iter() {
+            // Note: &SegmentedBytes.iter yields clones of Bytes, but those clones are cheap
             hasher.update(data);
         }
         hasher.finalize().encode_hex()
@@ -229,113 +201,6 @@ pub fn from_http_header_value(s: &str) -> Result<UtcTime, ParseError> {
         NaiveDateTime::parse_from_str(s, "%a, %d %b %Y %H:%M:%S GMT")?,
         Utc,
     ))
-}
-
-/// Converts multimap to HTTP headers
-pub fn to_http_headers(map: &Multimap) -> Vec<String> {
-    let mut headers: Vec<String> = Vec::new();
-    for (key, values) in map.iter_all() {
-        for value in values {
-            let mut s = String::new();
-            s.push_str(key);
-            s.push_str(": ");
-            s.push_str(value);
-            headers.push(s);
-        }
-    }
-    headers
-}
-
-/// Converts multimap to HTTP query string
-pub fn to_query_string(map: &Multimap) -> String {
-    let mut query = String::new();
-    for (key, values) in map.iter_all() {
-        for value in values {
-            if !query.is_empty() {
-                query.push('&');
-            }
-            query.push_str(&urlencode(key));
-            query.push('=');
-            query.push_str(&urlencode(value));
-        }
-    }
-    query
-}
-
-/// Converts multimap to canonical query string
-pub fn get_canonical_query_string(map: &Multimap) -> String {
-    let mut keys: Vec<String> = Vec::new();
-    for (key, _) in map.iter() {
-        keys.push(key.to_string());
-    }
-    keys.sort();
-
-    let mut query = String::new();
-    for key in keys {
-        match map.get_vec(key.as_str()) {
-            Some(values) => {
-                for value in values {
-                    if !query.is_empty() {
-                        query.push('&');
-                    }
-                    query.push_str(&urlencode(key.as_str()));
-                    query.push('=');
-                    query.push_str(&urlencode(value));
-                }
-            }
-            None => todo!(), // This never happens.
-        };
-    }
-
-    query
-}
-
-/// Converts multimap to signed headers and canonical headers
-pub fn get_canonical_headers(map: &Multimap) -> (String, String) {
-    lazy_static! {
-        static ref MULTI_SPACE_REGEX: Regex = Regex::new("( +)").unwrap();
-    }
-    let mut btmap: BTreeMap<String, String> = BTreeMap::new();
-
-    for (k, values) in map.iter_all() {
-        let key = k.to_lowercase();
-        if "authorization" == key || "user-agent" == key {
-            continue;
-        }
-
-        let mut vs = values.clone();
-        vs.sort();
-
-        let mut value = String::new();
-        for v in vs {
-            if !value.is_empty() {
-                value.push(',');
-            }
-            let s: String = MULTI_SPACE_REGEX.replace_all(&v, " ").trim().to_string();
-            value.push_str(&s);
-        }
-        btmap.insert(key.clone(), value.clone());
-    }
-
-    let mut signed_headers = String::new();
-    let mut canonical_headers = String::new();
-    let mut add_delim = false;
-    for (key, value) in &btmap {
-        if add_delim {
-            signed_headers.push(';');
-            canonical_headers.push('\n');
-        }
-
-        signed_headers.push_str(key);
-
-        canonical_headers.push_str(key);
-        canonical_headers.push(':');
-        canonical_headers.push_str(value);
-
-        add_delim = true;
-    }
-
-    (signed_headers, canonical_headers)
 }
 
 /// Checks if given hostname is valid or not

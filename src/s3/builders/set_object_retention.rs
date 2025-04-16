@@ -15,12 +15,12 @@
 
 use crate::s3::Client;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::SetObjectRetentionResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{RetentionMode, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{
-    Multimap, MultimapExt, UtcTime, check_bucket_name, check_object_name, insert, md5sum_hash,
-    to_iso8601utc,
+    UtcTime, check_bucket_name, check_object_name, insert, md5sum_hash, to_iso8601utc,
 };
 use bytes::Bytes;
 use http::Method;
@@ -124,9 +124,9 @@ impl ToS3Request for SetObjectRetention {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         if self.bypass_governance_mode {
-            headers.insert("x-amz-bypass-governance-retention".into(), "true".into());
+            headers.add("x-amz-bypass-governance-retention", "true");
         }
-        headers.insert("Content-MD5".into(), md5sum_hash(data.as_ref()));
+        headers.add("Content-MD5", md5sum_hash(data.as_ref()));
 
         let mut query_params: Multimap = insert(self.extra_query_params, "retention");
         query_params.add_version(self.version_id);

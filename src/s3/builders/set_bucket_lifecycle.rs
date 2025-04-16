@@ -15,10 +15,11 @@
 
 use crate::s3::Client;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::SetBucketLifecycleResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{LifecycleConfig, S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, insert, md5sum_hash};
+use crate::s3::utils::{check_bucket_name, insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -77,7 +78,7 @@ impl ToS3Request for SetBucketLifecycle {
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
 
         let bytes: Bytes = self.config.to_xml().into();
-        headers.insert("Content-MD5".into(), md5sum_hash(&bytes));
+        headers.add("Content-MD5", md5sum_hash(&bytes));
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
 
         Ok(S3Request::new(self.client, Method::PUT)

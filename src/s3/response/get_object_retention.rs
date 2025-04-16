@@ -14,10 +14,9 @@
 // limitations under the License.
 
 use crate::s3::error::{Error, ErrorCode};
+use crate::s3::multimap::MultimapExt;
 use crate::s3::types::{FromS3Response, RetentionMode, S3Request};
-use crate::s3::utils::{
-    MultimapExt, UtcTime, from_iso8601utc, get_option_text, take_bucket, take_object,
-};
+use crate::s3::utils::{UtcTime, from_iso8601utc, get_option_text, take_bucket, take_object};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;

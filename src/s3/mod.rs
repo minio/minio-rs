@@ -20,6 +20,7 @@ pub mod client;
 pub mod creds;
 pub mod error;
 pub mod http;
+pub mod multimap;
 mod object_content;
 pub mod response;
 pub mod segmented_bytes;

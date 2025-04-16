@@ -16,12 +16,12 @@
 use http::Method;
 use std::sync::Arc;
 
+use crate::s3::multimap::Multimap;
 use crate::s3::response::ListBucketsResponse;
 use crate::s3::{
     Client,
     error::Error,
     types::{S3Api, S3Request, ToS3Request},
-    utils::Multimap,
 };
 
 /// Argument builder for [list_buckets()](Client::list_buckets) API.

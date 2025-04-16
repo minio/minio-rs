@@ -16,10 +16,11 @@
 use crate::s3::Client;
 use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::MakeBucketResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name};
+use crate::s3::utils::check_bucket_name;
 use http::Method;
 use std::sync::Arc;
 
@@ -93,7 +94,7 @@ impl ToS3Request for MakeBucket {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         if self.object_lock {
-            headers.insert("x-amz-bucket-object-lock-enabled".into(), "true".into());
+            headers.add("x-amz-bucket-object-lock-enabled", "true");
         }
 
         let data: String = match region_str.as_str() {

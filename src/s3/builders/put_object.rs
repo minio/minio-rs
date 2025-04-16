@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::ObjectContent;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::utils::{check_object_name, insert};
 use crate::s3::{
@@ -27,7 +28,7 @@ use crate::s3::{
     },
     sse::Sse,
     types::{PartInfo, Retention, S3Api, S3Request, ToS3Request},
-    utils::{Multimap, check_bucket_name, md5sum_hash, merge, to_iso8601utc, urlencode},
+    utils::{check_bucket_name, md5sum_hash, to_iso8601utc, urlencode},
 };
 use bytes::{Bytes, BytesMut};
 use http::Method;
@@ -297,11 +298,11 @@ impl ToS3Request for CompleteMultipartUpload {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         {
-            headers.insert("Content-Type".into(), "application/xml".into());
-            headers.insert("Content-MD5".into(), md5sum_hash(data.as_ref()));
+            headers.add("Content-Type", "application/xml");
+            headers.add("Content-MD5", md5sum_hash(data.as_ref()));
         }
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
-        query_params.insert("uploadId".into(), self.upload_id.to_string());
+        query_params.add("uploadId", self.upload_id);
 
         Ok(S3Request::new(self.client, Method::POST)
             .region(self.region)
@@ -882,7 +883,7 @@ fn into_headers_put_object(
     let mut map = Multimap::new();
 
     if let Some(v) = extra_headers {
-        merge(&mut map, v);
+        map.add_multimap(v);
     }
 
     if let Some(v) = user_metadata {
@@ -900,12 +901,11 @@ fn into_headers_put_object(
                 )));
             }
         }
-
-        merge(&mut map, v);
+        map.add_multimap(v);
     }
 
     if let Some(v) = sse {
-        merge(&mut map, v.headers());
+        map.add_multimap(v.headers());
     }
 
     if let Some(v) = tags {

@@ -23,15 +23,16 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio_stream::iter as stream_iter;
 
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::DeleteError;
 use crate::s3::types::ListEntry;
-use crate::s3::utils::{MultimapExt, check_object_name, insert};
+use crate::s3::utils::{check_object_name, insert};
 use crate::s3::{
     Client,
     error::Error,
     response::{RemoveObjectResponse, RemoveObjectsResponse},
     types::{S3Api, S3Request, ToS3Request, ToStream},
-    utils::{Multimap, check_bucket_name, md5sum_hash},
+    utils::{check_bucket_name, md5sum_hash},
 };
 
 // region: object-to-delete
@@ -247,10 +248,10 @@ impl ToS3Request for RemoveObjectsApi {
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         {
             if self.bypass_governance_mode {
-                headers.insert("x-amz-bypass-governance-retention".into(), "true".into());
+                headers.add("x-amz-bypass-governance-retention", "true");
             }
-            headers.insert("Content-Type".into(), "application/xml".into());
-            headers.insert("Content-MD5".into(), md5sum_hash(data.as_ref()));
+            headers.add("Content-Type", "application/xml");
+            headers.add("Content-MD5", md5sum_hash(data.as_ref()));
         }
 
         Ok(S3Request::new(self.client, Method::POST)

@@ -16,6 +16,7 @@
 use crate::s3::Client;
 use crate::s3::client::MAX_PART_SIZE;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::{
     AbortMultipartUploadResponse, ComposeObjectResponse, CopyObjectInternalResponse,
     CopyObjectResponse, CreateMultipartUploadResponse, StatObjectResponse, UploadPartCopyResponse,
@@ -23,8 +24,7 @@ use crate::s3::response::{
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{Directive, PartInfo, Retention, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{
-    Multimap, UtcTime, check_bucket_name, check_object_name, merge, to_http_header_value,
-    to_iso8601utc, urlencode,
+    UtcTime, check_bucket_name, check_object_name, to_http_header_value, to_iso8601utc, urlencode,
 };
 use async_recursion::async_recursion;
 use http::Method;
@@ -104,7 +104,7 @@ impl ToS3Request for UploadPartCopy {
         }
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
-        merge(&mut headers, self.headers.clone());
+        headers.add_multimap(self.headers);
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         {
@@ -234,13 +234,13 @@ impl ToS3Request for CopyObjectInternal {
         let mut headers = self.headers;
         {
             if let Some(v) = self.extra_headers {
-                merge(&mut headers, v);
+                headers.add_multimap(v);
             }
             if let Some(v) = self.user_metadata {
-                merge(&mut headers, v);
+                headers.add_multimap(v);
             }
             if let Some(v) = self.sse {
-                merge(&mut headers, v.headers());
+                headers.add_multimap(v.headers());
             }
             if let Some(v) = self.tags {
                 let mut tagging = String::new();
@@ -253,24 +253,24 @@ impl ToS3Request for CopyObjectInternal {
                     tagging.push_str(&urlencode(value));
                 }
                 if !tagging.is_empty() {
-                    headers.insert("x-amz-tagging".into(), tagging);
+                    headers.add("x-amz-tagging", tagging);
                 }
             }
             if let Some(v) = self.retention {
-                headers.insert("x-amz-object-lock-mode".into(), v.mode.to_string());
-                headers.insert(
-                    "x-amz-object-lock-retain-until-date".into(),
+                headers.add("x-amz-object-lock-mode", v.mode.to_string());
+                headers.add(
+                    "x-amz-object-lock-retain-until-date",
                     to_iso8601utc(v.retain_until_date),
                 );
             }
             if self.legal_hold {
-                headers.insert("x-amz-object-lock-legal-hold".into(), "ON".into());
+                headers.add("x-amz-object-lock-legal-hold", "ON");
             }
             if let Some(v) = self.metadata_directive {
-                headers.insert("x-amz-metadata-directive".into(), v.to_string());
+                headers.add("x-amz-metadata-directive", v.to_string());
             }
             if let Some(v) = self.tagging_directive {
-                headers.insert("x-amz-tagging-directive".into(), v.to_string());
+                headers.add("x-amz-tagging-directive", v.to_string());
             }
 
             let mut copy_source = String::from("/");
@@ -281,37 +281,37 @@ impl ToS3Request for CopyObjectInternal {
                 copy_source.push_str("?versionId=");
                 copy_source.push_str(&urlencode(v));
             }
-            headers.insert("x-amz-copy-source".into(), copy_source);
+            headers.add("x-amz-copy-source", copy_source);
 
             let range = self.source.get_range_value();
             if !range.is_empty() {
-                headers.insert("x-amz-copy-source-range".into(), range);
+                headers.add("x-amz-copy-source-range", range);
             }
 
             if let Some(v) = self.source.match_etag {
-                headers.insert("x-amz-copy-source-if-match".into(), v);
+                headers.add("x-amz-copy-source-if-match", v);
             }
 
             if let Some(v) = self.source.not_match_etag {
-                headers.insert("x-amz-copy-source-if-none-match".into(), v);
+                headers.add("x-amz-copy-source-if-none-match", v);
             }
 
             if let Some(v) = self.source.modified_since {
-                headers.insert(
-                    "x-amz-copy-source-if-modified-since".into(),
+                headers.add(
+                    "x-amz-copy-source-if-modified-since",
                     to_http_header_value(v),
                 );
             }
 
             if let Some(v) = self.source.unmodified_since {
-                headers.insert(
-                    "x-amz-copy-source-if-unmodified-since".into(),
+                headers.add(
+                    "x-amz-copy-source-if-unmodified-since",
                     to_http_header_value(v),
                 );
             }
 
             if let Some(v) = self.source.ssec {
-                merge(&mut headers, v.copy_headers());
+                headers.add_multimap(v.copy_headers());
             }
         };
 
@@ -706,18 +706,18 @@ impl ComposeObjectInternal {
                 let mut offset = source.offset.unwrap_or_default();
 
                 let mut headers = source.get_headers();
-                merge(&mut headers, ssec_headers.clone());
+                headers.add_multimap(ssec_headers.clone());
 
                 if size <= MAX_PART_SIZE {
                     part_number += 1;
                     if let Some(l) = source.length {
-                        headers.insert(
-                            "x-amz-copy-source-range".into(),
+                        headers.add(
+                            "x-amz-copy-source-range",
                             format!("bytes={}-{}", offset, offset + l - 1),
                         );
                     } else if source.offset.is_some() {
-                        headers.insert(
-                            "x-amz-copy-source-range".into(),
+                        headers.add(
+                            "x-amz-copy-source-range",
                             format!("bytes={}-{}", offset, offset + size - 1),
                         );
                     }
@@ -751,8 +751,8 @@ impl ComposeObjectInternal {
                         let end_bytes = offset + length - 1;
 
                         let mut headers_copy = headers.clone();
-                        headers_copy.insert(
-                            "x-amz-copy-source-range".into(),
+                        headers_copy.add(
+                            "x-amz-copy-source-range",
                             format!("bytes={}-{}", offset, end_bytes),
                         );
 
@@ -1040,39 +1040,36 @@ impl ComposeSource {
             copy_source.push_str("?versionId=");
             copy_source.push_str(&urlencode(v));
         }
-        headers.insert(String::from("x-amz-copy-source"), copy_source.to_string());
+        headers.add("x-amz-copy-source", copy_source);
 
         if let Some(v) = &self.match_etag {
-            headers.insert(String::from("x-amz-copy-source-if-match"), v.to_string());
+            headers.add("x-amz-copy-source-if-match", v);
         }
 
         if let Some(v) = &self.not_match_etag {
-            headers.insert(
-                String::from("x-amz-copy-source-if-none-match"),
-                v.to_string(),
-            );
+            headers.add("x-amz-copy-source-if-none-match", v);
         }
 
         if let Some(v) = self.modified_since {
-            headers.insert(
-                String::from("x-amz-copy-source-if-modified-since"),
+            headers.add(
+                "x-amz-copy-source-if-modified-since",
                 to_http_header_value(v),
             );
         }
 
         if let Some(v) = self.unmodified_since {
-            headers.insert(
-                String::from("x-amz-copy-source-if-unmodified-since"),
+            headers.add(
+                "x-amz-copy-source-if-unmodified-since",
                 to_http_header_value(v),
             );
         }
 
         if let Some(v) = &self.ssec {
-            merge(&mut headers, v.copy_headers());
+            headers.add_multimap(v.copy_headers());
         }
 
         if !headers.contains_key("x-amz-copy-source-if-match") {
-            headers.insert(String::from("x-amz-copy-source-if-match"), etag);
+            headers.add("x-amz-copy-source-if-match", etag);
         }
 
         self.headers = Some(headers);
@@ -1153,19 +1150,19 @@ fn into_headers_copy_object(
     let mut map = Multimap::new();
 
     if let Some(v) = extra_headers {
-        merge(&mut map, v);
+        map.add_multimap(v);
     }
 
     if let Some(v) = headers {
-        merge(&mut map, v);
+        map.add_multimap(v);
     }
 
     if let Some(v) = user_metadata {
-        merge(&mut map, v);
+        map.add_multimap(v);
     }
 
     if let Some(v) = sse {
-        merge(&mut map, v.headers());
+        map.add_multimap(v.headers());
     }
 
     if let Some(v) = tags {

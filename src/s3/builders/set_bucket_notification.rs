@@ -15,10 +15,11 @@
 
 use crate::s3::Client;
 use crate::s3::error::Error;
+use crate::s3::multimap::Multimap;
 use crate::s3::response::SetBucketNotificationResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{NotificationConfig, S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, insert};
+use crate::s3::utils::{check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;

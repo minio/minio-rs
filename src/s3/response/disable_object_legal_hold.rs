@@ -14,8 +14,9 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
+use crate::s3::multimap::MultimapExt;
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::{MultimapExt, take_bucket, take_object};
+use crate::s3::utils::{take_bucket, take_object};
 use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;

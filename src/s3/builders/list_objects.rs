@@ -17,6 +17,7 @@ use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
 use std::sync::Arc;
 
+use crate::s3::multimap::Multimap;
 use crate::s3::utils::insert;
 use crate::s3::{
     client::Client,
@@ -26,7 +27,7 @@ use crate::s3::{
         ListObjectVersionsResponse, ListObjectsV1Response, ListObjectsV2Response,
     },
     types::{S3Api, S3Request, ToS3Request, ToStream},
-    utils::{Multimap, check_bucket_name},
+    utils::check_bucket_name,
 };
 
 fn add_common_list_objects_query_params(

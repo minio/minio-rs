@@ -18,12 +18,13 @@ use futures_util::Stream;
 use http::Method;
 use std::sync::Arc;
 
+use crate::s3::multimap::Multimap;
 use crate::s3::{
     client::Client,
     error::Error,
     response::ListenBucketNotificationResponse,
     types::{NotificationRecords, S3Api, S3Request, ToS3Request},
-    utils::{Multimap, check_bucket_name},
+    utils::check_bucket_name,
 };
 
 /// Argument builder for

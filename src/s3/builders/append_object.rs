@@ -18,11 +18,12 @@ use crate::s3::builders::{
     ContentStream, MAX_MULTIPART_COUNT, ObjectContent, Size, calc_part_info,
 };
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::{AppendObjectResponse, StatObjectResponse};
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::Sse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, check_object_name};
+use crate::s3::utils::{check_bucket_name, check_object_name};
 use http::Method;
 use std::sync::Arc;
 
@@ -91,10 +92,7 @@ impl ToS3Request for AppendObject {
         }
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
-        headers.insert(
-            "x-amz-write-offset-bytes".into(),
-            self.offset_bytes.to_string(),
-        );
+        headers.add("x-amz-write-offset-bytes", self.offset_bytes.to_string());
 
         Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)
@@ -198,10 +196,7 @@ impl AppendObjectContent {
                 Some(ref headers) => headers.clone(),
                 None => Multimap::new(),
             };
-            headers.insert(
-                "x-amz-write-offset-bytes".into(),
-                self.offset_bytes.to_string(),
-            );
+            headers.add("x-amz-write-offset-bytes", self.offset_bytes.to_string());
             self.extra_query_params = Some(headers);
         }
 

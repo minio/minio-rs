@@ -15,9 +15,10 @@
 
 use crate::s3::Client;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::DeleteObjectTagsResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, MultimapExt, check_bucket_name, check_object_name, insert};
+use crate::s3::utils::{check_bucket_name, check_object_name, insert};
 use http::Method;
 use std::sync::Arc;
 

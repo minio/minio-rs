@@ -17,14 +17,15 @@ use async_trait::async_trait;
 use http::Method;
 use std::sync::Arc;
 
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::StatObjectResponse;
-use crate::s3::utils::{MultimapExt, check_object_name};
+use crate::s3::utils::check_object_name;
 use crate::s3::{
     client::Client,
     error::Error,
     sse::{Sse, SseCustomerKey},
     types::{S3Api, S3Request, ToS3Request},
-    utils::{Multimap, UtcTime, check_bucket_name, merge, to_http_header_value},
+    utils::{UtcTime, check_bucket_name, to_http_header_value},
 };
 
 /// Argument builder for [list_objects()](Client::get_object) API.
@@ -133,19 +134,19 @@ impl ToS3Request for StatObject {
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         {
             if let Some(v) = self.match_etag {
-                headers.insert("if-match".into(), v);
+                headers.add("if-match", v);
             }
             if let Some(v) = self.not_match_etag {
-                headers.insert("if-none-match".into(), v);
+                headers.add("if-none-match", v);
             }
             if let Some(v) = self.modified_since {
-                headers.insert("if-modified-since".into(), to_http_header_value(v));
+                headers.add("if-modified-since", to_http_header_value(v));
             }
             if let Some(v) = self.unmodified_since {
-                headers.insert("if-unmodified-since".into(), to_http_header_value(v));
+                headers.add("if-unmodified-since", to_http_header_value(v));
             }
             if let Some(v) = self.ssec {
-                merge(&mut headers, v.headers());
+                headers.add_multimap(v.headers());
             }
         }
 

@@ -26,9 +26,10 @@ use crate::s3::error::{Error, ErrorCode, ErrorResponse};
 use crate::s3::http::BaseUrl;
 use crate::s3::response::*;
 use crate::s3::signer::sign_v4_s3;
-use crate::s3::utils::{EMPTY_SHA256, Multimap, sha256_hash_sb, to_amz_date, utc_now};
+use crate::s3::utils::{EMPTY_SHA256, sha256_hash_sb, to_amz_date, utc_now};
 
 use crate::s3::builders::{BucketExists, ComposeSource};
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::segmented_bytes::SegmentedBytes;
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -434,15 +435,15 @@ impl Client {
                 .build_url(method, region, query_params, bucket_name, object_name)?;
 
         {
-            headers.insert("Host".into(), url.host_header_value());
+            headers.add("Host", url.host_header_value());
 
             let sha256: String = match *method {
                 Method::PUT | Method::POST => {
                     if !headers.contains_key("Content-Type") {
-                        headers.insert("Content-Type".into(), "application/octet-stream".into());
+                        headers.add("Content-Type", "application/octet-stream");
                     }
                     let len: usize = body.as_ref().map_or(0, |b| b.len());
-                    headers.insert("Content-Length".into(), len.to_string());
+                    headers.add("Content-Length", len.to_string());
 
                     match body {
                         None => EMPTY_SHA256.into(),
@@ -451,15 +452,15 @@ impl Client {
                 }
                 _ => EMPTY_SHA256.into(),
             };
-            headers.insert("x-amz-content-sha256".into(), sha256.clone());
+            headers.add("x-amz-content-sha256", sha256.clone());
 
             let date = utc_now();
-            headers.insert("x-amz-date".into(), to_amz_date(date));
+            headers.add("x-amz-date", to_amz_date(date));
 
             if let Some(p) = &self.provider {
                 let creds = p.fetch();
                 if creds.session_token.is_some() {
-                    headers.insert("X-Amz-Security-Token".into(), creds.session_token.unwrap());
+                    headers.add("X-Amz-Security-Token", creds.session_token.unwrap());
                 }
                 sign_v4_s3(
                     method,

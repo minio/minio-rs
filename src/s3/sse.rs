@@ -15,15 +15,16 @@
 
 //! Server side encryption definitions
 
-use crate::s3::utils;
+use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::utils::{b64encode, md5sum_hash};
 use std::any::Any;
 
 /// Base server side encryption
 pub trait Sse: std::fmt::Debug + Send + Sync {
     /// Regular headers
-    fn headers(&self) -> utils::Multimap;
+    fn headers(&self) -> Multimap;
     /// Headers for copy operation
-    fn copy_headers(&self) -> utils::Multimap;
+    fn copy_headers(&self) -> Multimap;
     fn tls_required(&self) -> bool;
     fn as_any(&self) -> &dyn Any;
 }
@@ -31,40 +32,34 @@ pub trait Sse: std::fmt::Debug + Send + Sync {
 #[derive(Clone, Debug)]
 /// Server side encryption customer key type
 pub struct SseCustomerKey {
-    headers: utils::Multimap,
-    copy_headers: utils::Multimap,
+    headers: Multimap,
+    copy_headers: Multimap,
 }
 
 impl SseCustomerKey {
     pub fn new(key: &str) -> Self {
-        let b64key: String = utils::b64encode(key);
-        let md5key: String = utils::md5sum_hash(key.as_bytes());
+        let b64key: String = b64encode(key);
+        let md5key: String = md5sum_hash(key.as_bytes());
 
-        let mut headers = utils::Multimap::with_capacity(3);
-        headers.insert(
-            "X-Amz-Server-Side-Encryption-Customer-Algorithm".into(),
-            "AES256".into(),
-        );
-        headers.insert(
-            "X-Amz-Server-Side-Encryption-Customer-Key".into(),
-            b64key.clone(),
-        );
-        headers.insert(
-            "X-Amz-Server-Side-Encryption-Customer-Key-MD5".into(),
+        let mut headers = Multimap::with_capacity(3);
+        headers.add("X-Amz-Server-Side-Encryption-Customer-Algorithm", "AES256");
+        headers.add("X-Amz-Server-Side-Encryption-Customer-Key", b64key.clone());
+        headers.add(
+            "X-Amz-Server-Side-Encryption-Customer-Key-MD5",
             md5key.clone(),
         );
 
-        let mut copy_headers = utils::Multimap::with_capacity(3);
-        copy_headers.insert(
-            "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Algorithm".into(),
-            "AES256".into(),
+        let mut copy_headers = Multimap::with_capacity(3);
+        copy_headers.add(
+            "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Algorithm",
+            "AES256",
         );
-        copy_headers.insert(
-            "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key".into(),
+        copy_headers.add(
+            "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key",
             b64key,
         );
-        copy_headers.insert(
-            "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5".into(),
+        copy_headers.add(
+            "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5",
             md5key,
         );
 
@@ -76,11 +71,11 @@ impl SseCustomerKey {
 }
 
 impl Sse for SseCustomerKey {
-    fn headers(&self) -> utils::Multimap {
+    fn headers(&self) -> Multimap {
         self.headers.clone()
     }
 
-    fn copy_headers(&self) -> utils::Multimap {
+    fn copy_headers(&self) -> Multimap {
         self.copy_headers.clone()
     }
 
@@ -96,23 +91,17 @@ impl Sse for SseCustomerKey {
 #[derive(Clone, Debug)]
 /// Server side encryption KMS type
 pub struct SseKms {
-    headers: utils::Multimap,
+    headers: Multimap,
 }
 
 impl SseKms {
     pub fn new(key: &str, context: Option<&str>) -> SseKms {
-        let mut headers = utils::Multimap::with_capacity(3);
+        let mut headers = Multimap::with_capacity(3);
 
-        headers.insert(
-            "X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id".into(),
-            key.to_owned(),
-        );
-        headers.insert("X-Amz-Server-Side-Encryption".into(), "aws:kms".into());
+        headers.add("X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id", key);
+        headers.add("X-Amz-Server-Side-Encryption", "aws:kms");
         if let Some(v) = context {
-            headers.insert(
-                "X-Amz-Server-Side-Encryption-Context".into(),
-                utils::b64encode(v),
-            );
+            headers.add("X-Amz-Server-Side-Encryption-Context", b64encode(v));
         }
 
         SseKms { headers }
@@ -120,12 +109,12 @@ impl SseKms {
 }
 
 impl Sse for SseKms {
-    fn headers(&self) -> utils::Multimap {
+    fn headers(&self) -> Multimap {
         self.headers.clone()
     }
 
-    fn copy_headers(&self) -> utils::Multimap {
-        utils::Multimap::with_capacity(0)
+    fn copy_headers(&self) -> Multimap {
+        Multimap::with_capacity(0)
     }
 
     fn tls_required(&self) -> bool {
@@ -140,13 +129,13 @@ impl Sse for SseKms {
 #[derive(Clone, Debug)]
 /// Server side encryption S3 type
 pub struct SseS3 {
-    headers: utils::Multimap,
+    headers: Multimap,
 }
 
 impl SseS3 {
     pub fn new() -> Self {
-        let mut headers = utils::Multimap::new();
-        headers.insert("X-Amz-Server-Side-Encryption".into(), "AES256".into());
+        let mut headers = Multimap::new();
+        headers.add("X-Amz-Server-Side-Encryption", "AES256");
 
         Self { headers }
     }
@@ -159,12 +148,12 @@ impl Default for SseS3 {
 }
 
 impl Sse for SseS3 {
-    fn headers(&self) -> utils::Multimap {
+    fn headers(&self) -> Multimap {
         self.headers.clone()
     }
 
-    fn copy_headers(&self) -> utils::Multimap {
-        utils::Multimap::with_capacity(0)
+    fn copy_headers(&self) -> Multimap {
+        Multimap::with_capacity(0)
     }
 
     fn tls_required(&self) -> bool {

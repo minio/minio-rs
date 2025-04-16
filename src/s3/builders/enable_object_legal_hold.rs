@@ -15,12 +15,11 @@
 
 use crate::s3::Client;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::EnableObjectLegalHoldResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{
-    Multimap, MultimapExt, check_bucket_name, check_object_name, insert, md5sum_hash,
-};
+use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -79,7 +78,7 @@ impl ToS3Request for EnableObjectLegalHold {
         query_params.add_version(self.version_id);
 
         const PAYLOAD: &str = "<LegalHold><Status>ON</Status></LegalHold>";
-        headers.insert("Content-MD5".into(), md5sum_hash(PAYLOAD.as_ref()));
+        headers.add("Content-MD5", md5sum_hash(PAYLOAD.as_ref()));
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(PAYLOAD)));
         //TODO consider const body
 
