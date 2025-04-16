@@ -43,16 +43,31 @@ pub type UtcTime = DateTime<Utc>;
 /// Multimap for string key and string value
 pub type Multimap = MultiMap<String, String>;
 
+pub trait MultimapExt {
+    fn add_version(&mut self, version: Option<String>);
+    #[must_use]
+
+    fn take_version(self) -> Option<String>;
+}
+
+impl MultimapExt for Multimap {
+    fn add_version(&mut self, version: Option<String>) {
+        if let Some(v) = version {
+            self.insert("versionId".into(), v);
+        }
+    }
+    fn take_version(mut self) -> Option<String> {
+        self.remove("versionId").and_then(|mut v| v.pop())
+    }
+}
+
 /// Encodes data using base64 algorithm
-pub fn b64encode<T: AsRef<[u8]>>(input: T) -> String {
+pub fn b64encode(input: impl AsRef<[u8]>) -> String {
     BASE64.encode(input)
 }
 
 /// Merges two multimaps.
-pub fn merge<T>(m1: &mut Multimap, m2: T)
-where
-    T: IntoIterator<Item = (String, Vec<String>)>,
-{
+pub fn merge(m1: &mut Multimap, m2: impl IntoIterator<Item = (String, Vec<String>)>) {
     for (key, values) in m2 {
         for value in values {
             m1.insert(key.clone(), value);
@@ -62,6 +77,7 @@ where
 
 /// Computes CRC32 of given data.
 pub fn crc32(data: &[u8]) -> u32 {
+    //TODO creating a new Crc object is expensive, we should cache it
     Crc::<u32>::new(&CRC_32_ISO_HDLC).checksum(data)
 }
 
@@ -81,9 +97,7 @@ pub fn sha256_hash(data: &[u8]) -> String {
     }
     #[cfg(not(feature = "ring"))]
     {
-        let mut hasher = Sha256::new();
-        hasher.update(data);
-        hasher.finalize().encode_hex()
+        Sha256::new_with_prefix(data).finalize().encode_hex()
     }
 }
 
@@ -91,7 +105,7 @@ pub fn sha256_hash_sb(sb: &SegmentedBytes) -> String {
     #[cfg(feature = "ring")]
     {
         let mut context = Context::new(&SHA256);
-        for data in sb.iter() {
+        for data in sb.iter() { // Note: &SegmentedBytes.iter yields clones of Bytes, but those clones are cheap
             context.update(data.as_ref());
         }
         context.finish().encode_hex()
@@ -99,7 +113,7 @@ pub fn sha256_hash_sb(sb: &SegmentedBytes) -> String {
     #[cfg(not(feature = "ring"))]
     {
         let mut hasher = Sha256::new();
-        for data in sb.iter() {
+        for data in sb.iter() { // Note: &SegmentedBytes.iter yields clones of Bytes, but those clones are cheap
             hasher.update(data);
         }
         hasher.finalize().encode_hex()
@@ -362,25 +376,23 @@ pub fn match_region(value: &str) -> bool {
 }
 
 /// Validates given bucket name
-pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
-    let bucket_name: &str = bucket_name.trim();
-
-    if bucket_name.is_empty() {
-        return Err(Error::InvalidBucketName(String::from(
-            "bucket name cannot be empty",
-        )));
+pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(), Error> {
+    let bucket_name: &str = bucket_name.as_ref().trim();
+    let bucket_name_len = bucket_name.len();
+    if bucket_name_len == 0 {
+        return Err(Error::InvalidBucketName(
+            "bucket name cannot be empty".into(),
+        ));
     }
-
-    if bucket_name.len() < 3 {
-        return Err(Error::InvalidBucketName(String::from(
-            "bucket name cannot be less than 3 characters",
-        )));
+    if bucket_name_len < 3 {
+        return Err(Error::InvalidBucketName(
+            "bucket name cannot be less than 3 characters".into(),
+        ));
     }
-
-    if bucket_name.len() > 63 {
-        return Err(Error::InvalidBucketName(String::from(
-            "Bucket name cannot be greater than 63 characters",
-        )));
+    if bucket_name_len > 63 {
+        return Err(Error::InvalidBucketName(
+            "Bucket name cannot be greater than 63 characters".into(),
+        ));
     }
 
     lazy_static! {
@@ -421,8 +433,8 @@ pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn check_object_name(object_name: &str) -> Result<(), Error> {
-    if object_name.is_empty() {
+pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), Error> {
+    if object_name.as_ref().is_empty() {
         Err(Error::InvalidObjectName(
             "object name cannot be empty".into(),
         ))
@@ -541,9 +553,11 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
     Ok(tags)
 }
 
-pub fn insert(data: Option<Multimap>, key: &str) -> Multimap {
+#[must_use]
+/// Returns the consumed data and inserts a key into it with an empty value.
+pub fn insert(data: Option<Multimap>, key: impl AsRef<str>) -> Multimap {
     let mut result: Multimap = data.unwrap_or_default();
-    result.insert(key.into(), String::new());
+    result.insert(key.as_ref().into(), String::new());
     result
 }
 
@@ -553,11 +567,6 @@ pub fn take_bucket(opt_bucket: Option<String>) -> Result<String, Error> {
 
 pub fn take_object(opt_object: Option<String>) -> Result<String, Error> {
     opt_object.ok_or_else(|| Error::InvalidObjectName("no object specified".into()))
-}
-
-pub fn take_version_id(query_params: Multimap) -> Option<String> {
-    let mut query_params = query_params;
-    query_params.remove("versionId").and_then(|mut v| v.pop())
 }
 
 pub mod xml {

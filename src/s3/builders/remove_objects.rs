@@ -25,7 +25,7 @@ use tokio_stream::iter as stream_iter;
 
 use crate::s3::response::DeleteError;
 use crate::s3::types::ListEntry;
-use crate::s3::utils::{check_object_name, insert};
+use crate::s3::utils::{MultimapExt, check_object_name, insert};
 use crate::s3::{
     Client,
     error::Error,
@@ -149,9 +149,7 @@ impl ToS3Request for RemoveObject {
         check_object_name(&self.object.key)?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
-        if let Some(v) = self.object.version_id {
-            query_params.insert("versionId".into(), v);
-        }
+        query_params.add_version(self.object.version_id);
 
         Ok(S3Request::new(self.client, Method::DELETE)
             .region(self.region)

@@ -15,7 +15,7 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::{take_bucket, take_object, take_version_id};
+use crate::s3::utils::{MultimapExt, take_bucket, take_object};
 use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;
@@ -46,7 +46,7 @@ impl FromS3Response for DisableObjectLegalHoldResponse {
             region: req.inner_region,
             bucket: take_bucket(req.bucket)?,
             object: take_object(req.object)?,
-            version_id: take_version_id(req.query_params),
+            version_id: req.query_params.take_version(),
         })
     }
 }

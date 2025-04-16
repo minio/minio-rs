@@ -34,10 +34,8 @@ impl ToS3Request for GetBucketLifecycle {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let region: String = self.client.get_region_cached(&self.bucket, &self.region)?;
-
         Ok(S3Request::new(self.client, Method::GET)
-            .region(Some(region))
+            .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(insert(self.extra_query_params, "lifecycle"))
             .headers(self.extra_headers.unwrap_or_default()))

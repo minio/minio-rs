@@ -436,30 +436,23 @@ impl Client {
         {
             headers.insert("Host".into(), url.host_header_value());
 
-            let mut sha256 = String::new();
-            match *method {
+            let sha256: String = match *method {
                 Method::PUT | Method::POST => {
-                    let len: usize = body.as_ref().map_or(0, |x| x.len());
-                    headers.insert("Content-Length".into(), len.to_string());
                     if !headers.contains_key("Content-Type") {
                         headers.insert("Content-Type".into(), "application/octet-stream".into());
                     }
-                    if self.provider.is_some() {
-                        sha256 = match body {
-                            None => EMPTY_SHA256.into(),
-                            Some(v) => sha256_hash_sb(v),
-                        };
+                    let len: usize = body.as_ref().map_or(0, |b| b.len());
+                    headers.insert("Content-Length".into(), len.to_string());
+
+                    match body {
+                        None => EMPTY_SHA256.into(),
+                        Some(v) => sha256_hash_sb(v),
                     }
                 }
-                _ => {
-                    if self.provider.is_some() {
-                        sha256 = EMPTY_SHA256.into();
-                    }
-                }
+                _ => EMPTY_SHA256.into(),
             };
-            if !sha256.is_empty() {
-                headers.insert("x-amz-content-sha256".into(), sha256.clone());
-            }
+            headers.insert("x-amz-content-sha256".into(), sha256.clone());
+
             let date = utc_now();
             headers.insert("x-amz-date".into(), to_amz_date(date));
 
@@ -514,20 +507,21 @@ impl Client {
             );
         }
 
-        if *method == Method::PUT || *method == Method::POST {
-            let mut bytes_vec: Vec<Bytes> = vec![];
-            if let Some(body) = body {
-                bytes_vec = body.iter().collect();
+        if (*method == Method::PUT) || (*method == Method::POST) {
+            //TODO: why-oh-why first collect into a vector and then iterate to a stream?
+            let bytes_vec: Vec<Bytes> = match body {
+                Some(v) => v.into_iter().collect(),
+                None => Vec::new(),
             };
             let stream = futures_util::stream::iter(
                 bytes_vec
                     .into_iter()
-                    .map(|x| -> Result<_, std::io::Error> { Ok(x) }),
+                    .map(|b| -> Result<_, std::io::Error> { Ok(b) }),
             );
             req = req.body(Body::wrap_stream(stream));
         }
 
-        let resp = req.send().await?;
+        let resp: reqwest::Response = req.send().await?;
 
         if resp.status().is_success() {
             return Ok(resp);
@@ -550,20 +544,20 @@ impl Client {
         );
 
         match e {
-            Error::S3Error(ref er) => {
-                if (er.code == ErrorCode::NoSuchBucket) || (er.code == ErrorCode::RetryHead) {
+            Error::S3Error(ref err) => {
+                if (err.code == ErrorCode::NoSuchBucket) || (err.code == ErrorCode::RetryHead) {
                     if let Some(v) = bucket_name {
                         self.region_map.remove(v);
                     }
                 }
             }
-            _ => return Err(e),
+            _ => {}
         };
 
         Err(e)
     }
 
-    pub async fn execute(
+    pub(crate) async fn execute(
         &self,
         method: Method,
         region: &str,
@@ -659,8 +653,8 @@ impl Client {
 
             if (size < MIN_PART_SIZE) && (sources_len != 1) && (i != sources_len) {
                 return Err(Error::InvalidComposeSourcePartSize(
-                    source.bucket.to_string(),
-                    source.object.to_string(),
+                    source.bucket.clone(),
+                    source.object.clone(),
                     source.version_id.clone(),
                     size,
                     MIN_PART_SIZE,

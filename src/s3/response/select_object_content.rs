@@ -197,7 +197,7 @@ impl SelectObjectContentResponse {
                 let expected = uint32(&self.prelude_crc)?;
                 if got != expected {
                     self.done = true;
-                    return Err(Error::CrcMismatch(String::from("prelude"), expected, got));
+                    return Err(Error::CrcMismatch("prelude".into(), expected, got));
                 }
 
                 self.total_length = uint32(&self.prelude[0..4])? as usize;
@@ -221,7 +221,7 @@ impl SelectObjectContentResponse {
                 let expected = uint32(&self.message_crc)?;
                 if got != expected {
                     self.done = true;
-                    return Err(Error::CrcMismatch(String::from("message"), expected, got));
+                    return Err(Error::CrcMismatch("message".into(), expected, got));
                 }
             }
 
@@ -290,13 +290,13 @@ impl SelectObjectContentResponse {
             if self.done {
                 return Ok(0);
             }
-
-            if self.payload_index < self.payload.len() {
+            let payload_len = self.payload.len();
+            if self.payload_index < payload_len {
                 let n = copy_slice(buf, &self.payload[self.payload_index..]);
 
                 self.payload_index += n;
-                if self.payload_index > self.payload.len() {
-                    self.payload_index = self.payload.len();
+                if self.payload_index > payload_len {
+                    self.payload_index = payload_len;
                 }
 
                 return Ok(n);

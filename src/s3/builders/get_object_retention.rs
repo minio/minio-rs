@@ -17,7 +17,7 @@ use crate::s3::Client;
 use crate::s3::error::Error;
 use crate::s3::response::GetObjectRetentionResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, check_object_name, insert};
+use crate::s3::utils::{Multimap, MultimapExt, check_bucket_name, check_object_name, insert};
 use http::Method;
 use std::sync::Arc;
 
@@ -76,9 +76,7 @@ impl ToS3Request for GetObjectRetention {
         check_object_name(&self.object)?;
 
         let mut query_params: Multimap = insert(self.extra_query_params, "retention");
-        if let Some(v) = self.version_id {
-            query_params.insert("versionId".into(), v);
-        }
+        query_params.add_version(self.version_id);
 
         Ok(S3Request::new(self.client, Method::GET)
             .region(self.region)

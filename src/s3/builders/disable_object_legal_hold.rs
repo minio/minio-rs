@@ -18,7 +18,9 @@ use crate::s3::error::Error;
 use crate::s3::response::DisableObjectLegalHoldResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, check_object_name, insert, md5sum_hash};
+use crate::s3::utils::{
+    Multimap, MultimapExt, check_bucket_name, check_object_name, insert, md5sum_hash,
+};
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -74,9 +76,7 @@ impl ToS3Request for DisableObjectLegalHold {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         let mut query_params: Multimap = insert(self.extra_query_params, "legal-hold");
-        if let Some(v) = self.version_id {
-            query_params.insert("versionId".into(), v);
-        }
+        query_params.add_version(self.version_id);
 
         const PAYLOAD: &str = "<LegalHold><Status>OFF</Status></LegalHold>";
         headers.insert("Content-MD5".into(), md5sum_hash(PAYLOAD.as_ref()));

@@ -15,7 +15,7 @@
 
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::SseCustomerKey;
-use crate::s3::utils::{Multimap, check_bucket_name, check_object_name};
+use crate::s3::utils::{Multimap, MultimapExt, check_bucket_name, check_object_name};
 use crate::s3::{
     client::Client,
     error::Error,
@@ -96,16 +96,15 @@ impl ToS3Request for ObjectPrompt {
             check_object_name(&self.object)?;
 
             if self.client.is_aws_host() {
-                return Err(Error::UnsupportedApi(String::from("ObjectPrompt")));
+                return Err(Error::UnsupportedApi("ObjectPrompt".into()));
             }
             if self.ssec.is_some() && !self.client.is_secure() {
                 return Err(Error::SseTlsRequired(None));
             }
         }
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
-        if let Some(v) = self.version_id {
-            query_params.insert("versionId".into(), v);
-        }
+        query_params.add_version(self.version_id);
+
         query_params.insert(
             "lambdaArn".into(),
             self.lambda_arn

@@ -98,7 +98,7 @@ impl ToS3Request for SetBucketVersioning {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let data = {
+        let data: String = {
             let mut data = "<VersioningConfiguration>".to_string();
 
             if let Some(v) = self.mfa_delete {

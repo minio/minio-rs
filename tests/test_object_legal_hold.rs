@@ -16,7 +16,6 @@
 use bytes::Bytes;
 
 use minio::s3::client::DEFAULT_REGION;
-use minio::s3::error::{Error, ErrorCode};
 use minio::s3::response::{
     DisableObjectLegalHoldResponse, EnableObjectLegalHoldResponse,
     IsObjectLegalHoldEnabledResponse, MakeBucketResponse, PutObjectContentResponse,

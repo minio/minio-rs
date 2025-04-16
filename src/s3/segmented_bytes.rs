@@ -61,7 +61,15 @@ impl SegmentedBytes {
         }
     }
 
-    /// Copy all the content into a single `Bytes` object.
+    pub fn into_iter(self) -> SegmentedBytesIntoIterator {
+        SegmentedBytesIntoIterator {
+            sb: self,
+            current_segment: 0,
+            current_segment_index: 0,
+        }
+    }
+
+    /// Copy all the content into a single [Bytes](bytes::Bytes) object.
     ///
     /// ⚠️ This function is slow and intended for testing/debugging only.
     /// Do not use in performance-critical code.
@@ -89,14 +97,13 @@ impl Iterator for SegmentedBytesIntoIterator {
         if self.current_segment >= self.sb.segments.len() {
             return None;
         }
-        let segment = &mut self.sb.segments[self.current_segment];
-
+        let segment: &Vec<Self::Item> = &self.sb.segments[self.current_segment];
         if self.current_segment_index >= segment.len() {
             self.current_segment += 1;
             self.current_segment_index = 0;
             return self.next();
         }
-        let bytes = segment.remove(self.current_segment_index);
+        let bytes: Self::Item = segment[self.current_segment_index].clone(); // Note: clone of Bytes does not make a deep copy of byte
         self.current_segment_index += 1;
         Some(bytes)
     }
@@ -128,15 +135,15 @@ impl Iterator for SegmentedBytesIterator<'_> {
         if self.current_segment >= self.sb.segments.len() {
             return None;
         }
-        let segment = &self.sb.segments[self.current_segment];
+        let segment: &Vec<Self::Item> = &self.sb.segments[self.current_segment];
         if self.current_segment_index >= segment.len() {
             self.current_segment += 1;
             self.current_segment_index = 0;
             return Iterator::next(self);
         }
-        let bytes = &segment[self.current_segment_index];
+        let bytes: Self::Item = segment[self.current_segment_index].clone(); // Note: clone of Bytes does not make a deep copy of byte
         self.current_segment_index += 1;
-        Some(bytes.clone())
+        Some(bytes)
     }
 }
 

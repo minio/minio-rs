@@ -19,7 +19,8 @@ use crate::s3::response::SetObjectRetentionResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{RetentionMode, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{
-    Multimap, UtcTime, check_bucket_name, check_object_name, insert, md5sum_hash, to_iso8601utc,
+    Multimap, MultimapExt, UtcTime, check_bucket_name, check_object_name, insert, md5sum_hash,
+    to_iso8601utc,
 };
 use bytes::Bytes;
 use http::Method;
@@ -128,9 +129,7 @@ impl ToS3Request for SetObjectRetention {
         headers.insert("Content-MD5".into(), md5sum_hash(data.as_ref()));
 
         let mut query_params: Multimap = insert(self.extra_query_params, "retention");
-        if let Some(v) = self.version_id {
-            query_params.insert("versionId".into(), v);
-        }
+        query_params.add_version(self.version_id);
 
         Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)

@@ -16,7 +16,7 @@
 use crate::s3::error::{Error, ErrorCode};
 use crate::s3::types::{FromS3Response, RetentionMode, S3Request};
 use crate::s3::utils::{
-    UtcTime, from_iso8601utc, get_option_text, take_bucket, take_object, take_version_id,
+    MultimapExt, UtcTime, from_iso8601utc, get_option_text, take_bucket, take_object,
 };
 use async_trait::async_trait;
 use bytes::Buf;
@@ -65,7 +65,7 @@ impl FromS3Response for GetObjectRetentionResponse {
                     region: req.inner_region,
                     bucket: take_bucket(req.bucket)?,
                     object: take_object(req.object)?,
-                    version_id: take_version_id(req.query_params),
+                    version_id: req.query_params.take_version(),
                     retention_mode,
                     retain_until_date,
                 })
@@ -76,7 +76,7 @@ impl FromS3Response for GetObjectRetentionResponse {
                     region: req.inner_region,
                     bucket: take_bucket(req.bucket)?,
                     object: take_object(req.object)?,
-                    version_id: take_version_id(req.query_params),
+                    version_id: req.query_params.take_version(),
                     retention_mode: None,
                     retain_until_date: None,
                 })

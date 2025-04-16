@@ -16,7 +16,7 @@
 use http::Method;
 use std::sync::Arc;
 
-use crate::s3::utils::check_object_name;
+use crate::s3::utils::{MultimapExt, check_object_name};
 use crate::s3::{
     client::Client,
     error::Error,
@@ -170,9 +170,7 @@ impl ToS3Request for GetObject {
         }
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
-        if let Some(v) = self.version_id {
-            query_params.insert("versionId".into(), v);
-        }
+        query_params.add_version(self.version_id);
 
         Ok(S3Request::new(self.client, Method::GET)
             .region(self.region)

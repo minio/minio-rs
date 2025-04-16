@@ -18,7 +18,9 @@ use crate::s3::client::DEFAULT_EXPIRY_SECONDS;
 use crate::s3::error::Error;
 use crate::s3::response::GetPresignedObjectUrlResponse;
 use crate::s3::signer::presign_v4;
-use crate::s3::utils::{Multimap, UtcTime, check_bucket_name, check_object_name, utc_now};
+use crate::s3::utils::{
+    Multimap, MultimapExt, UtcTime, check_bucket_name, check_object_name, utc_now,
+};
 use http::Method;
 use std::sync::Arc;
 
@@ -58,9 +60,7 @@ impl GetPresignedObjectUrl {
         let region: String = self.client.get_region_cached(&self.bucket, &self.region)?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
-        if let Some(v) = &self.version_id {
-            query_params.insert("versionId".into(), v.to_owned());
-        }
+        query_params.add_version(self.version_id.clone());
 
         let mut url = self.client.base_url.build_url(
             &self.method,
