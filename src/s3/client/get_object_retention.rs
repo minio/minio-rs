@@ -42,7 +42,11 @@ impl Client {
     ///     println!("retrieved retention mode '{:?}' until '{:?}' from bucket '{}' is enabled", resp.retention_mode, resp.retain_until_date, resp.bucket);
     /// }
     /// ```
-    pub fn get_object_retention(&self, bucket: &str, object: &str) -> GetObjectRetention {
-        GetObjectRetention::new(self.clone(), bucket.to_owned(), object.to_owned())
+    pub fn get_object_retention<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> GetObjectRetention {
+        GetObjectRetention::new(self.clone(), bucket.into(), object.into())
     }
 }

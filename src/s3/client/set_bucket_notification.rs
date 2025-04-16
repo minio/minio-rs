@@ -62,7 +62,7 @@ impl Client {
     ///     println!("set bucket notification for bucket '{:?}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_notification(&self, bucket: &str) -> SetBucketNotification {
-        SetBucketNotification::new(self.clone(), bucket.to_owned())
+    pub fn set_bucket_notification<S: Into<String>>(&self, bucket: S) -> SetBucketNotification {
+        SetBucketNotification::new(self.clone(), bucket.into())
     }
 }

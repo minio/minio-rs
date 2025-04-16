@@ -40,7 +40,7 @@ async fn object_legal_hold_s3() {
         .send()
         .await
         .unwrap();
-    let _cleanup = CleanupGuard::new(&ctx.client, &bucket_name);
+    let _cleanup = CleanupGuard::new(ctx.client.clone(), &bucket_name);
     let object_name = rand_object_name();
 
     let data = Bytes::from("hello, world".to_string().into_bytes());

@@ -29,7 +29,9 @@ pub(crate) fn bench_enable_object_legal_hold(criterion: &mut Criterion) {
         "enable_object_legal_hold",
         criterion,
         || async { Ctx2::new_with_object(true).await },
-        |ctx| EnableObjectLegalHold::new(&ctx.client, ctx.bucket.to_owned(), ctx.object.to_owned()),
+        |ctx| {
+            EnableObjectLegalHold::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
+        },
     )
 }
 pub(crate) fn bench_disable_object_legal_hold(criterion: &mut Criterion) {
@@ -41,7 +43,7 @@ pub(crate) fn bench_disable_object_legal_hold(criterion: &mut Criterion) {
         criterion,
         || async { Ctx2::new_with_object(true).await },
         |ctx| {
-            DisableObjectLegalHold::new(&ctx.client, ctx.bucket.to_owned(), ctx.object.to_owned())
+            DisableObjectLegalHold::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
         },
     )
 }
@@ -62,7 +64,11 @@ pub(crate) fn bench_is_object_legal_hold(criterion: &mut Criterion) {
             ctx
         },
         |ctx| {
-            IsObjectLegalHoldEnabled::new(&ctx.client, ctx.bucket.to_owned(), ctx.object.to_owned())
+            IsObjectLegalHoldEnabled::new(
+                ctx.client.clone(),
+                ctx.bucket.clone(),
+                ctx.object.clone(),
+            )
         },
     )
 }

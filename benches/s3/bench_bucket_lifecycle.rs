@@ -27,7 +27,8 @@ pub(crate) fn bench_set_bucket_lifecycle(criterion: &mut Criterion) {
         || async { Ctx2::new().await },
         |ctx| {
             let config = create_bucket_lifecycle_config_examples();
-            SetBucketLifecycle::new(&ctx.client, ctx.bucket.to_owned()).life_cycle_config(config)
+            SetBucketLifecycle::new(ctx.client.clone(), ctx.bucket.clone())
+                .life_cycle_config(config)
         },
     )
 }
@@ -46,7 +47,7 @@ pub(crate) fn bench_get_bucket_lifecycle(criterion: &mut Criterion) {
                 .unwrap();
             ctx
         },
-        |ctx| GetBucketLifecycle::new(&ctx.client, ctx.bucket.to_owned()),
+        |ctx| GetBucketLifecycle::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }
 pub(crate) fn bench_delete_bucket_lifecycle(criterion: &mut Criterion) {
@@ -54,6 +55,6 @@ pub(crate) fn bench_delete_bucket_lifecycle(criterion: &mut Criterion) {
         "delete_bucket_lifecycle",
         criterion,
         || async { Ctx2::new().await },
-        |ctx| DeleteBucketLifecycle::new(&ctx.client, ctx.bucket.to_owned()),
+        |ctx| DeleteBucketLifecycle::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }

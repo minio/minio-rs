@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     let resp: ObjectPromptResponse = client
-        .object_prompt(&bucket_name, &object_name, "what is it about?".into())
+        .object_prompt(bucket_name, object_name, "what is it about?")
         //.lambda_arn("arn:minio:s3-object-lambda::_:webhook") // this is the default value
         .send()
         .await?;

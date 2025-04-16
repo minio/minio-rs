@@ -48,31 +48,35 @@ impl Client {
     ///     println!("bucket '{}' in region '{}' is removed", resp.bucket, resp.region);
     /// }
     /// ```
-    pub fn remove_bucket(&self, bucket: &str) -> RemoveBucket {
-        RemoveBucket::new(self.clone(), bucket.to_owned())
+    pub fn remove_bucket<S: Into<String>>(&self, bucket: S) -> RemoveBucket {
+        RemoveBucket::new(self.clone(), bucket.into())
     }
 
     /// Removes a bucket and also removes non-empty buckets by first removing all objects before
     /// deleting the bucket. Bypasses governance mode and legal hold.
-    pub async fn remove_and_purge_bucket(
+    pub async fn remove_and_purge_bucket<S: Into<String>>(
         &self,
-        bucket: &str,
+        bucket: S,
     ) -> Result<RemoveBucketResponse, Error> {
+        let bucket: String = bucket.into();
         if self.is_minio_express() {
-            let mut stream = self.list_objects(bucket).to_stream().await;
+            let mut stream = self.list_objects(&bucket).to_stream().await;
 
             while let Some(items) = stream.next().await {
-                let _resp = self
+                let mut resp = self
                     .remove_objects(
-                        bucket,
+                        &bucket,
                         items?.contents.into_iter().map(ObjectToDelete::from),
                     )
                     .to_stream()
                     .await;
+                while let Some(item) = resp.next().await {
+                    let _resp: RemoveObjectsResponse = item?;
+                }
             }
         } else {
             let mut stream = self
-                .list_objects(bucket)
+                .list_objects(&bucket)
                 .include_versions(true)
                 .to_stream()
                 .await;
@@ -80,7 +84,7 @@ impl Client {
             while let Some(items) = stream.next().await {
                 let mut resp = self
                     .remove_objects(
-                        bucket,
+                        &bucket,
                         items?.contents.into_iter().map(ObjectToDelete::from),
                     )
                     .bypass_governance_mode(true)
@@ -95,14 +99,14 @@ impl Client {
                             DeleteResult::Error(v) => {
                                 // the object is not deleted. try to disable legal hold and try again.
                                 let _resp: DisableObjectLegalHoldResponse = self
-                                    .disable_object_legal_hold(bucket, &v.object_name)
+                                    .disable_object_legal_hold(&bucket, &v.object_name)
                                     .version_id(v.version_id.clone())
                                     .send()
                                     .await?;
 
                                 let _resp: RemoveObjectResponse = RemoveObject::new(
                                     self.clone(),
-                                    bucket.to_string(),
+                                    bucket.clone(),
                                     ObjectToDelete::from(v),
                                 )
                                 .bypass_governance_mode(true)

@@ -180,9 +180,10 @@ pub struct RemoveObjectsApi {
 }
 
 impl RemoveObjectsApi {
-    pub fn new(client: &Client, bucket: String, objects: Vec<ObjectToDelete>) -> Self {
+    #[inline]
+    pub fn new(client: Client, bucket: String, objects: Vec<ObjectToDelete>) -> Self {
         RemoveObjectsApi {
-            client: client.clone(),
+            client,
             bucket,
             objects,
             ..Default::default()
@@ -366,7 +367,7 @@ impl RemoveObjects {
         }
 
         Ok(Some(
-            RemoveObjectsApi::new(&self.client, self.bucket.clone(), objects)
+            RemoveObjectsApi::new(self.client.clone(), self.bucket.clone(), objects)
                 .bypass_governance_mode(self.bypass_governance_mode)
                 .verbose_mode(self.verbose_mode)
                 .extra_headers(self.extra_headers.clone())

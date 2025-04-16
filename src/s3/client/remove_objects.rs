@@ -45,18 +45,30 @@ impl Client {
     ///     println!("the object is deleted. The delete marker has version '{:?}'", resp.version_id);
     /// }
     /// ```
-    pub fn remove_object(&self, bucket: &str, object: impl Into<ObjectToDelete>) -> RemoveObject {
-        RemoveObject::new(self.clone(), bucket.to_owned(), object)
+    pub fn remove_object<S: Into<String>, D: Into<ObjectToDelete>>(
+        &self,
+        bucket: S,
+        object: D,
+    ) -> RemoveObject {
+        RemoveObject::new(self.clone(), bucket.into(), object)
     }
 
-    pub fn remove_objects(&self, bucket: &str, objects: impl Into<DeleteObjects>) -> RemoveObjects {
-        RemoveObjects::new(self.clone(), bucket.to_owned(), objects)
+    pub fn remove_objects<S: Into<String>, D: Into<DeleteObjects>>(
+        &self,
+        bucket: S,
+        objects: D,
+    ) -> RemoveObjects {
+        RemoveObjects::new(self.clone(), bucket.into(), objects)
     }
 
     /// Creates a builder to execute
     /// [DeleteObjects](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html)
     /// S3 API
-    pub fn delete_objects(&self, bucket: &str, object: Vec<ObjectToDelete>) -> RemoveObjectsApi {
-        RemoveObjectsApi::new(self, bucket.to_owned(), object)
+    pub fn delete_objects<S: Into<String>, D: Into<ObjectToDelete>>(
+        &self,
+        bucket: S,
+        object: Vec<ObjectToDelete>,
+    ) -> RemoveObjectsApi {
+        RemoveObjectsApi::new(self.clone(), bucket.into(), object)
     }
 }

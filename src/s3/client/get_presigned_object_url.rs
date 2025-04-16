@@ -41,12 +41,12 @@ impl Client {
     ///     println!("the presigned url: '{:?}'", resp.url);
     /// }
     /// ```
-    pub fn get_presigned_object_url(
+    pub fn get_presigned_object_url<S1: Into<String>, S2: Into<String>>(
         &self,
-        bucket: &str,
-        object: &str,
+        bucket: S1,
+        object: S2,
         method: Method,
     ) -> GetPresignedObjectUrl {
-        GetPresignedObjectUrl::new(self.clone(), bucket.to_owned(), object.to_owned(), method)
+        GetPresignedObjectUrl::new(self.clone(), bucket.into(), object.into(), method)
     }
 }

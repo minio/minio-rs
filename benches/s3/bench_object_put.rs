@@ -37,7 +37,7 @@ pub(crate) fn bench_object_put(criterion: &mut Criterion) {
             })
             .unwrap();
 
-            PutObject::new(&ctx.client, ctx.bucket.clone(), object_name, data)
+            PutObject::new(ctx.client.clone(), ctx.bucket.clone(), object_name, data)
         },
     )
 }

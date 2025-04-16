@@ -42,7 +42,11 @@ impl Client {
     ///     println!("retrieved object tags '{:?}' from object '{}' in bucket '{}' is enabled", resp.tags, resp.object, resp.bucket);
     /// }
     /// ```
-    pub fn get_object_tags(&self, bucket: &str, object: &str) -> GetObjectTags {
-        GetObjectTags::new(self.clone(), bucket.to_owned(), object.to_owned())
+    pub fn get_object_tags<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> GetObjectTags {
+        GetObjectTags::new(self.clone(), bucket.into(), object.into())
     }
 }

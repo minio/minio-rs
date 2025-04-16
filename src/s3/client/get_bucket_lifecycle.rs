@@ -42,7 +42,7 @@ impl Client {
     ///     println!("retrieved bucket lifecycle config '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
     /// }
     /// ```
-    pub fn get_bucket_lifecycle(&self, bucket: &str) -> GetBucketLifecycle {
-        GetBucketLifecycle::new(self.clone(), bucket.to_owned())
+    pub fn get_bucket_lifecycle<S: Into<String>>(&self, bucket: S) -> GetBucketLifecycle {
+        GetBucketLifecycle::new(self.clone(), bucket.into())
     }
 }

@@ -42,7 +42,7 @@ async fn object_retention() {
         .send()
         .await
         .unwrap();
-    let _cleanup = CleanupGuard::new(&ctx.client, &bucket_name);
+    let _cleanup = CleanupGuard::new(ctx.client.clone(), &bucket_name);
     assert_eq!(resp.bucket, bucket_name);
     let object_name = rand_object_name();
 

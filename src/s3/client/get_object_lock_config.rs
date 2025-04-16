@@ -42,7 +42,7 @@ impl Client {
     ///     println!("retrieved object lock config '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
     /// }
     /// ```
-    pub fn get_object_lock_config(&self, bucket: &str) -> GetObjectLockConfig {
-        GetObjectLockConfig::new(self.clone(), bucket.to_owned())
+    pub fn get_object_lock_config<S: Into<String>>(&self, bucket: S) -> GetObjectLockConfig {
+        GetObjectLockConfig::new(self.clone(), bucket.into())
     }
 }

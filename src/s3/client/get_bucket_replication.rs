@@ -42,7 +42,7 @@ impl Client {
     ///     println!("retrieved bucket replication config '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
     /// }
     /// ```
-    pub fn get_bucket_replication(&self, bucket: &str) -> GetBucketReplication {
-        GetBucketReplication::new(self.clone(), bucket.to_owned())
+    pub fn get_bucket_replication<S: Into<String>>(&self, bucket: S) -> GetBucketReplication {
+        GetBucketReplication::new(self.clone(), bucket.into())
     }
 }

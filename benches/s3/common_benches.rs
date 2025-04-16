@@ -68,7 +68,7 @@ impl Ctx2 {
             .send()
             .await
             .unwrap();
-        let cleanup = CleanupGuard::new(&ctx.client, &bucket_name);
+        let cleanup = CleanupGuard::new(ctx.client.clone(), &bucket_name);
         let object_name = rand_object_name();
         let data = bytes::Bytes::from("hello, world".to_string().into_bytes());
         let _resp: PutObjectContentResponse = ctx
@@ -91,7 +91,7 @@ impl Ctx2 {
     pub async fn new_aux(&mut self) -> String {
         let bucket_name: String = rand_bucket_name();
         self.aux_bucket = Some(bucket_name.clone());
-        self._aux_cleanup = Some(CleanupGuard::new(&self.client, &bucket_name));
+        self._aux_cleanup = Some(CleanupGuard::new(self.client.clone(), &bucket_name));
         let _resp: MakeBucketResponse = self
             .client
             .make_bucket(&bucket_name)

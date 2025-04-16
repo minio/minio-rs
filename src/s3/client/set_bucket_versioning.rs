@@ -46,7 +46,7 @@ impl Client {
     ///     println!("enabled versioning on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_versioning(&self, bucket: &str) -> SetBucketVersioning {
-        SetBucketVersioning::new(self.clone(), bucket.to_owned())
+    pub fn set_bucket_versioning<S: Into<String>>(&self, bucket: S) -> SetBucketVersioning {
+        SetBucketVersioning::new(self.clone(), bucket.into())
     }
 }

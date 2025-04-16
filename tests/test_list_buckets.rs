@@ -22,10 +22,6 @@ use minio_common::test_context::TestContext;
 async fn list_buckets() {
     const N_BUCKETS: usize = 3;
     let ctx = TestContext::new_from_env();
-    if ctx.client.is_minio_express() {
-        println!("Skipping test because it is running in MinIO Express mode");
-        return;
-    }
 
     let mut names: Vec<String> = Vec::new();
     let mut guards: Vec<CleanupGuard> = Vec::new();

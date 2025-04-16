@@ -40,7 +40,7 @@ impl Client {
     ///     println!("Made bucket '{}' in region '{}'", resp.bucket, resp.region);
     /// }
     /// ```
-    pub fn make_bucket(&self, bucket: &str) -> MakeBucket {
-        MakeBucket::new(self.clone(), bucket.to_owned())
+    pub fn make_bucket<S: Into<String>>(&self, bucket: S) -> MakeBucket {
+        MakeBucket::new(self.clone(), bucket.into())
     }
 }

@@ -40,7 +40,10 @@ impl Client {
     ///     println!("notification of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```
-    pub fn delete_bucket_notification(&self, bucket: &str) -> DeleteBucketNotification {
-        DeleteBucketNotification::new(self.clone(), bucket.to_owned())
+    pub fn delete_bucket_notification<S: Into<String>>(
+        &self,
+        bucket: S,
+    ) -> DeleteBucketNotification {
+        DeleteBucketNotification::new(self.clone(), bucket.into())
     }
 }

@@ -45,16 +45,16 @@ impl Client {
     ///     println!("retrieved region '{:?}' for bucket '{}'", resp.region_response, resp.bucket);
     /// }
     /// ```
-    pub fn get_region(&self, bucket: &str) -> GetRegion {
-        GetRegion::new(self, bucket.to_owned())
+    pub fn get_region<S: Into<String>>(&self, bucket: S) -> GetRegion {
+        GetRegion::new(self.clone(), bucket.into())
     }
 
     /// Retrieves the region for the specified bucket name from the cache.
     /// If the region is not found in the cache, it is fetched via a call to S3 or MinIO
     /// and then stored in the cache for future lookups.
-    pub async fn get_region_cached_async(
+    pub async fn get_region_cached_async<S: Into<String>>(
         &self,
-        bucket: &str,
+        bucket: S,
         region: &Option<String>, // the region as provided by the S3Request
     ) -> Result<String, Error> {
         // If a region is provided, validate it against the base_url region
@@ -75,18 +75,19 @@ impl Client {
             return Ok(self.inner.base_url.region.clone());
         }
 
+        let bucket: String = bucket.into();
         // If no bucket or provider is configured, fall back to default
         if bucket.is_empty() || self.inner.provider.is_none() {
             return Ok(DEFAULT_REGION.to_owned());
         }
 
         // Return cached region if available
-        if let Some(v) = self.inner.region_map.get(bucket) {
+        if let Some(v) = self.inner.region_map.get(&bucket) {
             return Ok(v.value().clone());
         }
 
         // Otherwise, fetch the region and cache it
-        let resp: GetRegionResponse = self.get_region(bucket).send().await?;
+        let resp: GetRegionResponse = self.get_region(&bucket).send().await?;
 
         let resolved_region: String = if resp.region_response.is_empty() {
             DEFAULT_REGION.to_owned()
@@ -96,7 +97,7 @@ impl Client {
 
         self.inner
             .region_map
-            .insert(bucket.to_owned(), resolved_region.clone());
+            .insert(bucket, resolved_region.clone());
         Ok(resolved_region)
     }
 

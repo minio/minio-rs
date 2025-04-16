@@ -59,7 +59,7 @@ impl Client {
     ///    }
     ///}
     /// ```
-    pub fn list_objects(&self, bucket: &str) -> ListObjects {
-        ListObjects::new(self.clone(), bucket.to_owned())
+    pub fn list_objects<S: Into<String>>(&self, bucket: S) -> ListObjects {
+        ListObjects::new(self.clone(), bucket.into())
     }
 }

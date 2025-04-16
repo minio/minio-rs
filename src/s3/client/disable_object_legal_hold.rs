@@ -42,7 +42,11 @@ impl Client {
     ///     println!("legal hold of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```
-    pub fn disable_object_legal_hold(&self, bucket: &str, object: &str) -> DisableObjectLegalHold {
-        DisableObjectLegalHold::new(self, bucket.to_owned(), object.to_owned())
+    pub fn disable_object_legal_hold<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> DisableObjectLegalHold {
+        DisableObjectLegalHold::new(self.clone(), bucket.into(), object.into())
     }
 }

@@ -30,7 +30,7 @@ pub(crate) fn bench_set_object_retention(criterion: &mut Criterion) {
         criterion,
         || async { Ctx2::new_with_object(true).await },
         |ctx| {
-            SetObjectRetention::new(&ctx.client, ctx.bucket.to_owned(), ctx.object.to_owned())
+            SetObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
                 .retention_mode(Some(RetentionMode::GOVERNANCE))
                 .retain_until_date(Some(utc_now() + chrono::Duration::days(1)))
         },
@@ -46,7 +46,7 @@ pub(crate) fn bench_get_object_retention(criterion: &mut Criterion) {
         || async {
             let ctx = Ctx2::new_with_object(true).await;
             let _resp: SetObjectRetentionResponse =
-                SetObjectRetention::new(&ctx.client, ctx.bucket.to_owned(), ctx.object.to_owned())
+                SetObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
                     .retention_mode(Some(RetentionMode::GOVERNANCE))
                     .retain_until_date(Some(utc_now() + chrono::Duration::days(1)))
                     .send()
@@ -54,6 +54,6 @@ pub(crate) fn bench_get_object_retention(criterion: &mut Criterion) {
                     .unwrap();
             ctx
         },
-        |ctx| GetObjectRetention::new(&ctx.client, ctx.bucket.to_owned(), ctx.object.to_owned()),
+        |ctx| GetObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone()),
     )
 }

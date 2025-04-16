@@ -26,10 +26,10 @@ pub struct CleanupGuard {
 
 impl CleanupGuard {
     #[allow(dead_code)]
-    pub fn new(client: &Client, bucket_name: &str) -> Self {
+    pub fn new<S: Into<String>>(client: Client, bucket_name: S) -> Self {
         Self {
-            client: client.clone(),
-            bucket_name: bucket_name.to_string(),
+            client,
+            bucket_name: bucket_name.into(),
         }
     }
 }

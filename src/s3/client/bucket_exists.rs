@@ -40,7 +40,7 @@ impl Client {
     ///     println!("bucket '{}' exists: {}", resp.bucket, resp.exists);
     /// }
     /// ```
-    pub fn bucket_exists(&self, bucket: &str) -> BucketExists {
-        BucketExists::new(self.clone(), bucket.to_owned())
+    pub fn bucket_exists<S: Into<String>>(&self, bucket: S) -> BucketExists {
+        BucketExists::new(self.clone(), bucket.into())
     }
 }

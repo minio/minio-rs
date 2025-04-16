@@ -25,7 +25,7 @@ pub type Multimap = MultiMap<String, String>;
 
 pub trait MultimapExt {
     /// Adds a key-value pair to the multimap
-    fn add(&mut self, key: impl Into<String>, value: impl Into<String>);
+    fn add<K: Into<String>, V: Into<String>>(&mut self, key: K, value: V);
 
     /// Adds a multimap to the current multimap
     fn add_multimap(&mut self, other: Multimap);
@@ -46,7 +46,7 @@ pub trait MultimapExt {
 }
 
 impl MultimapExt for Multimap {
-    fn add(&mut self, key: impl Into<String>, value: impl Into<String>) {
+    fn add<K: Into<String>, V: Into<String>>(&mut self, key: K, value: V) {
         self.insert(key.into(), value.into());
     }
     fn add_multimap(&mut self, other: Multimap) {

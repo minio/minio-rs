@@ -42,7 +42,7 @@ impl Client {
     ///     println!("retrieved versioning status '{:?}' from bucket '{}' is enabled", resp.status, resp.bucket);
     /// }
     /// ```
-    pub fn get_bucket_versioning(&self, bucket: &str) -> GetBucketVersioning {
-        GetBucketVersioning::new(self.clone(), bucket.to_owned())
+    pub fn get_bucket_versioning<S: Into<String>>(&self, bucket: S) -> GetBucketVersioning {
+        GetBucketVersioning::new(self.clone(), bucket.into())
     }
 }

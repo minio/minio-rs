@@ -33,9 +33,9 @@ pub struct GetRegion {
 }
 
 impl GetRegion {
-    pub fn new(client: &Client, bucket: String) -> Self {
+    pub fn new(client: Client, bucket: String) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             ..Default::default()
         }

@@ -40,18 +40,18 @@ impl Client {
     ///     let bucket_name = "bucket-name";
     ///
     ///     let resp: MakeBucketResponse =
-    ///         client.make_bucket(&bucket_name).object_lock(true).send().await.unwrap();
+    ///         client.make_bucket(bucket_name).object_lock(true).send().await.unwrap();
     ///     println!("created bucket '{}' with object locking enabled", resp.bucket);
     ///
     ///     const DURATION_DAYS: i32 = 7;
     ///     let config = ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();
     ///
     ///     let resp: SetObjectLockConfigResponse =
-    ///         client.set_object_lock_config(&bucket_name).config(config).send().await.unwrap();
+    ///         client.set_object_lock_config(bucket_name).config(config).send().await.unwrap();
     ///     println!("configured object locking for bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_object_lock_config(&self, bucket: &str) -> SetObjectLockConfig {
-        SetObjectLockConfig::new(self.clone(), bucket.to_owned())
+    pub fn set_object_lock_config<S: Into<String>>(&self, bucket: S) -> SetObjectLockConfig {
+        SetObjectLockConfig::new(self.clone(), bucket.into())
     }
 }

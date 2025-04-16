@@ -40,7 +40,7 @@ impl Client {
     ///     println!("lifecycle of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```
-    pub fn delete_bucket_lifecycle(&self, bucket: &str) -> DeleteBucketLifecycle {
-        DeleteBucketLifecycle::new(self.clone(), bucket.to_owned())
+    pub fn delete_bucket_lifecycle<S: Into<String>>(&self, bucket: S) -> DeleteBucketLifecycle {
+        DeleteBucketLifecycle::new(self.clone(), bucket.into())
     }
 }

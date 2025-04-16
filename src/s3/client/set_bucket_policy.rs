@@ -69,7 +69,7 @@ impl Client {
     ///     println!("set bucket replication policy on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_policy(&self, bucket: &str) -> SetBucketPolicy {
-        SetBucketPolicy::new(self.clone(), bucket.to_owned())
+    pub fn set_bucket_policy<S: Into<String>>(&self, bucket: S) -> SetBucketPolicy {
+        SetBucketPolicy::new(self.clone(), bucket.into())
     }
 }

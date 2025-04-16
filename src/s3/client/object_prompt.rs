@@ -37,12 +37,17 @@ impl Client {
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: ObjectPromptResponse = client
-    ///         .object_prompt("bucket-name", "object-name", "What is it about?".to_string())
+    ///         .object_prompt("bucket-name", "object-name", "What is it about?")
     ///         .send().await.unwrap();
     ///     println!("the prompt response is: '{}'", resp.prompt_response);
     /// }
     /// ```
-    pub fn object_prompt(&self, bucket: &str, object: &str, prompt: String) -> ObjectPrompt {
-        ObjectPrompt::new(self.clone(), bucket.to_owned(), object.to_owned(), prompt)
+    pub fn object_prompt<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+        prompt: S3,
+    ) -> ObjectPrompt {
+        ObjectPrompt::new(self.clone(), bucket.into(), object.into(), prompt.into())
     }
 }

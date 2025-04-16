@@ -37,7 +37,7 @@ async fn object_lock_config() {
         .send()
         .await
         .unwrap();
-    let _cleanup = CleanupGuard::new(&ctx.client, &bucket_name);
+    let _cleanup = CleanupGuard::new(ctx.client.clone(), &bucket_name);
 
     const DURATION_DAYS: i32 = 7;
     let config =

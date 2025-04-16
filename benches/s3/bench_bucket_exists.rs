@@ -23,6 +23,6 @@ pub(crate) fn bench_bucket_exists(criterion: &mut Criterion) {
         "bucket_exists",
         criterion,
         || async { Ctx2::new().await },
-        |ctx| BucketExists::new(&ctx.client, ctx.bucket.to_owned()),
+        |ctx| BucketExists::new(ctx.client.clone(), ctx.bucket.clone()),
     );
 }

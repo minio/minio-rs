@@ -398,8 +398,8 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
             Some(v) => unescape(v)?,
             None => {
                 return Err(Error::TagDecodingError(
-                    s.to_string(),
-                    "tag key was empty".to_string(),
+                    s.into(),
+                    "tag key was empty".into(),
                 ));
             }
         };
@@ -409,8 +409,8 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
         };
         if kv.next().is_some() {
             return Err(Error::TagDecodingError(
-                s.to_string(),
-                "tag had too many values for a key".to_string(),
+                s.into(),
+                "tag had too many values for a key".into(),
             ));
         }
         tags.insert(k, v);
@@ -420,9 +420,9 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
 
 #[must_use]
 /// Returns the consumed data and inserts a key into it with an empty value.
-pub fn insert(data: Option<Multimap>, key: impl AsRef<str>) -> Multimap {
+pub fn insert(data: Option<Multimap>, key: impl Into<String>) -> Multimap {
     let mut result: Multimap = data.unwrap_or_default();
-    result.insert(key.as_ref().into(), String::new());
+    result.insert(key.into(), String::new());
     result
 }
 

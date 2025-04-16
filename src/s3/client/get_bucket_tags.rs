@@ -42,7 +42,7 @@ impl Client {
     ///     println!("retrieved bucket tags '{:?}' from bucket '{}' is enabled", resp.tags, resp.bucket);
     /// }
     /// ```
-    pub fn get_bucket_tags(&self, bucket: &str) -> GetBucketTags {
-        GetBucketTags::new(self.clone(), bucket.to_owned())
+    pub fn get_bucket_tags<S: Into<String>>(&self, bucket: S) -> GetBucketTags {
+        GetBucketTags::new(self.clone(), bucket.into())
     }
 }

@@ -42,7 +42,7 @@ impl Client {
     ///     println!("tags of bucket '{}' are deleted", resp.bucket);
     /// }
     /// ```
-    pub fn delete_bucket_tags(&self, bucket: &str) -> DeleteBucketTags {
-        DeleteBucketTags::new(self.clone(), bucket.to_owned())
+    pub fn delete_bucket_tags<S: Into<String>>(&self, bucket: S) -> DeleteBucketTags {
+        DeleteBucketTags::new(self.clone(), bucket.into())
     }
 }

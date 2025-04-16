@@ -50,58 +50,62 @@ impl Client {
     ///     println!("successfully put object '{}'", resp.object);
     /// }
     /// ```
-    pub fn put_object(&self, bucket: &str, object: &str, data: SegmentedBytes) -> PutObject {
-        PutObject::new(self.clone(), bucket.to_owned(), object.to_owned(), data)
+    pub fn put_object<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+        data: SegmentedBytes,
+    ) -> PutObject {
+        PutObject::new(self.clone(), bucket.into(), object.into(), data)
     }
 
     /// Create a CreateMultipartUpload request builder.
-    pub fn create_multipart_upload(&self, bucket: &str, object: &str) -> CreateMultipartUpload {
-        CreateMultipartUpload::new(self, bucket.to_owned(), object.to_owned())
+    pub fn create_multipart_upload<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> CreateMultipartUpload {
+        CreateMultipartUpload::new(self.clone(), bucket.into(), object.into())
     }
 
-    pub fn abort_multipart_upload(
+    pub fn abort_multipart_upload<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
         &self,
-        bucket: &str,
-        object: &str,
-        upload_id: &str,
+        bucket: S1,
+        object: S2,
+        upload_id: S3,
     ) -> AbortMultipartUpload {
-        AbortMultipartUpload::new(
-            self,
-            bucket.to_owned(),
-            object.to_owned(),
-            upload_id.to_owned(),
-        )
+        AbortMultipartUpload::new(self.clone(), bucket.into(), object.into(), upload_id.into())
     }
 
-    pub fn complete_multipart_upload(
+    pub fn complete_multipart_upload<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
         &self,
-        bucket: &str,
-        object: &str,
-        upload_id: &str,
+        bucket: S1,
+        object: S2,
+        upload_id: S3,
         parts: Vec<PartInfo>,
     ) -> CompleteMultipartUpload {
         CompleteMultipartUpload::new(
-            self,
-            bucket.to_owned(),
-            object.to_owned(),
-            upload_id.to_owned(),
+            self.clone(),
+            bucket.into(),
+            object.into(),
+            upload_id.into(),
             parts,
         )
     }
 
-    pub fn upload_part(
+    pub fn upload_part<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
         &self,
-        bucket: &str,
-        object: &str,
-        upload_id: &str,
+        bucket: S1,
+        object: S2,
+        upload_id: S3,
         part_number: u16,
         data: SegmentedBytes,
     ) -> UploadPart {
         UploadPart::new(
-            self,
-            bucket.to_owned(),
-            object.to_owned(),
-            upload_id.to_owned(),
+            self.clone(),
+            bucket.into(),
+            object.into(),
+            upload_id.into(),
             part_number,
             data,
         )
@@ -109,12 +113,12 @@ impl Client {
 
     /// Creates a PutObjectContent request builder to upload data to MinIO/S3.
     /// The content is streamed, and this higher-level API handles multipart uploads transparently.
-    pub fn put_object_content(
+    pub fn put_object_content<S: Into<String>, C: Into<ObjectContent>>(
         &self,
-        bucket: &str,
-        object: &str,
-        content: impl Into<ObjectContent>,
+        bucket: S,
+        object: S,
+        content: C,
     ) -> PutObjectContent {
-        PutObjectContent::new(self, bucket.to_owned(), object.to_owned(), content)
+        PutObjectContent::new(self.clone(), bucket.into(), object.into(), content)
     }
 }

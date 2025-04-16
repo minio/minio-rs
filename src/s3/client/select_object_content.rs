@@ -66,13 +66,12 @@ impl Client {
     ///     println!("the progress: '{:?}'", resp.progress);
     /// }
     /// ```
-    pub fn select_object_content(
+    pub fn select_object_content<S1: Into<String>, S2: Into<String>>(
         &self,
-        bucket: &str,
-        object: &str,
+        bucket: S1,
+        object: S2,
         request: SelectRequest,
     ) -> SelectObjectContent {
-        SelectObjectContent::new(self.clone(), bucket.to_owned(), object.to_owned())
-            .request(request)
+        SelectObjectContent::new(self.clone(), bucket.into(), object.into()).request(request)
     }
 }

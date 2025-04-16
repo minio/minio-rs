@@ -28,7 +28,9 @@ pub(crate) fn bench_set_bucket_tags(criterion: &mut Criterion) {
         "set_bucket_tags",
         criterion,
         || async { Ctx2::new().await },
-        |ctx| SetBucketTags::new(&ctx.client, ctx.bucket.to_owned()).tags(create_tags_example()),
+        |ctx| {
+            SetBucketTags::new(ctx.client.clone(), ctx.bucket.clone()).tags(create_tags_example())
+        },
     )
 }
 pub(crate) fn bench_get_bucket_tags(criterion: &mut Criterion) {
@@ -48,7 +50,7 @@ pub(crate) fn bench_get_bucket_tags(criterion: &mut Criterion) {
                 .unwrap();
             ctx
         },
-        |ctx| GetBucketTags::new(&ctx.client, ctx.bucket.to_owned()),
+        |ctx| GetBucketTags::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }
 pub(crate) fn bench_delete_bucket_tags(criterion: &mut Criterion) {
@@ -59,6 +61,6 @@ pub(crate) fn bench_delete_bucket_tags(criterion: &mut Criterion) {
         "delete_bucket_tags",
         criterion,
         || async { Ctx2::new().await },
-        |ctx| DeleteBucketTags::new(&ctx.client, ctx.bucket.to_owned()),
+        |ctx| DeleteBucketTags::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }

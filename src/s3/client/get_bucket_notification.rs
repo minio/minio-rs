@@ -40,7 +40,7 @@ impl Client {
     ///     println!("retrieved bucket notification config '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
     /// }
     /// ```
-    pub fn get_bucket_notification(&self, bucket: &str) -> GetBucketNotification {
-        GetBucketNotification::new(self.clone(), bucket.to_owned())
+    pub fn get_bucket_notification<S: Into<String>>(&self, bucket: S) -> GetBucketNotification {
+        GetBucketNotification::new(self.clone(), bucket.into())
     }
 }

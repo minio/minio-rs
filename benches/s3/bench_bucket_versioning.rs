@@ -26,7 +26,7 @@ pub(crate) fn bench_get_bucket_versioning(criterion: &mut Criterion) {
         "get_bucket_versioning",
         criterion,
         || async { Ctx2::new().await },
-        |ctx| GetBucketVersioning::new(&ctx.client, ctx.bucket.to_owned()),
+        |ctx| GetBucketVersioning::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }
 pub(crate) fn bench_set_bucket_versioning(criterion: &mut Criterion) {
@@ -38,7 +38,7 @@ pub(crate) fn bench_set_bucket_versioning(criterion: &mut Criterion) {
         criterion,
         || async { Ctx2::new().await },
         |ctx| {
-            SetBucketVersioning::new(&ctx.client, ctx.bucket.to_owned())
+            SetBucketVersioning::new(ctx.client.clone(), ctx.bucket.clone())
                 .versioning_status(VersioningStatus::Enabled)
         },
     )

@@ -42,7 +42,11 @@ impl Client {
     ///     println!("retrieved content '{}'", content_str);
     /// }
     /// ```
-    pub fn get_object(&self, bucket: &str, object: &str) -> GetObject {
-        GetObject::new(self.clone(), bucket.to_owned(), object.to_owned())
+    pub fn get_object<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> GetObject {
+        GetObject::new(self.clone(), bucket.into(), object.into())
     }
 }

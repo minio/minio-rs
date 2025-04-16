@@ -43,11 +43,11 @@ impl Client {
     ///     println!("legal hold of object '{}' in bucket '{}' is enabled: {}", resp.object, resp.bucket, resp.enabled);
     /// }
     /// ```
-    pub fn is_object_legal_hold_enabled(
+    pub fn is_object_legal_hold_enabled<S1: Into<String>, S2: Into<String>>(
         &self,
-        bucket: &str,
-        object: &str,
+        bucket: S1,
+        object: S2,
     ) -> IsObjectLegalHoldEnabled {
-        IsObjectLegalHoldEnabled::new(self.clone(), bucket.to_owned(), object.to_owned())
+        IsObjectLegalHoldEnabled::new(self.clone(), bucket.into(), object.into())
     }
 }

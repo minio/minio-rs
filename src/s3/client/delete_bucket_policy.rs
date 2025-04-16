@@ -41,7 +41,7 @@ impl Client {
     ///     println!("policy of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```
-    pub fn delete_bucket_policy(&self, bucket: &str) -> DeleteBucketPolicy {
-        DeleteBucketPolicy::new(self.clone(), bucket.to_owned())
+    pub fn delete_bucket_policy<S: Into<String>>(&self, bucket: S) -> DeleteBucketPolicy {
+        DeleteBucketPolicy::new(self.clone(), bucket.into())
     }
 }

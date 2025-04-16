@@ -57,9 +57,9 @@ pub struct CreateMultipartUpload {
 }
 
 impl CreateMultipartUpload {
-    pub fn new(client: &Client, bucket: String, object: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         CreateMultipartUpload {
-            client: client.clone(),
+            client,
             bucket,
             object,
             ..Default::default()
@@ -161,9 +161,9 @@ pub struct AbortMultipartUpload {
 }
 
 impl AbortMultipartUpload {
-    pub fn new(client: &Client, bucket: String, object: String, upload_id: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String, upload_id: String) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             object,
             upload_id,
@@ -235,14 +235,14 @@ impl S3Api for CompleteMultipartUpload {
 
 impl CompleteMultipartUpload {
     pub fn new(
-        client: &Client,
+        client: Client,
         bucket: String,
         object: String,
         upload_id: String,
         parts: Vec<PartInfo>,
     ) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             object,
             upload_id,
@@ -345,7 +345,7 @@ pub struct UploadPart {
 
 impl UploadPart {
     pub fn new(
-        client: &Client,
+        client: Client,
         bucket: String,
         object: String,
         upload_id: String,
@@ -353,7 +353,7 @@ impl UploadPart {
         data: SegmentedBytes,
     ) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             object,
             upload_id: Some(upload_id),
@@ -556,13 +556,13 @@ pub struct PutObjectContent {
 
 impl PutObjectContent {
     pub fn new(
-        client: &Client,
+        client: Client,
         bucket: String,
         object: String,
         content: impl Into<ObjectContent>,
     ) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             object,
             input_content: content.into(),
@@ -738,7 +738,7 @@ impl PutObjectContent {
             if mpu_res.is_err() {
                 // If we failed to complete the multipart upload, we should abort it.
                 let _ =
-                    AbortMultipartUpload::new(&client, bucket, object, create_mpu_resp.upload_id)
+                    AbortMultipartUpload::new(client, bucket, object, create_mpu_resp.upload_id)
                         .send()
                         .await;
             }

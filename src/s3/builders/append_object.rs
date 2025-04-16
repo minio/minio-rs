@@ -47,14 +47,14 @@ pub struct AppendObject {
 
 impl AppendObject {
     pub fn new(
-        client: &Client,
+        client: Client,
         bucket: String,
         object: String,
         data: SegmentedBytes,
         offset_bytes: u64,
     ) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             object,
             offset_bytes,
@@ -134,13 +134,13 @@ pub struct AppendObjectContent {
 
 impl AppendObjectContent {
     pub fn new(
-        client: &Client,
+        client: Client,
         bucket: String,
         object: String,
         content: impl Into<ObjectContent>,
     ) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             object,
             input_content: content.into(),

@@ -25,17 +25,17 @@ impl Client {
     /// This is a lower-level API that performs a non-multipart object upload.
     ///
     /// 🛈 This operation is not supported for regular non-express buckets.
-    pub fn append_object(
+    pub fn append_object<S: Into<String>>(
         &self,
-        bucket: &str,
-        object: &str,
+        bucket: S,
+        object: S,
         data: SegmentedBytes,
         offset_bytes: u64,
     ) -> AppendObject {
         AppendObject::new(
-            self,
-            bucket.to_owned(),
-            object.to_owned(),
+            self.clone(),
+            bucket.into(),
+            object.into(),
             data,
             offset_bytes,
         )
@@ -44,12 +44,12 @@ impl Client {
     /// Creates an AppendObjectContent request builder to append data to the end of an existing
     /// object. The content is streamed and appended to MinIO/S3. This is a higher-level API that
     /// handles multipart appends transparently.
-    pub fn append_object_content(
+    pub fn append_object_content<S: Into<String>, C: Into<ObjectContent>>(
         &self,
-        bucket: &str,
-        object: &str,
-        content: impl Into<ObjectContent>,
+        bucket: S,
+        object: S,
+        content: C,
     ) -> AppendObjectContent {
-        AppendObjectContent::new(self, bucket.to_owned(), object.to_owned(), content)
+        AppendObjectContent::new(self.clone(), bucket.into(), object.into(), content)
     }
 }

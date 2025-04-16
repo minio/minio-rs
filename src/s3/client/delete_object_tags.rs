@@ -42,7 +42,11 @@ impl Client {
     ///     println!("legal hold of object '{}' in bucket '{}' is deleted", resp.object, resp.bucket);
     /// }
     /// ```
-    pub fn delete_object_tags(&self, bucket: &str, object: &str) -> DeleteObjectTags {
-        DeleteObjectTags::new(self, bucket.to_owned(), object.to_owned())
+    pub fn delete_object_tags<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> DeleteObjectTags {
+        DeleteObjectTags::new(self.clone(), bucket.into(), object.into())
     }
 }

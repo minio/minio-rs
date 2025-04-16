@@ -40,7 +40,7 @@ impl Client {
     ///     println!("retrieved bucket policy config '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
     /// }
     /// ```
-    pub fn get_bucket_policy(&self, bucket: &str) -> GetBucketPolicy {
-        GetBucketPolicy::new(self.clone(), bucket.to_owned())
+    pub fn get_bucket_policy<S: Into<String>>(&self, bucket: S) -> GetBucketPolicy {
+        GetBucketPolicy::new(self.clone(), bucket.into())
     }
 }

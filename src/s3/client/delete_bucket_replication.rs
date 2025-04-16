@@ -42,7 +42,7 @@ impl Client {
     ///     println!("replication of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```
-    pub fn delete_bucket_replication(&self, bucket: &str) -> DeleteBucketReplication {
-        DeleteBucketReplication::new(self.clone(), bucket.to_owned())
+    pub fn delete_bucket_replication<S: Into<String>>(&self, bucket: S) -> DeleteBucketReplication {
+        DeleteBucketReplication::new(self.clone(), bucket.into())
     }
 }

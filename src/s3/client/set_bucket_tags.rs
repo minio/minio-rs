@@ -51,7 +51,7 @@ impl Client {
     ///     println!("set tags on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_tags(&self, bucket: &str) -> SetBucketTags {
-        SetBucketTags::new(self.clone(), bucket.to_owned())
+    pub fn set_bucket_tags<S: Into<String>>(&self, bucket: S) -> SetBucketTags {
+        SetBucketTags::new(self.clone(), bucket.into())
     }
 }

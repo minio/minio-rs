@@ -40,7 +40,7 @@ impl Client {
     ///     println!("retrieved SseConfig '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
     /// }
     /// ```
-    pub fn get_bucket_encryption(&self, bucket: &str) -> GetBucketEncryption {
-        GetBucketEncryption::new(self.clone(), bucket.to_owned())
+    pub fn get_bucket_encryption<S: Into<String>>(&self, bucket: S) -> GetBucketEncryption {
+        GetBucketEncryption::new(self.clone(), bucket.into())
     }
 }

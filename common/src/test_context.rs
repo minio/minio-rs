@@ -152,7 +152,7 @@ impl TestContext {
     pub async fn create_bucket_helper(&self) -> (String, CleanupGuard) {
         let bucket_name = rand_bucket_name();
         let _resp = self.client.make_bucket(&bucket_name).send().await.unwrap();
-        let guard = CleanupGuard::new(&self.client, &bucket_name);
+        let guard = CleanupGuard::new(self.client.clone(), &bucket_name);
         (bucket_name, guard)
     }
 }

@@ -45,7 +45,7 @@ pub(crate) fn bench_object_append(criterion: &mut Criterion) {
 
             let offset_bytes: u64 = resp.size;
             AppendObject::new(
-                &ctx.client,
+                ctx.client.clone(),
                 ctx.bucket.clone(),
                 ctx.object.clone(),
                 data1,

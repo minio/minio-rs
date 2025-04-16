@@ -36,9 +36,9 @@ pub struct DeleteObjectTags {
 }
 
 impl DeleteObjectTags {
-    pub fn new(client: &Client, bucket: String, object: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             object,
             ..Default::default()

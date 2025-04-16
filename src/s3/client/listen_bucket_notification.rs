@@ -54,7 +54,10 @@ impl Client {
     ///     }
     /// }
     /// ```
-    pub fn listen_bucket_notification(&self, bucket: &str) -> ListenBucketNotification {
-        ListenBucketNotification::new(self.clone(), bucket.to_owned())
+    pub fn listen_bucket_notification<S: Into<String>>(
+        &self,
+        bucket: S,
+    ) -> ListenBucketNotification {
+        ListenBucketNotification::new(self.clone(), bucket.into())
     }
 }

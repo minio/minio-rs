@@ -48,9 +48,9 @@ pub struct UploadPartCopy {
 }
 
 impl UploadPartCopy {
-    pub fn new(client: &Client, bucket: String, object: String, upload_id: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String, upload_id: String) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             object,
             upload_id,
@@ -144,9 +144,9 @@ pub struct CopyObjectInternal {
 }
 
 impl CopyObjectInternal {
-    pub fn new(client: &Client, bucket: String, object: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             object,
             ..Default::default()
@@ -347,9 +347,9 @@ pub struct CopyObject {
 }
 
 impl CopyObject {
-    pub fn new(client: &Client, bucket: String, object: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             object,
             ..Default::default()
@@ -553,9 +553,9 @@ pub struct ComposeObjectInternal {
 }
 
 impl ComposeObjectInternal {
-    pub fn new(client: &Client, bucket: String, object: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             object,
             ..Default::default()
@@ -826,9 +826,9 @@ pub struct ComposeObject {
 }
 
 impl ComposeObject {
-    pub fn new(client: &Client, bucket: String, object: String) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            client: client.clone(),
+            client,
             bucket,
             object,
             ..Default::default()

@@ -40,7 +40,7 @@ impl Client {
     ///     println!("bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```
-    pub fn delete_bucket_encryption(&self, bucket: &str) -> DeleteBucketEncryption {
-        DeleteBucketEncryption::new(self.clone(), bucket.to_owned())
+    pub fn delete_bucket_encryption<S: Into<String>>(&self, bucket: S) -> DeleteBucketEncryption {
+        DeleteBucketEncryption::new(self.clone(), bucket.into())
     }
 }

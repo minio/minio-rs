@@ -20,7 +20,7 @@ use crate::s3::builders::SetBucketEncryption;
 
 impl Client {
     /// Create a SetBucketEncryption request builder.
-    pub fn set_bucket_encryption(&self, bucket: &str) -> SetBucketEncryption {
-        SetBucketEncryption::new(self.clone(), bucket.to_owned())
+    pub fn set_bucket_encryption<S: Into<String>>(&self, bucket: S) -> SetBucketEncryption {
+        SetBucketEncryption::new(self.clone(), bucket.into())
     }
 }
