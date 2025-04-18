@@ -188,8 +188,8 @@ impl ClientBuilder {
         }
 
         Ok(Client {
-            inner: Arc::new(ClientRef {
-                client: builder.build()?,
+            http_client: builder.build()?,
+            shared: Arc::new(SharedClientItems {
                 base_url: self.base_url,
                 provider: self.provider,
                 ..Default::default()
@@ -204,7 +204,8 @@ impl ClientBuilder {
 /// AWS Signature Version 4; else they are performed anonymously.
 #[derive(Clone, Default, Debug)]
 pub struct Client {
-    pub(crate) inner: Arc<ClientRef>,
+    http_client: reqwest::Client,
+    pub(crate) shared: Arc<SharedClientItems>,
 }
 
 impl Client {
@@ -240,18 +241,18 @@ impl Client {
 
     /// Returns whether is client uses an AWS host.
     pub fn is_aws_host(&self) -> bool {
-        self.inner.base_url.is_aws_host()
+        self.shared.base_url.is_aws_host()
     }
 
     /// Returns whether this client is configured to use HTTPS.
     pub fn is_secure(&self) -> bool {
-        self.inner.base_url.https
+        self.shared.base_url.https
     }
 
     /// Returns whether this client is configured to use the express endpoint and is minio enterprise.
     pub fn is_minio_express(&self) -> bool {
-        if self.inner.express.get().is_some() {
-            self.inner.express.get().unwrap().clone()
+        if self.shared.express.get().is_some() {
+            self.shared.express.get().unwrap().clone()
         } else {
             task::block_in_place(|| match tokio::runtime::Runtime::new() {
                 Ok(rt) => {
@@ -277,11 +278,33 @@ impl Client {
                         }
                         false
                     });
-                    self.inner.express.set(express).unwrap_or_default();
+                    self.shared.express.set(express).unwrap_or_default();
                     express
                 }
                 Err(_) => false,
             })
+        }
+    }
+
+    /// Add a bucket-region pair to the region cache if it does not exist.
+    pub(crate) fn add_bucket_region(&mut self, bucket: &str, region: impl Into<String>) {
+        self.shared
+            .region_map
+            .entry(bucket.to_owned())
+            .or_insert_with(|| region.into());
+    }
+
+    /// Remove a bucket-region pair from the region cache if it exists.
+    pub(crate) fn remove_bucket_region(&mut self, bucket: &str) {
+        self.shared.region_map.remove(bucket);
+    }
+
+    /// Get the region as configured in the url
+    pub(crate) fn get_region_from_url(&self) -> Option<&str> {
+        if self.shared.base_url.region.is_empty() {
+            None
+        } else {
+            Some(&self.shared.base_url.region)
         }
     }
 
@@ -377,18 +400,208 @@ impl Client {
 
         Ok(part_count)
     }
+
+    async fn execute_internal(
+        &self,
+        method: &Method,
+        region: &str,
+        headers: &mut Multimap,
+        query_params: &Multimap,
+        bucket_name: Option<&str>,
+        object_name: Option<&str>,
+        body: Option<&SegmentedBytes>,
+        retry: bool,
+    ) -> Result<reqwest::Response, Error> {
+        let url = self.shared.base_url.build_url(
+            method,
+            region,
+            query_params,
+            bucket_name,
+            object_name,
+        )?;
+
+        {
+            headers.add("Host", url.host_header_value());
+
+            let sha256: String = match *method {
+                Method::PUT | Method::POST => {
+                    if !headers.contains_key("Content-Type") {
+                        headers.add("Content-Type", "application/octet-stream");
+                    }
+                    let len: usize = body.as_ref().map_or(0, |b| b.len());
+                    headers.add("Content-Length", len.to_string());
+
+                    match body {
+                        None => EMPTY_SHA256.into(),
+                        Some(v) => sha256_hash_sb(v),
+                    }
+                }
+                _ => EMPTY_SHA256.into(),
+            };
+            headers.add("x-amz-content-sha256", sha256.clone());
+
+            let date = utc_now();
+            headers.add("x-amz-date", to_amz_date(date));
+
+            if let Some(p) = &self.shared.provider {
+                let creds = p.fetch();
+                if creds.session_token.is_some() {
+                    headers.add("X-Amz-Security-Token", creds.session_token.unwrap());
+                }
+                sign_v4_s3(
+                    method,
+                    &url.path,
+                    region,
+                    headers,
+                    query_params,
+                    &creds.access_key,
+                    &creds.secret_key,
+                    &sha256,
+                    date,
+                );
+            }
+        }
+        let mut req = self.http_client.request(method.clone(), url.to_string());
+
+        for (key, values) in headers.iter_all() {
+            for value in values {
+                req = req.header(key, value);
+            }
+        }
+
+        if false {
+            let mut header_strings: Vec<String> = headers
+                .iter_all()
+                .map(|(k, v)| format!("{}: {}", k, v.join(",")))
+                .collect();
+
+            // Sort headers alphabetically by name
+            header_strings.sort();
+
+            let body_str: String = String::from_utf8(
+                body.clone()
+                    .unwrap_or(&SegmentedBytes::new())
+                    .to_bytes()
+                    .to_vec(),
+            )?;
+
+            println!(
+                "S3 request: {} url={:?}; headers={:?}; body={}\n",
+                method,
+                url.path,
+                header_strings.join("; "),
+                body_str
+            );
+        }
+
+        if (*method == Method::PUT) || (*method == Method::POST) {
+            //TODO: why-oh-why first collect into a vector and then iterate to a stream?
+            let bytes_vec: Vec<Bytes> = match body {
+                Some(v) => v.into_iter().collect(),
+                None => Vec::new(),
+            };
+            let stream = futures_util::stream::iter(
+                bytes_vec
+                    .into_iter()
+                    .map(|b| -> Result<_, std::io::Error> { Ok(b) }),
+            );
+            req = req.body(Body::wrap_stream(stream));
+        }
+
+        let resp: reqwest::Response = req.send().await?;
+
+        if resp.status().is_success() {
+            return Ok(resp);
+        }
+
+        let mut resp = resp;
+        let status_code = resp.status().as_u16();
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+        let body: Bytes = resp.bytes().await?;
+
+        let e: Error = self.shared.get_error_response(
+            body,
+            status_code,
+            headers,
+            method,
+            &url.path,
+            bucket_name,
+            object_name,
+            retry,
+        );
+
+        match e {
+            Error::S3Error(ref err) => {
+                if (err.code == ErrorCode::NoSuchBucket) || (err.code == ErrorCode::RetryHead) {
+                    if let Some(v) = bucket_name {
+                        self.shared.region_map.remove(v);
+                    }
+                }
+            }
+            _ => {}
+        };
+
+        Err(e)
+    }
+
+    pub(crate) async fn execute(
+        &self,
+        method: Method,
+        region: &str,
+        headers: &mut Multimap,
+        query_params: &Multimap,
+        bucket_name: &Option<&str>,
+        object_name: &Option<&str>,
+        data: Option<&SegmentedBytes>,
+    ) -> Result<reqwest::Response, Error> {
+        let resp: Result<reqwest::Response, Error> = self
+            .execute_internal(
+                &method,
+                region,
+                headers,
+                query_params,
+                bucket_name.as_deref(),
+                object_name.as_deref(),
+                data,
+                true,
+            )
+            .await;
+        match resp {
+            Ok(r) => return Ok(r),
+            Err(e) => match e {
+                Error::S3Error(ref er) => {
+                    if er.code != ErrorCode::RetryHead {
+                        return Err(e);
+                    }
+                }
+                _ => return Err(e),
+            },
+        };
+
+        // Retry only once on RetryHead error.
+        self.execute_internal(
+            &method,
+            region,
+            headers,
+            query_params,
+            bucket_name.as_deref(),
+            object_name.as_deref(),
+            data,
+            false,
+        )
+        .await
+    }
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct ClientRef {
-    client: reqwest::Client,
+pub(crate) struct SharedClientItems {
     pub(crate) base_url: BaseUrl,
     pub(crate) provider: Option<Arc<Box<(dyn Provider + Send + Sync + 'static)>>>,
-    pub(crate) region_map: DashMap<String, String>,
+    region_map: DashMap<String, String>,
     express: OnceLock<bool>,
 }
 
-impl ClientRef {
+impl SharedClientItems {
     fn handle_redirect_response(
         &self,
         status_code: u16,
@@ -519,192 +732,5 @@ impl ClientRef {
             bucket_name: bucket_name.unwrap_or_default().to_string(),
             object_name: object_name.unwrap_or_default().to_string(),
         })
-    }
-
-    async fn execute_internal(
-        &self,
-        method: &Method,
-        region: &str,
-        headers: &mut Multimap,
-        query_params: &Multimap,
-        bucket_name: Option<&str>,
-        object_name: Option<&str>,
-        body: Option<&SegmentedBytes>,
-        retry: bool,
-    ) -> Result<reqwest::Response, Error> {
-        let url =
-            self.base_url
-                .build_url(method, region, query_params, bucket_name, object_name)?;
-
-        {
-            headers.add("Host", url.host_header_value());
-
-            let sha256: String = match *method {
-                Method::PUT | Method::POST => {
-                    if !headers.contains_key("Content-Type") {
-                        headers.add("Content-Type", "application/octet-stream");
-                    }
-                    let len: usize = body.as_ref().map_or(0, |b| b.len());
-                    headers.add("Content-Length", len.to_string());
-
-                    match body {
-                        None => EMPTY_SHA256.into(),
-                        Some(v) => sha256_hash_sb(v),
-                    }
-                }
-                _ => EMPTY_SHA256.into(),
-            };
-            headers.add("x-amz-content-sha256", sha256.clone());
-
-            let date = utc_now();
-            headers.add("x-amz-date", to_amz_date(date));
-
-            if let Some(p) = &self.provider {
-                let creds = p.fetch();
-                if creds.session_token.is_some() {
-                    headers.add("X-Amz-Security-Token", creds.session_token.unwrap());
-                }
-                sign_v4_s3(
-                    method,
-                    &url.path,
-                    region,
-                    headers,
-                    query_params,
-                    &creds.access_key,
-                    &creds.secret_key,
-                    &sha256,
-                    date,
-                );
-            }
-        }
-        let mut req = self.client.request(method.clone(), url.to_string());
-
-        for (key, values) in headers.iter_all() {
-            for value in values {
-                req = req.header(key, value);
-            }
-        }
-
-        if false {
-            let mut header_strings: Vec<String> = headers
-                .iter_all()
-                .map(|(k, v)| format!("{}: {}", k, v.join(",")))
-                .collect();
-
-            // Sort headers alphabetically by name
-            header_strings.sort();
-
-            let body_str: String = String::from_utf8(
-                body.clone()
-                    .unwrap_or(&SegmentedBytes::new())
-                    .to_bytes()
-                    .to_vec(),
-            )?;
-
-            println!(
-                "S3 request: {} url={:?}; headers={:?}; body={}\n",
-                method,
-                url.path,
-                header_strings.join("; "),
-                body_str
-            );
-        }
-
-        if (*method == Method::PUT) || (*method == Method::POST) {
-            //TODO: why-oh-why first collect into a vector and then iterate to a stream?
-            let bytes_vec: Vec<Bytes> = match body {
-                Some(v) => v.into_iter().collect(),
-                None => Vec::new(),
-            };
-            let stream = futures_util::stream::iter(
-                bytes_vec
-                    .into_iter()
-                    .map(|b| -> Result<_, std::io::Error> { Ok(b) }),
-            );
-            req = req.body(Body::wrap_stream(stream));
-        }
-
-        let resp: reqwest::Response = req.send().await?;
-
-        if resp.status().is_success() {
-            return Ok(resp);
-        }
-
-        let mut resp = resp;
-        let status_code = resp.status().as_u16();
-        let headers: HeaderMap = mem::take(resp.headers_mut());
-        let body: Bytes = resp.bytes().await?;
-
-        let e: Error = self.get_error_response(
-            body,
-            status_code,
-            headers,
-            method,
-            &url.path,
-            bucket_name,
-            object_name,
-            retry,
-        );
-
-        match e {
-            Error::S3Error(ref err) => {
-                if (err.code == ErrorCode::NoSuchBucket) || (err.code == ErrorCode::RetryHead) {
-                    if let Some(v) = bucket_name {
-                        self.region_map.remove(v);
-                    }
-                }
-            }
-            _ => {}
-        };
-
-        Err(e)
-    }
-
-    pub(crate) async fn execute(
-        &self,
-        method: Method,
-        region: &str,
-        headers: &mut Multimap,
-        query_params: &Multimap,
-        bucket_name: &Option<&str>,
-        object_name: &Option<&str>,
-        data: Option<&SegmentedBytes>,
-    ) -> Result<reqwest::Response, Error> {
-        let resp: Result<reqwest::Response, Error> = self
-            .execute_internal(
-                &method,
-                region,
-                headers,
-                query_params,
-                bucket_name.as_deref(),
-                object_name.as_deref(),
-                data,
-                true,
-            )
-            .await;
-        match resp {
-            Ok(r) => return Ok(r),
-            Err(e) => match e {
-                Error::S3Error(ref er) => {
-                    if er.code != ErrorCode::RetryHead {
-                        return Err(e);
-                    }
-                }
-                _ => return Err(e),
-            },
-        };
-
-        // Retry only once on RetryHead error.
-        self.execute_internal(
-            &method,
-            region,
-            headers,
-            query_params,
-            bucket_name.as_deref(),
-            object_name.as_deref(),
-            data,
-            false,
-        )
-        .await
     }
 }

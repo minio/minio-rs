@@ -15,6 +15,7 @@
 
 use crate::s3::Client;
 use crate::s3::client::DEFAULT_EXPIRY_SECONDS;
+use crate::s3::creds::Credentials;
 use crate::s3::error::Error;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::GetPresignedObjectUrlResponse;
@@ -60,7 +61,7 @@ impl GetPresignedObjectUrl {
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.add_version(self.version_id.clone());
 
-        let mut url = self.client.inner.base_url.build_url(
+        let mut url = self.client.shared.base_url.build_url(
             &self.method,
             &region,
             &query_params,
@@ -68,10 +69,10 @@ impl GetPresignedObjectUrl {
             Some(&self.object),
         )?;
 
-        if let Some(p) = &self.client.inner.provider {
-            let creds = p.fetch();
+        if let Some(p) = &self.client.shared.provider {
+            let creds: Credentials = p.fetch();
             if let Some(t) = creds.session_token {
-                query_params.insert("X-Amz-Security-Token".into(), t);
+                query_params.add("X-Amz-Security-Token", t);
             }
 
             let date = match self.request_time {

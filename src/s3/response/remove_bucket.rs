@@ -37,10 +37,10 @@ impl FromS3Response for RemoveBucketResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let mut req = req;
         let bucket: String = take_bucket(req.bucket)?;
+        req.client.remove_bucket_region(&bucket);
         let mut resp = resp?;
-
-        req.client.inner.region_map.remove(&bucket);
 
         Ok(Self {
             headers: mem::take(resp.headers_mut()),

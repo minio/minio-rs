@@ -21,6 +21,18 @@ pub fn create_client_on_play() -> Result<Client, Box<dyn std::error::Error + Sen
     Ok(client)
 }
 
+pub fn create_client_on_localhost() -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
+    let base_url = "http://localhost:9000/".parse::<BaseUrl>()?;
+    log::info!("Trying to connect to MinIO at: `{:?}`", base_url);
+
+    let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+
+    let client = ClientBuilder::new(base_url.clone())
+        .provider(Some(Box::new(static_provider)))
+        .build()?;
+    Ok(client)
+}
+
 pub async fn create_bucket_if_not_exists(
     bucket_name: &str,
     client: &Client,

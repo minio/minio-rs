@@ -16,7 +16,7 @@ use async_trait::async_trait;
 use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
 
-use crate::s3::multimap::Multimap;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::utils::insert;
 use crate::s3::{
     client::Client,
@@ -36,11 +36,11 @@ fn add_common_list_objects_query_params(
     max_keys: Option<u16>,
     prefix: Option<String>,
 ) {
-    query_params.insert("delimiter".into(), delimiter.unwrap_or("".into()));
-    query_params.insert("max-keys".into(), max_keys.unwrap_or(1000).to_string());
-    query_params.insert("prefix".into(), prefix.unwrap_or("".into()));
+    query_params.add("delimiter", delimiter.unwrap_or("".into()));
+    query_params.add("max-keys", max_keys.unwrap_or(1000).to_string());
+    query_params.add("prefix", prefix.unwrap_or("".into()));
     if !disable_url_encoding {
-        query_params.insert("encoding-type".into(), "url".into());
+        query_params.add("encoding-type", "url");
     }
 }
 
@@ -125,7 +125,7 @@ impl ToS3Request for ListObjectsV1 {
                 self.prefix,
             );
             if let Some(v) = self.marker {
-                query_params.insert("marker".into(), v);
+                query_params.add("marker", v);
             }
         }
 
@@ -221,7 +221,7 @@ impl ToS3Request for ListObjectsV2 {
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         {
-            query_params.insert("list-type".into(), "2".into());
+            query_params.add("list-type", "2");
             add_common_list_objects_query_params(
                 &mut query_params,
                 self.delimiter,
@@ -230,19 +230,19 @@ impl ToS3Request for ListObjectsV2 {
                 self.prefix,
             );
             if let Some(v) = self.continuation_token {
-                query_params.insert("continuation-token".into(), v);
+                query_params.add("continuation-token", v);
             }
             if self.fetch_owner {
-                query_params.insert("fetch-owner".into(), "true".into());
+                query_params.add("fetch-owner", "true");
             }
             if let Some(v) = self.start_after {
-                query_params.insert("start-after".into(), v);
+                query_params.add("start-after", v);
             }
             if self.include_user_metadata {
-                query_params.insert("metadata".into(), "true".into());
+                query_params.add("metadata", "true");
             }
             if self.unsorted {
-                query_params.insert("unsorted".into(), "true".into());
+                query_params.add("unsorted", "true");
             }
         }
 
@@ -353,16 +353,16 @@ impl ToS3Request for ListObjectVersions {
                 self.prefix,
             );
             if let Some(v) = self.key_marker {
-                query_params.insert("key-marker".into(), v);
+                query_params.add("key-marker", v);
             }
             if let Some(v) = self.version_id_marker {
-                query_params.insert("version-id-marker".into(), v);
+                query_params.add("version-id-marker", v);
             }
             if self.include_user_metadata {
-                query_params.insert("metadata".into(), "true".into());
+                query_params.add("metadata", "true");
             }
             if self.unsorted {
-                query_params.insert("unsorted".into(), "true".into());
+                query_params.add("unsorted", "true");
             }
         }
 

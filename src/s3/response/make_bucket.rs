@@ -37,15 +37,11 @@ impl FromS3Response for MakeBucketResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
+        let mut req = req;
         let bucket: String = take_bucket(req.bucket)?;
+        req.client.add_bucket_region(&bucket, &req.inner_region);
         let mut resp = resp?;
 
-        if !req.client.inner.region_map.contains_key(&bucket) {
-            req.client
-                .inner
-                .region_map
-                .insert(bucket.clone(), req.inner_region.clone());
-        }
         Ok(Self {
             headers: mem::take(resp.headers_mut()),
             region: req.inner_region,

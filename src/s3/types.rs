@@ -99,7 +99,6 @@ impl S3Request {
     pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
         self.inner_region = self.compute_inner_region()?;
         self.client
-            .inner
             .execute(
                 self.method.clone(),
                 &self.inner_region,

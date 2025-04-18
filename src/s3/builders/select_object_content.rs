@@ -93,7 +93,7 @@ impl ToS3Request for SelectObjectContent {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
 
-            if self.ssec.is_some() && !self.client.inner.base_url.https {
+            if self.ssec.is_some() && !self.client.is_secure() {
                 return Err(Error::SseTlsRequired(None));
             }
         }

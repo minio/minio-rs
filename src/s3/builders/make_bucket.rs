@@ -75,16 +75,12 @@ impl ToS3Request for MakeBucket {
         check_bucket_name(&self.bucket, true)?;
 
         let region1: Option<&str> = self.region.as_deref();
-        let region2: Option<&str> = if self.client.inner.base_url.region.is_empty() {
-            None
-        } else {
-            Some(&self.client.inner.base_url.region)
-        };
+        let region2: Option<&str> = self.client.get_region_from_url();
 
         let region_str: String = match (region1, region2) {
             (None, None) => DEFAULT_REGION.to_string(),
             (Some(_), None) => self.region.unwrap(),
-            (None, Some(_)) => self.client.inner.base_url.region.clone(),
+            (None, Some(v)) => v.to_string(),
             (Some(r1), Some(r2)) if r1 == r2 => self.region.unwrap(), // Both are Some and equal
             (Some(r1), Some(r2)) => {
                 return Err(Error::RegionMismatch(r1.to_string(), r2.to_string()));

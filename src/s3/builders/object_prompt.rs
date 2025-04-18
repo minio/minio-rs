@@ -105,8 +105,8 @@ impl ToS3Request for ObjectPrompt {
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.add_version(self.version_id);
 
-        query_params.insert(
-            "lambdaArn".into(),
+        query_params.add(
+            "lambdaArn",
             self.lambda_arn
                 .as_ref()
                 .map(ToString::to_string)

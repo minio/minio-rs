@@ -407,12 +407,6 @@ impl BaseUrl {
         bucket_name: Option<&str>,
         object_name: Option<&str>,
     ) -> Result<Url, Error> {
-        if !object_name.is_none_or(|v| v.is_empty()) && bucket_name.is_none_or(|v| v.is_empty()) {
-            return Err(Error::UrlBuildError(String::from(
-                "empty bucket name provided for object name",
-            )));
-        }
-
         let mut url = Url {
             https: self.https,
             host: self.host.clone(),

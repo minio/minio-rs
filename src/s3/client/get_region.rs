@@ -59,11 +59,11 @@ impl Client {
     ) -> Result<String, Error> {
         // If a region is provided, validate it against the base_url region
         if let Some(requested_region) = region {
-            if !self.inner.base_url.region.is_empty()
-                && (self.inner.base_url.region != *requested_region)
+            if !self.shared.base_url.region.is_empty()
+                && (self.shared.base_url.region != *requested_region)
             {
                 return Err(Error::RegionMismatch(
-                    self.inner.base_url.region.clone(),
+                    self.shared.base_url.region.clone(),
                     requested_region.clone(),
                 ));
             }
@@ -71,18 +71,18 @@ impl Client {
         }
 
         // If base_url has a region set, use it
-        if !self.inner.base_url.region.is_empty() {
-            return Ok(self.inner.base_url.region.clone());
+        if !self.shared.base_url.region.is_empty() {
+            return Ok(self.shared.base_url.region.clone());
         }
 
         let bucket: String = bucket.into();
         // If no bucket or provider is configured, fall back to default
-        if bucket.is_empty() || self.inner.provider.is_none() {
+        if bucket.is_empty() || self.shared.provider.is_none() {
             return Ok(DEFAULT_REGION.to_owned());
         }
 
         // Return cached region if available
-        if let Some(v) = self.inner.region_map.get(&bucket) {
+        if let Some(v) = self.shared.region_map.get(&bucket) {
             return Ok(v.value().clone());
         }
 
@@ -95,7 +95,7 @@ impl Client {
             resp.region_response
         };
 
-        self.inner
+        self.shared
             .region_map
             .insert(bucket, resolved_region.clone());
         Ok(resolved_region)

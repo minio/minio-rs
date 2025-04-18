@@ -76,6 +76,9 @@ name = "file_downloader"
 [[example]]
 name = "object_prompt"
 
+[[example]]
+name = "append_object"
+
 [[bench]]
 name = "s3-api"
 path = "benches/s3/api_benchmarks.rs"

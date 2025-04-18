@@ -198,7 +198,7 @@ impl ToS3Request for AbortMultipartUpload {
 
         let headers: Multimap = self.extra_headers.unwrap_or_default();
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
-        query_params.insert("uploadId".into(), urlencode(&self.upload_id).to_string());
+        query_params.add("uploadId", urlencode(&self.upload_id).to_string());
 
         Ok(S3Request::new(self.client, Method::DELETE)
             .region(self.region)
@@ -436,10 +436,10 @@ impl ToS3Request for UploadPart {
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
 
         if let Some(upload_id) = self.upload_id {
-            query_params.insert("uploadId".into(), upload_id);
+            query_params.add("uploadId", upload_id);
         }
         if let Some(part_number) = self.part_number {
-            query_params.insert("partNumber".into(), part_number.to_string());
+            query_params.add("partNumber", part_number.to_string());
         }
 
         Ok(S3Request::new(self.client, Method::PUT)

@@ -17,7 +17,7 @@ use async_trait::async_trait;
 use futures_util::Stream;
 use http::Method;
 
-use crate::s3::multimap::Multimap;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::{
     client::Client,
     error::Error,
@@ -102,19 +102,19 @@ impl ToS3Request for ListenBucketNotification {
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         {
             if let Some(v) = self.prefix {
-                query_params.insert("prefix".into(), v);
+                query_params.add("prefix", v);
             }
             if let Some(v) = self.suffix {
-                query_params.insert("suffix".into(), v);
+                query_params.add("suffix", v);
             }
             if let Some(v) = self.events {
                 for e in v.into_iter() {
-                    query_params.insert("events".into(), e);
+                    query_params.add("events", e);
                 }
             } else {
-                query_params.insert("events".into(), "s3:ObjectCreated:*".into());
-                query_params.insert("events".into(), "s3:ObjectRemoved:*".into());
-                query_params.insert("events".into(), "s3:ObjectAccessed:*".into());
+                query_params.add("events", "s3:ObjectCreated:*");
+                query_params.add("events", "s3:ObjectRemoved:*");
+                query_params.add("events", "s3:ObjectAccessed:*");
             }
         }
 

@@ -40,7 +40,7 @@ impl GetPresignedPolicyFormData {
             .client
             .get_region_cached(&self.policy.bucket, &self.policy.region)?;
 
-        let creds: Credentials = self.client.inner.provider.as_ref().unwrap().fetch();
+        let creds: Credentials = self.client.shared.provider.as_ref().unwrap().fetch();
         self.policy.form_data(
             creds.access_key,
             creds.secret_key,

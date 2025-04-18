@@ -152,7 +152,7 @@ fn sign_v4(
 }
 
 /// Signs and updates headers for given parameters for S3 request
-pub fn sign_v4_s3(
+pub(crate) fn sign_v4_s3(
     method: &Method,
     uri: &str,
     region: &str,
@@ -178,7 +178,7 @@ pub fn sign_v4_s3(
 }
 
 /// Signs and updates headers for given parameters for pre-sign request
-pub fn presign_v4(
+pub(crate) fn presign_v4(
     method: &Method,
     host: &str,
     uri: &str,
@@ -193,14 +193,11 @@ pub fn presign_v4(
     let canonical_headers = "host:".to_string() + host;
     let signed_headers = "host";
 
-    query_params.insert("X-Amz-Algorithm".into(), "AWS4-HMAC-SHA256".into());
-    query_params.insert(
-        "X-Amz-Credential".into(),
-        access_key.to_string() + "/" + &scope,
-    );
-    query_params.insert("X-Amz-Date".into(), to_amz_date(date));
-    query_params.insert("X-Amz-Expires".into(), expires.to_string());
-    query_params.insert("X-Amz-SignedHeaders".into(), signed_headers.to_string());
+    query_params.add("X-Amz-Algorithm", "AWS4-HMAC-SHA256");
+    query_params.add("X-Amz-Credential", access_key.to_string() + "/" + &scope);
+    query_params.add("X-Amz-Date", to_amz_date(date));
+    query_params.add("X-Amz-Expires", expires.to_string());
+    query_params.add("X-Amz-SignedHeaders", signed_headers.to_string());
 
     let canonical_query_string = query_params.get_canonical_query_string();
     let canonical_request_hash = get_canonical_request_hash(
@@ -215,11 +212,11 @@ pub fn presign_v4(
     let signing_key = get_signing_key(secret_key, date, region, "s3");
     let signature = get_signature(signing_key.as_slice(), string_to_sign.as_bytes());
 
-    query_params.insert("X-Amz-Signature".into(), signature);
+    query_params.add("X-Amz-Signature", signature);
 }
 
 /// Signs and updates headers for given parameters for pre-sign POST request
-pub fn post_presign_v4(
+pub(crate) fn post_presign_v4(
     string_to_sign: &str,
     secret_key: &str,
     date: UtcTime,

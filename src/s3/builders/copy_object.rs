@@ -108,8 +108,8 @@ impl ToS3Request for UploadPartCopy {
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         {
-            query_params.insert("partNumber".into(), self.part_number.to_string());
-            query_params.insert("uploadId".into(), self.upload_id);
+            query_params.add("partNumber", self.part_number.to_string());
+            query_params.add("uploadId", self.upload_id);
         }
 
         Ok(S3Request::new(self.client, Method::PUT)
