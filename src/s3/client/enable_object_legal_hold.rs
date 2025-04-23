@@ -19,8 +19,34 @@ use super::Client;
 use crate::s3::builders::EnableObjectLegalHold;
 
 impl Client {
-    /// Create a EnableObjectLegalHold request builder.
-    pub fn enable_object_legal_hold(&self, bucket: &str) -> EnableObjectLegalHold {
-        EnableObjectLegalHold::new(bucket).client(self)
+    /// Creates a [`EnableObjectLegalHold`] request builder.
+    ///
+    /// To execute the request, call [`EnableObjectLegalHold::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`EnableObjectLegalHoldResponse`](crate::s3::response::EnableObjectLegalHoldResponse).
+    ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::EnableObjectLegalHoldResponse;
+    /// use minio::s3::types::S3Api;
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let resp: EnableObjectLegalHoldResponse =
+    ///         client.enable_object_legal_hold("bucket-name", "object-name").send().await.unwrap();
+    ///     println!("legal hold of object '{}' in bucket '{}' is enabled", resp.object, resp.bucket);
+    /// }
+    /// ```
+    pub fn enable_object_legal_hold<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> EnableObjectLegalHold {
+        EnableObjectLegalHold::new(self.clone(), bucket.into(), object.into())
     }
 }

@@ -23,7 +23,7 @@ jobs:
         cargo clippy --all-targets --all-features
         cargo build --bins --examples --tests --benches --verbose
 
-    - name: Run tests
+    - name: Run tests S3
       run: |
         ./tests/start-server.sh
         export SERVER_ENDPOINT=localhost:9000

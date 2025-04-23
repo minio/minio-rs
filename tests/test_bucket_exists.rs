@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use minio::s3::client::DEFAULT_REGION;
-use minio::s3::response::BucketExistsResponse;
+use minio::s3::response::{BucketExistsResponse, RemoveBucketResponse};
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
 
@@ -24,8 +24,16 @@ async fn bucket_exists() {
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
     let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
-
     assert!(resp.exists);
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
+
+    let resp: RemoveBucketResponse = ctx.client.remove_bucket(&bucket_name).send().await.unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
+
+    let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
+    assert!(!resp.exists);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, "");
 }

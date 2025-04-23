@@ -15,32 +15,29 @@
 
 use http::Method;
 
+use crate::s3::multimap::Multimap;
 use crate::s3::response::ListBucketsResponse;
 use crate::s3::{
     Client,
     error::Error,
     types::{S3Api, S3Request, ToS3Request},
-    utils::Multimap,
 };
 
 /// Argument builder for [list_buckets()](Client::list_buckets) API.
 #[derive(Clone, Debug, Default)]
 pub struct ListBuckets {
-    client: Option<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
 }
 
-// builder interface
 impl ListBuckets {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
+    pub fn new(client: Client) -> Self {
+        Self {
+            client,
+            ..Default::default()
+        }
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -54,27 +51,14 @@ impl ListBuckets {
     }
 }
 
-impl ToS3Request for ListBuckets {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            headers = v.clone();
-        }
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            query_params = v.clone();
-        }
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::GET,
-        )
-        .query_params(query_params)
-        .headers(headers);
-        Ok(req)
-    }
-}
-
 impl S3Api for ListBuckets {
     type S3Response = ListBucketsResponse;
+}
+
+impl ToS3Request for ListBuckets {
+    fn to_s3request(self) -> Result<S3Request, Error> {
+        Ok(S3Request::new(self.client, Method::GET)
+            .query_params(self.extra_query_params.unwrap_or_default())
+            .headers(self.extra_headers.unwrap_or_default()))
+    }
 }

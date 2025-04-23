@@ -13,13 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ErrorCode};
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::get_text;
+use crate::s3::utils::{get_text, take_bucket};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
 use std::collections::HashMap;
+use std::mem;
 use xmltree::Element;
 
 /// Response of
@@ -27,6 +28,7 @@ use xmltree::Element;
 /// API
 #[derive(Clone, Debug)]
 pub struct GetBucketTagsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -35,17 +37,13 @@ pub struct GetBucketTagsResponse {
 
 #[async_trait]
 impl FromS3Response for GetBucketTagsResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
         match resp {
-            Ok(r) => {
-                let headers = r.headers().clone();
+            Ok(mut r) => {
+                let headers: HeaderMap = mem::take(r.headers_mut());
                 let body = r.bytes().await?;
                 let mut root = Element::parse(body.reader())?;
 
@@ -57,21 +55,19 @@ impl FromS3Response for GetBucketTagsResponse {
                     tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
                 }
 
-                Ok(GetBucketTagsResponse {
+                Ok(Self {
                     headers,
-                    region: req.get_computed_region(),
-                    bucket,
+                    region: req.inner_region,
+                    bucket: take_bucket(req.bucket)?,
                     tags,
                 })
             }
-            Err(Error::S3Error(ref err)) if err.code == Error::NoSuchTagSet.as_str() => {
-                Ok(GetBucketTagsResponse {
-                    headers: HeaderMap::new(),
-                    region: req.get_computed_region(),
-                    bucket,
-                    tags: HashMap::new(),
-                })
-            }
+            Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchTagSet => Ok(Self {
+                headers: e.headers,
+                region: req.inner_region,
+                bucket: take_bucket(req.bucket)?,
+                tags: HashMap::new(),
+            }),
             Err(e) => Err(e),
         }
     }

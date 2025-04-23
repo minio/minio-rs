@@ -19,41 +19,41 @@ use crate::s3::utils::{from_iso8601utc, get_text};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
+use std::mem;
 use xmltree::Element;
 
 /// Response of [list_buckets()](crate::s3::client::Client::list_buckets) API
 #[derive(Debug, Clone)]
 pub struct ListBucketsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub buckets: Vec<Bucket>,
 }
 
 #[async_trait]
 impl FromS3Response for ListBucketsResponse {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let resp = resp?;
-        let header_map = resp.headers().clone();
+        let mut resp = resp?;
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+
         let body = resp.bytes().await?;
         let mut root = Element::parse(body.reader())?;
-        let buckets = root
+        let buckets_xml = root
             .get_mut_child("Buckets")
-            .ok_or(Error::XmlError(String::from("<Buckets> tag not found")))?;
+            .ok_or(Error::XmlError("<Buckets> tag not found".into()))?;
 
-        let mut bucket_list: Vec<Bucket> = Vec::new();
-        while let Some(b) = buckets.take_child("Bucket") {
+        let mut buckets: Vec<Bucket> = Vec::new();
+        while let Some(b) = buckets_xml.take_child("Bucket") {
             let bucket = b;
-            bucket_list.push(Bucket {
+            buckets.push(Bucket {
                 name: get_text(&bucket, "Name")?,
                 creation_date: from_iso8601utc(&get_text(&bucket, "CreationDate")?)?,
             })
         }
 
-        Ok(ListBucketsResponse {
-            headers: header_map.clone(),
-            buckets: bucket_list,
-        })
+        Ok(Self { headers, buckets })
     }
 }

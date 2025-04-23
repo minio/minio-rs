@@ -14,15 +14,19 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
+use crate::s3::multimap::MultimapExt;
 use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::{take_bucket, take_object};
 use async_trait::async_trait;
 use http::HeaderMap;
+use std::mem;
 
 /// Response of
 /// [set_object_tags()](crate::s3::client::Client::set_object_tags)
 /// API
 #[derive(Clone, Debug)]
 pub struct SetObjectTagsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -33,27 +37,18 @@ pub struct SetObjectTagsResponse {
 
 #[async_trait]
 impl FromS3Response for SetObjectTagsResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
-        let resp = resp?;
+        let mut resp = resp?;
 
-        let headers: HeaderMap = resp.headers().clone();
-        let region: String = req.get_computed_region();
-        let object: String = req.object.unwrap().into();
-        let version_id: Option<String> = req.query_params.get("versionId").cloned(); //TODO consider taking the version_id
-
-        Ok(SetObjectTagsResponse {
-            headers,
-            region,
-            bucket,
-            object,
-            version_id,
+        Ok(Self {
+            headers: mem::take(resp.headers_mut()),
+            region: req.inner_region,
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
+            version_id: req.query_params.take_version(),
         })
     }
 }

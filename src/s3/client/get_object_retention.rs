@@ -19,8 +19,34 @@ use super::Client;
 use crate::s3::builders::GetObjectRetention;
 
 impl Client {
-    /// Create a GetObjectRetention request builder.
-    pub fn get_object_retention(&self, bucket: &str) -> GetObjectRetention {
-        GetObjectRetention::new(bucket).client(self)
+    /// Creates a [`GetObjectRetention`] request builder.
+    ///
+    /// To execute the request, call [`GetObjectRetention::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetObjectRetentionResponse`](crate::s3::response::GetObjectRetentionResponse).
+    ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::GetObjectRetentionResponse;
+    /// use minio::s3::types::S3Api;
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let resp: GetObjectRetentionResponse =
+    ///         client.get_object_retention("bucket-name", "object-name").send().await.unwrap();
+    ///     println!("retrieved retention mode '{:?}' until '{:?}' from bucket '{}' is enabled", resp.retention_mode, resp.retain_until_date, resp.bucket);
+    /// }
+    /// ```
+    pub fn get_object_retention<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> GetObjectRetention {
+        GetObjectRetention::new(self.clone(), bucket.into(), object.into())
     }
 }

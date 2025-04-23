@@ -19,8 +19,28 @@ use super::Client;
 use crate::s3::builders::BucketExists;
 
 impl Client {
-    /// Create a BucketExists request builder.
-    pub fn bucket_exists(&self, bucket: &str) -> BucketExists {
-        BucketExists::new(bucket).client(self)
+    /// Creates a [`BucketExists`] request builder.
+    ///
+    /// To execute the request, call [`BucketExists::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`BucketExistsResponse`](crate::s3::response::BucketExistsResponse).    
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::BucketExistsResponse;
+    /// use minio::s3::types::S3Api;
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {    
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let resp: BucketExistsResponse =
+    ///         client.bucket_exists("bucket-name").send().await.unwrap();
+    ///     println!("bucket '{}' exists: {}", resp.bucket, resp.exists);
+    /// }
+    /// ```
+    pub fn bucket_exists<S: Into<String>>(&self, bucket: S) -> BucketExists {
+        BucketExists::new(self.clone(), bucket.into())
     }
 }

@@ -13,12 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ErrorCode};
 use crate::s3::types::{FromS3Response, S3Request, SseConfig};
-use crate::s3::utils::{get_option_text, get_text};
+use crate::s3::utils::{get_option_text, get_text, take_bucket};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
+use std::mem;
 use xmltree::Element;
 
 /// Response of
@@ -26,6 +27,7 @@ use xmltree::Element;
 /// API
 #[derive(Clone, Debug)]
 pub struct GetBucketEncryptionResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -34,47 +36,43 @@ pub struct GetBucketEncryptionResponse {
 
 #[async_trait]
 impl FromS3Response for GetBucketEncryptionResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
         match resp {
-            Ok(r) => {
-                let headers = r.headers().clone();
+            Ok(mut r) => {
+                let headers: HeaderMap = mem::take(r.headers_mut());
                 let body = r.bytes().await?;
                 let mut root = Element::parse(body.reader())?;
 
                 let rule = root
                     .get_mut_child("Rule")
-                    .ok_or(Error::XmlError(String::from("<Rule> tag not found")))?;
+                    .ok_or(Error::XmlError("<Rule> tag not found".into()))?;
 
                 let sse_by_default = rule
                     .get_mut_child("ApplyServerSideEncryptionByDefault")
-                    .ok_or(Error::XmlError(String::from(
-                        "<ApplyServerSideEncryptionByDefault> tag not found",
-                    )))?;
+                    .ok_or(Error::XmlError(
+                        "<ApplyServerSideEncryptionByDefault> tag not found".into(),
+                    ))?;
 
-                Ok(GetBucketEncryptionResponse {
+                Ok(Self {
                     headers,
-                    region: req.get_computed_region(),
-                    bucket,
+                    region: req.inner_region,
+                    bucket: take_bucket(req.bucket)?,
                     config: SseConfig {
                         sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
                         kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID"),
                     },
                 })
             }
-            Err(Error::S3Error(ref err))
-                if err.code == "ServerSideEncryptionConfigurationNotFoundError" =>
+            Err(Error::S3Error(e))
+                if e.code == ErrorCode::ServerSideEncryptionConfigurationNotFoundError =>
             {
-                Ok(GetBucketEncryptionResponse {
-                    headers: HeaderMap::new(),
-                    region: req.get_computed_region(),
-                    bucket,
+                Ok(Self {
+                    headers: e.headers,
+                    region: req.inner_region,
+                    bucket: take_bucket(req.bucket)?,
                     config: Default::default(),
                 })
             }

@@ -14,11 +14,12 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::SetObjectTagsResponse;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name};
+use crate::s3::utils::{check_bucket_name, check_object_name, insert};
 use bytes::Bytes;
 use http::Method;
 use std::collections::HashMap;
@@ -26,28 +27,26 @@ use std::collections::HashMap;
 /// Argument builder for [set_object_tags()](Client::set_object_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct SetObjectTags {
-    pub client: Option<Client>,
+    client: Client,
 
-    pub extra_headers: Option<Multimap>,
-    pub extra_query_params: Option<Multimap>,
-    pub region: Option<String>,
-    pub bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-    pub object: String,
-    pub version_id: Option<String>,
-    pub tags: HashMap<String, String>,
+    object: String,
+    version_id: Option<String>,
+    tags: HashMap<String, String>,
 }
 
 impl SetObjectTags {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client,
+            bucket,
+            object,
             ..Default::default()
         }
-    }
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -62,11 +61,6 @@ impl SetObjectTags {
 
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
-        self
-    }
-
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
         self
     }
 
@@ -86,63 +80,40 @@ impl S3Api for SetObjectTags {
 }
 
 impl ToS3Request for SetObjectTags {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
 
-        // TODO add to all other function (that use object) the following test
-        // TODO should it be moved to the object setter function? or use validate as in put_object
-        if self.object.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
+        let mut query_params: Multimap = insert(self.extra_query_params, "tagging");
+        query_params.add_version(self.version_id);
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
-        if let Some(v) = &self.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert("tagging".into(), String::new());
-
-        let mut data = String::from("<Tagging>");
-        if !self.tags.is_empty() {
-            data.push_str("<TagSet>");
-            for (key, value) in self.tags.iter() {
-                data.push_str("<Tag>");
-                data.push_str("<Key>");
-                data.push_str(key);
-                data.push_str("</Key>");
-                data.push_str("<Value>");
-                data.push_str(value);
-                data.push_str("</Value>");
-                data.push_str("</Tag>");
+        let data: String = {
+            let mut data = String::from("<Tagging>");
+            if !self.tags.is_empty() {
+                data.push_str("<TagSet>");
+                for (key, value) in self.tags.iter() {
+                    data.push_str("<Tag>");
+                    data.push_str("<Key>");
+                    data.push_str(key);
+                    data.push_str("</Key>");
+                    data.push_str("<Value>");
+                    data.push_str(value);
+                    data.push_str("</Value>");
+                    data.push_str("</Tag>");
+                }
+                data.push_str("</TagSet>");
             }
-            data.push_str("</TagSet>");
-        }
-        data.push_str("</Tagging>");
-
+            data.push_str("</Tagging>");
+            data
+        };
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(data)));
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::PUT)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(self.client, Method::PUT)
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
-            .object(Some(&self.object))
-            .headers(headers)
-            .body(body);
-
-        Ok(req)
+            .object(Some(self.object))
+            .headers(self.extra_headers.unwrap_or_default())
+            .body(body))
     }
 }

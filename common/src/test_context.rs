@@ -23,12 +23,12 @@ use std::path::{Path, PathBuf};
 
 #[derive(Clone)]
 pub struct TestContext {
+    pub client: Client,
     pub base_url: BaseUrl,
     pub access_key: String,
     pub secret_key: String,
     pub ignore_cert_check: Option<bool>,
     pub ssl_cert_file: Option<PathBuf>,
-    pub client: Client,
 }
 
 impl TestContext {
@@ -66,12 +66,12 @@ impl TestContext {
             .unwrap();
 
             Self {
+                client,
                 base_url,
                 access_key,
                 secret_key,
                 ignore_cert_check: Some(ignore_cert_check),
                 ssl_cert_file: ssl_cert_file.map(PathBuf::from),
-                client,
             }
         } else {
             const DEFAULT_SERVER_ENDPOINT: &str = "https://play.min.io/";
@@ -123,12 +123,12 @@ impl TestContext {
             .unwrap();
 
             Self {
+                client,
                 base_url,
                 access_key,
                 secret_key,
                 ignore_cert_check: Some(ignore_cert_check),
                 ssl_cert_file: Some(ssl_cert_file),
-                client,
             }
         }
     }
@@ -144,7 +144,7 @@ impl TestContext {
     /// - `CleanupGuard` - A guard that automatically deletes the bucket when dropped.
     ///
     /// # Example
-    /// ```rust
+    /// ```ignore
     /// let (bucket_name, guard) = client.create_bucket_helper().await;
     /// println!("Created temporary bucket: {}", bucket_name);
     /// // The bucket will be removed when `guard` is dropped.
@@ -152,7 +152,7 @@ impl TestContext {
     pub async fn create_bucket_helper(&self) -> (String, CleanupGuard) {
         let bucket_name = rand_bucket_name();
         let _resp = self.client.make_bucket(&bucket_name).send().await.unwrap();
-        let guard = CleanupGuard::new(&self.client, &bucket_name);
+        let guard = CleanupGuard::new(self.client.clone(), &bucket_name);
         (bucket_name, guard)
     }
 }

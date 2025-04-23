@@ -53,8 +53,7 @@ pub(crate) fn bench_set_bucket_replication(criterion: &mut Criterion) {
         |ctx| {
             let config =
                 create_bucket_replication_config_example(ctx.aux_bucket.clone().unwrap().as_str());
-            SetBucketReplication::new(&ctx.bucket)
-                .client(&ctx.client)
+            SetBucketReplication::new(ctx.client.clone(), ctx.bucket.clone())
                 .replication_config(config)
         },
     )
@@ -86,7 +85,7 @@ pub(crate) fn bench_get_bucket_replication(criterion: &mut Criterion) {
 
             ctx
         },
-        |ctx| GetBucketReplication::new(&ctx.bucket).client(&ctx.client),
+        |ctx| GetBucketReplication::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }
 #[allow(dead_code)]
@@ -116,6 +115,6 @@ pub(crate) fn bench_delete_bucket_replication(criterion: &mut Criterion) {
 
             ctx
         },
-        |ctx| DeleteBucketReplication::new(&ctx.bucket).client(&ctx.client),
+        |ctx| DeleteBucketReplication::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }

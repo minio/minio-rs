@@ -13,23 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(unused_imports)]
 use crate::common_benches::{Ctx2, benchmark_s3_api};
 
 use criterion::Criterion;
+use minio::s3::builders::{CopyObjectInternal, CopySource};
+use minio_common::utils::rand_object_name;
 
-#[allow(dead_code)]
-pub(crate) fn bench_object_copy(_criterion: &mut Criterion) {
-    /*
+pub(crate) fn bench_object_copy_internal(criterion: &mut Criterion) {
     benchmark_s3_api(
-        "object_copy",
+        "object_copy_internal",
         criterion,
         || async { Ctx2::new_with_object(false).await },
         |ctx| {
-            let _object_name_dst = rand_object_name();
-            //TODO refactor copy object for this to be possible
-            todo!()
+            let object_name_src = &ctx.object;
+            let object_name_dst = rand_object_name();
+            CopyObjectInternal::new(ctx.client.clone(), ctx.bucket.clone(), object_name_dst)
+                .source(CopySource::new(&ctx.bucket, object_name_src).unwrap())
         },
-    );
-     */
+    )
 }

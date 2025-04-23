@@ -14,11 +14,12 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
+use crate::s3::multimap::Multimap;
 use crate::s3::response::SetBucketTagsResponse;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name};
+use crate::s3::utils::{check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
 use std::collections::HashMap;
@@ -26,27 +27,23 @@ use std::collections::HashMap;
 /// Argument builder for [set_bucket_tags()](crate::s3::client::Client::set_bucket_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct SetBucketTags {
-    pub(crate) client: Option<Client>,
+    client: Client,
 
-    pub(crate) extra_headers: Option<Multimap>,
-    pub(crate) extra_query_params: Option<Multimap>,
-    pub(crate) region: Option<String>,
-    pub(crate) bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-    pub(crate) tags: HashMap<String, String>,
+    tags: HashMap<String, String>,
 }
 
 impl SetBucketTags {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: Client, bucket: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client,
+            bucket,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -75,51 +72,35 @@ impl S3Api for SetBucketTags {
 }
 
 impl ToS3Request for SetBucketTags {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
-        query_params.insert(String::from("tagging"), String::new());
-
-        let mut data = String::from("<Tagging>");
-        if !self.tags.is_empty() {
-            data.push_str("<TagSet>");
-            for (key, value) in self.tags.iter() {
-                data.push_str("<Tag>");
-                data.push_str("<Key>");
-                data.push_str(key);
-                data.push_str("</Key>");
-                data.push_str("<Value>");
-                data.push_str(value);
-                data.push_str("</Value>");
-                data.push_str("</Tag>");
+        let data: String = {
+            let mut data = String::from("<Tagging>");
+            if !self.tags.is_empty() {
+                data.push_str("<TagSet>");
+                for (key, value) in self.tags.iter() {
+                    data.push_str("<Tag>");
+                    data.push_str("<Key>");
+                    data.push_str(key);
+                    data.push_str("</Key>");
+                    data.push_str("<Value>");
+                    data.push_str(value);
+                    data.push_str("</Value>");
+                    data.push_str("</Tag>");
+                }
+                data.push_str("</TagSet>");
             }
-            data.push_str("</TagSet>");
-        }
-        data.push_str("</Tagging>");
-
+            data.push_str("</Tagging>");
+            data
+        };
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(data)));
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::PUT)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
-            .query_params(query_params)
-            .headers(headers)
-            .body(body);
-
-        Ok(req)
+        Ok(S3Request::new(self.client, Method::PUT)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(insert(self.extra_query_params, "tagging"))
+            .headers(self.extra_headers.unwrap_or_default())
+            .body(body))
     }
 }

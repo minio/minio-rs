@@ -16,6 +16,8 @@ use async_trait::async_trait;
 use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
 
+use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::utils::insert;
 use crate::s3::{
     client::Client,
     error::Error,
@@ -24,34 +26,41 @@ use crate::s3::{
         ListObjectVersionsResponse, ListObjectsV1Response, ListObjectsV2Response,
     },
     types::{S3Api, S3Request, ToS3Request, ToStream},
-    utils::{Multimap, check_bucket_name, merge},
+    utils::check_bucket_name,
 };
 
 fn add_common_list_objects_query_params(
     query_params: &mut Multimap,
-    delimiter: Option<&str>,
+    delimiter: Option<String>,
     disable_url_encoding: bool,
     max_keys: Option<u16>,
-    prefix: Option<&str>,
+    prefix: Option<String>,
 ) {
-    query_params.insert(
-        String::from("delimiter"),
-        delimiter.unwrap_or("").to_string(),
-    );
-    query_params.insert(
-        String::from("max-keys"),
-        max_keys.unwrap_or(1000).to_string(),
-    );
-    query_params.insert(String::from("prefix"), prefix.unwrap_or("").to_string());
+    query_params.add("delimiter", delimiter.unwrap_or("".into()));
+    query_params.add("max-keys", max_keys.unwrap_or(1000).to_string());
+    query_params.add("prefix", prefix.unwrap_or("".into()));
     if !disable_url_encoding {
-        query_params.insert(String::from("encoding-type"), String::from("url"));
+        query_params.add("encoding-type", "url");
     }
 }
+
+/// Helper function delimiter based on recursive flag when delimiter is not provided.
+fn delim_helper(delim: Option<String>, recursive: bool) -> Option<String> {
+    if delim.is_some() {
+        return delim;
+    }
+    match recursive {
+        true => None,
+        false => Some(String::from("/")),
+    }
+}
+
+// region: list-objects-v1
 
 /// Argument for ListObjectsV1 S3 API.
 #[derive(Clone, Debug, Default)]
 struct ListObjectsV1 {
-    client: Option<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -70,60 +79,31 @@ impl ToStream for ListObjectsV1 {
 
     async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
         Box::new(Box::pin(futures_stream::unfold(
-            (self.clone(), false),
-            move |(mut args, mut is_done)| async move {
+            (self, false),
+            move |(args, mut is_done)| async move {
+                // Stop the stream if no more data is available
                 if is_done {
                     return None;
                 }
-                let resp = args.send().await;
-                match resp {
+                // Prepare a clone of `args` for the next iteration
+                let mut args_for_next_request: ListObjectsV1 = args.clone();
+
+                // Handle the result of the API call
+                match args.send().await {
                     Ok(resp) => {
-                        args.marker.clone_from(&resp.next_marker);
+                        // Update the marker for the next request
+                        args_for_next_request.marker.clone_from(&resp.next_marker);
+
+                        // Determine if there are more results to fetch
                         is_done = !resp.is_truncated;
-                        Some((Ok(resp), (args, is_done)))
+
+                        // Return the response and prepare for the next iteration
+                        Some((Ok(resp), (args_for_next_request, is_done)))
                     }
-                    Err(e) => Some((Err(e), (args, true))),
+                    Err(e) => Some((Err(e), (args_for_next_request, true))),
                 }
             },
         )))
-    }
-}
-
-impl ToS3Request for ListObjectsV1 {
-    fn to_s3request(&self) -> Result<S3Request<'_>, Error> {
-        check_bucket_name(&self.bucket, true)?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-
-        add_common_list_objects_query_params(
-            &mut query_params,
-            self.delimiter.as_deref(),
-            self.disable_url_encoding,
-            self.max_keys,
-            self.prefix.as_deref(),
-        );
-        if let Some(v) = &self.marker {
-            query_params.insert(String::from("marker"), v.to_string());
-        }
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::GET,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .query_params(query_params)
-        .headers(headers);
-
-        Ok(req)
     }
 }
 
@@ -131,15 +111,29 @@ impl S3Api for ListObjectsV1 {
     type S3Response = ListObjectsV1Response;
 }
 
-// Helper function delimiter based on recursive flag when delimiter is not
-// provided.
-fn delim_helper(delim: Option<String>, recursive: bool) -> Option<String> {
-    if delim.is_some() {
-        return delim;
-    }
-    match recursive {
-        true => None,
-        false => Some(String::from("/")),
+impl ToS3Request for ListObjectsV1 {
+    fn to_s3request(self) -> Result<S3Request, Error> {
+        check_bucket_name(&self.bucket, true)?;
+
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        {
+            add_common_list_objects_query_params(
+                &mut query_params,
+                self.delimiter,
+                self.disable_url_encoding,
+                self.max_keys,
+                self.prefix,
+            );
+            if let Some(v) = self.marker {
+                query_params.add("marker", v);
+            }
+        }
+
+        Ok(S3Request::new(self.client, Method::GET)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(query_params)
+            .headers(self.extra_headers.unwrap_or_default()))
     }
 }
 
@@ -159,11 +153,14 @@ impl From<ListObjects> for ListObjectsV1 {
         }
     }
 }
+// endregion: list-objects-v1
+
+// region: list-objects-v2
 
 /// Argument for ListObjectsV2 S3 API.
 #[derive(Clone, Debug, Default)]
 struct ListObjectsV2 {
-    client: Option<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -177,6 +174,7 @@ struct ListObjectsV2 {
     continuation_token: Option<String>,
     fetch_owner: bool,
     include_user_metadata: bool,
+    unsorted: bool,
 }
 
 #[async_trait]
@@ -185,20 +183,28 @@ impl ToStream for ListObjectsV2 {
 
     async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
         Box::new(Box::pin(futures_stream::unfold(
-            (self.clone(), false),
-            move |(mut args, mut is_done)| async move {
+            (self, false),
+            move |(args, mut is_done)| async move {
+                // Stop the stream if no more data is available
                 if is_done {
                     return None;
                 }
-                let resp = args.send().await;
-                match resp {
+                // Prepare a clone of `args` for the next iteration
+                let mut args_for_next_request = args.clone();
+                match args.send().await {
                     Ok(resp) => {
-                        args.continuation_token
+                        // Update the continuation_token for the next request
+                        args_for_next_request
+                            .continuation_token
                             .clone_from(&resp.next_continuation_token);
+
+                        // Determine if there are more results to fetch
                         is_done = !resp.is_truncated;
-                        Some((Ok(resp), (args, is_done)))
+
+                        // Return the response and prepare for the next iteration
+                        Some((Ok(resp), (args_for_next_request, is_done)))
                     }
-                    Err(e) => Some((Err(e), (args, true))),
+                    Err(e) => Some((Err(e), (args_for_next_request, true))),
                 }
             },
         )))
@@ -210,48 +216,41 @@ impl S3Api for ListObjectsV2 {
 }
 
 impl ToS3Request for ListObjectsV2 {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        {
+            query_params.add("list-type", "2");
+            add_common_list_objects_query_params(
+                &mut query_params,
+                self.delimiter,
+                self.disable_url_encoding,
+                self.max_keys,
+                self.prefix,
+            );
+            if let Some(v) = self.continuation_token {
+                query_params.add("continuation-token", v);
+            }
+            if self.fetch_owner {
+                query_params.add("fetch-owner", "true");
+            }
+            if let Some(v) = self.start_after {
+                query_params.add("start-after", v);
+            }
+            if self.include_user_metadata {
+                query_params.add("metadata", "true");
+            }
+            if self.unsorted {
+                query_params.add("unsorted", "true");
+            }
         }
 
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("list-type"), String::from("2"));
-        add_common_list_objects_query_params(
-            &mut query_params,
-            self.delimiter.as_deref(),
-            self.disable_url_encoding,
-            self.max_keys,
-            self.prefix.as_deref(),
-        );
-        if let Some(v) = &self.continuation_token {
-            query_params.insert(String::from("continuation-token"), v.to_string());
-        }
-        if self.fetch_owner {
-            query_params.insert(String::from("fetch-owner"), String::from("true"));
-        }
-        if let Some(v) = &self.start_after {
-            query_params.insert(String::from("start-after"), v.to_string());
-        }
-        if self.include_user_metadata {
-            query_params.insert(String::from("metadata"), String::from("true"));
-        }
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::GET,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .query_params(query_params)
-        .headers(headers);
-        Ok(req)
+        Ok(S3Request::new(self.client, Method::GET)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(query_params)
+            .headers(self.extra_headers.unwrap_or_default()))
     }
 }
 
@@ -271,14 +270,18 @@ impl From<ListObjects> for ListObjectsV2 {
             continuation_token: value.continuation_token,
             fetch_owner: value.fetch_owner,
             include_user_metadata: value.include_user_metadata,
+            unsorted: value.unsorted,
         }
     }
 }
+// endregion: list-objects-v2
 
-/// Argument for ListObjectVerions S3 API
+// region: list-object-versions
+
+/// Argument for ListObjectVersions S3 API
 #[derive(Clone, Debug, Default)]
 struct ListObjectVersions {
-    client: Option<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -291,6 +294,7 @@ struct ListObjectVersions {
     key_marker: Option<String>,
     version_id_marker: Option<String>,
     include_user_metadata: bool,
+    unsorted: bool,
 }
 
 #[async_trait]
@@ -299,22 +303,32 @@ impl ToStream for ListObjectVersions {
 
     async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
         Box::new(Box::pin(futures_stream::unfold(
-            (self.clone(), false),
-            move |(mut args, mut is_done)| async move {
+            (self, false),
+            move |(args, mut is_done)| async move {
+                // Stop the stream if no more data is available
                 if is_done {
                     return None;
                 }
-                let resp = args.send().await;
-                match resp {
+                // Prepare a clone of `args` for the next iteration
+                let mut args_for_next_request = args.clone();
+                match args.send().await {
                     Ok(resp) => {
-                        args.key_marker.clone_from(&resp.next_key_marker);
-                        args.version_id_marker
+                        // Update the key_marker for the next request
+                        args_for_next_request
+                            .key_marker
+                            .clone_from(&resp.next_key_marker);
+                        // Update the version_id_marker for the next request
+                        args_for_next_request
+                            .version_id_marker
                             .clone_from(&resp.next_version_id_marker);
 
+                        // Determine if there are more results to fetch
                         is_done = !resp.is_truncated;
-                        Some((Ok(resp), (args, is_done)))
+
+                        // Return the response and prepare for the next iteration
+                        Some((Ok(resp), (args_for_next_request, is_done)))
                     }
-                    Err(e) => Some((Err(e), (args, true))),
+                    Err(e) => Some((Err(e), (args_for_next_request, true))),
                 }
             },
         )))
@@ -326,51 +340,43 @@ impl S3Api for ListObjectVersions {
 }
 
 impl ToS3Request for ListObjectVersions {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
+        let mut query_params: Multimap = insert(self.extra_query_params, "versions");
+        {
+            add_common_list_objects_query_params(
+                &mut query_params,
+                self.delimiter,
+                self.disable_url_encoding,
+                self.max_keys,
+                self.prefix,
+            );
+            if let Some(v) = self.key_marker {
+                query_params.add("key-marker", v);
+            }
+            if let Some(v) = self.version_id_marker {
+                query_params.add("version-id-marker", v);
+            }
+            if self.include_user_metadata {
+                query_params.add("metadata", "true");
+            }
+            if self.unsorted {
+                query_params.add("unsorted", "true");
+            }
         }
 
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("versions"), String::new());
-        add_common_list_objects_query_params(
-            &mut query_params,
-            self.delimiter.as_deref(),
-            self.disable_url_encoding,
-            self.max_keys,
-            self.prefix.as_deref(),
-        );
-        if let Some(v) = &self.key_marker {
-            query_params.insert(String::from("key-marker"), v.to_string());
-        }
-        if let Some(v) = &self.version_id_marker {
-            query_params.insert(String::from("version-id-marker"), v.to_string());
-        }
-        if self.include_user_metadata {
-            query_params.insert(String::from("metadata"), String::from("true"));
-        }
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::GET,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .query_params(query_params)
-        .headers(headers);
-        Ok(req)
+        Ok(S3Request::new(self.client, Method::GET)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(query_params)
+            .headers(self.extra_headers.unwrap_or_default()))
     }
 }
 
 impl From<ListObjects> for ListObjectVersions {
     fn from(value: ListObjects) -> Self {
-        ListObjectVersions {
+        Self {
             client: value.client,
             extra_headers: value.extra_headers,
             extra_query_params: value.extra_query_params,
@@ -383,9 +389,14 @@ impl From<ListObjects> for ListObjectVersions {
             key_marker: value.key_marker,
             version_id_marker: value.version_id_marker,
             include_user_metadata: value.include_user_metadata,
+            unsorted: value.unsorted,
         }
     }
 }
+
+// endregion: list-object-versions
+
+// region: list-objects
 
 /// Argument builder for
 /// [list_objects()](crate::s3::client::Client::list_objects) API.
@@ -395,7 +406,7 @@ impl From<ListObjects> for ListObjectVersions {
 /// a stream of results. Pagination is automatically performed.
 #[derive(Clone, Debug, Default)]
 pub struct ListObjects {
-    client: Option<Client>,
+    client: Client,
 
     // Parameters common to all ListObjects APIs.
     extra_headers: Option<Multimap>,
@@ -424,6 +435,7 @@ pub struct ListObjects {
     recursive: bool,
     use_api_v1: bool,
     include_versions: bool,
+    unsorted: bool,
 }
 
 #[async_trait]
@@ -445,18 +457,13 @@ impl ToStream for ListObjects {
 }
 
 impl ListObjects {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: Client, bucket: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client,
+            bucket,
             ..Default::default()
         }
     }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
-    }
-
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
         self.extra_headers = extra_headers;
         self
@@ -556,4 +563,11 @@ impl ListObjects {
         self.include_versions = include_versions;
         self
     }
+
+    /// Set this to allow unsorted versions. Defaults to false
+    pub fn unsorted(mut self, unsorted: bool) -> Self {
+        self.unsorted = unsorted;
+        self
+    }
 }
+// endregion: list-objects

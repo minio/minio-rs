@@ -19,8 +19,28 @@ use super::Client;
 use crate::s3::builders::DeleteBucketEncryption;
 
 impl Client {
-    /// Create a DeleteBucketEncryption request builder.
-    pub fn delete_bucket_encryption(&self, bucket: &str) -> DeleteBucketEncryption {
-        DeleteBucketEncryption::new(bucket).client(self)
+    /// Creates a [`DeleteBucketEncryption`] request builder.
+    ///
+    /// To execute the request, call [`DeleteBucketEncryption::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`BucketExistsResponse`](crate::s3::response::BucketExistsResponse).    
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::DeleteBucketEncryptionResponse;
+    /// use minio::s3::types::S3Api;
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {    
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let resp: DeleteBucketEncryptionResponse =
+    ///         client.delete_bucket_encryption("bucket-name").send().await.unwrap();
+    ///     println!("bucket '{}' is deleted", resp.bucket);
+    /// }
+    /// ```
+    pub fn delete_bucket_encryption<S: Into<String>>(&self, bucket: S) -> DeleteBucketEncryption {
+        DeleteBucketEncryption::new(self.clone(), bucket.into())
     }
 }

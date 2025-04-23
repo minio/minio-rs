@@ -24,7 +24,7 @@ use minio_common::test_context::TestContext;
 const SQS_ARN: &str = "arn:minio:sqs::miniojavatest:webhook";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn set_get_delete_bucket_notification() {
+async fn test_bucket_notification() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 

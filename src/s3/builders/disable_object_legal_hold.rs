@@ -14,39 +14,37 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::DisableObjectLegalHoldResponse;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, md5sum_hash};
+use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
 
 /// Argument builder for [disable_object_legal_hold()](Client::disable_object_legal_hold) API
 #[derive(Clone, Debug, Default)]
 pub struct DisableObjectLegalHold {
-    pub(crate) client: Option<Client>,
+    client: Client,
 
-    pub(crate) extra_headers: Option<Multimap>,
-    pub(crate) extra_query_params: Option<Multimap>,
-    pub(crate) region: Option<String>,
-    pub(crate) bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-    pub(crate) object: String,
-    pub(crate) version_id: Option<String>,
+    object: String,
+    version_id: Option<String>,
 }
 
 impl DisableObjectLegalHold {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client,
+            bucket,
+            object,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -56,11 +54,6 @@ impl DisableObjectLegalHold {
 
     pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
         self.extra_query_params = extra_query_params;
-        self
-    }
-
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
         self
     }
 
@@ -75,42 +68,25 @@ impl S3Api for DisableObjectLegalHold {
 }
 
 impl ToS3Request for DisableObjectLegalHold {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
 
-        let mut headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
-        if let Some(v) = &self.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("legal-hold"), String::new());
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
+        let mut query_params: Multimap = insert(self.extra_query_params, "legal-hold");
+        query_params.add_version(self.version_id);
 
         const PAYLOAD: &str = "<LegalHold><Status>OFF</Status></LegalHold>";
-        headers.insert(String::from("Content-MD5"), md5sum_hash(PAYLOAD.as_ref()));
+        headers.add("Content-MD5", md5sum_hash(PAYLOAD.as_ref()));
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(PAYLOAD)));
         //TODO consider const body
 
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
-
-        let req = S3Request::new(client, Method::PUT)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(self.client, Method::PUT)
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
             .headers(headers)
-            .object(Some(&self.object))
-            .body(body);
-
-        Ok(req)
+            .object(Some(self.object))
+            .body(body))
     }
 }

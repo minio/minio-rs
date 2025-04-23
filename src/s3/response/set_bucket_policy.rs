@@ -15,12 +15,15 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
 use http::HeaderMap;
+use std::mem;
 
 /// Response of [set_bucket_policy()](crate::s3::client::Client::set_bucket_policy) API
 #[derive(Debug)]
 pub struct SetBucketPolicyResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -28,19 +31,16 @@ pub struct SetBucketPolicyResponse {
 
 #[async_trait]
 impl FromS3Response for SetBucketPolicyResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
-        let resp = resp?;
-        Ok(SetBucketPolicyResponse {
-            headers: resp.headers().clone(),
-            region: req.get_computed_region(),
-            bucket,
+        let mut resp = resp?;
+
+        Ok(Self {
+            headers: mem::take(resp.headers_mut()),
+            region: req.inner_region,
+            bucket: take_bucket(req.bucket)?,
         })
     }
 }

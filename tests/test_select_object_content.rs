@@ -13,59 +13,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use minio::s3::args::SelectObjectContentArgs;
-use minio::s3::types::{
-    CsvInputSerialization, CsvOutputSerialization, FileHeaderInfo, QuoteFields, SelectRequest,
-};
+use minio::s3::error::{Error, ErrorCode};
+use minio::s3::response::{PutObjectContentResponse, SelectObjectContentResponse};
+use minio::s3::types::{S3Api, SelectRequest};
+use minio_common::example::{create_select_content_data, create_select_content_request};
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn select_object_content() {
+async fn select_object_content_s3() {
     let ctx = TestContext::new_from_env();
+    if ctx.client.is_minio_express() {
+        println!("Skipping test because it is running in MinIO Express mode");
+        return;
+    }
+
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
-    let object_name = rand_object_name();
+    let object_name: String = rand_object_name();
+    let (select_body, select_data) = create_select_content_data();
 
-    let mut data = String::new();
-    data.push_str("1997,Ford,E350,\"ac, abs, moon\",3000.00\n");
-    data.push_str("1999,Chevy,\"Venture \"\"Extended Edition\"\"\",,4900.00\n");
-    data.push_str("1999,Chevy,\"Venture \"\"Extended Edition, Very Large\"\"\",,5000.00\n");
-    data.push_str("1996,Jeep,Grand Cherokee,\"MUST SELL!\n");
-    data.push_str("air, moon roof, loaded\",4799.00\n");
-    let body = String::from("Year,Make,Model,Description,Price\n") + &data;
-
-    ctx.client
-        .put_object_content(&bucket_name, &object_name, body)
+    let resp: PutObjectContentResponse = ctx
+        .client
+        .put_object_content(&bucket_name, &object_name, select_body.clone())
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
 
-    let request = SelectRequest::new_csv_input_output(
-        "select * from S3Object",
-        CsvInputSerialization {
-            compression_type: None,
-            allow_quoted_record_delimiter: false,
-            comments: None,
-            field_delimiter: None,
-            file_header_info: Some(FileHeaderInfo::USE),
-            quote_character: None,
-            quote_escape_character: None,
-            record_delimiter: None,
-        },
-        CsvOutputSerialization {
-            field_delimiter: None,
-            quote_character: None,
-            quote_escape_character: None,
-            quote_fields: Some(QuoteFields::ASNEEDED),
-            record_delimiter: None,
-        },
-    )
-    .unwrap();
-    let mut resp = ctx
+    let select_request: SelectRequest = create_select_content_request();
+
+    let mut resp: SelectObjectContentResponse = ctx
         .client
-        .select_object_content(
-            &SelectObjectContentArgs::new(&bucket_name, &object_name, &request).unwrap(),
-        )
+        .select_object_content(&bucket_name, &object_name, select_request)
+        .send()
         .await
         .unwrap();
     let mut got = String::new();
@@ -77,5 +58,37 @@ async fn select_object_content() {
         }
         got += core::str::from_utf8(&buf[..size]).unwrap();
     }
-    assert_eq!(got, data);
+    assert_eq!(got, select_data);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn select_object_content_express() {
+    let ctx = TestContext::new_from_env();
+    if !ctx.client.is_minio_express() {
+        println!("Skipping test because it is NOT running in MinIO Express mode");
+        return;
+    }
+
+    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+    let object_name = rand_object_name();
+    let (select_body, _) = create_select_content_data();
+
+    let _resp: PutObjectContentResponse = ctx
+        .client
+        .put_object_content(&bucket_name, &object_name, select_body)
+        .send()
+        .await
+        .unwrap();
+
+    let select_request: SelectRequest = create_select_content_request();
+
+    let resp: Result<SelectObjectContentResponse, Error> = ctx
+        .client
+        .select_object_content(&bucket_name, &object_name, select_request)
+        .send()
+        .await;
+    match resp {
+        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
+        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+    }
 }

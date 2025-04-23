@@ -13,46 +13,62 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common_benches::{Ctx2, benchmark_s3_api};
+use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 
 use criterion::Criterion;
 use minio::s3::builders::{
     DisableObjectLegalHold, EnableObjectLegalHold, IsObjectLegalHoldEnabled,
 };
+use minio::s3::types::S3Api;
 
 pub(crate) fn bench_enable_object_legal_hold(criterion: &mut Criterion) {
+    if skip_express_mode("bench_enable_object_legal_hold") {
+        return;
+    }
     benchmark_s3_api(
         "enable_object_legal_hold",
         criterion,
         || async { Ctx2::new_with_object(true).await },
         |ctx| {
-            EnableObjectLegalHold::new(&ctx.bucket)
-                .client(&ctx.client)
-                .object(ctx.object.clone())
+            EnableObjectLegalHold::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
         },
     )
 }
 pub(crate) fn bench_disable_object_legal_hold(criterion: &mut Criterion) {
+    if skip_express_mode("bench_disable_object_legal_hold") {
+        return;
+    }
     benchmark_s3_api(
         "disable_object_legal_hold",
         criterion,
         || async { Ctx2::new_with_object(true).await },
         |ctx| {
-            DisableObjectLegalHold::new(&ctx.bucket)
-                .client(&ctx.client)
-                .object(ctx.object.clone())
+            DisableObjectLegalHold::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
         },
     )
 }
 pub(crate) fn bench_is_object_legal_hold(criterion: &mut Criterion) {
+    if skip_express_mode("bench_is_object_legal_hold") {
+        return;
+    }
     benchmark_s3_api(
         "is_object_legal_hold",
         criterion,
-        || async { Ctx2::new().await },
+        || async {
+            let ctx = Ctx2::new_with_object(true).await;
+            ctx.client
+                .enable_object_legal_hold(&ctx.bucket, &ctx.object)
+                .send()
+                .await
+                .unwrap();
+            ctx
+        },
         |ctx| {
-            IsObjectLegalHoldEnabled::new(&ctx.bucket)
-                .client(&ctx.client)
-                .object(ctx.object.clone())
+            IsObjectLegalHoldEnabled::new(
+                ctx.client.clone(),
+                ctx.bucket.clone(),
+                ctx.object.clone(),
+            )
         },
     )
 }

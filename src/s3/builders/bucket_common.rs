@@ -15,11 +15,12 @@
 
 use std::marker::PhantomData;
 
-use crate::s3::{client::Client, utils::Multimap};
+use crate::s3::client::Client;
+use crate::s3::multimap::Multimap;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct BucketCommon<A> {
-    pub(crate) client: Option<Client>,
+    pub(crate) client: Client,
 
     pub(crate) extra_headers: Option<Multimap>,
     pub(crate) extra_query_params: Option<Multimap>,
@@ -30,16 +31,12 @@ pub struct BucketCommon<A> {
 }
 
 impl<A: Default> BucketCommon<A> {
-    pub fn new(bucket: &str) -> BucketCommon<A> {
+    pub fn new(client: Client, bucket: String) -> BucketCommon<A> {
         BucketCommon {
-            bucket: bucket.to_owned(),
+            client,
+            bucket,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {

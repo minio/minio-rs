@@ -13,33 +13,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashMap, sync::Arc};
-
-use bytes::BytesMut;
-use http::Method;
-
+use super::ObjectContent;
+use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::segmented_bytes::SegmentedBytes;
+use crate::s3::utils::{check_object_name, insert};
 use crate::s3::{
     builders::{ContentStream, Size},
     client::Client,
     error::Error,
     response::{
-        AbortMultipartUploadResponse2, CompleteMultipartUploadResponse2,
-        CreateMultipartUploadResponse2, PutObjectContentResponse, PutObjectResponse,
-        UploadPartResponse2,
+        AbortMultipartUploadResponse, CompleteMultipartUploadResponse,
+        CreateMultipartUploadResponse, PutObjectContentResponse, PutObjectResponse,
+        UploadPartResponse,
     },
     sse::Sse,
     types::{PartInfo, Retention, S3Api, S3Request, ToS3Request},
-    utils::{Multimap, check_bucket_name, md5sum_hash, merge, to_iso8601utc, urlencode},
+    utils::{check_bucket_name, md5sum_hash, to_iso8601utc, urlencode},
 };
-
-use super::{ObjectContent, SegmentedBytes};
+use bytes::{Bytes, BytesMut};
+use http::Method;
+use std::{collections::HashMap, sync::Arc};
+// region: multipart-upload
 
 /// Argument for
 /// [create_multipart_upload()](Client::create_multipart_upload)
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct CreateMultipartUpload {
-    client: Option<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -56,17 +57,13 @@ pub struct CreateMultipartUpload {
 }
 
 impl CreateMultipartUpload {
-    pub fn new(bucket: &str, object: &str) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         CreateMultipartUpload {
-            bucket: bucket.to_string(),
-            object: object.to_string(),
+            client,
+            bucket,
+            object,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -113,90 +110,65 @@ impl CreateMultipartUpload {
         self.content_type = content_type;
         self
     }
-
-    fn get_headers(&self) -> Result<Multimap, Error> {
-        object_write_args_headers(
-            self.extra_headers.as_ref(),
-            self.user_metadata.as_ref(),
-            &self.sse,
-            self.tags.as_ref(),
-            self.retention.as_ref(),
-            self.legal_hold,
-            self.content_type.as_ref(),
-        )
-    }
-
-    fn validate(&self) -> Result<(), Error> {
-        check_bucket_name(&self.bucket, true)?;
-
-        if self.object.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
-
-        Ok(())
-    }
-}
-
-impl ToS3Request for CreateMultipartUpload {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        self.validate()?;
-
-        let headers = self.get_headers()?;
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("uploads"), String::new());
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::POST,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .object(Some(&self.object))
-        .query_params(query_params)
-        .headers(headers);
-
-        Ok(req)
-    }
 }
 
 impl S3Api for CreateMultipartUpload {
-    type S3Response = CreateMultipartUploadResponse2;
+    type S3Response = CreateMultipartUploadResponse;
 }
+
+impl ToS3Request for CreateMultipartUpload {
+    fn to_s3request(self) -> Result<S3Request, Error> {
+        check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
+
+        let headers: Multimap = into_headers_put_object(
+            self.extra_headers,
+            self.user_metadata,
+            self.sse,
+            self.tags,
+            self.retention,
+            self.legal_hold,
+            self.content_type,
+        )?;
+
+        Ok(S3Request::new(self.client, Method::POST)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .object(Some(self.object))
+            .query_params(insert(self.extra_query_params, "uploads"))
+            .headers(headers))
+    }
+}
+
+// endregion: multipart-upload
+
+// region: abort-multipart-upload
 
 /// Argument for
 /// [abort_multipart_upload()](Client::abort_multipart_upload)
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct AbortMultipartUpload {
-    client: Option<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
     region: Option<String>,
     bucket: String,
+
     object: String,
     upload_id: String,
 }
 
 impl AbortMultipartUpload {
-    pub fn new(bucket: &str, object: &str, upload_id: &str) -> Self {
-        AbortMultipartUpload {
-            bucket: bucket.to_string(),
-            object: object.to_string(),
-            upload_id: upload_id.to_string(),
+    pub fn new(client: Client, bucket: String, object: String, upload_id: String) -> Self {
+        Self {
+            client,
+            bucket,
+            object,
+            upload_id,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -215,48 +187,38 @@ impl AbortMultipartUpload {
     }
 }
 
+impl S3Api for AbortMultipartUpload {
+    type S3Response = AbortMultipartUploadResponse;
+}
+
 impl ToS3Request for AbortMultipartUpload {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
 
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
-        }
+        let headers: Multimap = self.extra_headers.unwrap_or_default();
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        query_params.add("uploadId", urlencode(&self.upload_id).to_string());
 
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(
-            String::from("uploadId"),
-            urlencode(&self.upload_id).to_string(),
-        );
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::DELETE,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .object(Some(&self.object))
-        .query_params(query_params)
-        .headers(headers);
-
-        Ok(req)
+        Ok(S3Request::new(self.client, Method::DELETE)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .object(Some(self.object))
+            .query_params(query_params)
+            .headers(headers))
     }
 }
 
-impl S3Api for AbortMultipartUpload {
-    type S3Response = AbortMultipartUploadResponse2;
-}
+// endregion: abort-multipart-upload
+
+// region: complete-multipart-upload
 
 /// Argument for
 /// [complete_multipart_upload()](Client::complete_multipart_upload)
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct CompleteMultipartUpload {
-    client: Option<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -267,20 +229,26 @@ pub struct CompleteMultipartUpload {
     parts: Vec<PartInfo>,
 }
 
+impl S3Api for CompleteMultipartUpload {
+    type S3Response = CompleteMultipartUploadResponse;
+}
+
 impl CompleteMultipartUpload {
-    pub fn new(bucket: &str, object: &str, upload_id: &str, parts: Vec<PartInfo>) -> Self {
-        CompleteMultipartUpload {
-            bucket: bucket.to_string(),
-            object: object.to_string(),
-            upload_id: upload_id.to_string(),
+    pub fn new(
+        client: Client,
+        bucket: String,
+        object: String,
+        upload_id: String,
+        parts: Vec<PartInfo>,
+    ) -> Self {
+        Self {
+            client,
+            bucket,
+            object,
+            upload_id,
             parts,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -300,78 +268,59 @@ impl CompleteMultipartUpload {
 }
 
 impl ToS3Request for CompleteMultipartUpload {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        check_bucket_name(&self.bucket, true)?;
-
-        if self.object.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
-
-        if self.upload_id.is_empty() {
-            return Err(Error::InvalidUploadId(String::from(
-                "upload ID cannot be empty",
-            )));
-        }
-
-        if self.parts.is_empty() {
-            return Err(Error::EmptyParts(String::from("parts cannot be empty")));
+    fn to_s3request(self) -> Result<S3Request, Error> {
+        {
+            check_bucket_name(&self.bucket, true)?;
+            check_object_name(&self.object)?;
+            if self.upload_id.is_empty() {
+                return Err(Error::InvalidUploadId("upload ID cannot be empty".into()));
+            }
+            if self.parts.is_empty() {
+                return Err(Error::EmptyParts("parts cannot be empty".into()));
+            }
         }
 
         // Set capacity of the byte-buffer based on the part count - attempting
         // to avoid extra allocations when building the XML payload.
-        let mut data = BytesMut::with_capacity(100 * self.parts.len() + 100);
-        data.extend_from_slice(b"<CompleteMultipartUpload>");
-        for part in self.parts.iter() {
-            data.extend_from_slice(b"<Part><PartNumber>");
-            data.extend_from_slice(part.number.to_string().as_bytes());
-            data.extend_from_slice(b"</PartNumber><ETag>");
-            data.extend_from_slice(part.etag.as_bytes());
-            data.extend_from_slice(b"</ETag></Part>");
+        let data: Bytes = {
+            let mut data = BytesMut::with_capacity(100 * self.parts.len() + 100);
+            data.extend_from_slice(b"<CompleteMultipartUpload>");
+            for part in self.parts.iter() {
+                data.extend_from_slice(b"<Part><PartNumber>");
+                data.extend_from_slice(part.number.to_string().as_bytes());
+                data.extend_from_slice(b"</PartNumber><ETag>");
+                data.extend_from_slice(part.etag.as_bytes());
+                data.extend_from_slice(b"</ETag></Part>");
+            }
+            data.extend_from_slice(b"</CompleteMultipartUpload>");
+            data.freeze()
+        };
+
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
+        {
+            headers.add("Content-Type", "application/xml");
+            headers.add("Content-MD5", md5sum_hash(data.as_ref()));
         }
-        data.extend_from_slice(b"</CompleteMultipartUpload>");
-        let data = data.freeze();
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        query_params.add("uploadId", self.upload_id);
 
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
-        }
-        headers.insert(
-            String::from("Content-Type"),
-            String::from("application/xml"),
-        );
-        headers.insert(String::from("Content-MD5"), md5sum_hash(data.as_ref()));
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("uploadId"), self.upload_id.to_string());
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::POST,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .object(Some(&self.object))
-        .query_params(query_params)
-        .headers(headers)
-        .body(Some(data.into()));
-
-        Ok(req)
+        Ok(S3Request::new(self.client, Method::POST)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .object(Some(self.object))
+            .query_params(query_params)
+            .headers(headers)
+            .body(Some(data.into())))
     }
 }
+// endregion: complete-multipart-upload
 
-impl S3Api for CompleteMultipartUpload {
-    type S3Response = CompleteMultipartUploadResponse2;
-}
+// region: upload-part
 
 /// Argument for [upload_part()](Client::upload_part) S3 API
 #[derive(Debug, Clone, Default)]
 pub struct UploadPart {
-    client: Option<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -396,25 +345,22 @@ pub struct UploadPart {
 
 impl UploadPart {
     pub fn new(
-        bucket: &str,
-        object: &str,
-        upload_id: &str,
+        client: Client,
+        bucket: String,
+        object: String,
+        upload_id: String,
         part_number: u16,
         data: SegmentedBytes,
     ) -> Self {
-        UploadPart {
-            bucket: bucket.to_string(),
-            object: object.to_string(),
-            upload_id: Some(upload_id.to_string()),
+        Self {
+            client,
+            bucket,
+            object,
+            upload_id: Some(upload_id),
             part_number: Some(part_number),
             data,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -451,101 +397,78 @@ impl UploadPart {
         self.legal_hold = legal_hold;
         self
     }
-
-    fn get_headers(&self) -> Result<Multimap, Error> {
-        object_write_args_headers(
-            self.extra_headers.as_ref(),
-            self.user_metadata.as_ref(),
-            &self.sse,
-            self.tags.as_ref(),
-            self.retention.as_ref(),
-            self.legal_hold,
-            self.content_type.as_ref(),
-        )
-    }
-
-    fn validate(&self) -> Result<(), Error> {
-        check_bucket_name(&self.bucket, true)?;
-
-        if self.object.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
-
-        if let Some(upload_id) = &self.upload_id {
-            if upload_id.is_empty() {
-                return Err(Error::InvalidUploadId(String::from(
-                    "upload ID cannot be empty",
-                )));
-            }
-        }
-
-        if let Some(part_number) = self.part_number {
-            if !(1..=10000).contains(&part_number) {
-                return Err(Error::InvalidPartNumber(String::from(
-                    "part number must be between 1 and 1000",
-                )));
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl ToS3Request for UploadPart {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        self.validate()?;
-
-        let headers = self.get_headers()?;
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(upload_id) = &self.upload_id {
-            query_params.insert(String::from("uploadId"), upload_id.to_string());
-        }
-        if let Some(part_number) = self.part_number {
-            query_params.insert(String::from("partNumber"), part_number.to_string());
-        }
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::PUT,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .object(Some(&self.object))
-        .query_params(query_params)
-        .headers(headers)
-        .body(Some(self.data.clone()));
-
-        Ok(req)
-    }
 }
 
 impl S3Api for UploadPart {
-    type S3Response = UploadPartResponse2;
+    type S3Response = UploadPartResponse;
 }
+
+impl ToS3Request for UploadPart {
+    fn to_s3request(self) -> Result<S3Request, Error> {
+        {
+            check_bucket_name(&self.bucket, true)?;
+            check_object_name(&self.object)?;
+
+            if let Some(upload_id) = &self.upload_id {
+                if upload_id.is_empty() {
+                    return Err(Error::InvalidUploadId("upload ID cannot be empty".into()));
+                }
+            }
+            if let Some(part_number) = self.part_number {
+                if !(1..=10000).contains(&part_number) {
+                    return Err(Error::InvalidPartNumber(
+                        "part number must be between 1 and 10000".into(),
+                    ));
+                }
+            }
+        }
+
+        let headers: Multimap = into_headers_put_object(
+            self.extra_headers,
+            self.user_metadata,
+            self.sse,
+            self.tags,
+            self.retention,
+            self.legal_hold,
+            self.content_type,
+        )?;
+
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
+
+        if let Some(upload_id) = self.upload_id {
+            query_params.add("uploadId", upload_id);
+        }
+        if let Some(part_number) = self.part_number {
+            query_params.add("partNumber", part_number.to_string());
+        }
+
+        Ok(S3Request::new(self.client, Method::PUT)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(query_params)
+            .object(Some(self.object))
+            .headers(headers)
+            .body(Some(self.data)))
+    }
+}
+
+// endregion: upload-part
+
+// region: put-object
 
 /// Argument builder for PutObject S3 API. This is a lower-level API.
 #[derive(Debug, Clone, Default)]
 pub struct PutObject(UploadPart);
 
 impl PutObject {
-    pub fn new(bucket: &str, object: &str, data: SegmentedBytes) -> Self {
+    pub fn new(client: Client, bucket: String, object: String, data: SegmentedBytes) -> Self {
         PutObject(UploadPart {
-            bucket: bucket.to_string(),
-            object: object.to_string(),
+            client,
+            bucket,
+            object,
             data,
             ..Default::default()
         })
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.0.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -589,104 +512,25 @@ impl PutObject {
     }
 }
 
-impl ToS3Request for PutObject {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        self.0.to_s3request()
-    }
-}
-
 impl S3Api for PutObject {
     type S3Response = PutObjectResponse;
 }
 
-fn object_write_args_headers(
-    extra_headers: Option<&Multimap>,
-    user_metadata: Option<&Multimap>,
-    sse: &Option<Arc<dyn Sse>>,
-    tags: Option<&HashMap<String, String>>,
-    retention: Option<&Retention>,
-    legal_hold: bool,
-    content_type: Option<&String>,
-) -> Result<Multimap, Error> {
-    let mut map = Multimap::new();
-
-    if let Some(v) = extra_headers {
-        merge(&mut map, v);
+impl ToS3Request for PutObject {
+    fn to_s3request(self) -> Result<S3Request, Error> {
+        self.0.to_s3request()
     }
-
-    if let Some(v) = user_metadata {
-        // Validate it.
-        for (k, _) in v.iter() {
-            if k.is_empty() {
-                return Err(Error::InvalidUserMetadata(String::from(
-                    "user metadata key cannot be empty",
-                )));
-            }
-            if !k.starts_with("x-amz-meta-") {
-                return Err(Error::InvalidUserMetadata(format!(
-                    "user metadata key '{}' does not start with 'x-amz-meta-'",
-                    k
-                )));
-            }
-        }
-
-        merge(&mut map, v);
-    }
-
-    if let Some(v) = sse {
-        merge(&mut map, &v.headers());
-    }
-
-    if let Some(v) = tags {
-        let mut tagging = String::new();
-        for (key, value) in v.iter() {
-            if !tagging.is_empty() {
-                tagging.push('&');
-            }
-            tagging.push_str(&urlencode(key));
-            tagging.push('=');
-            tagging.push_str(&urlencode(value));
-        }
-
-        if !tagging.is_empty() {
-            map.insert(String::from("x-amz-tagging"), tagging);
-        }
-    }
-
-    if let Some(v) = retention {
-        map.insert(String::from("x-amz-object-lock-mode"), v.mode.to_string());
-        map.insert(
-            String::from("x-amz-object-lock-retain-until-date"),
-            to_iso8601utc(v.retain_until_date),
-        );
-    }
-
-    if legal_hold {
-        map.insert(
-            String::from("x-amz-object-lock-legal-hold"),
-            String::from("ON"),
-        );
-    }
-
-    // Set the Content-Type header if not already set.
-    if !map.contains_key("Content-Type") {
-        map.insert(
-            String::from("Content-Type"),
-            match content_type {
-                Some(content_type) => content_type.clone(),
-                None => String::from("application/octet-stream"),
-            },
-        );
-    }
-
-    Ok(map)
 }
+
+// endregion: put-object
+
+// region: put-object-content
 
 /// PutObjectContent takes a `ObjectContent` stream and uploads it to MinIO/S3.
 ///
 /// It is a higher level API and handles multipart uploads transparently.
 pub struct PutObjectContent {
-    client: Option<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -711,12 +555,17 @@ pub struct PutObjectContent {
 }
 
 impl PutObjectContent {
-    pub fn new(bucket: &str, object: &str, content: impl Into<ObjectContent>) -> Self {
-        PutObjectContent {
-            bucket: bucket.to_string(),
-            object: object.to_string(),
+    pub fn new(
+        client: Client,
+        bucket: String,
+        object: String,
+        content: impl Into<ObjectContent>,
+    ) -> Self {
+        Self {
+            client,
+            bucket,
+            object,
             input_content: content.into(),
-            client: None,
             extra_headers: None,
             extra_query_params: None,
             region: None,
@@ -730,11 +579,6 @@ impl PutObjectContent {
             content_stream: ContentStream::empty(),
             part_count: None,
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -789,12 +633,7 @@ impl PutObjectContent {
 
     pub async fn send(mut self) -> Result<PutObjectContentResponse, Error> {
         check_bucket_name(&self.bucket, true)?;
-
-        if self.object.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
-        }
+        check_object_name(&self.object)?;
 
         let input_content = std::mem::take(&mut self.input_content);
         self.content_stream = input_content
@@ -805,21 +644,19 @@ impl PutObjectContent {
         // object_size may be Size::Unknown.
         let object_size = self.content_stream.get_size();
 
-        let (psize, expected_parts) = calc_part_info(object_size, self.part_size)?;
+        let (part_size, expected_parts) = calc_part_info(object_size, self.part_size)?;
         // Set the chosen part size and part count.
-        self.part_size = Size::Known(psize);
+        self.part_size = Size::Known(part_size);
         self.part_count = expected_parts;
 
-        let client = self.client.clone().ok_or(Error::NoClientProvided)?;
-
         if let Some(v) = &self.sse {
-            if v.tls_required() && !client.is_secure() {
+            if v.tls_required() && !self.client.is_secure() {
                 return Err(Error::SseTlsRequired(None));
             }
         }
 
         // Read the first part.
-        let seg_bytes = self.content_stream.read_upto(psize as usize).await?;
+        let seg_bytes = self.content_stream.read_upto(part_size as usize).await?;
 
         // In the first part read, if:
         //
@@ -827,55 +664,92 @@ impl PutObjectContent {
         //   - we are expecting only one part to be uploaded,
         //
         // we upload it as a simple put object.
-        if (object_size.is_unknown() && (seg_bytes.len() as u64) < psize)
+        if (object_size.is_unknown() && (seg_bytes.len() as u64) < part_size)
             || expected_parts == Some(1)
         {
             let size = seg_bytes.len() as u64;
-            let po = self.to_put_object(seg_bytes);
-            let res = po.send().await?;
-            return Ok(PutObjectContentResponse {
+
+            let res: PutObjectResponse = PutObject(UploadPart {
+                client: self.client.clone(),
+                extra_headers: self.extra_headers.clone(),
+                extra_query_params: self.extra_query_params.clone(),
+                bucket: self.bucket.clone(),
+                object: self.object.clone(),
+                region: self.region.clone(),
+                user_metadata: self.user_metadata.clone(),
+                sse: self.sse.clone(),
+                tags: self.tags.clone(),
+                retention: self.retention.clone(),
+                legal_hold: self.legal_hold,
+                part_number: None,
+                upload_id: None,
+                data: seg_bytes,
+                content_type: self.content_type.clone(),
+            })
+            .send()
+            .await?;
+
+            Ok(PutObjectContentResponse {
                 headers: res.headers,
-                bucket: self.bucket,
-                object: self.object,
-                region: res.location,
+                bucket: res.bucket,
+                object: res.object,
+                region: res.region,
                 object_size: size,
                 etag: res.etag,
                 version_id: res.version_id,
-            });
-        } else if object_size.is_known() && (seg_bytes.len() as u64) < psize {
+            })
+        } else if object_size.is_known() && (seg_bytes.len() as u64) < part_size {
             // Not enough data!
-            let expected = object_size.as_u64().unwrap();
-            let got = seg_bytes.len() as u64;
-            return Err(Error::InsufficientData(expected, got));
+            let expected: u64 = object_size.as_u64().unwrap();
+            let got: u64 = seg_bytes.len() as u64;
+            Err(Error::InsufficientData(expected, got))
+        } else {
+            let bucket: String = self.bucket.clone();
+            let object: String = self.object.clone();
+
+            // Otherwise, we start a multipart upload.
+            let create_mpu_resp: CreateMultipartUploadResponse = CreateMultipartUpload {
+                client: self.client.clone(),
+                extra_headers: self.extra_headers.clone(),
+                extra_query_params: self.extra_query_params.clone(),
+                region: self.region.clone(),
+                bucket: self.bucket.clone(),
+                object: self.object.clone(),
+                user_metadata: self.user_metadata.clone(),
+                sse: self.sse.clone(),
+                tags: self.tags.clone(),
+                retention: self.retention.clone(),
+                legal_hold: self.legal_hold,
+                content_type: self.content_type.clone(),
+            }
+            .send()
+            .await?;
+
+            let client = self.client.clone();
+            let mpu_res = self
+                .send_mpu(
+                    part_size,
+                    create_mpu_resp.upload_id.clone(),
+                    object_size,
+                    seg_bytes,
+                )
+                .await;
+
+            if mpu_res.is_err() {
+                // If we failed to complete the multipart upload, we should abort it.
+                let _ =
+                    AbortMultipartUpload::new(client, bucket, object, create_mpu_resp.upload_id)
+                        .send()
+                        .await;
+            }
+            mpu_res
         }
-
-        // Otherwise, we start a multipart upload.
-        let create_mpu = self.to_create_multipart_upload();
-
-        let create_mpu_resp = create_mpu.send().await?;
-
-        let mpu_res = self
-            .send_mpu(
-                psize,
-                create_mpu_resp.upload_id.clone(),
-                object_size,
-                seg_bytes,
-            )
-            .await;
-        if mpu_res.is_err() {
-            // If we failed to complete the multipart upload, we should abort it.
-            let _ =
-                AbortMultipartUpload::new(&self.bucket, &self.object, &create_mpu_resp.upload_id)
-                    .client(&client)
-                    .send()
-                    .await;
-        }
-        mpu_res
     }
 
+    /// send multi-part-upload
     async fn send_mpu(
-        &mut self,
-        psize: u64,
+        mut self,
+        part_size: u64,
         upload_id: String,
         object_size: Size,
         first_part: SegmentedBytes,
@@ -895,23 +769,27 @@ impl PutObjectContent {
                 if let Some(v) = first_part.take() {
                     v
                 } else {
-                    self.content_stream.read_upto(psize as usize).await?
+                    self.content_stream.read_upto(part_size as usize).await?
                 }
             };
             part_number += 1;
             let buffer_size = part_content.len() as u64;
             total_read += buffer_size;
 
-            assert!(buffer_size <= psize, "{:?} <= {:?}", buffer_size, psize);
+            assert!(
+                buffer_size <= part_size,
+                "{:?} <= {:?}",
+                buffer_size,
+                part_size
+            );
 
-            if buffer_size == 0 && part_number > 1 {
-                // We are done as we uploaded at least 1 part and we have
-                // reached the end of the stream.
+            if (buffer_size == 0) && (part_number > 1) {
+                // We are done as we uploaded at least 1 part and we have reached the end of the stream.
                 break;
             }
 
             // Check if we have too many parts to upload.
-            if self.part_count.is_none() && part_number > MAX_MULTIPART_COUNT {
+            if self.part_count.is_none() && (part_number > MAX_MULTIPART_COUNT) {
                 return Err(Error::TooManyParts);
             }
 
@@ -923,16 +801,35 @@ impl PutObjectContent {
             }
 
             // Upload the part now.
-            let upload_part = self.to_upload_part(part_content, &upload_id, part_number);
-            let upload_part_resp = upload_part.send().await?;
+            let resp: UploadPartResponse = UploadPart {
+                client: self.client.clone(),
+                extra_headers: self.extra_headers.clone(),
+                extra_query_params: self.extra_query_params.clone(),
+                bucket: self.bucket.clone(),
+                object: self.object.clone(),
+                region: self.region.clone(),
+                // User metadata is not sent with UploadPart.
+                user_metadata: None,
+                sse: self.sse.clone(),
+                tags: self.tags.clone(),
+                retention: self.retention.clone(),
+                legal_hold: self.legal_hold,
+                part_number: Some(part_number),
+                upload_id: Some(upload_id.to_string()),
+                data: part_content,
+                content_type: self.content_type.clone(),
+            }
+            .send()
+            .await?;
+
             parts.push(PartInfo {
                 number: part_number,
-                etag: upload_part_resp.etag,
+                etag: resp.etag,
                 size: buffer_size,
             });
 
             // Finally check if we are done.
-            if buffer_size < psize {
+            if buffer_size < part_size {
                 done = true;
             }
         }
@@ -947,13 +844,24 @@ impl PutObjectContent {
             }
         }
 
-        let complete_mpu = self.to_complete_multipart_upload(&upload_id, parts);
-        let res = complete_mpu.send().await?;
+        let res: CompleteMultipartUploadResponse = CompleteMultipartUpload {
+            client: self.client,
+            extra_headers: self.extra_headers,
+            extra_query_params: self.extra_query_params,
+            bucket: self.bucket,
+            object: self.object,
+            region: self.region,
+            parts,
+            upload_id,
+        }
+        .send()
+        .await?;
+
         Ok(PutObjectContentResponse {
             headers: res.headers,
-            bucket: self.bucket.clone(),
-            object: self.object.clone(),
-            region: res.location,
+            bucket: res.bucket,
+            object: res.object,
+            region: res.region,
             object_size: size,
             etag: res.etag,
             version_id: res.version_id,
@@ -961,86 +869,85 @@ impl PutObjectContent {
     }
 }
 
-impl PutObjectContent {
-    fn to_put_object(&self, data: SegmentedBytes) -> PutObject {
-        PutObject(UploadPart {
-            client: self.client.clone(),
-            extra_headers: self.extra_headers.clone(),
-            extra_query_params: self.extra_query_params.clone(),
-            bucket: self.bucket.clone(),
-            object: self.object.clone(),
-            region: self.region.clone(),
-            user_metadata: self.user_metadata.clone(),
-            sse: self.sse.clone(),
-            tags: self.tags.clone(),
-            retention: self.retention.clone(),
-            legal_hold: self.legal_hold,
-            part_number: None,
-            upload_id: None,
-            data,
-            content_type: self.content_type.clone(),
-        })
+// endregion: put-object-content
+
+fn into_headers_put_object(
+    extra_headers: Option<Multimap>,
+    user_metadata: Option<Multimap>,
+    sse: Option<Arc<dyn Sse>>,
+    tags: Option<HashMap<String, String>>,
+    retention: Option<Retention>,
+    legal_hold: bool,
+    content_type: Option<String>,
+) -> Result<Multimap, Error> {
+    let mut map = Multimap::new();
+
+    if let Some(v) = extra_headers {
+        map.add_multimap(v);
     }
 
-    fn to_upload_part(
-        &self,
-        data: SegmentedBytes,
-        upload_id: &str,
-        part_number: u16,
-    ) -> UploadPart {
-        UploadPart {
-            client: self.client.clone(),
-            extra_headers: self.extra_headers.clone(),
-            extra_query_params: self.extra_query_params.clone(),
-            bucket: self.bucket.clone(),
-            object: self.object.clone(),
-            region: self.region.clone(),
-            // User metadata is not sent with UploadPart.
-            user_metadata: None,
-            sse: self.sse.clone(),
-            tags: self.tags.clone(),
-            retention: self.retention.clone(),
-            legal_hold: self.legal_hold,
-            part_number: Some(part_number),
-            upload_id: Some(upload_id.to_string()),
-            data,
-            content_type: self.content_type.clone(),
+    if let Some(v) = user_metadata {
+        // Validate it.
+        for (k, _) in v.iter() {
+            if k.is_empty() {
+                return Err(Error::InvalidUserMetadata(
+                    "user metadata key cannot be empty".into(),
+                ));
+            }
+            if !k.starts_with("x-amz-meta-") {
+                return Err(Error::InvalidUserMetadata(format!(
+                    "user metadata key '{}' does not start with 'x-amz-meta-'",
+                    k
+                )));
+            }
+        }
+        map.add_multimap(v);
+    }
+
+    if let Some(v) = sse {
+        map.add_multimap(v.headers());
+    }
+
+    if let Some(v) = tags {
+        let mut tagging = String::new();
+        for (key, value) in v.iter() {
+            if !tagging.is_empty() {
+                tagging.push('&');
+            }
+            tagging.push_str(&urlencode(key));
+            tagging.push('=');
+            tagging.push_str(&urlencode(value));
+        }
+
+        if !tagging.is_empty() {
+            map.insert("x-amz-tagging".into(), tagging);
         }
     }
 
-    fn to_complete_multipart_upload(
-        &self,
-        upload_id: &str,
-        parts: Vec<PartInfo>,
-    ) -> CompleteMultipartUpload {
-        CompleteMultipartUpload {
-            client: self.client.clone(),
-            extra_headers: self.extra_headers.clone(),
-            extra_query_params: self.extra_query_params.clone(),
-            bucket: self.bucket.clone(),
-            object: self.object.clone(),
-            region: self.region.clone(),
-            parts,
-            upload_id: upload_id.to_string(),
-        }
+    if let Some(v) = retention {
+        map.insert("x-amz-object-lock-mode".into(), v.mode.to_string());
+        map.insert(
+            "x-amz-object-lock-retain-until-date".into(),
+            to_iso8601utc(v.retain_until_date),
+        );
     }
 
-    fn to_create_multipart_upload(&self) -> CreateMultipartUpload {
-        CreateMultipartUpload {
-            client: self.client.clone(),
-            extra_headers: self.extra_headers.clone(),
-            extra_query_params: self.extra_query_params.clone(),
-            region: self.region.clone(),
-            bucket: self.bucket.clone(),
-            object: self.object.clone(),
-            user_metadata: self.user_metadata.clone(),
-            sse: self.sse.clone(),
-            tags: self.tags.clone(),
-            retention: self.retention.clone(),
-            legal_hold: self.legal_hold,
-            content_type: self.content_type.clone(),
-        }
+    if legal_hold {
+        map.insert("x-amz-object-lock-legal-hold".into(), "ON".into());
     }
+
+    // Set the Content-Type header if not already set.
+    if !map.contains_key("Content-Type") {
+        map.insert(
+            "Content-Type".into(),
+            match content_type {
+                Some(content_type) => content_type.clone(),
+                None => "application/octet-stream".into(),
+            },
+        );
+    }
+
+    Ok(map)
 }
 
 pub const MIN_PART_SIZE: u64 = 5 * 1024 * 1024; // 5 MiB
@@ -1050,7 +957,7 @@ pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 
 /// Returns the size of each part to upload and the total number of parts. The
 /// number of parts is `None` when the object size is unknown.
-fn calc_part_info(object_size: Size, part_size: Size) -> Result<(u64, Option<u16>), Error> {
+pub fn calc_part_info(object_size: Size, part_size: Size) -> Result<(u64, Option<u16>), Error> {
     // Validate arguments against limits.
     if let Size::Known(v) = part_size {
         if v < MIN_PART_SIZE {

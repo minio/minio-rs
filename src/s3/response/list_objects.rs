@@ -12,11 +12,11 @@
 
 //! Response types for ListObjects APIs
 
-use std::collections::HashMap;
-
 use async_trait::async_trait;
 use bytes::Buf;
 use reqwest::header::HeaderMap;
+use std::collections::HashMap;
+use std::mem;
 
 use crate::s3::{
     error::Error,
@@ -188,6 +188,7 @@ fn parse_list_objects_common_prefixes(
 /// Response of [list_objects_v1()](crate::s3::client::Client::list_objects_v1) S3 API
 #[derive(Clone, Debug)]
 pub struct ListObjectsV1Response {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub name: String,
     pub encoding_type: Option<String>,
@@ -202,12 +203,12 @@ pub struct ListObjectsV1Response {
 
 #[async_trait]
 impl FromS3Response for ListObjectsV1Response {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let resp = resp?;
-        let headers = resp.headers().clone();
+        let mut resp = resp?;
+        let headers = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
         let xmltree_root = xmltree::Element::parse(body.reader())?;
         let root = Element::from(&xmltree_root);
@@ -241,6 +242,7 @@ impl FromS3Response for ListObjectsV1Response {
 /// Response of [list_objects_v2()](crate::s3::client::Client::list_objects_v2) S3 API
 #[derive(Clone, Debug)]
 pub struct ListObjectsV2Response {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub name: String,
     pub encoding_type: Option<String>,
@@ -257,12 +259,13 @@ pub struct ListObjectsV2Response {
 
 #[async_trait]
 impl FromS3Response for ListObjectsV2Response {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let resp = resp?;
-        let headers = resp.headers().clone();
+        let mut resp = resp?;
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+
         let body = resp.bytes().await?;
         let xmltree_root = xmltree::Element::parse(body.reader())?;
         let root = Element::from(&xmltree_root);
@@ -300,6 +303,7 @@ impl FromS3Response for ListObjectsV2Response {
 /// Response of [list_object_versions()](crate::s3::client::Client::list_object_versions) S3 API
 #[derive(Clone, Debug)]
 pub struct ListObjectVersionsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub name: String,
     pub encoding_type: Option<String>,
@@ -316,8 +320,8 @@ pub struct ListObjectVersionsResponse {
 
 #[async_trait]
 impl FromS3Response for ListObjectVersionsResponse {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let resp = resp?;
@@ -356,6 +360,7 @@ impl FromS3Response for ListObjectVersionsResponse {
 /// Response of [list_objects()](crate::s3::client::Client::list_objects) API
 #[derive(Clone, Debug, Default)]
 pub struct ListObjectsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub name: String,
     pub encoding_type: Option<String>,
@@ -424,7 +429,7 @@ impl From<ListObjectsV2Response> for ListObjectsResponse {
 
 impl From<ListObjectsV1Response> for ListObjectsResponse {
     fn from(value: ListObjectsV1Response) -> Self {
-        ListObjectsResponse {
+        Self {
             headers: value.headers,
             name: value.name,
             encoding_type: value.encoding_type,

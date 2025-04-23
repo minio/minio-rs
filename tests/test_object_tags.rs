@@ -28,6 +28,11 @@ use std::collections::HashMap;
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn object_tags() {
     let ctx = TestContext::new_from_env();
+    if ctx.client.is_minio_express() {
+        println!("Skipping test because it is running in MinIO Express mode");
+        return;
+    }
+
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
     let object_name = rand_object_name();
 
@@ -46,7 +51,7 @@ async fn object_tags() {
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.object_size, size);
     assert_eq!(resp.version_id, None);
-    assert_eq!(&resp.region, "");
+    assert_eq!(resp.region, DEFAULT_REGION);
 
     let tags = HashMap::from([
         (String::from("Project"), String::from("Project One")),
@@ -55,8 +60,7 @@ async fn object_tags() {
 
     let resp: SetObjectTagsResponse = ctx
         .client
-        .set_object_tags(&bucket_name)
-        .object(object_name.clone())
+        .set_object_tags(&bucket_name, &object_name)
         .tags(tags.clone())
         .send()
         .await
@@ -68,8 +72,7 @@ async fn object_tags() {
 
     let resp: GetObjectTagsResponse = ctx
         .client
-        .get_object_tags(&bucket_name)
-        .object(object_name.clone())
+        .get_object_tags(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -81,8 +84,7 @@ async fn object_tags() {
 
     let resp: DeleteObjectTagsResponse = ctx
         .client
-        .delete_object_tags(&bucket_name)
-        .object(object_name.clone())
+        .delete_object_tags(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -93,8 +95,7 @@ async fn object_tags() {
 
     let resp: GetObjectTagsResponse = ctx
         .client
-        .get_object_tags(&bucket_name.clone())
-        .object(object_name.clone())
+        .get_object_tags(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();

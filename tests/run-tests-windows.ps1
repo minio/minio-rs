@@ -8,4 +8,7 @@ $Env:IGNORE_CERT_CHECK = "false"
 $Env:SERVER_REGION = ""
 
 # Run tests
-cargo test
+cargo test -- --nocapture
+
+# run one specific test and show stdout
+# cargo test --test test_bucket_exists -- --nocapture

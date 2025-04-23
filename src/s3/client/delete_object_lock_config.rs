@@ -19,8 +19,43 @@ use super::Client;
 use crate::s3::builders::DeleteObjectLockConfig;
 
 impl Client {
-    /// Create a DeleteObjectLockConfig request builder.
-    pub fn delete_object_lock_config(&self, bucket: &str) -> DeleteObjectLockConfig {
-        DeleteObjectLockConfig::new(bucket).client(self)
+    /// Creates a [`DeleteObjectLockConfig`] request builder.
+    ///
+    /// To execute the request, call [`DeleteObjectLockConfig::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`DeleteObjectLockConfigResponse`](crate::s3::response::DeleteObjectLockConfigResponse).    
+    ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::{DeleteObjectLockConfigResponse, MakeBucketResponse, SetObjectLockConfigResponse};
+    /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {    
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let bucket_name = "bucket-name";
+    ///
+    ///     let resp: MakeBucketResponse =
+    ///         client.make_bucket(bucket_name).object_lock(true).send().await.unwrap();
+    ///     println!("created bucket '{}' with object locking enabled", resp.bucket);
+    ///
+    ///     const DURATION_DAYS: i32 = 7;
+    ///     let config = ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();
+    ///
+    ///     let resp: SetObjectLockConfigResponse =     
+    ///         client.set_object_lock_config(bucket_name).config(config).send().await.unwrap();
+    ///     println!("configured object locking for bucket '{}'", resp.bucket);
+    ///
+    ///     let resp: DeleteObjectLockConfigResponse =
+    ///         client.delete_object_lock_config(bucket_name).send().await.unwrap();
+    ///     println!("object locking of bucket '{}' is deleted", resp.bucket);
+    /// }
+    /// ```
+    pub fn delete_object_lock_config<S: Into<String>>(&self, bucket: S) -> DeleteObjectLockConfig {
+        DeleteObjectLockConfig::new(self.clone(), bucket.into())
     }
 }

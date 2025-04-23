@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use bytes::Bytes;
+use minio::s3::response::{GetObjectResponse, PutObjectContentResponse};
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
@@ -24,18 +25,27 @@ async fn get_object() {
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
     let object_name = rand_object_name();
 
-    let data = Bytes::from("hello, world".to_string().into_bytes());
-    ctx.client
+    let data: Bytes = Bytes::from("hello, world".to_string().into_bytes());
+    let resp: PutObjectContentResponse = ctx
+        .client
         .put_object_content(&bucket_name, &object_name, data.clone())
         .send()
         .await
         .unwrap();
-    let resp = ctx
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.object_size, data.len() as u64);
+
+    let resp: GetObjectResponse = ctx
         .client
         .get_object(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.object_size, data.len() as u64);
+
     let got = resp.content.to_segmented_bytes().await.unwrap().to_bytes();
     assert_eq!(got, data);
 }

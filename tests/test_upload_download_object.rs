@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use hex::ToHex;
-use minio::s3::response::PutObjectContentResponse;
+use minio::s3::builders::ObjectContent;
+use minio::s3::response::{GetObjectResponse, PutObjectContentResponse};
 use minio::s3::types::S3Api;
 use minio_common::rand_reader::RandReader;
 use minio_common::test_context::TestContext;
@@ -47,24 +48,20 @@ fn get_hash(filename: &String) -> String {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn upload_download_object() {
+async fn upload_download_object(size: u64) {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
-    let object_name = rand_object_name();
+    let object_name: String = rand_object_name();
 
-    let size = 16_u64;
     let mut file = fs::File::create(&object_name).unwrap();
     io::copy(&mut RandReader::new(size), &mut file).unwrap();
     file.sync_all().unwrap();
 
+    let obj: ObjectContent = PathBuf::from(&object_name).as_path().into();
+
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(
-            &bucket_name,
-            &object_name,
-            PathBuf::from(&object_name).as_path(),
-        )
+        .put_object_content(&bucket_name, &object_name, obj)
         .send()
         .await
         .unwrap();
@@ -72,15 +69,18 @@ async fn upload_download_object() {
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.object_size, size);
 
-    let filename = rand_object_name();
-    let get_obj_rsp = ctx
+    let filename: String = rand_object_name();
+    let resp: GetObjectResponse = ctx
         .client
         .get_object(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
-    get_obj_rsp
-        .content
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+
+    // save the object to a file
+    resp.content
         .to_file(PathBuf::from(&filename).as_path())
         .await
         .unwrap();
@@ -88,44 +88,14 @@ async fn upload_download_object() {
 
     fs::remove_file(&object_name).unwrap();
     fs::remove_file(&filename).unwrap();
+}
 
-    ctx.client
-        .remove_object(&bucket_name, object_name.as_str())
-        .send()
-        .await
-        .unwrap();
-    ctx.client
-        .remove_object(&bucket_name, object_name.as_str())
-        .send()
-        .await
-        .unwrap();
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn upload_download_object_1() {
+    upload_download_object(16).await;
+}
 
-    let object_name = rand_object_name();
-    let size: u64 = 16 + 5 * 1024 * 1024;
-    let mut file = fs::File::create(&object_name).unwrap();
-    io::copy(&mut RandReader::new(size), &mut file).unwrap();
-    file.sync_all().unwrap();
-    ctx.client
-        .put_object_content(
-            &bucket_name,
-            &object_name,
-            PathBuf::from(&object_name).as_path(),
-        )
-        .send()
-        .await
-        .unwrap();
-
-    let filename = rand_object_name();
-    let get_rsp = ctx
-        .client
-        .get_object(&bucket_name, &object_name)
-        .send()
-        .await
-        .unwrap();
-    get_rsp
-        .content
-        .to_file(PathBuf::from(&filename).as_path())
-        .await
-        .unwrap();
-    assert_eq!(get_hash(&object_name), get_hash(&filename));
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn upload_download_object_2() {
+    upload_download_object(16 + 5 * 1024 * 1024).await;
 }

@@ -15,14 +15,15 @@
 
 //! Implementation of Simple Storage Service (aka S3) client
 
-pub mod args;
 pub mod builders;
 pub mod client;
-pub mod client_core;
 pub mod creds;
 pub mod error;
 pub mod http;
+pub mod multimap;
+mod object_content;
 pub mod response;
+pub mod segmented_bytes;
 pub mod signer;
 pub mod sse;
 pub mod types;

@@ -13,16 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ErrorCode};
 use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
 use http::HeaderMap;
+use std::mem;
 
 /// Response of
 /// [bucket_exists()](crate::s3::client::Client::bucket_exists)
 /// API
 #[derive(Clone, Debug)]
 pub struct BucketExistsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -31,26 +34,22 @@ pub struct BucketExistsResponse {
 
 #[async_trait]
 impl FromS3Response for BucketExistsResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
         match resp {
-            Ok(r) => Ok(BucketExistsResponse {
-                headers: r.headers().clone(),
-                region: req.get_computed_region(),
-                bucket,
+            Ok(mut r) => Ok(Self {
+                headers: mem::take(r.headers_mut()),
+                region: req.inner_region,
+                bucket: take_bucket(req.bucket)?,
                 exists: true,
             }),
-            Err(Error::S3Error(ref err)) if err.code == Error::NoSuchBucket.as_str() => {
-                Ok(BucketExistsResponse {
-                    headers: HeaderMap::new(),
+            Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchBucket => {
+                Ok(Self {
+                    headers: e.headers,
                     region: String::new(), // NOTE the bucket does not exist and the region is not provided
-                    bucket,
+                    bucket: take_bucket(req.bucket)?,
                     exists: false,
                 })
             }

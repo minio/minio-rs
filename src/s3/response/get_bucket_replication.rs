@@ -15,9 +15,11 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, ReplicationConfig, S3Request};
+use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
+use std::mem;
 use xmltree::Element;
 
 /// Response of
@@ -25,6 +27,7 @@ use xmltree::Element;
 /// API
 #[derive(Clone, Debug)]
 pub struct GetBucketReplicationResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -33,24 +36,21 @@ pub struct GetBucketReplicationResponse {
 
 #[async_trait]
 impl FromS3Response for GetBucketReplicationResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
-        let resp = resp?;
-        let headers = resp.headers().clone();
+        let mut resp = resp?;
+
+        let headers: HeaderMap = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
         let root = Element::parse(body.reader())?;
         let config = ReplicationConfig::from_xml(&root)?;
 
-        Ok(GetBucketReplicationResponse {
+        Ok(Self {
             headers,
-            region: req.get_computed_region(),
-            bucket,
+            region: req.inner_region,
+            bucket: take_bucket(req.bucket)?,
             config,
         })
     }

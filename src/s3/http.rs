@@ -18,8 +18,8 @@
 use super::utils::urlencode_object_key;
 use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::utils::match_hostname;
-use crate::s3::utils::{Multimap, to_query_string};
 use derivative::Derivative;
 use hyper::Uri;
 use hyper::http::Method;
@@ -82,7 +82,7 @@ impl fmt::Display for Url {
 
         if !self.query.is_empty() {
             f.write_str("?")?;
-            f.write_str(&to_query_string(&self.query))?;
+            f.write_str(&self.query.to_query_string())?;
         }
 
         Ok(())
@@ -171,7 +171,7 @@ fn get_aws_info(
     }
 
     let mut tokens: Vec<_> = host.get(matcher.len()..).unwrap().split('.').collect();
-    *dualstack = tokens[0] == "dualstack";
+    *dualstack = tokens[0].eq_ignore_ascii_case("dualstack");
     if *dualstack {
         tokens.remove(0);
     }
@@ -184,10 +184,12 @@ fn get_aws_info(
 
     let domain_suffix = tokens.join(".");
 
-    if host == "s3-external-1.amazonaws.com" {
+    if host.eq_ignore_ascii_case("s3-external-1.amazonaws.com") {
         region_in_host = DEFAULT_REGION.to_string();
     }
-    if host == "s3-us-gov-west-1.amazonaws.com" || host == "s3-fips-us-gov-west-1.amazonaws.com" {
+    if host.eq_ignore_ascii_case("s3-us-gov-west-1.amazonaws.com")
+        || host.eq_ignore_ascii_case("s3-fips-us-gov-west-1.amazonaws.com")
+    {
         region_in_host = "us-gov-west-1".to_string();
     }
 
@@ -336,9 +338,9 @@ impl BaseUrl {
     ) -> Result<(), Error> {
         let mut host = String::from(&self.aws_s3_prefix);
         host.push_str(&self.aws_domain_suffix);
-        if host == "s3-external-1.amazonaws.com"
-            || host == "s3-us-gov-west-1.amazonaws.com"
-            || host == "s3-fips-us-gov-west-1.amazonaws.com"
+        if host.eq_ignore_ascii_case("s3-external-1.amazonaws.com")
+            || host.eq_ignore_ascii_case("s3-us-gov-west-1.amazonaws.com")
+            || host.eq_ignore_ascii_case("s3-fips-us-gov-west-1.amazonaws.com")
         {
             url.host = host;
             return Ok(());
@@ -378,9 +380,9 @@ impl BaseUrl {
 
         let mut host = String::from(&self.aws_s3_prefix);
         host.push_str(&self.aws_domain_suffix);
-        if host == "s3-external-1.amazonaws.com"
-            || host == "s3-us-gov-west-1.amazonaws.com"
-            || host == "s3-fips-us-gov-west-1.amazonaws.com"
+        if host.eq_ignore_ascii_case("s3-external-1.amazonaws.com")
+            || host.eq_ignore_ascii_case("s3-us-gov-west-1.amazonaws.com")
+            || host.eq_ignore_ascii_case("s3-fips-us-gov-west-1.amazonaws.com")
         {
             url.host = host;
             return;
@@ -407,12 +409,6 @@ impl BaseUrl {
         bucket_name: Option<&str>,
         object_name: Option<&str>,
     ) -> Result<Url, Error> {
-        if !object_name.is_none_or(|v| v.is_empty()) && bucket_name.is_none_or(|v| v.is_empty()) {
-            return Err(Error::UrlBuildError(String::from(
-                "empty bucket name provided for object name",
-            )));
-        }
-
         let mut url = Url {
             https: self.https,
             host: self.host.clone(),
@@ -421,12 +417,13 @@ impl BaseUrl {
             query: query.clone(),
         };
 
-        if bucket_name.is_none() {
-            self.build_list_buckets_url(&mut url, region);
-            return Ok(url);
-        }
-
-        let bucket = bucket_name.unwrap();
+        let bucket: &str = match bucket_name {
+            None => {
+                self.build_list_buckets_url(&mut url, region);
+                return Ok(url);
+            }
+            Some(v) => v,
+        };
 
         #[allow(clippy::nonminimal_bool)]
         let enforce_path_style = true &&

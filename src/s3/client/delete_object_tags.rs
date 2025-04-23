@@ -19,8 +19,34 @@ use super::Client;
 use crate::s3::builders::DeleteObjectTags;
 
 impl Client {
-    /// Create a DeleteObjectTags request builder.
-    pub fn delete_object_tags(&self, bucket: &str) -> DeleteObjectTags {
-        DeleteObjectTags::new(bucket).client(self)
+    /// Creates a [`DeleteObjectTags`] request builder.
+    ///
+    /// To execute the request, call [`DeleteObjectTags::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`DeleteObjectTagsResponse`](crate::s3::response::DeleteObjectTagsResponse).
+    ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::DeleteObjectTagsResponse;
+    /// use minio::s3::types::S3Api;
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let resp: DeleteObjectTagsResponse =
+    ///         client.delete_object_tags("bucket-name", "object_name").send().await.unwrap();
+    ///     println!("legal hold of object '{}' in bucket '{}' is deleted", resp.object, resp.bucket);
+    /// }
+    /// ```
+    pub fn delete_object_tags<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> DeleteObjectTags {
+        DeleteObjectTags::new(self.clone(), bucket.into(), object.into())
     }
 }

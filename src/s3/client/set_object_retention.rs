@@ -19,8 +19,40 @@ use super::Client;
 use crate::s3::builders::SetObjectRetention;
 
 impl Client {
-    /// Create a SetObjectRetention request builder.
-    pub fn set_object_retention(&self, bucket: &str) -> SetObjectRetention {
-        SetObjectRetention::new(bucket).client(self)
+    /// Creates a [`SetObjectRetention`] request builder.
+    ///
+    /// To execute the request, call [`SetObjectRetention::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`SetObjectRetentionResponse`](crate::s3::response::SetObjectRetentionResponse).
+    ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::SetObjectRetentionResponse;
+    /// use minio::s3::builders::ObjectToDelete;
+    /// use minio::s3::types::{S3Api, RetentionMode};
+    /// use minio::s3::utils::utc_now;
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    /// let client: Client = Default::default(); // configure your client here
+    ///     let retain_until_date = utc_now() + chrono::Duration::days(1);
+    ///     let resp: SetObjectRetentionResponse = client
+    ///         .set_object_retention("bucket-name", "object-name")
+    ///         .retention_mode(Some(RetentionMode::GOVERNANCE))
+    ///         .retain_until_date(Some(retain_until_date))
+    ///         .send().await.unwrap();
+    ///     println!("set the object retention for object '{}'", resp.object);
+    /// }
+    /// ```
+    pub fn set_object_retention<S: Into<String>>(
+        &self,
+        bucket: S,
+        object: S,
+    ) -> SetObjectRetention {
+        SetObjectRetention::new(self.clone(), bucket.into(), object.into())
     }
 }

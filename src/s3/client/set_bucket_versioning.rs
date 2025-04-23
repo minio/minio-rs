@@ -19,8 +19,34 @@ use super::Client;
 use crate::s3::builders::SetBucketVersioning;
 
 impl Client {
-    /// Create a SetBucketVersioning request builder.
-    pub fn set_bucket_versioning(&self, bucket: &str) -> SetBucketVersioning {
-        SetBucketVersioning::new(bucket).client(self)
+    /// Creates a [`SetBucketVersioning`] request builder.
+    ///
+    /// To execute the request, call [`SetBucketVersioning::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`SetBucketVersioningResponse`](crate::s3::response::SetBucketVersioningResponse).
+    ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::builders::VersioningStatus;
+    /// use minio::s3::response::SetBucketVersioningResponse;
+    /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     
+    ///     let resp: SetBucketVersioningResponse = client
+    ///         .set_bucket_versioning("bucket-name")
+    ///         .versioning_status(VersioningStatus::Enabled)
+    ///         .send().await.unwrap();
+    ///     println!("enabled versioning on bucket '{}'", resp.bucket);
+    /// }
+    /// ```
+    pub fn set_bucket_versioning<S: Into<String>>(&self, bucket: S) -> SetBucketVersioning {
+        SetBucketVersioning::new(self.clone(), bucket.into())
     }
 }

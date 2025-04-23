@@ -16,8 +16,10 @@
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
+use std::mem;
 use xmltree::Element;
 
+use crate::s3::utils::{take_bucket, take_object};
 use crate::s3::{
     error::Error,
     types::{FromS3Response, S3Request},
@@ -27,96 +29,95 @@ use crate::s3::{
 /// Response of [put_object_api()](crate::s3::client::Client::put_object) API
 #[derive(Debug, Clone)]
 pub struct PutObjectResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
-    pub bucket_name: String,
-    pub object_name: String,
-    pub location: String,
+    pub bucket: String,
+    pub object: String,
+    pub region: String,
     pub etag: String,
     pub version_id: Option<String>,
 }
 
 #[async_trait]
 impl FromS3Response for PutObjectResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
-        response: Result<reqwest::Response, Error>,
+    async fn from_s3response(
+        req: S3Request,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let response = response?;
-        let header_map = response.headers();
+        let mut resp = resp?;
 
-        Ok(PutObjectResponse {
-            headers: header_map.clone(),
-            bucket_name: req.bucket.unwrap().to_string(),
-            object_name: req.object.unwrap().to_string(),
-            location: req.region.unwrap_or("").to_string(),
-            etag: match header_map.get("etag") {
-                Some(v) => v.to_str()?.to_string().trim_matches('"').to_string(),
-                _ => String::new(),
-            },
-            version_id: match header_map.get("x-amz-version-id") {
-                Some(v) => Some(v.to_str()?.to_string()),
-                None => None,
-            },
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+
+        let etag: String = headers
+            .get("etag")
+            .and_then(|v| v.to_str().ok()) // Convert to &str safely
+            .map(|s| s.trim_matches('"').to_string()) // Trim and convert to String
+            .unwrap_or_default();
+
+        let version_id: Option<String> = headers
+            .get("x-amz-version-id")
+            .and_then(|v| v.to_str().ok().map(String::from));
+
+        Ok(Self {
+            headers,
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
+            region: req.inner_region,
+            etag,
+            version_id,
         })
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct CreateMultipartUploadResponse2 {
+pub struct CreateMultipartUploadResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
+    pub bucket: String,
+    pub object: String,
     pub upload_id: String,
 }
 
 #[async_trait]
-impl FromS3Response for CreateMultipartUploadResponse2 {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
-        response: Result<reqwest::Response, Error>,
+impl FromS3Response for CreateMultipartUploadResponse {
+    async fn from_s3response(
+        req: S3Request,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let response = response?;
-        let headers = response.headers().clone();
-        let body = response.bytes().await?;
-        let root = Element::parse(body.reader())?;
-
-        let region: String = req.region.unwrap_or("").to_string(); // Keep this since it defaults to an empty string
-
-        let bucket_name: String = req
+        let bucket = req
             .bucket
-            .ok_or_else(|| {
-                Error::InvalidBucketName(String::from("Missing bucket name in request"))
-            })?
-            .to_string();
-
-        let object_name: String = req
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
+        let object = req
             .object
-            .ok_or_else(|| {
-                Error::InvalidObjectName(String::from("Missing object name in request"))
-            })?
-            .to_string();
+            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
+        let mut resp = resp?;
 
-        let upload_id: String = get_text(&root, "UploadId")?;
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+        let body = resp.bytes().await?;
+        let root = Element::parse(body.reader())?;
+        let upload_id: String =
+            get_text(&root, "UploadId").map_err(|e| Error::InvalidUploadId(e.to_string()))?;
 
-        Ok(CreateMultipartUploadResponse2 {
+        Ok(CreateMultipartUploadResponse {
             headers,
-            region,
-            bucket_name,
-            object_name,
+            region: req.inner_region,
+            bucket,
+            object,
             upload_id,
         })
     }
 }
 
-pub type AbortMultipartUploadResponse2 = CreateMultipartUploadResponse2;
+pub type AbortMultipartUploadResponse = CreateMultipartUploadResponse;
 
-pub type CompleteMultipartUploadResponse2 = PutObjectResponse;
+pub type CompleteMultipartUploadResponse = PutObjectResponse;
 
-pub type UploadPartResponse2 = PutObjectResponse;
+pub type UploadPartResponse = PutObjectResponse;
 
 #[derive(Debug, Clone)]
 pub struct PutObjectContentResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub bucket: String,
     pub object: String,

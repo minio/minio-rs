@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common_benches::{Ctx2, benchmark_s3_api};
+use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 
 use criterion::Criterion;
 use minio::s3::builders::{GetObjectRetention, SetObjectRetention};
@@ -22,39 +22,38 @@ use minio::s3::types::{RetentionMode, S3Api};
 use minio::s3::utils::utc_now;
 
 pub(crate) fn bench_set_object_retention(criterion: &mut Criterion) {
+    if skip_express_mode("bench_set_object_retention") {
+        return;
+    }
     benchmark_s3_api(
         "set_object_retention",
         criterion,
         || async { Ctx2::new_with_object(true).await },
         |ctx| {
-            SetObjectRetention::new(&ctx.bucket)
-                .client(&ctx.client)
-                .object(ctx.object.clone())
+            SetObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
                 .retention_mode(Some(RetentionMode::GOVERNANCE))
                 .retain_until_date(Some(utc_now() + chrono::Duration::days(1)))
         },
     )
 }
 pub(crate) fn bench_get_object_retention(criterion: &mut Criterion) {
+    if skip_express_mode("bench_get_object_retention") {
+        return;
+    }
     benchmark_s3_api(
         "get_object_retention",
         criterion,
         || async {
             let ctx = Ctx2::new_with_object(true).await;
-            let _resp: SetObjectRetentionResponse = SetObjectRetention::new(&ctx.bucket)
-                .client(&ctx.client)
-                .object(ctx.object.clone())
-                .retention_mode(Some(RetentionMode::GOVERNANCE))
-                .retain_until_date(Some(utc_now() + chrono::Duration::days(1)))
-                .send()
-                .await
-                .unwrap();
+            let _resp: SetObjectRetentionResponse =
+                SetObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
+                    .retention_mode(Some(RetentionMode::GOVERNANCE))
+                    .retain_until_date(Some(utc_now() + chrono::Duration::days(1)))
+                    .send()
+                    .await
+                    .unwrap();
             ctx
         },
-        |ctx| {
-            GetObjectRetention::new(&ctx.bucket)
-                .client(&ctx.client)
-                .object(ctx.object.clone())
-        },
+        |ctx| GetObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone()),
     )
 }

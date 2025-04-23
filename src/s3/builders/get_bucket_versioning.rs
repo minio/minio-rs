@@ -17,7 +17,7 @@ use crate::s3::builders::BucketCommon;
 use crate::s3::error::Error;
 use crate::s3::response::GetBucketVersioningResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name, merge};
+use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
 /// Argument builder for [get_bucket_versioning()](crate::s3::client::Client::get_bucket_versioning) API
@@ -31,27 +31,13 @@ impl S3Api for GetBucketVersioning {
 }
 
 impl ToS3Request for GetBucketVersioning {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
-        }
 
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        query_params.insert(String::from("versioning"), String::new());
-
-        let req = S3Request::new(
-            self.client.as_ref().ok_or(Error::NoClientProvided)?,
-            Method::GET,
-        )
-        .region(self.region.as_deref())
-        .bucket(Some(&self.bucket))
-        .query_params(query_params)
-        .headers(headers);
-        Ok(req)
+        Ok(S3Request::new(self.client, Method::GET)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(insert(self.extra_query_params, "versioning"))
+            .headers(self.extra_headers.unwrap_or_default()))
     }
 }

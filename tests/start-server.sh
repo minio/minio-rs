@@ -1,7 +1,5 @@
 #!/bin/bash
 
-#Note start this script from minio-rs, not from directory tests
-
 set -x
 set -e
 
@@ -16,3 +14,6 @@ cp ./tests/public.crt ./tests/private.key /tmp/certs/
     ./minio server /tmp/test-xl/{1...4}/ --certs-dir /tmp/certs/ &)
 
 sleep 10
+
+
+

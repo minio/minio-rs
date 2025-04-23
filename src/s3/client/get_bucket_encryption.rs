@@ -19,8 +19,28 @@ use super::Client;
 use crate::s3::builders::GetBucketEncryption;
 
 impl Client {
-    /// Create a GetBucketEncryption request builder.
-    pub fn get_bucket_encryption(&self, bucket: &str) -> GetBucketEncryption {
-        GetBucketEncryption::new(bucket).client(self)
+    /// Creates a [`GetBucketEncryption`] request builder.
+    ///
+    /// To execute the request, call [`GetBucketEncryption::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetBucketEncryptionResponse`](crate::s3::response::GetBucketEncryptionResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::GetBucketEncryptionResponse;
+    /// use minio::s3::types::S3Api;
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let resp: GetBucketEncryptionResponse =
+    ///         client.get_bucket_encryption("bucket-name").send().await.unwrap();
+    ///     println!("retrieved SseConfig '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
+    /// }
+    /// ```
+    pub fn get_bucket_encryption<S: Into<String>>(&self, bucket: S) -> GetBucketEncryption {
+        GetBucketEncryption::new(self.clone(), bucket.into())
     }
 }

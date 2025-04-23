@@ -29,6 +29,11 @@ use minio_common::utils::{rand_bucket_name, rand_object_name};
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn object_retention() {
     let ctx = TestContext::new_from_env();
+    if ctx.client.is_minio_express() {
+        println!("Skipping test because it is running in MinIO Express mode");
+        return;
+    }
+
     let bucket_name: String = rand_bucket_name();
     let resp: MakeBucketResponse = ctx
         .client
@@ -37,7 +42,7 @@ async fn object_retention() {
         .send()
         .await
         .unwrap();
-    let _cleanup = CleanupGuard::new(&ctx.client, &bucket_name);
+    let _cleanup = CleanupGuard::new(ctx.client.clone(), &bucket_name);
     assert_eq!(resp.bucket, bucket_name);
     let object_name = rand_object_name();
 
@@ -56,29 +61,27 @@ async fn object_retention() {
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.object_size, size);
-    //assert_eq!(resp.version_id, None);
-    assert_eq!(resp.region, "");
+    assert_ne!(resp.version_id, None);
+    assert_eq!(resp.region, DEFAULT_REGION);
     //assert_eq!(resp.etag, "");
 
     let retain_until_date = utc_now() + chrono::Duration::days(1);
     let obj_resp: SetObjectRetentionResponse = ctx
         .client
-        .set_object_retention(&bucket_name)
-        .object(object_name.clone())
+        .set_object_retention(&bucket_name, &object_name)
         .retention_mode(Some(RetentionMode::GOVERNANCE))
         .retain_until_date(Some(retain_until_date))
         .send()
         .await
         .unwrap();
     assert_eq!(obj_resp.bucket, bucket_name);
+    assert_eq!(obj_resp.object, object_name);
     assert_eq!(obj_resp.version_id, None);
     assert_eq!(obj_resp.region, DEFAULT_REGION);
-    assert_eq!(obj_resp.object, object_name);
 
     let resp: GetObjectRetentionResponse = ctx
         .client
-        .get_object_retention(&bucket_name)
-        .object(object_name.clone())
+        .get_object_retention(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -90,28 +93,26 @@ async fn object_retention() {
 
     let resp: SetObjectRetentionResponse = ctx
         .client
-        .set_object_retention(&bucket_name)
-        .object(object_name.clone())
+        .set_object_retention(&bucket_name, &object_name)
         .bypass_governance_mode(true)
         .send()
         .await
         .unwrap();
     assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
     assert_eq!(resp.version_id, None);
     assert_eq!(resp.region, DEFAULT_REGION);
-    assert_eq!(resp.object, object_name);
 
     let resp: GetObjectRetentionResponse = ctx
         .client
-        .get_object_retention(&bucket_name)
-        .object(object_name.clone())
+        .get_object_retention(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
     assert!(resp.retention_mode.is_none());
     assert!(resp.retain_until_date.is_none());
     assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
     assert_eq!(resp.version_id, None);
     assert_eq!(resp.region, DEFAULT_REGION);
-    assert_eq!(resp.object, object_name);
 }

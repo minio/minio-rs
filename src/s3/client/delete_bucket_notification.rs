@@ -19,8 +19,31 @@ use super::Client;
 use crate::s3::builders::DeleteBucketNotification;
 
 impl Client {
-    /// Create a DeleteBucketNotification request builder.
-    pub fn delete_bucket_notification(&self, bucket: &str) -> DeleteBucketNotification {
-        DeleteBucketNotification::new(bucket).client(self)
+    /// Creates a [`DeleteBucketNotification`] request builder.
+    ///
+    /// To execute the request, call [`DeleteBucketNotification::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`DeleteBucketNotificationResponse`](crate::s3::response::DeleteBucketNotificationResponse).    
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::DeleteBucketNotificationResponse;
+    /// use minio::s3::types::S3Api;
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {    
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let resp: DeleteBucketNotificationResponse =
+    ///         client.delete_bucket_notification("bucket-name").send().await.unwrap();
+    ///     println!("notification of bucket '{}' is deleted", resp.bucket);
+    /// }
+    /// ```
+    pub fn delete_bucket_notification<S: Into<String>>(
+        &self,
+        bucket: S,
+    ) -> DeleteBucketNotification {
+        DeleteBucketNotification::new(self.clone(), bucket.into())
     }
 }

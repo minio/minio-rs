@@ -15,64 +15,60 @@
 
 //! Various types for S3 API requests and responses
 
-use super::builders::SegmentedBytes;
 use super::client::{Client, DEFAULT_REGION};
 use crate::s3::error::Error;
 use crate::s3::utils::{
-    Multimap, UtcTime, from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc,
+    UtcTime, from_iso8601utc, get_default_text, get_option_text, get_text, to_iso8601utc,
 };
 
+use crate::s3::multimap::Multimap;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use async_trait::async_trait;
 use futures_util::Stream;
 use http::Method;
 use serde::{Deserialize, Serialize};
-use xmltree::Element;
-
 use std::collections::HashMap;
 use std::fmt;
 
-#[derive(Clone)]
-pub struct S3Request<'a> {
-    pub(crate) client: &'a Client,
+use xmltree::Element;
 
-    pub method: Method,
-    pub region: Option<&'a str>,
-    pub bucket: Option<&'a str>,
-    pub object: Option<&'a str>,
-    pub query_params: Multimap,
-    pub headers: Multimap,
-    pub body: Option<SegmentedBytes>,
+#[derive(Clone, Default, Debug)]
+/// Generic S3Request
+pub struct S3Request {
+    pub(crate) client: Client,
 
-    // Computed region
-    inner_region: String,
+    method: Method,
+    region: Option<String>,
+    pub(crate) bucket: Option<String>,
+    pub(crate) object: Option<String>,
+    pub(crate) query_params: Multimap,
+    headers: Multimap,
+    body: Option<SegmentedBytes>,
+
+    /// region computed by [`S3Request::execute`]
+    pub(crate) inner_region: String,
 }
 
-impl<'a> S3Request<'a> {
-    pub fn new(client: &'a Client, method: Method) -> S3Request<'a> {
-        S3Request {
+impl S3Request {
+    pub fn new(client: Client, method: Method) -> Self {
+        Self {
             client,
             method,
-            region: None,
-            bucket: None,
-            object: None,
-            query_params: Multimap::new(),
-            headers: Multimap::new(),
-            body: None,
-            inner_region: String::new(),
+            ..Default::default()
         }
     }
 
-    pub fn region(mut self, region: Option<&'a str>) -> Self {
+    pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
     }
 
-    pub fn bucket(mut self, bucket: Option<&'a str>) -> Self {
+    pub fn bucket(mut self, bucket: Option<String>) -> Self {
         self.bucket = bucket;
         self
     }
 
-    pub fn object(mut self, object: Option<&'a str>) -> Self {
+    pub fn object(mut self, object: Option<String>) -> Self {
         self.object = object;
         self
     }
@@ -92,76 +88,143 @@ impl<'a> S3Request<'a> {
         self
     }
 
-    pub fn get_computed_region(&self) -> String {
-        self.inner_region.clone()
+    fn compute_inner_region(&self) -> Result<String, Error> {
+        Ok(match &self.bucket {
+            Some(b) => self.client.get_region_cached(b, &self.region)?,
+            None => DEFAULT_REGION.to_string(),
+        })
     }
 
+    /// Execute the request, returning the response. Only used in [`S3Api::send()`]
     pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
-        // Lookup the region of the bucket if provided.
-        self.inner_region = if let Some(bucket) = self.bucket {
-            self.client.get_region(bucket, self.region).await?
-        } else {
-            DEFAULT_REGION.to_string()
-        };
-
-        // Execute the API request.
+        self.inner_region = self.compute_inner_region()?;
         self.client
-            .execute2(
+            .execute(
                 self.method.clone(),
                 &self.inner_region,
                 &mut self.headers,
                 &self.query_params,
-                self.bucket,
-                self.object,
+                &self.bucket.as_deref(),
+                &self.object.as_deref(),
                 self.body.as_ref(),
             )
             .await
     }
 }
 
-pub trait ToS3Request {
-    fn to_s3request(&self) -> Result<S3Request, Error>;
+/// Trait for converting a request builder into a concrete S3 HTTP request.
+///
+/// This trait is implemented by all S3 request builders and serves as an
+/// intermediate step in the request execution pipeline. It enables the
+/// conversion from a strongly-typed request builder into a generic
+/// [`S3Request`] that can be executed over HTTP.
+///
+/// The [`S3Api::send`] method uses this trait to convert request builders
+/// into executable HTTP requests before sending them to the S3-compatible
+/// service.
+///
+/// # See Also
+///
+/// * [`S3Api`] - The trait that uses `ToS3Request` as part of its request execution pipeline
+/// * [`FromS3Response`] - The counterpart trait for converting HTTP responses into typed responses
+///
+pub trait ToS3Request: Sized {
+    /// Consumes this request builder and returns a [`S3Request`].
+    ///
+    /// This method transforms the request builder into a concrete HTTP request
+    /// that can be executed against an S3-compatible service. The transformation
+    /// includes:
+    ///
+    /// * Setting appropriate HTTP method (GET, PUT, POST, etc.)
+    /// * Building the request URL with path and query parameters
+    /// * Adding required headers (authentication, content-type, etc.)
+    /// * Attaching the request body, if applicable
+    ///
+    /// # Returns
+    ///
+    /// * `Result<S3Request, Error>` - The executable S3 request on success,
+    ///   or an error if the request cannot be built correctly.
+    ///
+    fn to_s3request(self) -> Result<S3Request, Error>;
 }
 
+/// Trait for converting HTTP responses into strongly-typed S3 response objects.
+///
+/// This trait is implemented by all S3 response types in the SDK and provides
+/// a way to parse and validate raw HTTP responses from S3-compatible services.
+/// It works as the final step in the request execution pipeline, transforming
+/// the HTTP layer response into a domain-specific response object with proper
+/// typing and field validation.
+///
+/// # See Also
+///
+/// * [`S3Api`] - The trait that uses `FromS3Response` as part of its request execution pipeline
+/// * [`ToS3Request`] - The counterpart trait for converting request builders into HTTP requests
 #[async_trait]
 pub trait FromS3Response: Sized {
-    async fn from_s3response<'a>(
-        s3req: S3Request<'a>,
+    /// Asynchronously converts an HTTP response into a strongly-typed S3 response.
+    ///
+    /// This method takes both the original S3 request and the HTTP response (or error)
+    /// that resulted from executing that request. It then parses the response data
+    /// and constructs a typed response object that provides convenient access to
+    /// the response fields.
+    ///
+    /// The method handles both successful responses and error responses from the
+    /// S3 service, transforming S3-specific errors into appropriate error types.
+    ///
+    /// # Parameters
+    ///
+    /// * `s3req` - The original S3 request that was executed
+    /// * `resp` - The result of the HTTP request execution, which can be either a
+    ///   successful response or an error
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Self, Error>` - The typed response object on success, or an error
+    ///   if the response cannot be parsed or represents an S3 service error
+    ///
+    async fn from_s3response(
+        s3req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error>;
 }
 
-/// A trait for interacting with the S3 API, providing a unified interface
-/// for sending requests and handling responses.
+/// Trait that defines a common interface for all S3 API request builders.
+///
+/// This trait is implemented by all request builders in the SDK and provides
+/// a consistent way to send requests and obtain typed responses. It works in
+/// conjunction with [`ToS3Request`] to convert the builder into a concrete
+/// HTTP request and with [`FromS3Response`] to convert the HTTP response back
+/// into a strongly-typed S3 response object.
+///
+/// # Type Parameters
+///
+/// * `S3Response` - The specific response type associated with this request builder.
+///   Must implement the [`FromS3Response`] trait.
+///
 #[async_trait]
 pub trait S3Api: ToS3Request {
-    /// The associated response type that must implement `FromS3Response`.
+    /// The response type associated with this request builder.
+    ///
+    /// Each implementation of `S3Api` defines its own response type that will be
+    /// returned by the `send()` method. This type must implement the [`FromS3Response`]
+    /// trait to enable conversion from the raw HTTP response.
     type S3Response: FromS3Response;
-
-    /// Sends an S3 request and processes the response.
+    /// Sends the S3 API request and returns the corresponding typed response.
+    ///
+    /// This method consumes the request builder, converts it into a concrete HTTP
+    /// request using [`ToS3Request::to_s3request`], executes the request, and then
+    /// converts the HTTP response into the appropriate typed response using
+    /// [`FromS3Response::from_s3response`].
     ///
     /// # Returns
-    /// - `Ok(Self::S3Response)`: If the request is successful and the response can be parsed.
-    /// - `Err(Error)`: If there is a failure in request execution or response processing.
     ///
-    /// # Example Usage
-    /// ```ignore
-    /// use minio::s3::types::S3Api;
-    /// async fn example(api: &impl S3Api) {
-    ///     match api.send().await {
-    ///         Ok(response) => println!("Success: {:?}", response),
-    ///         Err(err) => eprintln!("Error: {:?}", err),
-    ///     }
-    /// }
-    /// ```
-    async fn send(&self) -> Result<Self::S3Response, Error> {
-        // Convert the implementing type into an S3 request
+    /// * `Result<Self::S3Response, Error>` - The typed S3 response on success,
+    ///   or an error if the request failed at any stage.    
+    ///
+    async fn send(self) -> Result<Self::S3Response, Error> {
         let mut req = self.to_s3request()?;
-
-        // Execute the request and await the response
         let resp: Result<reqwest::Response, Error> = req.execute().await;
-
-        // Convert the response into the associated response type
         Self::S3Response::from_s3response(req, resp).await
     }
 }
@@ -222,7 +285,7 @@ pub enum RetentionMode {
 
 impl RetentionMode {
     pub fn parse(s: &str) -> Result<RetentionMode, Error> {
-        match s {
+        match s.to_uppercase().as_str() {
             "GOVERNANCE" => Ok(RetentionMode::GOVERNANCE),
             "COMPLIANCE" => Ok(RetentionMode::COMPLIANCE),
             _ => Err(Error::InvalidRetentionMode(s.to_string())),
@@ -248,7 +311,7 @@ pub struct Retention {
 
 /// Parses legal hold string value
 pub fn parse_legal_hold(s: &str) -> Result<bool, Error> {
-    match s {
+    match s.to_uppercase().as_str() {
         "ON" => Ok(true),
         "OFF" => Ok(false),
         _ => Err(Error::InvalidLegalHold(s.to_string())),
@@ -344,7 +407,7 @@ pub struct JsonInputSerialization {
 }
 
 #[derive(Clone, Debug, Default)]
-/// Parque input serialization definitions
+/// Parquet input serialization definitions
 pub struct ParquetInputSerialization;
 
 #[derive(Clone, Debug, Default)]
@@ -365,8 +428,8 @@ pub struct JsonOutputSerialization {
 
 #[derive(Clone, Debug, Default)]
 /// Select request for [select_object_content()](crate::s3::client::Client::select_object_content) API
-pub struct SelectRequest<'a> {
-    pub expr: &'a str,
+pub struct SelectRequest {
+    pub expr: String,
     pub csv_input: Option<CsvInputSerialization>,
     pub json_input: Option<JsonInputSerialization>,
     pub parquet_input: Option<ParquetInputSerialization>,
@@ -377,7 +440,7 @@ pub struct SelectRequest<'a> {
     pub scan_end_range: Option<usize>,
 }
 
-impl<'a> SelectRequest<'a> {
+impl SelectRequest {
     pub fn new_csv_input_output(
         expr: &str,
         csv_input: CsvInputSerialization,
@@ -390,7 +453,7 @@ impl<'a> SelectRequest<'a> {
         }
 
         Ok(SelectRequest {
-            expr,
+            expr: expr.to_string(),
             csv_input: Some(csv_input),
             json_input: None,
             parquet_input: None,
@@ -403,10 +466,10 @@ impl<'a> SelectRequest<'a> {
     }
 
     pub fn new_csv_input_json_output(
-        expr: &'a str,
+        expr: String,
         csv_input: CsvInputSerialization,
         json_output: JsonOutputSerialization,
-    ) -> Result<SelectRequest<'a>, Error> {
+    ) -> Result<SelectRequest, Error> {
         if expr.is_empty() {
             return Err(Error::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
@@ -427,10 +490,10 @@ impl<'a> SelectRequest<'a> {
     }
 
     pub fn new_json_input_output(
-        expr: &'a str,
+        expr: String,
         json_input: JsonInputSerialization,
         json_output: JsonOutputSerialization,
-    ) -> Result<SelectRequest<'a>, Error> {
+    ) -> Result<SelectRequest, Error> {
         if expr.is_empty() {
             return Err(Error::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
@@ -451,10 +514,10 @@ impl<'a> SelectRequest<'a> {
     }
 
     pub fn new_parquet_input_csv_output(
-        expr: &'a str,
+        expr: String,
         parquet_input: ParquetInputSerialization,
         csv_output: CsvOutputSerialization,
-    ) -> Result<SelectRequest<'a>, Error> {
+    ) -> Result<SelectRequest, Error> {
         if expr.is_empty() {
             return Err(Error::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
@@ -475,10 +538,10 @@ impl<'a> SelectRequest<'a> {
     }
 
     pub fn new_parquet_input_json_output(
-        expr: &'a str,
+        expr: String,
         parquet_input: ParquetInputSerialization,
         json_output: JsonOutputSerialization,
-    ) -> Result<SelectRequest<'a>, Error> {
+    ) -> Result<SelectRequest, Error> {
         if expr.is_empty() {
             return Err(Error::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
@@ -502,7 +565,7 @@ impl<'a> SelectRequest<'a> {
         let mut data = String::from("<SelectObjectContentRequest>");
 
         data.push_str("<Expression>");
-        data.push_str(self.expr);
+        data.push_str(&self.expr);
         data.push_str("</Expression>");
         data.push_str("<ExpressionType>SQL</ExpressionType>");
 
@@ -844,11 +907,12 @@ impl SseConfig {
         data.push_str("<SSEAlgorithm>");
         data.push_str(&self.sse_algorithm);
         data.push_str("</SSEAlgorithm>");
-        if self.kms_master_key_id.is_some() {
+        if let Some(v) = &self.kms_master_key_id {
             data.push_str("<KMSMasterKeyID>");
-            data.push_str(self.kms_master_key_id.as_ref().unwrap());
+            data.push_str(v);
             data.push_str("</KMSMasterKeyID>");
         }
+
         data.push_str(
             "</ApplyServerSideEncryptionByDefault></Rule></ServerSideEncryptionConfiguration>",
         );
@@ -1653,9 +1717,9 @@ pub struct AccessControlTranslation {
 }
 
 impl AccessControlTranslation {
-    pub fn new() -> AccessControlTranslation {
-        AccessControlTranslation {
-            owner: String::from("Destination"),
+    pub fn new() -> Self {
+        Self {
+            owner: "Destination".to_string(),
         }
     }
 }
@@ -1680,8 +1744,8 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    pub fn new(status: bool) -> Metrics {
-        Metrics {
+    pub fn new(status: bool) -> Self {
+        Self {
             event_threshold_minutes: Some(15),
             status,
         }
@@ -1696,8 +1760,8 @@ pub struct ReplicationTime {
 }
 
 impl ReplicationTime {
-    pub fn new(status: bool) -> ReplicationTime {
-        ReplicationTime {
+    pub fn new(status: bool) -> Self {
+        Self {
             time_minutes: Some(15),
             status,
         }
@@ -2044,13 +2108,9 @@ pub struct ObjectLockConfig {
 }
 
 impl ObjectLockConfig {
-    pub fn new(
-        mode: RetentionMode,
-        days: Option<i32>,
-        years: Option<i32>,
-    ) -> Result<ObjectLockConfig, Error> {
+    pub fn new(mode: RetentionMode, days: Option<i32>, years: Option<i32>) -> Result<Self, Error> {
         if days.is_some() ^ years.is_some() {
-            return Ok(ObjectLockConfig {
+            return Ok(Self {
                 retention_mode: Some(mode),
                 retention_duration_days: days,
                 retention_duration_years: years,

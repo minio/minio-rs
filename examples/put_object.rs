@@ -17,7 +17,7 @@ use clap::Parser;
 use log::info;
 use minio::s3::response::BucketExistsResponse;
 use minio::s3::types::S3Api;
-use minio::s3::{builders::ObjectContent, client::ClientBuilder, creds::StaticProvider};
+use minio::s3::{Client, builders::ObjectContent, client::ClientBuilder, creds::StaticProvider};
 use std::path::PathBuf;
 
 /// Upload a file to the given bucket and object path on the MinIO Play server.
@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         None,
     );
 
-    let client = ClientBuilder::new("https://play.min.io".parse()?)
+    let client: Client = ClientBuilder::new("https://play.min.io".parse()?)
         .provider(Some(Box::new(static_provider)))
         .build()?;
 

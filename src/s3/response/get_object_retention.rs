@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ErrorCode};
+use crate::s3::multimap::MultimapExt;
 use crate::s3::types::{FromS3Response, RetentionMode, S3Request};
-use crate::s3::utils::{UtcTime, from_iso8601utc, get_option_text};
+use crate::s3::utils::{UtcTime, from_iso8601utc, get_option_text, take_bucket, take_object};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
+use std::mem;
 use xmltree::Element;
 
 /// Response of
@@ -26,6 +28,7 @@ use xmltree::Element;
 /// API
 #[derive(Clone, Debug)]
 pub struct GetObjectRetentionResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -38,22 +41,13 @@ pub struct GetObjectRetentionResponse {
 
 #[async_trait]
 impl FromS3Response for GetObjectRetentionResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
-
-        let region: String = req.get_computed_region();
-        let object_name: String = req.object.unwrap().into();
-        let version_id: Option<String> = req.query_params.get("versionId").cloned();
-
         match resp {
-            Ok(r) => {
-                let headers = r.headers().clone();
+            Ok(mut r) => {
+                let headers = mem::take(r.headers_mut());
                 let body = r.bytes().await?;
                 let root = Element::parse(body.reader())?;
                 let retention_mode = match get_option_text(&root, "Mode") {
@@ -65,25 +59,23 @@ impl FromS3Response for GetObjectRetentionResponse {
                     _ => None,
                 };
 
-                Ok(GetObjectRetentionResponse {
+                Ok(Self {
                     headers,
-                    region,
-                    bucket,
-                    object: object_name.clone(),
-                    version_id,
+                    region: req.inner_region,
+                    bucket: take_bucket(req.bucket)?,
+                    object: take_object(req.object)?,
+                    version_id: req.query_params.take_version(),
                     retention_mode,
                     retain_until_date,
                 })
             }
-            Err(Error::S3Error(ref err))
-                if err.code == Error::NoSuchObjectLockConfiguration.as_str() =>
-            {
-                Ok(GetObjectRetentionResponse {
-                    headers: HeaderMap::new(),
-                    region,
-                    bucket,
-                    object: object_name.clone(),
-                    version_id,
+            Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchObjectLockConfiguration => {
+                Ok(Self {
+                    headers: e.headers,
+                    region: req.inner_region,
+                    bucket: take_bucket(req.bucket)?,
+                    object: take_object(req.object)?,
+                    version_id: req.query_params.take_version(),
                     retention_mode: None,
                     retain_until_date: None,
                 })

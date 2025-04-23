@@ -19,18 +19,25 @@ use super::Client;
 use crate::s3::builders::SetBucketLifecycle;
 
 impl Client {
-    /// Create a SetBucketLifecycle request builder.
+    /// Creates a [`SetBucketLifecycle`] request builder.
     ///
-    /// Returns argument for [set_bucket_lifecycle()](crate::s3::client::Client::set_bucket_lifecycle) API with given bucket name and configuration
+    /// To execute the request, call [`SetBucketLifecycle::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`SetBucketLifecycleResponse`](crate::s3::response::SetBucketLifecycleResponse).
     ///
-    /// # Examples
+    /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use minio::s3::Client;
+    /// use minio::s3::builders::VersioningStatus;
+    /// use minio::s3::response::SetBucketLifecycleResponse;
     /// use minio::s3::types::{Filter, LifecycleConfig, LifecycleRule, S3Api};
+    ///
+    /// use std::collections::HashMap;
     ///
     /// #[tokio::main]
     /// async fn main() {
+    ///     let client: Client = Default::default(); // configure your client here
+    ///
     ///     let rules: Vec<LifecycleRule> = vec![LifecycleRule {
     ///         abort_incomplete_multipart_upload_days_after_initiation: None,
     ///         expiration_date: None,
@@ -46,14 +53,15 @@ impl Client {
     ///         transition_days: None,
     ///         transition_storage_class: None,
     ///     }];
-    ///     let client = Client::default();
-    ///     let _resp = client
-    ///          .set_bucket_lifecycle("my-bucket-name")
-    ///          .life_cycle_config(LifecycleConfig { rules })
-    ///          .send().await;
+    ///
+    ///     let resp: SetBucketLifecycleResponse = client
+    ///         .set_bucket_lifecycle("bucket-name")
+    ///         .life_cycle_config(LifecycleConfig { rules })
+    ///         .send().await.unwrap();
+    ///     println!("set bucket replication policy on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_lifecycle(&self, bucket: &str) -> SetBucketLifecycle {
-        SetBucketLifecycle::new(bucket).client(self)
+    pub fn set_bucket_lifecycle<S: Into<String>>(&self, bucket: S) -> SetBucketLifecycle {
+        SetBucketLifecycle::new(self.clone(), bucket.into())
     }
 }

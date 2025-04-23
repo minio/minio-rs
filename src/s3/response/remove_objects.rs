@@ -18,6 +18,7 @@
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
+use std::mem;
 use xmltree::Element;
 
 use crate::s3::{
@@ -28,6 +29,7 @@ use crate::s3::{
 
 #[derive(Debug, Clone)]
 pub struct RemoveObjectResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     /// Value of the `x-amz-delete-marker` header.
     pub is_delete_marker: bool,
@@ -38,20 +40,20 @@ pub struct RemoveObjectResponse {
 
 #[async_trait]
 impl FromS3Response for RemoveObjectResponse {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let resp = resp?;
-        let headers = resp.headers().clone();
+        let mut resp = resp?;
+        let headers: HeaderMap = mem::take(resp.headers_mut());
         let is_delete_marker = headers
             .get("x-amz-delete-marker")
             .map(|v| v == "true")
             .unwrap_or(false);
 
-        let version_id = headers
+        let version_id: Option<String> = headers
             .get("x-amz-version-id")
-            .map(|v| v.to_str().unwrap().to_string());
+            .and_then(|v| v.to_str().ok().map(String::from));
 
         Ok(RemoveObjectResponse {
             headers,
@@ -86,6 +88,7 @@ pub struct DeletedObject {
 /// form of a stream.
 #[derive(Clone, Debug)]
 pub struct RemoveObjectsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub result: Vec<DeleteResult>,
 }
@@ -118,8 +121,8 @@ impl DeleteResult {
 
 #[async_trait]
 impl FromS3Response for RemoveObjectsResponse {
-    async fn from_s3response<'a>(
-        _req: S3Request<'a>,
+    async fn from_s3response(
+        _req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let resp = resp?;
@@ -153,6 +156,6 @@ impl FromS3Response for RemoveObjectsResponse {
             })
             .collect::<Result<Vec<DeleteResult>, Error>>()?;
 
-        Ok(RemoveObjectsResponse { headers, result })
+        Ok(Self { headers, result })
     }
 }

@@ -20,8 +20,34 @@ use crate::s3::builders::ObjectPrompt;
 use super::Client;
 
 impl Client {
-    /// Create a ObjectPrompt request builder. Prompt an object using natural language.
-    pub fn object_prompt(&self, bucket: &str, object: &str, prompt: &str) -> ObjectPrompt {
-        ObjectPrompt::new(bucket, object, prompt).client(self)
+    /// Creates a [`ObjectPrompt`] request builder. Prompt an object using natural language.
+    ///
+    /// To execute the request, call [`ObjectPrompt::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`ObjectPromptResponse`](crate::s3::response::ObjectPromptResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::ObjectPromptResponse;
+    /// use minio::s3::types::S3Api;
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let resp: ObjectPromptResponse = client
+    ///         .object_prompt("bucket-name", "object-name", "What is it about?")
+    ///         .send().await.unwrap();
+    ///     println!("the prompt response is: '{}'", resp.prompt_response);
+    /// }
+    /// ```
+    pub fn object_prompt<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+        prompt: S3,
+    ) -> ObjectPrompt {
+        ObjectPrompt::new(self.clone(), bucket.into(), object.into(), prompt.into())
     }
 }

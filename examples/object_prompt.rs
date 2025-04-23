@@ -16,10 +16,11 @@
 mod common;
 
 use crate::common::create_bucket_if_not_exists;
-use minio::s3::builders::{ObjectContent, ObjectPrompt};
+use minio::s3::builders::ObjectContent;
 use minio::s3::client::ClientBuilder;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
+use minio::s3::response::ObjectPromptResponse;
 use minio::s3::types::S3Api;
 use std::path::Path;
 
@@ -65,12 +66,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         filename.display()
     );
 
-    let op = ObjectPrompt::new(bucket_name, object_name, "what is it about?")
+    let resp: ObjectPromptResponse = client
+        .object_prompt(bucket_name, object_name, "what is it about?")
         //.lambda_arn("arn:minio:s3-object-lambda::_:webhook") // this is the default value
-        .client(&client);
+        .send()
+        .await?;
 
-    let res = op.send().await?;
-    log::info!("Object prompt result: '{}'", res.prompt_response);
+    log::info!("Object prompt result: '{}'", resp.prompt_response);
 
     Ok(())
 }

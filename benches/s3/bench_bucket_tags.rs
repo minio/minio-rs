@@ -13,34 +13,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common_benches::{Ctx2, benchmark_s3_api};
+use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 
 use criterion::Criterion;
 use minio::s3::builders::{DeleteBucketTags, GetBucketTags, SetBucketTags};
-use minio::s3::response::SetBucketTagsResponse;
 use minio::s3::types::S3Api;
 use minio_common::example::create_tags_example;
 
 pub(crate) fn bench_set_bucket_tags(criterion: &mut Criterion) {
+    if skip_express_mode("bench_set_bucket_tags") {
+        return;
+    }
     benchmark_s3_api(
         "set_bucket_tags",
         criterion,
         || async { Ctx2::new().await },
         |ctx| {
-            SetBucketTags::new(&ctx.bucket)
-                .client(&ctx.client)
-                .tags(create_tags_example())
+            SetBucketTags::new(ctx.client.clone(), ctx.bucket.clone()).tags(create_tags_example())
         },
     )
 }
 pub(crate) fn bench_get_bucket_tags(criterion: &mut Criterion) {
+    if skip_express_mode("bench_get_bucket_tags") {
+        return;
+    }
     benchmark_s3_api(
         "get_bucket_tags",
         criterion,
         || async {
             let ctx = Ctx2::new().await;
-            let _resp: SetBucketTagsResponse = ctx
-                .client
+            ctx.client
                 .set_bucket_tags(&ctx.bucket)
                 .tags(create_tags_example())
                 .send()
@@ -48,14 +50,17 @@ pub(crate) fn bench_get_bucket_tags(criterion: &mut Criterion) {
                 .unwrap();
             ctx
         },
-        |ctx| GetBucketTags::new(&ctx.bucket).client(&ctx.client),
+        |ctx| GetBucketTags::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }
 pub(crate) fn bench_delete_bucket_tags(criterion: &mut Criterion) {
+    if skip_express_mode("bench_delete_bucket_tags") {
+        return;
+    }
     benchmark_s3_api(
         "delete_bucket_tags",
         criterion,
         || async { Ctx2::new().await },
-        |ctx| DeleteBucketTags::new(&ctx.bucket).client(&ctx.client),
+        |ctx| DeleteBucketTags::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }

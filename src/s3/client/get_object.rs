@@ -15,13 +15,38 @@
 
 //! S3 APIs for downloading objects.
 
+use super::Client;
 use crate::s3::builders::GetObject;
 
-use super::Client;
-
 impl Client {
-    /// Create a GetObject request builder.
-    pub fn get_object(&self, bucket: &str, object: &str) -> GetObject {
-        GetObject::new(bucket, object).client(self)
+    /// Creates a [`GetObject`] request builder.
+    ///
+    /// To execute the request, call [`GetObject::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetObjectResponse`](crate::s3::response::GetObjectResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::GetObjectResponse;
+    /// use minio::s3::types::S3Api;
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let resp: GetObjectResponse =
+    ///         client.get_object("bucket-name", "object-name").send().await.unwrap();
+    ///     let content_bytes = resp.content.to_segmented_bytes().await.unwrap().to_bytes();
+    ///     let content_str = String::from_utf8(content_bytes.to_vec()).unwrap();
+    ///     println!("retrieved content '{}'", content_str);
+    /// }
+    /// ```
+    pub fn get_object<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> GetObject {
+        GetObject::new(self.clone(), bucket.into(), object.into())
     }
 }

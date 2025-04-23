@@ -19,50 +19,57 @@ use super::Client;
 use crate::s3::builders::SetBucketPolicy;
 
 impl Client {
-    /// Create a SetBucketPolicy request builder.
+    /// Creates a [`SetBucketPolicy`] request builder.
     ///
-    /// Returns argument for [set_bucket_policy()](crate::s3::client::Client::set_bucket_policy) API with given bucket name and configuration
+    /// To execute the request, call [`SetBucketPolicy::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`SetBucketPolicyResponse`](crate::s3::response::SetBucketPolicyResponse).
     ///
-    /// # Examples
+    /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use minio::s3::Client;
-    /// use minio::s3::types::{Filter, LifecycleConfig, LifecycleRule, S3Api};
+    /// use minio::s3::builders::VersioningStatus;
+    /// use minio::s3::response::SetBucketPolicyResponse;
+    /// use minio::s3::types::{S3Api, AndOperator, Destination, Filter, ReplicationConfig, ReplicationRule};
+    ///
+    /// use std::collections::HashMap;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// let config = r#"{
-    ///   "Version": "2012-10-17",
-    ///   "Statement": [
-    ///     {
-    ///       "Effect": "Allow",
-    ///       "Principal": {
-    ///         "AWS": "*"
-    ///       },
-    ///       "Action": [
-    ///         "s3:GetBucketLocation",
-    ///         "s3:ListBucket"
-    ///       ],
-    ///       "Resource": "arn:aws:s3:::my-bucket"
-    ///     },
-    ///     {
-    ///       "Effect": "Allow",
-    ///       "Principal": {
-    ///         "AWS": "*"
-    ///       },
-    ///       "Action": "s3:GetObject",
-    ///       "Resource": "arn:aws:s3:::my-bucket-name/*"
-    ///     }
-    ///   ]
-    /// }"#;
-    ///     let client = Client::default();
-    ///     let _resp = client
-    ///          .set_bucket_policy("my-bucket-name")
-    ///          .config(config).
-    ///          .send().await.unwrap();
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     
+    ///     let config = r#"{
+    ///         "Version": "2012-10-17",
+    ///         "Statement": [
+    ///         {
+    ///             "Effect": "Allow",
+    ///             "Principal": {
+    ///                 "AWS": "*"
+    ///             },
+    ///             "Action": [
+    ///                 "s3:GetBucketLocation",
+    ///                 "s3:ListBucket"
+    ///             ],
+    ///             "Resource": "arn:aws:s3:::bucket-name"
+    ///         },
+    ///         {
+    ///             "Effect": "Allow",
+    ///             "Principal": {
+    ///                 "AWS": "*"
+    ///             },
+    ///             "Action": "s3:GetObject",
+    ///             "Resource": "arn:aws:s3:::bucket-name/*"
+    ///         }]
+    ///     }"#;
+    ///
+    ///     let resp: SetBucketPolicyResponse = client
+    ///         .set_bucket_policy("bucket-name")
+    ///         .config(config.to_owned())
+    ///         .send().await.unwrap();
+    ///     println!("set bucket replication policy on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_policy(&self, bucket: &str) -> SetBucketPolicy {
-        SetBucketPolicy::new(bucket).client(self)
+    pub fn set_bucket_policy<S: Into<String>>(&self, bucket: S) -> SetBucketPolicy {
+        SetBucketPolicy::new(self.clone(), bucket.into())
     }
 }

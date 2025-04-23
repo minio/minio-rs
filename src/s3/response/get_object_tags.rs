@@ -14,12 +14,14 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
+use crate::s3::multimap::MultimapExt;
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::get_text;
+use crate::s3::utils::{get_text, take_bucket, take_object};
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;
 use std::collections::HashMap;
+use std::mem;
 use xmltree::Element;
 
 /// Response of
@@ -27,6 +29,7 @@ use xmltree::Element;
 /// API
 #[derive(Clone, Debug)]
 pub struct GetObjectTagsResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -38,20 +41,13 @@ pub struct GetObjectTagsResponse {
 
 #[async_trait]
 impl FromS3Response for GetObjectTagsResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
-        let resp = resp?;
+        let mut resp = resp?;
 
-        let headers: HeaderMap = resp.headers().clone();
-        let region: String = req.get_computed_region();
-        let object: String = req.object.unwrap().into();
-        let version_id: Option<String> = req.query_params.get("versionId").cloned(); //TODO consider taking the version_id
+        let headers: HeaderMap = mem::take(resp.headers_mut());
 
         let body = resp.bytes().await?;
         let mut root = Element::parse(body.reader())?;
@@ -63,12 +59,12 @@ impl FromS3Response for GetObjectTagsResponse {
             tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
         }
 
-        Ok(GetObjectTagsResponse {
+        Ok(Self {
             headers,
-            region,
-            bucket,
-            object,
-            version_id,
+            region: req.inner_region,
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
+            version_id: req.query_params.take_version(),
             tags,
         })
     }

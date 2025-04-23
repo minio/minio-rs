@@ -15,17 +15,60 @@
 
 //! APIs to remove objects.
 
+use crate::s3::builders::RemoveObjectsApi;
 use crate::s3::{
     builders::{DeleteObjects, ObjectToDelete, RemoveObject, RemoveObjects},
     client::Client,
 };
 
 impl Client {
-    pub fn remove_object(&self, bucket: &str, object: impl Into<ObjectToDelete>) -> RemoveObject {
-        RemoveObject::new(bucket, object).client(self)
+    /// Creates a [`RemoveObject`] request builder.
+    ///
+    /// To execute the request, call [`RemoveObject::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`RemoveObjectResponse`](crate::s3::response::RemoveObjectResponse).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::RemoveObjectResponse;
+    /// use minio::s3::builders::ObjectToDelete;
+    /// use minio::s3::types::S3Api;
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    /// let client: Client = Default::default(); // configure your client here
+    ///     let resp: RemoveObjectResponse = client
+    ///         .remove_object("bucket-name", ObjectToDelete::from("object-name"))
+    ///         .send().await.unwrap();
+    ///     println!("the object is deleted. The delete marker has version '{:?}'", resp.version_id);
+    /// }
+    /// ```
+    pub fn remove_object<S: Into<String>, D: Into<ObjectToDelete>>(
+        &self,
+        bucket: S,
+        object: D,
+    ) -> RemoveObject {
+        RemoveObject::new(self.clone(), bucket.into(), object)
     }
 
-    pub fn remove_objects(&self, bucket: &str, object: impl Into<DeleteObjects>) -> RemoveObjects {
-        RemoveObjects::new(bucket, object).client(self)
+    pub fn remove_objects<S: Into<String>, D: Into<DeleteObjects>>(
+        &self,
+        bucket: S,
+        objects: D,
+    ) -> RemoveObjects {
+        RemoveObjects::new(self.clone(), bucket.into(), objects)
+    }
+
+    /// Creates a builder to execute
+    /// [DeleteObjects](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html)
+    /// S3 API
+    pub fn delete_objects<S: Into<String>, D: Into<ObjectToDelete>>(
+        &self,
+        bucket: S,
+        object: Vec<ObjectToDelete>,
+    ) -> RemoveObjectsApi {
+        RemoveObjectsApi::new(self.clone(), bucket.into(), object)
     }
 }

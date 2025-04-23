@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use minio::s3::args::PostPolicy;
+use minio::s3::builders::PostPolicy;
 use minio_common::example::create_post_policy_example;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
@@ -29,7 +29,8 @@ async fn get_presigned_post_form_data() {
 
     let form_data: HashMap<String, String> = ctx
         .client
-        .get_presigned_post_form_data(&policy)
+        .get_presigned_post_form_data(policy)
+        .send()
         .await
         .unwrap();
     //println!("form_data={:?}", &form_data);

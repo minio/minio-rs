@@ -13,8 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use minio::s3::args::{CopyObjectArgs, CopySource, StatObjectArgs};
-use minio::s3::builders::ObjectContent;
+use minio::s3::builders::{CopySource, ObjectContent};
+use minio::s3::response::{CopyObjectResponse, PutObjectContentResponse, StatObjectResponse};
+use minio::s3::types::S3Api;
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
@@ -22,34 +23,42 @@ use minio_common::utils::rand_object_name;
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn copy_object() {
     let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
-    let src_object_name = rand_object_name();
+    if ctx.client.is_minio_express() {
+        println!("Skipping test because it is running in MinIO Express mode");
+        return;
+    }
 
-    let n_bytes = 16_u64;
-    let content = ObjectContent::new_from_stream(RandSrc::new(n_bytes), Some(n_bytes));
-    ctx.client
-        .put_object_content(&bucket_name, &src_object_name, content)
+    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+    let object_name_src: String = rand_object_name();
+    let object_name_dst: String = rand_object_name();
+
+    let size = 16_u64;
+    let content = ObjectContent::new_from_stream(RandSrc::new(size), Some(size));
+
+    let resp: PutObjectContentResponse = ctx
+        .client
+        .put_object_content(&bucket_name, &object_name_src, content)
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
 
-    let object_name = rand_object_name();
-    ctx.client
-        .copy_object(
-            &CopyObjectArgs::new(
-                &bucket_name,
-                &object_name,
-                CopySource::new(&bucket_name, &src_object_name).unwrap(),
-            )
-            .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    let resp = ctx
+    let resp: CopyObjectResponse = ctx
         .client
-        .stat_object(&StatObjectArgs::new(&bucket_name, &object_name).unwrap())
+        .copy_object(&bucket_name, &object_name_dst)
+        .source(CopySource::new(&bucket_name, &object_name_src).unwrap())
+        .send()
         .await
         .unwrap();
-    assert_eq!(resp.size as u64, n_bytes);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name_dst);
+
+    let resp: StatObjectResponse = ctx
+        .client
+        .stat_object(&bucket_name, &object_name_dst)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.size, size);
+    assert_eq!(resp.bucket, bucket_name);
 }

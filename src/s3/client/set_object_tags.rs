@@ -20,7 +20,10 @@ use crate::s3::builders::SetObjectTags;
 
 impl Client {
     /// Create a SetObjectTags request builder.
-    pub fn set_object_tags(&self, bucket: &str) -> SetObjectTags {
-        SetObjectTags::new(bucket).client(self)
+    ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
+    pub fn set_object_tags<S: Into<String>>(&self, bucket: S, object: S) -> SetObjectTags {
+        SetObjectTags::new(self.clone(), bucket.into(), object.into())
     }
 }

@@ -17,13 +17,14 @@ use criterion::Criterion;
 use minio::s3::Client;
 use minio::s3::error::Error;
 use minio::s3::response::{MakeBucketResponse, PutObjectContentResponse};
-use minio::s3::types::{FromS3Response, S3Api};
+use minio::s3::types::{FromS3Response, S3Api, S3Request};
 use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::test_context::TestContext;
 use minio_common::utils::{
     get_bytes_from_response, get_response_from_bytes, rand_bucket_name, rand_object_name,
 };
 use std::env;
+
 use tokio::runtime::Runtime;
 
 pub(crate) struct Ctx2 {
@@ -67,7 +68,7 @@ impl Ctx2 {
             .send()
             .await
             .unwrap();
-        let cleanup = CleanupGuard::new(&ctx.client, &bucket_name);
+        let cleanup = CleanupGuard::new(ctx.client.clone(), &bucket_name);
         let object_name = rand_object_name();
         let data = bytes::Bytes::from("hello, world".to_string().into_bytes());
         let _resp: PutObjectContentResponse = ctx
@@ -90,7 +91,7 @@ impl Ctx2 {
     pub async fn new_aux(&mut self) -> String {
         let bucket_name: String = rand_bucket_name();
         self.aux_bucket = Some(bucket_name.clone());
-        self._aux_cleanup = Some(CleanupGuard::new(&self.client, &bucket_name));
+        self._aux_cleanup = Some(CleanupGuard::new(self.client.clone(), &bucket_name));
         let _resp: MakeBucketResponse = self
             .client
             .make_bucket(&bucket_name)
@@ -140,7 +141,7 @@ pub(crate) fn benchmark_s3_api<ApiType, GlobalSetupFuture>(
 
             // Per-iteration setup for initial request
             let api = per_iter_setup(&ctx);
-            let request = api.to_s3request().unwrap();
+            let request: S3Request = api.to_s3request().unwrap();
 
             // Execute the request to get a response, store the bytes for swift cloning
             let bytes: bytes::Bytes = rt.block_on(async {
@@ -164,4 +165,12 @@ pub(crate) fn benchmark_s3_api<ApiType, GlobalSetupFuture>(
     });
 
     group.finish();
+}
+
+pub(crate) fn skip_express_mode(bench_name: &str) -> bool {
+    let skip = TestContext::new_from_env().client.is_minio_express();
+    if skip {
+        println!("Skipping benchmark '{}' (MinIO Express mode)", bench_name);
+    }
+    skip
 }

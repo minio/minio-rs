@@ -14,18 +14,19 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::builders::SegmentedBytes;
 use crate::s3::error::Error;
+use crate::s3::multimap::Multimap;
 use crate::s3::response::SetBucketEncryptionResponse;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, SseConfig, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name};
+use crate::s3::utils::{check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
 
 /// Argument builder for [set_bucket_encryption()](Client::set_bucket_encryption) API
 #[derive(Clone, Debug, Default)]
 pub struct SetBucketEncryption {
-    client: Option<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -36,16 +37,12 @@ pub struct SetBucketEncryption {
 }
 
 impl SetBucketEncryption {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: Client, bucket: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client,
+            bucket,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -74,35 +71,17 @@ impl S3Api for SetBucketEncryption {
 }
 
 impl ToS3Request for SetBucketEncryption {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
-
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-
-        query_params.insert("encryption".into(), String::new());
 
         let bytes: Bytes = self.config.to_xml().into();
         let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
 
-        let req = S3Request::new(client, Method::GET)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
-            .query_params(query_params)
-            .headers(headers)
-            .body(body);
-
-        Ok(req)
+        Ok(S3Request::new(self.client, Method::GET)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(insert(self.extra_query_params, "encryption"))
+            .headers(self.extra_headers.unwrap_or_default())
+            .body(body))
     }
 }

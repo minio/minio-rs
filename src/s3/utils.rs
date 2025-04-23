@@ -15,8 +15,9 @@
 
 //! Various utility and helper functions
 
-use std::collections::{BTreeMap, HashMap};
-
+use crate::s3::error::Error;
+use crate::s3::multimap::Multimap;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use base64::engine::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use byteorder::{BigEndian, ReadBytesExt};
@@ -25,43 +26,28 @@ use crc::{CRC_32_ISO_HDLC, Crc};
 use hex::ToHex;
 use lazy_static::lazy_static;
 use md5::compute as md5compute;
-use multimap::MultiMap;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use regex::Regex;
 #[cfg(feature = "ring")]
 use ring::digest::{Context, SHA256};
 #[cfg(not(feature = "ring"))]
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 pub use urlencoding::decode as urldecode;
 pub use urlencoding::encode as urlencode;
 use xmltree::Element;
 
-use crate::s3::error::Error;
-
-use super::builders::SegmentedBytes;
-
 /// Date and time with UTC timezone
 pub type UtcTime = DateTime<Utc>;
 
-/// Multimap for string key and string value
-pub type Multimap = MultiMap<String, String>;
-
 /// Encodes data using base64 algorithm
-pub fn b64encode<T: AsRef<[u8]>>(input: T) -> String {
+pub fn b64encode(input: impl AsRef<[u8]>) -> String {
     BASE64.encode(input)
-}
-
-/// Merges two multimaps.
-pub fn merge(m1: &mut Multimap, m2: &Multimap) {
-    for (key, values) in m2.iter_all() {
-        for value in values {
-            m1.insert(key.to_string(), value.to_string());
-        }
-    }
 }
 
 /// Computes CRC32 of given data.
 pub fn crc32(data: &[u8]) -> u32 {
+    //TODO creating a new Crc object is expensive, we should cache it
     Crc::<u32>::new(&CRC_32_ISO_HDLC).checksum(data)
 }
 
@@ -69,6 +55,9 @@ pub fn crc32(data: &[u8]) -> u32 {
 pub fn uint32(mut data: &[u8]) -> Result<u32, std::io::Error> {
     data.read_u32::<BigEndian>()
 }
+
+/// sha256 hash of empty data
+pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 /// Gets hex encoded SHA256 hash of given data
 pub fn sha256_hash(data: &[u8]) -> String {
@@ -78,9 +67,7 @@ pub fn sha256_hash(data: &[u8]) -> String {
     }
     #[cfg(not(feature = "ring"))]
     {
-        let mut hasher = Sha256::new();
-        hasher.update(data);
-        hasher.finalize().encode_hex()
+        Sha256::new_with_prefix(data).finalize().encode_hex()
     }
 }
 
@@ -89,6 +76,7 @@ pub fn sha256_hash_sb(sb: &SegmentedBytes) -> String {
     {
         let mut context = Context::new(&SHA256);
         for data in sb.iter() {
+            // Note: &SegmentedBytes.iter yields clones of Bytes, but those clones are cheap
             context.update(data.as_ref());
         }
         context.finish().encode_hex()
@@ -97,23 +85,27 @@ pub fn sha256_hash_sb(sb: &SegmentedBytes) -> String {
     {
         let mut hasher = Sha256::new();
         for data in sb.iter() {
+            // Note: &SegmentedBytes.iter yields clones of Bytes, but those clones are cheap
             hasher.update(data);
         }
         hasher.finalize().encode_hex()
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::s3::utils::SegmentedBytes;
+    use crate::s3::utils::sha256_hash_sb;
+
+    #[test]
+    fn test_empty_sha256_segmented_bytes() {
+        assert_eq!(super::EMPTY_SHA256, sha256_hash_sb(&SegmentedBytes::new()));
+    }
+}
+
 /// Gets bas64 encoded MD5 hash of given data
 pub fn md5sum_hash(data: &[u8]) -> String {
     b64encode(md5compute(data).as_slice())
-}
-
-pub fn md5sum_hash_sb(sb: &SegmentedBytes) -> String {
-    let mut hasher = md5::Context::new();
-    for data in sb.iter() {
-        hasher.consume(data);
-    }
-    b64encode(hasher.compute().as_slice())
 }
 
 /// Gets current UTC time
@@ -211,113 +203,6 @@ pub fn from_http_header_value(s: &str) -> Result<UtcTime, ParseError> {
     ))
 }
 
-/// Converts multimap to HTTP headers
-pub fn to_http_headers(map: &Multimap) -> Vec<String> {
-    let mut headers: Vec<String> = Vec::new();
-    for (key, values) in map.iter_all() {
-        for value in values {
-            let mut s = String::new();
-            s.push_str(key);
-            s.push_str(": ");
-            s.push_str(value);
-            headers.push(s);
-        }
-    }
-    headers
-}
-
-/// Converts multimap to HTTP query string
-pub fn to_query_string(map: &Multimap) -> String {
-    let mut query = String::new();
-    for (key, values) in map.iter_all() {
-        for value in values {
-            if !query.is_empty() {
-                query.push('&');
-            }
-            query.push_str(&urlencode(key));
-            query.push('=');
-            query.push_str(&urlencode(value));
-        }
-    }
-    query
-}
-
-/// Converts multimap to canonical query string
-pub fn get_canonical_query_string(map: &Multimap) -> String {
-    let mut keys: Vec<String> = Vec::new();
-    for (key, _) in map.iter() {
-        keys.push(key.to_string());
-    }
-    keys.sort();
-
-    let mut query = String::new();
-    for key in keys {
-        match map.get_vec(key.as_str()) {
-            Some(values) => {
-                for value in values {
-                    if !query.is_empty() {
-                        query.push('&');
-                    }
-                    query.push_str(&urlencode(key.as_str()));
-                    query.push('=');
-                    query.push_str(&urlencode(value));
-                }
-            }
-            None => todo!(), // This never happens.
-        };
-    }
-
-    query
-}
-
-/// Converts multimap to signed headers and canonical headers
-pub fn get_canonical_headers(map: &Multimap) -> (String, String) {
-    lazy_static! {
-        static ref MULTI_SPACE_REGEX: Regex = Regex::new("( +)").unwrap();
-    }
-    let mut btmap: BTreeMap<String, String> = BTreeMap::new();
-
-    for (k, values) in map.iter_all() {
-        let key = k.to_lowercase();
-        if "authorization" == key || "user-agent" == key {
-            continue;
-        }
-
-        let mut vs = values.clone();
-        vs.sort();
-
-        let mut value = String::new();
-        for v in vs {
-            if !value.is_empty() {
-                value.push(',');
-            }
-            let s: String = MULTI_SPACE_REGEX.replace_all(&v, " ").trim().to_string();
-            value.push_str(&s);
-        }
-        btmap.insert(key.clone(), value.clone());
-    }
-
-    let mut signed_headers = String::new();
-    let mut canonical_headers = String::new();
-    let mut add_delim = false;
-    for (key, value) in &btmap {
-        if add_delim {
-            signed_headers.push(';');
-            canonical_headers.push('\n');
-        }
-
-        signed_headers.push_str(key);
-
-        canonical_headers.push_str(key);
-        canonical_headers.push(':');
-        canonical_headers.push_str(value);
-
-        add_delim = true;
-    }
-
-    (signed_headers, canonical_headers)
-}
-
 /// Checks if given hostname is valid or not
 pub fn match_hostname(value: &str) -> bool {
     lazy_static! {
@@ -356,25 +241,23 @@ pub fn match_region(value: &str) -> bool {
 }
 
 /// Validates given bucket name
-pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
-    let bucket_name: &str = bucket_name.trim();
-
-    if bucket_name.is_empty() {
-        return Err(Error::InvalidBucketName(String::from(
-            "bucket name cannot be empty",
-        )));
+pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(), Error> {
+    let bucket_name: &str = bucket_name.as_ref().trim();
+    let bucket_name_len = bucket_name.len();
+    if bucket_name_len == 0 {
+        return Err(Error::InvalidBucketName(
+            "bucket name cannot be empty".into(),
+        ));
     }
-
-    if bucket_name.len() < 3 {
-        return Err(Error::InvalidBucketName(String::from(
-            "bucket name cannot be less than 3 characters",
-        )));
+    if bucket_name_len < 3 {
+        return Err(Error::InvalidBucketName(
+            "bucket name cannot be less than 3 characters".into(),
+        ));
     }
-
-    if bucket_name.len() > 63 {
-        return Err(Error::InvalidBucketName(String::from(
-            "Bucket name cannot be greater than 63 characters",
-        )));
+    if bucket_name_len > 63 {
+        return Err(Error::InvalidBucketName(
+            "Bucket name cannot be greater than 63 characters".into(),
+        ));
     }
 
     lazy_static! {
@@ -413,6 +296,16 @@ pub fn check_bucket_name(bucket_name: &str, strict: bool) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), Error> {
+    if object_name.as_ref().is_empty() {
+        Err(Error::InvalidObjectName(
+            "object name cannot be empty".into(),
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 /// Gets text value of given XML element for given tag.
@@ -505,8 +398,8 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
             Some(v) => unescape(v)?,
             None => {
                 return Err(Error::TagDecodingError(
-                    s.to_string(),
-                    "tag key was empty".to_string(),
+                    s.into(),
+                    "tag key was empty".into(),
                 ));
             }
         };
@@ -516,13 +409,29 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
         };
         if kv.next().is_some() {
             return Err(Error::TagDecodingError(
-                s.to_string(),
-                "tag had too many values for a key".to_string(),
+                s.into(),
+                "tag had too many values for a key".into(),
             ));
         }
         tags.insert(k, v);
     }
     Ok(tags)
+}
+
+#[must_use]
+/// Returns the consumed data and inserts a key into it with an empty value.
+pub fn insert(data: Option<Multimap>, key: impl Into<String>) -> Multimap {
+    let mut result: Multimap = data.unwrap_or_default();
+    result.insert(key.into(), String::new());
+    result
+}
+
+pub fn take_bucket(opt_bucket: Option<String>) -> Result<String, Error> {
+    opt_bucket.ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))
+}
+
+pub fn take_object(opt_object: Option<String>) -> Result<String, Error> {
+    opt_object.ok_or_else(|| Error::InvalidObjectName("no object specified".into()))
 }
 
 pub mod xml {

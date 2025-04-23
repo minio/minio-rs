@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common_benches::{Ctx2, benchmark_s3_api};
+use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 
 use criterion::Criterion;
 use minio::s3::builders::{GetObjectTags, SetObjectTags};
@@ -22,37 +22,38 @@ use minio::s3::types::S3Api;
 use minio_common::example::create_tags_example;
 
 pub(crate) fn bench_set_object_tags(criterion: &mut Criterion) {
+    if skip_express_mode("bench_set_object_tags") {
+        return;
+    }
     benchmark_s3_api(
         "set_object_tags",
         criterion,
         || async { Ctx2::new_with_object(false).await },
         |ctx| {
-            SetObjectTags::new(&ctx.bucket)
-                .client(&ctx.client)
-                .object(ctx.object.clone())
+            SetObjectTags::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
                 .tags(create_tags_example())
         },
     )
 }
 pub(crate) fn bench_get_object_tags(criterion: &mut Criterion) {
+    if skip_express_mode("bench_get_object_tags") {
+        return;
+    }
     benchmark_s3_api(
         "get_object_tags",
         criterion,
         || async {
             let ctx = Ctx2::new_with_object(false).await;
-            let _resp: SetObjectTagsResponse = SetObjectTags::new(&ctx.bucket)
-                .client(&ctx.client)
-                .object(ctx.object.clone())
+
+            let _resp: SetObjectTagsResponse = ctx
+                .client
+                .set_object_tags(&ctx.bucket, &ctx.object)
                 .tags(create_tags_example())
                 .send()
                 .await
                 .unwrap();
             ctx
         },
-        |ctx| {
-            GetObjectTags::new(&ctx.bucket)
-                .client(&ctx.client)
-                .object(ctx.object.clone())
-        },
+        |ctx| GetObjectTags::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone()),
     )
 }

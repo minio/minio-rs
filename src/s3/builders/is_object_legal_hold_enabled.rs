@@ -15,36 +15,34 @@
 
 use crate::s3::Client;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::IsObjectLegalHoldEnabledResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name};
+use crate::s3::utils::{check_bucket_name, check_object_name, insert};
 use http::Method;
 
 /// Argument builder for [is_object_legal_hold_enabled()](Client::is_object_legal_hold_enabled) API
 #[derive(Clone, Debug, Default)]
 pub struct IsObjectLegalHoldEnabled {
-    pub(crate) client: Option<Client>,
+    client: Client,
 
-    pub(crate) extra_headers: Option<Multimap>,
-    pub(crate) extra_query_params: Option<Multimap>,
-    pub(crate) region: Option<String>,
-    pub(crate) bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-    pub(crate) object: String,
-    pub(crate) version_id: Option<String>,
+    object: String,
+    version_id: Option<String>,
 }
 
 impl IsObjectLegalHoldEnabled {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client,
+            bucket,
+            object,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -54,11 +52,6 @@ impl IsObjectLegalHoldEnabled {
 
     pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
         self.extra_query_params = extra_query_params;
-        self
-    }
-
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
         self
     }
 
@@ -73,36 +66,18 @@ impl S3Api for IsObjectLegalHoldEnabled {
 }
 
 impl ToS3Request for IsObjectLegalHoldEnabled {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
+        let mut query_params: Multimap = insert(self.extra_query_params, "legal-hold");
+        query_params.add_version(self.version_id);
 
-        if let Some(v) = &self.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(String::from("legal-hold"), String::new());
-
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
-
-        let req = S3Request::new(client, Method::GET)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(self.client, Method::GET)
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
-            .headers(headers)
-            .object(Some(&self.object));
-
-        Ok(req)
+            .headers(self.extra_headers.unwrap_or_default())
+            .object(Some(self.object)))
     }
 }

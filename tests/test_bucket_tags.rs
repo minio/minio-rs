@@ -14,14 +14,19 @@
 // limitations under the License.
 
 use minio::s3::client::DEFAULT_REGION;
+use minio::s3::error::{Error, ErrorCode};
 use minio::s3::response::{DeleteBucketTagsResponse, GetBucketTagsResponse, SetBucketTagsResponse};
 use minio::s3::types::S3Api;
 use minio_common::example::create_tags_example;
 use minio_common::test_context::TestContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn set_get_delete_bucket_tags() {
+async fn bucket_tags_s3() {
     let ctx = TestContext::new_from_env();
+    if ctx.client.is_minio_express() {
+        println!("Skipping test because it is running in MinIO Express mode");
+        return;
+    }
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
     let tags = create_tags_example();
@@ -64,4 +69,41 @@ async fn set_get_delete_bucket_tags() {
     assert!(resp.tags.is_empty());
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn bucket_tags_s3express() {
+    let ctx = TestContext::new_from_env();
+    if !ctx.client.is_minio_express() {
+        println!("Skipping test because it is NOT running in MinIO Express mode");
+        return;
+    }
+    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+
+    let tags = create_tags_example();
+
+    let resp: Result<SetBucketTagsResponse, Error> = ctx
+        .client
+        .set_bucket_tags(&bucket_name)
+        .tags(tags.clone())
+        .send()
+        .await;
+    match resp {
+        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
+        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+    }
+
+    let resp: Result<GetBucketTagsResponse, Error> =
+        ctx.client.get_bucket_tags(&bucket_name).send().await;
+    match resp {
+        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
+        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+    }
+
+    let resp: Result<DeleteBucketTagsResponse, Error> =
+        ctx.client.delete_bucket_tags(&bucket_name).send().await;
+    match resp {
+        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
+        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+    }
 }

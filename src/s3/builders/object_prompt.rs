@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::builders::SegmentedBytes;
-use crate::s3::sse::{Sse, SseCustomerKey};
-use crate::s3::utils::{Multimap, check_bucket_name, merge};
+use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::segmented_bytes::SegmentedBytes;
+use crate::s3::sse::SseCustomerKey;
+use crate::s3::utils::{check_bucket_name, check_object_name};
 use crate::s3::{
     client::Client,
     error::Error,
@@ -28,7 +29,7 @@ use serde_json::json;
 
 #[derive(Debug, Clone, Default)]
 pub struct ObjectPrompt {
-    client: Option<Client>,
+    client: Client,
     bucket: String,
     object: String,
     prompt: String,
@@ -43,19 +44,14 @@ pub struct ObjectPrompt {
 
 // builder interface
 impl ObjectPrompt {
-    pub fn new(bucket: &str, object: &str, prompt: &str) -> Self {
+    pub fn new(client: Client, bucket: String, object: String, prompt: String) -> Self {
         ObjectPrompt {
-            client: None,
-            bucket: bucket.to_string(),
-            object: object.to_string(),
-            prompt: prompt.to_string(),
+            client,
+            bucket,
+            object,
+            prompt,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn lambda_arn(mut self, lambda_arn: &str) -> Self {
@@ -89,47 +85,28 @@ impl ObjectPrompt {
     }
 }
 
-// internal helpers
-impl ObjectPrompt {
-    fn get_headers(&self) -> Multimap {
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.ssec {
-            merge(&mut headers, &v.headers());
-        }
-        headers
-    }
+impl S3Api for ObjectPrompt {
+    type S3Response = ObjectPromptResponse;
 }
 
 impl ToS3Request for ObjectPrompt {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        check_bucket_name(&self.bucket, true)?;
+    fn to_s3request(self) -> Result<S3Request, Error> {
+        {
+            check_bucket_name(&self.bucket, true)?;
+            check_object_name(&self.object)?;
 
-        if self.object.is_empty() {
-            return Err(Error::InvalidObjectName(String::from(
-                "object name cannot be empty",
-            )));
+            if self.client.is_aws_host() {
+                return Err(Error::UnsupportedApi("ObjectPrompt".into()));
+            }
+            if self.ssec.is_some() && !self.client.is_secure() {
+                return Err(Error::SseTlsRequired(None));
+            }
         }
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        query_params.add_version(self.version_id);
 
-        if self.ssec.is_some() && !client.is_secure() {
-            return Err(Error::SseTlsRequired(None));
-        }
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
-        }
-        merge(&mut headers, &self.get_headers());
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = &self.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert(
-            String::from("lambdaArn"),
+        query_params.add(
+            "lambdaArn",
             self.lambda_arn
                 .as_ref()
                 .map(ToString::to_string)
@@ -139,18 +116,12 @@ impl ToS3Request for ObjectPrompt {
         let prompt_body = json!({ "prompt": self.prompt });
         let body: SegmentedBytes = SegmentedBytes::from(Bytes::from(prompt_body.to_string()));
 
-        let req = S3Request::new(client, Method::POST)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
-            .object(Some(&self.object))
+        Ok(S3Request::new(self.client, Method::POST)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .object(Some(self.object))
             .query_params(query_params)
-            .headers(headers)
-            .body(Some(body));
-
-        Ok(req)
+            .headers(self.extra_headers.unwrap_or_default())
+            .body(Some(body)))
     }
-}
-
-impl S3Api for ObjectPrompt {
-    type S3Response = ObjectPromptResponse;
 }

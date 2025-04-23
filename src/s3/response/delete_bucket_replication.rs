@@ -13,16 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ErrorCode};
 use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
 use http::HeaderMap;
+use std::mem;
 
 /// Response of
 /// [delete_bucket_replication()](crate::s3::client::Client::delete_bucket_replication)
 /// API
 #[derive(Clone, Debug)]
 pub struct DeleteBucketReplicationResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -30,27 +33,23 @@ pub struct DeleteBucketReplicationResponse {
 
 #[async_trait]
 impl FromS3Response for DeleteBucketReplicationResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
         match resp {
-            Ok(r) => Ok(DeleteBucketReplicationResponse {
-                headers: r.headers().clone(),
-                region: req.get_computed_region(),
-                bucket,
+            Ok(mut r) => Ok(Self {
+                headers: mem::take(r.headers_mut()),
+                region: req.inner_region,
+                bucket: take_bucket(req.bucket)?,
             }),
-            Err(Error::S3Error(ref err))
-                if err.code == Error::ReplicationConfigurationNotFoundError.as_str() =>
+            Err(Error::S3Error(e))
+                if e.code == ErrorCode::ReplicationConfigurationNotFoundError =>
             {
-                Ok(DeleteBucketReplicationResponse {
-                    headers: HeaderMap::new(),
-                    region: req.get_computed_region(),
-                    bucket,
+                Ok(Self {
+                    headers: e.headers,
+                    region: req.inner_region,
+                    bucket: take_bucket(req.bucket)?,
                 })
             }
             Err(e) => Err(e),

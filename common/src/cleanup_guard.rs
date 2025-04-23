@@ -15,6 +15,7 @@
 
 use async_std::future::timeout;
 use minio::s3::Client;
+
 use std::thread;
 
 /// Cleanup guard that removes the bucket when it is dropped
@@ -25,10 +26,10 @@ pub struct CleanupGuard {
 
 impl CleanupGuard {
     #[allow(dead_code)]
-    pub fn new(client: &Client, bucket_name: &str) -> Self {
+    pub fn new<S: Into<String>>(client: Client, bucket_name: S) -> Self {
         Self {
-            client: client.clone(),
-            bucket_name: bucket_name.to_string(),
+            client,
+            bucket_name: bucket_name.into(),
         }
     }
 }
@@ -57,7 +58,9 @@ impl Drop for CleanupGuard {
                         Ok(_) => {
                             //println!("Bucket {} removed successfully", bucket_name),
                         }
-                        Err(e) => println!("Error removing bucket {}: {:?}", bucket_name, e),
+                        Err(_e) => {
+                            //println!("Error removing bucket {}: {:?}", bucket_name, e)
+                        }
                     },
                     Err(_) => println!("Timeout after 60s while removing bucket {}", bucket_name),
                 }

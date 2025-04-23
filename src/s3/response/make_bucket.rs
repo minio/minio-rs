@@ -15,14 +15,17 @@
 
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
 use http::HeaderMap;
+use std::mem;
 
 /// Response of
 /// [make_bucket()](crate::s3::client::Client::make_bucket)
 /// API
 #[derive(Clone, Debug)]
 pub struct MakeBucketResponse {
+    /// Set of HTTP headers returned by the server.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -30,23 +33,18 @@ pub struct MakeBucketResponse {
 
 #[async_trait]
 impl FromS3Response for MakeBucketResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
+    async fn from_s3response(
+        req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket: String = match req.bucket {
-            None => return Err(Error::InvalidBucketName("no bucket specified".to_string())),
-            Some(v) => v.to_string(),
-        };
-        let resp = resp?;
-        let region: String = req.get_computed_region();
-        if !req.client.region_map.contains_key(&bucket) {
-            req.client.region_map.insert(bucket.clone(), region.clone());
-        }
+        let mut req = req;
+        let bucket: String = take_bucket(req.bucket)?;
+        req.client.add_bucket_region(&bucket, &req.inner_region);
+        let mut resp = resp?;
 
-        Ok(MakeBucketResponse {
-            headers: resp.headers().clone(),
-            region,
+        Ok(Self {
+            headers: mem::take(resp.headers_mut()),
+            region: req.inner_region,
             bucket,
         })
     }

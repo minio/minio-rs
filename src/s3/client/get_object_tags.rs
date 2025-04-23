@@ -19,8 +19,34 @@ use super::Client;
 use crate::s3::builders::GetObjectTags;
 
 impl Client {
-    /// Create a GetObjectTags request builder.
-    pub fn get_object_tags(&self, bucket: &str) -> GetObjectTags {
-        GetObjectTags::new(bucket).client(self)
+    /// Creates a [`GetObjectTags`] request builder.
+    ///
+    /// To execute the request, call [`GetObjectTags::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetObjectTagsResponse`](crate::s3::response::GetObjectTagsResponse).
+    ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::GetObjectTagsResponse;
+    /// use minio::s3::types::S3Api;
+    ///
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let resp: GetObjectTagsResponse =
+    ///         client.get_object_tags("bucket-name", "object-name").send().await.unwrap();
+    ///     println!("retrieved object tags '{:?}' from object '{}' in bucket '{}' is enabled", resp.tags, resp.object, resp.bucket);
+    /// }
+    /// ```
+    pub fn get_object_tags<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> GetObjectTags {
+        GetObjectTags::new(self.clone(), bucket.into(), object.into())
     }
 }

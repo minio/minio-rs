@@ -19,29 +19,39 @@ use super::Client;
 use crate::s3::builders::SetBucketTags;
 
 impl Client {
-    /// Create a SetBucketTags request builder.
+    /// Creates a [`SetBucketTags`] request builder.
     ///
-    /// # Examples
+    /// To execute the request, call [`SetBucketTags::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`SetBucketTagsResponse`](crate::s3::response::SetBucketTagsResponse).
     ///
-    /// ```ignore
-    /// use std::collections::HashMap;
+    /// 🛈 This operation is not supported for express buckets.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
     /// use minio::s3::Client;
+    /// use minio::s3::builders::VersioningStatus;
+    /// use minio::s3::response::SetBucketTagsResponse;
     /// use minio::s3::types::S3Api;
     ///
+    /// use std::collections::HashMap;
+    ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
+    /// let client: Client = Default::default(); // configure your client here
+    ///
     ///     let mut tags: HashMap<String, String> = HashMap::new();
     ///     tags.insert(String::from("Project"), String::from("Project One"));
     ///     tags.insert(String::from("User"), String::from("jsmith"));
     ///
-    ///     let client = Client::default();
-    ///     let _resp = client
-    ///         .set_bucket_tags("my-bucket-name")
+    ///     let resp: SetBucketTagsResponse = client
+    ///         .set_bucket_tags("bucket-name")
     ///         .tags(tags)
-    ///         .send().await;
+    ///         .send().await.unwrap();
+    ///     println!("set tags on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn set_bucket_tags(&self, bucket: &str) -> SetBucketTags {
-        SetBucketTags::new(bucket).client(self)
+    pub fn set_bucket_tags<S: Into<String>>(&self, bucket: S) -> SetBucketTags {
+        SetBucketTags::new(self.clone(), bucket.into())
     }
 }

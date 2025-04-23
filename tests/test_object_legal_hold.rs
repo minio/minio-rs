@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use bytes::Bytes;
+
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
     DisableObjectLegalHoldResponse, EnableObjectLegalHoldResponse,
@@ -25,8 +26,12 @@ use minio_common::test_context::TestContext;
 use minio_common::utils::{rand_bucket_name, rand_object_name};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn object_legal_hold() {
+async fn object_legal_hold_s3() {
     let ctx = TestContext::new_from_env();
+    if ctx.client.is_minio_express() {
+        println!("Skipping test because it is running in MinIO Express mode");
+        return;
+    }
     let bucket_name: String = rand_bucket_name();
     let _resp: MakeBucketResponse = ctx
         .client
@@ -35,7 +40,7 @@ async fn object_legal_hold() {
         .send()
         .await
         .unwrap();
-    let _cleanup = CleanupGuard::new(&ctx.client, &bucket_name);
+    let _cleanup = CleanupGuard::new(ctx.client.clone(), &bucket_name);
     let object_name = rand_object_name();
 
     let data = Bytes::from("hello, world".to_string().into_bytes());
@@ -52,8 +57,7 @@ async fn object_legal_hold() {
 
     let resp: DisableObjectLegalHoldResponse = ctx
         .client
-        .disable_object_legal_hold(&bucket_name)
-        .object(object_name.clone())
+        .disable_object_legal_hold(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -65,8 +69,7 @@ async fn object_legal_hold() {
 
     let resp: IsObjectLegalHoldEnabledResponse = ctx
         .client
-        .is_object_legal_hold_enabled(&bucket_name)
-        .object(object_name.clone())
+        .is_object_legal_hold_enabled(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -79,8 +82,7 @@ async fn object_legal_hold() {
 
     let resp: EnableObjectLegalHoldResponse = ctx
         .client
-        .enable_object_legal_hold(&bucket_name)
-        .object(object_name.clone())
+        .enable_object_legal_hold(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -92,8 +94,7 @@ async fn object_legal_hold() {
 
     let resp: IsObjectLegalHoldEnabledResponse = ctx
         .client
-        .is_object_legal_hold_enabled(&bucket_name)
-        .object(object_name.clone())
+        .is_object_legal_hold_enabled(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();

@@ -15,35 +15,34 @@
 
 use crate::s3::Client;
 use crate::s3::error::Error;
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::GetObjectTagsResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{Multimap, check_bucket_name};
+use crate::s3::utils::{check_bucket_name, check_object_name, insert};
 use http::Method;
 
 /// Argument builder for [get_object_tags()](Client::get_object_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct GetObjectTags {
-    pub client: Option<Client>,
+    client: Client,
 
-    pub extra_headers: Option<Multimap>,
-    pub extra_query_params: Option<Multimap>,
-    pub region: Option<String>,
-    pub bucket: String,
+    extra_headers: Option<Multimap>,
+    extra_query_params: Option<Multimap>,
+    region: Option<String>,
+    bucket: String,
 
-    pub object: String,
-    pub version_id: Option<String>,
+    object: String,
+    version_id: Option<String>,
 }
 
 impl GetObjectTags {
-    pub fn new(bucket: &str) -> Self {
+    pub fn new(client: Client, bucket: String, object: String) -> Self {
         Self {
-            bucket: bucket.to_owned(),
+            client,
+            bucket,
+            object,
             ..Default::default()
         }
-    }
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -61,11 +60,6 @@ impl GetObjectTags {
         self
     }
 
-    pub fn object(mut self, object: String) -> Self {
-        self.object = object;
-        self
-    }
-
     pub fn version_id(mut self, version_id: Option<String>) -> Self {
         self.version_id = version_id;
         self
@@ -77,36 +71,18 @@ impl S3Api for GetObjectTags {
 }
 
 impl ToS3Request for GetObjectTags {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
 
-        let headers = self
-            .extra_headers
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
-        let mut query_params = self
-            .extra_query_params
-            .as_ref()
-            .filter(|v| !v.is_empty())
-            .cloned()
-            .unwrap_or_default();
+        let mut query_params: Multimap = insert(self.extra_query_params, "tagging");
+        query_params.add_version(self.version_id);
 
-        if let Some(v) = &self.version_id {
-            query_params.insert(String::from("versionId"), v.to_string());
-        }
-        query_params.insert("tagging".into(), String::new());
-
-        let client: &Client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
-
-        let req = S3Request::new(client, Method::GET)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
+        Ok(S3Request::new(self.client, Method::GET)
+            .region(self.region)
+            .bucket(Some(self.bucket))
             .query_params(query_params)
-            .object(Some(&self.object))
-            .headers(headers);
-
-        Ok(req)
+            .object(Some(self.object))
+            .headers(self.extra_headers.unwrap_or_default()))
     }
 }

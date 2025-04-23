@@ -17,12 +17,13 @@ use async_trait::async_trait;
 use futures_util::Stream;
 use http::Method;
 
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::{
     client::Client,
     error::Error,
     response::ListenBucketNotificationResponse,
     types::{NotificationRecords, S3Api, S3Request, ToS3Request},
-    utils::{Multimap, check_bucket_name, merge},
+    utils::check_bucket_name,
 };
 
 /// Argument builder for
@@ -30,7 +31,7 @@ use crate::s3::{
 /// API.
 #[derive(Clone, Debug, Default)]
 pub struct ListenBucketNotification {
-    client: Option<Client>,
+    client: Client,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -41,70 +42,13 @@ pub struct ListenBucketNotification {
     events: Option<Vec<String>>,
 }
 
-#[async_trait]
-impl S3Api for ListenBucketNotification {
-    type S3Response = (
-        ListenBucketNotificationResponse,
-        Box<dyn Stream<Item = Result<NotificationRecords, Error>> + Unpin + Send>,
-    );
-}
-
-impl ToS3Request for ListenBucketNotification {
-    fn to_s3request(&self) -> Result<S3Request, Error> {
-        let client = self.client.as_ref().ok_or(Error::NoClientProvided)?;
-        if client.is_aws_host() {
-            return Err(Error::UnsupportedApi(String::from(
-                "ListenBucketNotification",
-            )));
-        }
-
-        check_bucket_name(&self.bucket, true)?;
-
-        let mut headers = Multimap::new();
-        if let Some(v) = &self.extra_headers {
-            merge(&mut headers, v);
-        }
-
-        let mut query_params = Multimap::new();
-        if let Some(v) = &self.extra_query_params {
-            merge(&mut query_params, v);
-        }
-        if let Some(v) = &self.prefix {
-            query_params.insert(String::from("prefix"), v.to_string());
-        }
-        if let Some(v) = &self.suffix {
-            query_params.insert(String::from("suffix"), v.to_string());
-        }
-        if let Some(v) = &self.events {
-            for e in v.iter() {
-                query_params.insert(String::from("events"), e.to_string());
-            }
-        } else {
-            query_params.insert(String::from("events"), String::from("s3:ObjectCreated:*"));
-            query_params.insert(String::from("events"), String::from("s3:ObjectRemoved:*"));
-            query_params.insert(String::from("events"), String::from("s3:ObjectAccessed:*"));
-        }
-
-        let req = S3Request::new(client, Method::GET)
-            .region(self.region.as_deref())
-            .bucket(Some(&self.bucket))
-            .query_params(query_params)
-            .headers(headers);
-        Ok(req)
-    }
-}
-
 impl ListenBucketNotification {
-    pub fn new(bucket_name: &str) -> ListenBucketNotification {
-        ListenBucketNotification {
-            bucket: bucket_name.to_owned(),
+    pub fn new(client: Client, bucket: String) -> Self {
+        Self {
+            client,
+            bucket,
             ..Default::default()
         }
-    }
-
-    pub fn client(mut self, client: &Client) -> Self {
-        self.client = Some(client.clone());
-        self
     }
 
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
@@ -135,5 +79,49 @@ impl ListenBucketNotification {
     pub fn events(mut self, events: Option<Vec<String>>) -> Self {
         self.events = events;
         self
+    }
+}
+
+#[async_trait]
+impl S3Api for ListenBucketNotification {
+    type S3Response = (
+        ListenBucketNotificationResponse,
+        Box<dyn Stream<Item = Result<NotificationRecords, Error>> + Unpin + Send>,
+    );
+}
+
+impl ToS3Request for ListenBucketNotification {
+    fn to_s3request(self) -> Result<S3Request, Error> {
+        {
+            check_bucket_name(&self.bucket, true)?;
+            if self.client.is_aws_host() {
+                return Err(Error::UnsupportedApi("ListenBucketNotification".into()));
+            }
+        }
+
+        let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
+        {
+            if let Some(v) = self.prefix {
+                query_params.add("prefix", v);
+            }
+            if let Some(v) = self.suffix {
+                query_params.add("suffix", v);
+            }
+            if let Some(v) = self.events {
+                for e in v.into_iter() {
+                    query_params.add("events", e);
+                }
+            } else {
+                query_params.add("events", "s3:ObjectCreated:*");
+                query_params.add("events", "s3:ObjectRemoved:*");
+                query_params.add("events", "s3:ObjectAccessed:*");
+            }
+        }
+
+        Ok(S3Request::new(self.client, Method::GET)
+            .region(self.region)
+            .bucket(Some(self.bucket))
+            .query_params(query_params)
+            .headers(self.extra_headers.unwrap_or_default()))
     }
 }

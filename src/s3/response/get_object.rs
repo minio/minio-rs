@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::s3::utils::{take_bucket, take_object};
 use crate::s3::{
     builders::ObjectContent,
     error::Error,
@@ -20,12 +21,15 @@ use crate::s3::{
 };
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
+use http::HeaderMap;
+use std::mem;
 
 pub struct GetObjectResponse {
-    pub headers: http::HeaderMap,
+    /// Set of HTTP headers returned by the server.
+    pub headers: HeaderMap,
     pub region: String,
-    pub bucket_name: String,
-    pub object_name: String,
+    pub bucket: String,
+    pub object: String,
     pub version_id: Option<String>,
     pub content: ObjectContent,
     pub object_size: u64,
@@ -34,32 +38,32 @@ pub struct GetObjectResponse {
 
 #[async_trait]
 impl FromS3Response for GetObjectResponse {
-    async fn from_s3response<'a>(
-        req: S3Request<'a>,
-        response: Result<reqwest::Response, Error>,
+    async fn from_s3response(
+        req: S3Request,
+        resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let response = response?;
-        let header_map = response.headers().clone();
-        let version_id = header_map
-            .get("x-amz-version-id")
-            .map(|v| v.to_str().unwrap().to_string());
+        let mut resp = resp?;
 
-        let etag = header_map
+        let headers = mem::take(resp.headers_mut());
+
+        let etag: Option<String> = headers
             .get("etag")
-            .map(|v| v.to_str().unwrap().trim_matches('"').to_string());
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.trim_matches('"').to_string());
 
-        let content_length = response
-            .content_length()
-            .ok_or(Error::ContentLengthUnknown)?;
-        let body = response.bytes_stream().map_err(std::io::Error::other);
+        let version_id: Option<String> = headers
+            .get("x-amz-version-id")
+            .and_then(|v| v.to_str().ok().map(String::from));
 
+        let content_length: u64 = resp.content_length().ok_or(Error::ContentLengthUnknown)?;
+        let body = resp.bytes_stream().map_err(std::io::Error::other);
         let content = ObjectContent::new_from_stream(body, Some(content_length));
 
-        Ok(GetObjectResponse {
-            headers: header_map,
-            region: req.region.unwrap_or("").to_string(),
-            bucket_name: req.bucket.unwrap().to_string(),
-            object_name: req.object.unwrap().to_string(),
+        Ok(Self {
+            headers,
+            region: req.inner_region,
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
             version_id,
             content,
             object_size: content_length,
