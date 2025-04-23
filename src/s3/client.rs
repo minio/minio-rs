@@ -256,6 +256,10 @@ impl Client {
         } else {
             task::block_in_place(|| match tokio::runtime::Runtime::new() {
                 Ok(rt) => {
+                    // create a random bucket name, and check if it exists,
+                    // we are not interested in the result, just the headers
+                    // which will contain the server type
+
                     let bucket_name: String = rand::thread_rng()
                         .sample_iter(&Alphanumeric)
                         .take(20)
@@ -263,12 +267,13 @@ impl Client {
                         .collect::<String>()
                         .to_lowercase();
 
-                    let express = rt.block_on(async {
+                    let express: bool = rt.block_on(async {
                         match BucketExists::new(self.clone(), bucket_name).send().await {
                             Ok(v) => {
                                 if let Some(server) = v.headers.get("server") {
                                     if let Ok(s) = server.to_str() {
-                                        return s == "MinIO Enterprise/S3express";
+                                        return s
+                                            .eq_ignore_ascii_case("MinIO Enterprise/S3Express");
                                     }
                                 }
                             }

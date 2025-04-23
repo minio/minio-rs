@@ -285,7 +285,7 @@ pub enum RetentionMode {
 
 impl RetentionMode {
     pub fn parse(s: &str) -> Result<RetentionMode, Error> {
-        match s {
+        match s.to_uppercase().as_str() {
             "GOVERNANCE" => Ok(RetentionMode::GOVERNANCE),
             "COMPLIANCE" => Ok(RetentionMode::COMPLIANCE),
             _ => Err(Error::InvalidRetentionMode(s.to_string())),
@@ -407,7 +407,7 @@ pub struct JsonInputSerialization {
 }
 
 #[derive(Clone, Debug, Default)]
-/// Parque input serialization definitions
+/// Parquet input serialization definitions
 pub struct ParquetInputSerialization;
 
 #[derive(Clone, Debug, Default)]

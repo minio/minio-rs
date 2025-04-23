@@ -53,10 +53,7 @@ impl FromS3Response for BucketExistsResponse {
                     exists: false,
                 })
             }
-            Err(e) => {
-                println!("Error: {:?}", e);
-                Err(e)
-            }
+            Err(e) => Err(e),
         }
     }
 }

@@ -98,7 +98,7 @@ impl ToS3Request for UploadPartCopy {
             }
             if !(1..=10000).contains(&self.part_number) {
                 return Err(Error::InvalidPartNumber(
-                    "part number must be between 1 and 1000".into(),
+                    "part number must be between 1 and 10000".into(),
                 ));
             }
         }

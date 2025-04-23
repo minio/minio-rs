@@ -44,6 +44,7 @@ pub enum ErrorCode {
     AccessDenied,
     NotSupported,
     BucketNotEmpty,
+    BucketAlreadyOwnedByYou,
 
     OtherError(String),
 }
@@ -72,6 +73,8 @@ impl ErrorCode {
             "accessdenied" => ErrorCode::AccessDenied,
             "notsupported" => ErrorCode::NotSupported,
             "bucketnotempty" => ErrorCode::BucketNotEmpty,
+            "bucketalreadyownedbyyou" => ErrorCode::BucketAlreadyOwnedByYou,
+
             v => ErrorCode::OtherError(v.to_owned()),
         }
     }
@@ -176,6 +179,7 @@ pub enum Error {
     TagDecodingError(String, String),
     ContentLengthUnknown,
 
+    //TODO are the following still needed?
     NoSuchTagSet,
     ReplicationConfigurationNotFoundError,
     NoSuchObjectLockConfiguration,

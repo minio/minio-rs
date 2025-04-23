@@ -88,7 +88,7 @@ criterion_group!(
         //
         bench_list_buckets,
         bench_object_copy_internal,
-        //bench_object_append, // TODO: add support to switch on/off s3-express
+        bench_object_append,
         bench_object_put,
         //
         bench_enable_object_legal_hold,

@@ -171,7 +171,7 @@ fn get_aws_info(
     }
 
     let mut tokens: Vec<_> = host.get(matcher.len()..).unwrap().split('.').collect();
-    *dualstack = tokens[0] == "dualstack";
+    *dualstack = tokens[0].eq_ignore_ascii_case("dualstack");
     if *dualstack {
         tokens.remove(0);
     }
@@ -184,10 +184,12 @@ fn get_aws_info(
 
     let domain_suffix = tokens.join(".");
 
-    if host == "s3-external-1.amazonaws.com" {
+    if host.eq_ignore_ascii_case("s3-external-1.amazonaws.com") {
         region_in_host = DEFAULT_REGION.to_string();
     }
-    if host == "s3-us-gov-west-1.amazonaws.com" || host == "s3-fips-us-gov-west-1.amazonaws.com" {
+    if host.eq_ignore_ascii_case("s3-us-gov-west-1.amazonaws.com")
+        || host.eq_ignore_ascii_case("s3-fips-us-gov-west-1.amazonaws.com")
+    {
         region_in_host = "us-gov-west-1".to_string();
     }
 
@@ -336,9 +338,9 @@ impl BaseUrl {
     ) -> Result<(), Error> {
         let mut host = String::from(&self.aws_s3_prefix);
         host.push_str(&self.aws_domain_suffix);
-        if host == "s3-external-1.amazonaws.com"
-            || host == "s3-us-gov-west-1.amazonaws.com"
-            || host == "s3-fips-us-gov-west-1.amazonaws.com"
+        if host.eq_ignore_ascii_case("s3-external-1.amazonaws.com")
+            || host.eq_ignore_ascii_case("s3-us-gov-west-1.amazonaws.com")
+            || host.eq_ignore_ascii_case("s3-fips-us-gov-west-1.amazonaws.com")
         {
             url.host = host;
             return Ok(());
@@ -378,9 +380,9 @@ impl BaseUrl {
 
         let mut host = String::from(&self.aws_s3_prefix);
         host.push_str(&self.aws_domain_suffix);
-        if host == "s3-external-1.amazonaws.com"
-            || host == "s3-us-gov-west-1.amazonaws.com"
-            || host == "s3-fips-us-gov-west-1.amazonaws.com"
+        if host.eq_ignore_ascii_case("s3-external-1.amazonaws.com")
+            || host.eq_ignore_ascii_case("s3-us-gov-west-1.amazonaws.com")
+            || host.eq_ignore_ascii_case("s3-fips-us-gov-west-1.amazonaws.com")
         {
             url.host = host;
             return;

@@ -104,12 +104,12 @@ impl PostPolicy {
     }
 
     fn is_reserved_element(element: &str) -> bool {
-        element == "bucket"
-            || element == "x-amz-algorithm"
-            || element == "x-amz-credential"
-            || element == "x-amz-date"
-            || element == "policy"
-            || element == "x-amz-signature"
+        element.eq_ignore_ascii_case("bucket")
+            || element.eq_ignore_ascii_case("x-amz-algorithm")
+            || element.eq_ignore_ascii_case("x-amz-credential")
+            || element.eq_ignore_ascii_case("x-amz-date")
+            || element.eq_ignore_ascii_case("policy")
+            || element.eq_ignore_ascii_case("x-amz-signature")
     }
 
     fn get_credential_string(access_key: &String, date: &UtcTime, region: &String) -> String {
@@ -142,7 +142,10 @@ impl PostPolicy {
         }
 
         let v = PostPolicy::trim_dollar(element);
-        if v == "success_action_redirect" || v == "redirect" || v == "content-length-range" {
+        if v.eq_ignore_ascii_case("success_action_redirect")
+            || v.eq_ignore_ascii_case("redirect")
+            || v.eq_ignore_ascii_case("content-length-range")
+        {
             return Err(Error::PostPolicyError(format!(
                 "{} is unsupported for equals condition",
                 element
@@ -195,8 +198,8 @@ impl PostPolicy {
         }
 
         let v = PostPolicy::trim_dollar(element);
-        if v == "success_action_status"
-            || v == "content-length-range"
+        if v.eq_ignore_ascii_case("success_action_status")
+            || v.eq_ignore_ascii_case("content-length-range")
             || (v.starts_with("x-amz-") && v.starts_with("x-amz-meta-"))
         {
             return Err(Error::PostPolicyError(format!(
