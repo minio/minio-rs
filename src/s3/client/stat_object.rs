@@ -41,7 +41,11 @@ impl Client {
     ///     println!("stat of object '{}' are {:#?}", resp.object, resp);
     /// }
     /// ```
-    pub fn stat_object<S: Into<String>>(&self, bucket: S, object: S) -> StatObject {
+    pub fn stat_object<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> StatObject {
         StatObject::new(self.clone(), bucket.into(), object.into())
     }
 }

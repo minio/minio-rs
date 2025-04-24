@@ -208,7 +208,7 @@ impl FromS3Response for ListObjectsV1Response {
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let mut resp = resp?;
-        let headers = mem::take(resp.headers_mut());
+        let headers: HeaderMap = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
         let xmltree_root = xmltree::Element::parse(body.reader())?;
         let root = Element::from(&xmltree_root);

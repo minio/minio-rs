@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::client::MAX_PART_SIZE;
+use crate::s3::client::{MAX_MULTIPART_COUNT, MAX_PART_SIZE};
 use crate::s3::error::Error;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::{
@@ -96,10 +96,11 @@ impl ToS3Request for UploadPartCopy {
             if self.upload_id.is_empty() {
                 return Err(Error::InvalidUploadId("upload ID cannot be empty".into()));
             }
-            if !(1..=10000).contains(&self.part_number) {
-                return Err(Error::InvalidPartNumber(
-                    "part number must be between 1 and 10000".into(),
-                ));
+            if !(1..=MAX_MULTIPART_COUNT).contains(&self.part_number) {
+                return Err(Error::InvalidPartNumber(format!(
+                    "part number must be between 1 and {}",
+                    MAX_MULTIPART_COUNT
+                )));
             }
         }
 

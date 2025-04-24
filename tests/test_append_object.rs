@@ -351,7 +351,7 @@ async fn append_object_content_3() {
                 assert_eq!(resp.size, sizes[idx] + initial_size);
                 assert_eq!(resp.etag, etag);
                 client
-                    .remove_object(&test_bucket, object_name.as_str())
+                    .remove_object(&test_bucket, &object_name)
                     .send()
                     .await
                     .unwrap();

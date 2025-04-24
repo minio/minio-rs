@@ -23,7 +23,11 @@ impl Client {
     ///
     /// 🛈 This operation is not supported for express buckets.
     ///
-    pub fn set_object_tags<S: Into<String>>(&self, bucket: S, object: S) -> SetObjectTags {
+    pub fn set_object_tags<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> SetObjectTags {
         SetObjectTags::new(self.clone(), bucket.into(), object.into())
     }
 }

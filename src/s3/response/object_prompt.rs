@@ -37,7 +37,7 @@ impl FromS3Response for ObjectPromptResponse {
     ) -> Result<Self, Error> {
         let mut resp = resp?;
 
-        let headers = mem::take(resp.headers_mut());
+        let headers: HeaderMap = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
         let prompt_response: String = String::from_utf8(body.to_vec())?;
 

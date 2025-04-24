@@ -31,8 +31,8 @@ pub trait MultimapExt {
     fn add_multimap(&mut self, other: Multimap);
 
     fn add_version(&mut self, version: Option<String>);
-    #[must_use]
 
+    #[must_use]
     fn take_version(self) -> Option<String>;
 
     /// Converts multimap to HTTP query string

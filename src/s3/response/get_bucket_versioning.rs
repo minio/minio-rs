@@ -53,7 +53,8 @@ impl FromS3Response for GetBucketVersioningResponse {
                 "Enabled" => VersioningStatus::Enabled,
                 _ => VersioningStatus::Suspended, // Default case
             });
-        let mfa_delete: Option<bool> = get_option_text(&root, "MFADelete").map(|v| v == "Enabled");
+        let mfa_delete: Option<bool> =
+            get_option_text(&root, "MFADelete").map(|v| v.eq_ignore_ascii_case("Enabled"));
 
         Ok(Self {
             headers,

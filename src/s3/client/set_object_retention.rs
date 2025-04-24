@@ -48,10 +48,10 @@ impl Client {
     ///     println!("set the object retention for object '{}'", resp.object);
     /// }
     /// ```
-    pub fn set_object_retention<S: Into<String>>(
+    pub fn set_object_retention<S1: Into<String>, S2: Into<String>>(
         &self,
-        bucket: S,
-        object: S,
+        bucket: S1,
+        object: S2,
     ) -> SetObjectRetention {
         SetObjectRetention::new(self.clone(), bucket.into(), object.into())
     }

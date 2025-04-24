@@ -42,7 +42,7 @@ impl FromS3Response for GetObjectLockConfigResponse {
     ) -> Result<Self, Error> {
         let mut resp = resp?;
 
-        let headers = mem::take(resp.headers_mut());
+        let headers: HeaderMap = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
         let root = Element::parse(body.reader())?;
 
