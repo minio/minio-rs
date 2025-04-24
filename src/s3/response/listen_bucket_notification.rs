@@ -30,9 +30,13 @@ use crate::s3::{
 /// API
 #[derive(Debug)]
 pub struct ListenBucketNotificationResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
     pub bucket: String,
 }
 

@@ -29,11 +29,18 @@ use xmltree::Element;
 /// Response of [select_object_content()](crate::s3::client::Client::select_object_content) API
 #[derive(Debug)]
 pub struct SelectObjectContentResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
     pub bucket: String,
+
+    /// Key (path) identifying the object within the bucket.
     pub object: String,
+
     pub progress: SelectProgress,
 
     resp: reqwest::Response,

@@ -28,12 +28,22 @@ use xmltree::Element;
 /// API
 #[derive(Clone, Debug)]
 pub struct IsObjectLegalHoldEnabledResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
     pub bucket: String,
+
+    /// Key (path) identifying the object within the bucket.
     pub object: String,
+
+    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
     pub version_id: Option<String>,
+
+    /// Indicates whether the object legal hold is enabled.
     pub enabled: bool,
 }
 

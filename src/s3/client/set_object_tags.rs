@@ -19,15 +19,36 @@ use super::Client;
 use crate::s3::builders::SetObjectTags;
 
 impl Client {
-    /// Create a SetObjectTags request builder.
+    /// Creates a [`SetObjectTags`] request builder.
+    ///
+    /// To execute the request, call [`SetObjectTags::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`SetObjectTagsResponse`](crate::s3::response::SetObjectTagsResponse).
     ///
     /// 🛈 This operation is not supported for express buckets.
     ///
-    pub fn set_object_tags<S1: Into<String>, S2: Into<String>>(
-        &self,
-        bucket: S1,
-        object: S2,
-    ) -> SetObjectTags {
+    /// # Example
+    ///
+    /// ```no_run
+    /// use std::collections::HashMap;
+    /// use minio::s3::Client;
+    /// use minio::s3::response::SetObjectTagsResponse;
+    /// use minio::s3::types::S3Api;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    /// let client: Client = Default::default(); // configure your client here
+    ///     let tags = HashMap::from([
+    ///         (String::from("Project"), String::from("Project One")),
+    ///         (String::from("User"), String::from("jsmith")),
+    ///     ]);
+    ///     let resp: SetObjectTagsResponse = client
+    ///         .set_object_tags("bucket-name", "object-name")
+    ///         .tags(tags)
+    ///         .send().await.unwrap();
+    ///     println!("set the object tags for object '{}'", resp.object);
+    /// }
+    /// ```
+    pub fn set_object_tags<S: Into<String>>(&self, bucket: S, object: S) -> SetObjectTags {
         SetObjectTags::new(self.clone(), bucket.into(), object.into())
     }
 }

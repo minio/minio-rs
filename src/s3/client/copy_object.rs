@@ -22,7 +22,32 @@ use crate::s3::builders::{
 };
 
 impl Client {
-    /// Executes [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) S3 API
+    /// Creates a [`UploadPartCopy`] request builder.
+    /// See [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) S3 API
+    ///
+    /// To execute the request, call [`UploadPartCopy::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`UploadPartCopyResponse`](crate::s3::response::UploadPartCopyResponse).    
+    ///
+    /// 🛈 This operation is not supported for regular non-express buckets.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::{UploadPartCopyResponse};
+    /// use minio::s3::segmented_bytes::SegmentedBytes;
+    /// use minio::s3::types::S3Api;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {    
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let data1: SegmentedBytes = SegmentedBytes::from("aaaa".to_string());
+    ///     let resp: UploadPartCopyResponse = client
+    ///         .upload_part_copy("bucket-name", "object-name", data1)
+    ///         .send().await.unwrap();
+    ///     println!("size of the final object is {} bytes", resp.object_size);
+    /// }
+    /// ```
     pub fn upload_part_copy<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
         &self,
         bucket: S1,
@@ -34,7 +59,7 @@ impl Client {
 
     /// Create a CopyObject request builder. This is a lower-level API that
     /// performs a non-multipart object copy.
-    pub fn copy_object_internal<S1: Into<String>, S2: Into<String>>(
+    pub(crate) fn copy_object_internal<S1: Into<String>, S2: Into<String>>(
         &self,
         bucket: S1,
         object: S2,
@@ -43,7 +68,7 @@ impl Client {
     }
 
     /// copy object is a high-order API that calls [`stat_object`] and based on the results calls
-    /// either [`compose_object`] or [`copy_object_internal`]  to copy the object.
+    /// either [`compose_object`] or [`copy_object_internal`] to copy the object.
     pub fn copy_object<S1: Into<String>, S2: Into<String>>(
         &self,
         bucket: S1,

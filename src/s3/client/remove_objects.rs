@@ -35,7 +35,6 @@ impl Client {
     /// use minio::s3::builders::ObjectToDelete;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     /// let client: Client = Default::default(); // configure your client here

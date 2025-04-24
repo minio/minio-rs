@@ -37,8 +37,9 @@ impl Client {
     /// #[tokio::main]
     /// async fn main() {    
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: DeleteBucketTagsResponse =
-    ///         client.delete_bucket_tags("bucket-name").send().await.unwrap();
+    ///     let resp: DeleteBucketTagsResponse = client
+    ///         .delete_bucket_tags("bucket-name")
+    ///         .send().await.unwrap();
     ///     println!("tags of bucket '{}' are deleted", resp.bucket);
     /// }
     /// ```

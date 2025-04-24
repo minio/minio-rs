@@ -27,12 +27,11 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
+    /// use std::collections::HashMap;
     /// use minio::s3::Client;
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::SetBucketPolicyResponse;
     /// use minio::s3::types::{S3Api, AndOperator, Destination, Filter, ReplicationConfig, ReplicationRule};
-    ///
-    /// use std::collections::HashMap;
     ///
     /// #[tokio::main]
     /// async fn main() {

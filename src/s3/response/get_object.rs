@@ -25,15 +25,29 @@ use http::HeaderMap;
 use std::mem;
 
 pub struct GetObjectResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
     pub bucket: String,
+
+    /// Key (path) identifying the object within the bucket.
     pub object: String,
-    pub version_id: Option<String>,
-    pub content: ObjectContent,
-    pub object_size: u64,
+
+    /// Entity tag representing a specific version of the object.
     pub etag: Option<String>,
+
+    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
+    pub version_id: Option<String>,
+
+    /// The content of the object as a stream or byte buffer.
+    pub content: ObjectContent,
+
+    /// Size of the object in bytes.
+    pub object_size: u64,
 }
 
 #[async_trait]

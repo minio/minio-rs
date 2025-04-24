@@ -20,14 +20,22 @@ use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;
 
-/// Response of
-/// [delete_object_lock_config_response()](crate::s3::client::Client::delete_object_lock_config_response)
-/// API
+/// Response from the [`delete_object_lock_config_response`](crate::s3::client::Client::delete_object_lock_config_response) API call,
+/// indicating that the Object Lock configuration has been successfully removed from the specified S3 bucket.
+///
+/// Removing the Object Lock configuration disables the default retention settings for new objects added to the bucket.
+/// Existing object versions with retention settings or legal holds remain unaffected.
+///
+/// For more information, refer to the [AWS S3 DeleteObjectLockConfiguration API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjectLockConfiguration.html).
 #[derive(Clone, Debug)]
 pub struct DeleteObjectLockConfigResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket from which the Object Lock configuration was removed.    
     pub bucket: String,
 }
 

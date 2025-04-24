@@ -21,16 +21,30 @@ use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;
 
-/// Response of
-/// [delete_object_tags()](crate::s3::client::Client::delete_object_tags)
-/// API
+/// Response from the [`delete_object_tags`](crate::s3::client::Client::delete_object_tags) API call,
+/// indicating that all tags have been successfully removed from a specific object (or object version) in an S3 bucket.
+///
+/// This operation deletes the entire tag set associated with the specified object. If the bucket is versioning-enabled,
+/// you can specify a version ID to remove tags from a specific version of the object.
+///
+/// For more information, refer to the [AWS S3 DeleteObjectTagging API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjectTagging.html).
 #[derive(Clone, Debug)]
 pub struct DeleteObjectTagsResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
     pub bucket: String,
+
+    /// Key (name) identifying the object within the bucket.
     pub object: String,
+
+    /// The version ID of the object from which the tags were removed.
+    ///
+    /// If versioning is not enabled on the bucket, this field may be `None`.
     pub version_id: Option<String>,
 }
 

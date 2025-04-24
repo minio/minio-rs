@@ -21,11 +21,19 @@ use http::HeaderMap;
 use std::mem;
 
 pub struct ObjectPromptResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
     pub bucket: String,
+
+    /// Key (path) identifying the object within the bucket.
     pub object: String,
+
+    /// The prompt response for the object.
     pub prompt_response: String,
 }
 

@@ -35,7 +35,6 @@ impl Client {
     /// use minio::s3::types::{S3Api, RetentionMode};
     /// use minio::s3::utils::utc_now;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     /// let client: Client = Default::default(); // configure your client here

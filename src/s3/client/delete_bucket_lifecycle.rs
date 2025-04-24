@@ -31,12 +31,12 @@ impl Client {
     /// use minio::s3::response::DeleteBucketLifecycleResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {    
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: DeleteBucketLifecycleResponse =
-    ///         client.delete_bucket_lifecycle("bucket-name").send().await.unwrap();
+    ///     let resp: DeleteBucketLifecycleResponse = client
+    ///         .delete_bucket_lifecycle("bucket-name")
+    ///         .send().await.unwrap();
     ///     println!("lifecycle of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```

@@ -20,14 +20,23 @@ use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;
 
-/// Response of
-/// [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification)
-/// API
+/// Represents the response of the [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API call.
+/// This struct contains metadata and information about the bucket whose notifications were removed.
+///
+/// # Fields
+///
+/// * `headers` - HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
+/// * `region` - The AWS region where the bucket resides.
+/// * `bucket` - Name of the bucket from which the Bucket Notifications were removed.
 #[derive(Clone, Debug)]
 pub struct DeleteBucketNotificationResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket from which the Bucket Notifications were removed.    
     pub bucket: String,
 }
 

@@ -31,12 +31,12 @@ impl Client {
     /// use minio::s3::response::MakeBucketResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: MakeBucketResponse =
-    ///         client.make_bucket("bucket-name").send().await.unwrap();
+    ///     let resp: MakeBucketResponse = client
+    ///         .make_bucket("bucket-name")
+    ///         .send().await.unwrap();
     ///     println!("Made bucket '{}' in region '{}'", resp.bucket, resp.region);
     /// }
     /// ```

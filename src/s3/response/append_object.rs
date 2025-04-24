@@ -20,16 +20,38 @@ use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;
 
+/// Represents the response of the `append_object` API call.
+/// This struct contains metadata and information about the object being appended.
+///
+/// # Fields
+///
+/// * `headers` - HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
+/// * `region` - The AWS region where the bucket resides.
+/// * `bucket` - Name of the bucket containing the object.
+/// * `object` - Key (path) identifying the object within the bucket.
+/// * `etag` - Entity tag representing a specific version of the object.
+/// * `version_id` - Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
+/// * `object_size` - Value of the `x-amz-object-size` header.
 #[derive(Debug, Clone)]
 pub struct AppendObjectResponse {
-    /// set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
-    pub bucket: String,
-    pub object: String,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
+    pub bucket: String,
+
+    /// Key (path) identifying the object within the bucket.
+    pub object: String,
+
+    /// Entity tag representing a specific version of the object.
     pub etag: String,
-    /// Value of the `x-amz-version-id` header.
+
+    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
     pub version_id: Option<String>,
+
     /// Value of the `x-amz-object-size` header.
     pub object_size: u64,
 }

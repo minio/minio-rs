@@ -29,7 +29,7 @@ use crate::s3::{
 /// Response of [put_object_api()](crate::s3::client::Client::put_object) API
 #[derive(Debug, Clone)]
 pub struct PutObjectResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
     pub bucket: String,
     pub object: String,
@@ -71,7 +71,7 @@ impl FromS3Response for PutObjectResponse {
 
 #[derive(Debug, Clone)]
 pub struct CreateMultipartUploadResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -111,12 +111,24 @@ pub type UploadPartResponse = PutObjectResponse;
 
 #[derive(Debug, Clone)]
 pub struct PutObjectContentResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
-    pub bucket: String,
-    pub object: String,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
+    pub bucket: String,
+
+    /// Key (path) identifying the object within the bucket.
+    pub object: String,
+
+    /// Size of the object in bytes.
     pub object_size: u64,
+
+    /// Entity tag representing a specific version of the object.
     pub etag: String,
+
+    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
     pub version_id: Option<String>,
 }

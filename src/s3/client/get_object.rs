@@ -31,12 +31,12 @@ impl Client {
     /// use minio::s3::response::GetObjectResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: GetObjectResponse =
-    ///         client.get_object("bucket-name", "object-name").send().await.unwrap();
+    ///     let resp: GetObjectResponse = client
+    ///         .get_object("bucket-name", "object-name")
+    ///         .send().await.unwrap();
     ///     let content_bytes = resp.content.to_segmented_bytes().await.unwrap().to_bytes();
     ///     let content_str = String::from_utf8(content_bytes.to_vec()).unwrap();
     ///     println!("retrieved content '{}'", content_str);

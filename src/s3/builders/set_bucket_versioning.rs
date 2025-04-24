@@ -24,11 +24,20 @@ use bytes::Bytes;
 use http::Method;
 use std::fmt;
 
+/// Represents the versioning state of an S3 bucket.
+///
+/// This enum corresponds to the possible values returned by the
+/// `GetBucketVersioning` API call in S3-compatible services.
+///
+/// # Variants
+///
+/// - `Enabled`: Object versioning is enabled for the bucket.
+/// - `Suspended`: Object versioning is suspended for the bucket.
 #[derive(Clone, Debug, PartialEq)]
 pub enum VersioningStatus {
-    /// **Enable** object versioning in given bucket.
+    /// Object versioning is enabled for the bucket.
     Enabled,
-    /// **Suspend** object versioning in given bucket.
+    /// Object versioning is suspended for the bucket.
     Suspended,
 }
 
@@ -41,17 +50,37 @@ impl fmt::Display for VersioningStatus {
     }
 }
 
-/// Argument builder for [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption) API
+/// Builder for the [`set_bucket_versioning`](crate::s3::client::Client::set_bucket_versioning) API call,
+/// allowing configuration of bucket versioning settings.
 #[derive(Clone, Debug, Default)]
 pub struct SetBucketVersioning {
+    /// The S3 client instance used to send the request.
     client: Client,
 
+    /// Optional additional HTTP headers to include in the request.
     extra_headers: Option<Multimap>,
+
+    /// Optional additional query parameters to include in the request URL.
     extra_query_params: Option<Multimap>,
+
+    /// Optional AWS region to override the client's default region.
     region: Option<String>,
+
+    /// The name of the bucket for which to configure versioning.
     bucket: String,
 
+    /// Desired versioning status for the bucket.
+    ///
+    /// - `Some(VersioningStatus::Enabled)`: Enables versioning.
+    /// - `Some(VersioningStatus::Suspended)`: Suspends versioning.
+    /// - `None`: No change to the current versioning status.
     status: Option<VersioningStatus>,
+
+    /// Specifies whether MFA delete is enabled for the bucket.
+    ///
+    /// - `Some(true)`: Enables MFA delete.
+    /// - `Some(false)`: Disables MFA delete.
+    /// - `None`: No change to the current MFA delete setting.
     mfa_delete: Option<bool>,
 }
 

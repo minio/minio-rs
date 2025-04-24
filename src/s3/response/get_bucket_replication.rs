@@ -22,15 +22,29 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response of
-/// [get_bucket_replication()](crate::s3::client::Client::get_bucket_replication)
-/// API
+/// Response from the [`get_bucket_replication`](crate::s3::client::Client::get_bucket_replication) API call,
+/// providing the replication configuration of an S3 bucket.
+///
+/// This includes the rules and settings that define how objects in the bucket are replicated to other buckets.
+///
+/// For more information, refer to the [AWS S3 GetBucketReplication API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketReplication.html).
 #[derive(Clone, Debug)]
 pub struct GetBucketReplicationResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket whose replication configuration is retrieved.
     pub bucket: String,
+
+    /// The replication configuration of the bucket.
+    ///
+    /// This includes the IAM role that Amazon S3 assumes to replicate objects on your behalf,
+    /// and one or more replication rules that specify the conditions under which objects are replicated.
+    ///
+    /// For more details on replication configuration elements, see the [AWS S3 Replication Configuration documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication-add-config.html).
     pub config: ReplicationConfig,
 }
 

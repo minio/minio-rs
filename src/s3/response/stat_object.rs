@@ -27,21 +27,46 @@ use std::collections::HashMap;
 use std::mem;
 
 #[derive(Debug)]
-/// Response of [stat_object()](crate::s3::client::Client::stat_object) API
+/// Response from the [`stat_object`](crate::s3::client::Client::stat_object) API call,
+/// providing metadata about an object stored in S3 or a compatible service.
 pub struct StatObjectResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
     pub bucket: String,
+
+    /// Key (path) identifying the object within the bucket.
     pub object: String,
+
+    /// Size of the object in bytes.
     pub size: u64,
+
+    /// Entity tag representing a specific version of the object.
     pub etag: String,
+
+    /// Version ID of the object, if versioning is enabled.
     pub version_id: Option<String>,
+
+    /// Timestamp indicating when the object was last modified.
     pub last_modified: Option<UtcTime>,
+
+    /// Retention mode applied to the object (e.g., Governance, Compliance).
     pub retention_mode: Option<RetentionMode>,
+
+    /// Date until which the object is retained under the specified retention mode.
     pub retention_retain_until_date: Option<UtcTime>,
+
+    /// Indicates if a legal hold is in place for the object.
     pub legal_hold: Option<bool>,
+
+    /// Indicates if the object is a delete marker (in versioned buckets).
     pub delete_marker: Option<bool>,
+
+    /// Custom user-defined metadata associated with the object.
     pub user_metadata: HashMap<String, String>,
 }
 

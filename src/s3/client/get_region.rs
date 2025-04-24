@@ -36,12 +36,12 @@ impl Client {
     /// use minio::s3::response::GetRegionResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: GetRegionResponse =
-    ///         client.get_region("bucket-name").send().await.unwrap();
+    ///     let resp: GetRegionResponse = client
+    ///         .get_region("bucket-name")
+    ///         .send().await.unwrap();
     ///     println!("retrieved region '{:?}' for bucket '{}'", resp.region_response, resp.bucket);
     /// }
     /// ```

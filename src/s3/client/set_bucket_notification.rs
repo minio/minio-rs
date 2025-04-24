@@ -31,7 +31,6 @@ impl Client {
     /// use minio::s3::types::{NotificationConfig, PrefixFilterRule, QueueConfig, S3Api, SuffixFilterRule};
     /// use minio::s3::response::SetBucketNotificationResponse;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here

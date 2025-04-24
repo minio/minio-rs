@@ -23,15 +23,31 @@ use std::collections::HashMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response of
-/// [get_bucket_tags()](crate::s3::client::Client::get_bucket_tags)
-/// API
+/// Response from the [`get_bucket_tags`](crate::s3::client::Client::get_bucket_tags) API call,
+/// providing the set of tags associated with an S3 bucket.
+///
+/// Tags are key-value pairs that help organize and manage resources,
+/// often used for cost allocation and access control.
+///
+/// For more information, refer to the [AWS S3 GetBucketTagging API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketTagging.html).
 #[derive(Clone, Debug)]
 pub struct GetBucketTagsResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket whose tags are retrieved.
     pub bucket: String,
+
+    /// A collection of tags assigned to the bucket.
+    ///
+    /// Each tag is a key-value pair represented as a `HashMap<String, String>`.
+    /// If the bucket has no tags, this map will be empty.
+    ///
+    /// Note: If the bucket has no tags, the `get_bucket_tags` API call may return an error
+    /// with the code `NoSuchTagSet`. It's advisable to handle this case appropriately in your application.
     pub tags: HashMap<String, String>,
 }
 

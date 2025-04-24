@@ -29,10 +29,12 @@ use crate::s3::{
 
 #[derive(Debug, Clone)]
 pub struct RemoveObjectResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
     /// Value of the `x-amz-delete-marker` header.
     pub is_delete_marker: bool,
+
     /// If a delete marker was created, this field will contain the version_id
     /// of the delete marker. Value of the `x-amz-version-id` header.
     pub version_id: Option<String>,
@@ -88,7 +90,7 @@ pub struct DeletedObject {
 /// form of a stream.
 #[derive(Clone, Debug)]
 pub struct RemoveObjectsResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
     pub result: Vec<DeleteResult>,
 }

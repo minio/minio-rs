@@ -33,12 +33,12 @@ impl Client {
     /// use minio::s3::response::GetObjectTagsResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: GetObjectTagsResponse =
-    ///         client.get_object_tags("bucket-name", "object-name").send().await.unwrap();
+    ///     let resp: GetObjectTagsResponse = client
+    ///         .get_object_tags("bucket-name", "object-name")
+    ///         .send().await.unwrap();
     ///     println!("retrieved object tags '{:?}' from object '{}' in bucket '{}' is enabled", resp.tags, resp.object, resp.bucket);
     /// }
     /// ```

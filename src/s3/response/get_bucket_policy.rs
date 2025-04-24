@@ -20,15 +20,33 @@ use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;
 
-/// Response of
-/// [get_bucket_policy()](crate::s3::client::Client::get_bucket_policy)
-/// API
+/// Response from the [`get_bucket_policy`](crate::s3::client::Client::get_bucket_policy) API call,
+/// providing the bucket policy associated with an S3 bucket.
+///
+/// The bucket policy is a JSON-formatted string that defines permissions for the bucket,
+/// specifying who can access the bucket and what actions they can perform.
+///
+/// For more information, refer to the [AWS S3 GetBucketPolicy API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketPolicy.html).
 #[derive(Clone, Debug)]
 pub struct GetBucketPolicyResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket whose policy is retrieved.
     pub bucket: String,
+
+    /// The bucket policy as a JSON-formatted string.
+    ///
+    /// This policy defines access permissions for the bucket. It specifies who can access the bucket,
+    /// what actions they can perform, and under what conditions.
+    ///
+    /// For example, a policy might grant read-only access to anonymous users or restrict access to specific IP addresses.
+    ///
+    /// Note: If the bucket has no policy, the `get_bucket_policy` API call may return an error
+    /// with the code `NoSuchBucketPolicy`. It's advisable to handle this case appropriately in your application.
     pub config: String,
 }
 

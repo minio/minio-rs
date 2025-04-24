@@ -33,12 +33,12 @@ impl Client {
     /// use minio::s3::response::DeleteObjectTagsResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: DeleteObjectTagsResponse =
-    ///         client.delete_object_tags("bucket-name", "object_name").send().await.unwrap();
+    ///     let resp: DeleteObjectTagsResponse = client
+    ///         .delete_object_tags("bucket-name", "object_name")
+    ///         .send().await.unwrap();
     ///     println!("legal hold of object '{}' in bucket '{}' is deleted", resp.object, resp.bucket);
     /// }
     /// ```

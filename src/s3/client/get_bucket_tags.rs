@@ -33,13 +33,13 @@ impl Client {
     /// use minio::s3::response::GetBucketTagsResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: GetBucketTagsResponse =
-    ///         client.get_bucket_tags("bucket-name").send().await.unwrap();
-    ///     println!("retrieved bucket tags '{:?}' from bucket '{}' is enabled", resp.tags, resp.bucket);
+    ///     let resp: GetBucketTagsResponse = client
+    ///         .get_bucket_tags("bucket-name")
+    ///         .send().await.unwrap();
+    ///     println!("retrieved bucket tags '{:?}' from bucket '{}'", resp.tags, resp.bucket);
     /// }
     /// ```
     pub fn get_bucket_tags<S: Into<String>>(&self, bucket: S) -> GetBucketTags {

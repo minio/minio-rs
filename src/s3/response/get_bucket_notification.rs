@@ -22,15 +22,30 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response of
-/// [get_bucket_notification()](crate::s3::client::Client::get_bucket_notification)
-/// API
+/// Response from the [`get_bucket_notification`](crate::s3::client::Client::get_bucket_notification) API call,
+/// providing the notification configuration of an S3 bucket.
+///
+/// This configuration specifies the events for which Amazon S3 sends notifications and the destinations
+/// (such as Amazon SNS topics, Amazon SQS queues, or AWS Lambda functions) where these notifications are sent.
+///
+/// For more information, refer to the [AWS S3 GetBucketNotificationConfiguration API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketNotificationConfiguration.html).
 #[derive(Clone, Debug)]
 pub struct GetBucketNotificationResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket whose notification configuration is retrieved.
     pub bucket: String,
+
+    /// The notification configuration of the bucket.
+    ///
+    /// This includes the event types and the destinations (e.g., SNS topics, SQS queues, Lambda functions)
+    /// configured to receive notifications for those events.
+    ///
+    /// If the bucket has no notification configuration, this field may contain an empty configuration.
     pub config: NotificationConfig,
 }
 

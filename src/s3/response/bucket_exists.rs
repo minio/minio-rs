@@ -20,15 +20,27 @@ use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;
 
-/// Response of
-/// [bucket_exists()](crate::s3::client::Client::bucket_exists)
-/// API
+/// Represents the response of the [bucket_exists()](crate::s3::client::Client::bucket_exists) API call.
+/// This struct contains metadata and information about the existence of a bucket.
+///
+/// # Fields
+///
+/// * `headers` - HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
+/// * `region` - The AWS region where the bucket resides. If the bucket does not exist, this will be an empty string.
+/// * `bucket` - The name of the bucket being checked.
+/// * `exists` - A boolean indicating whether the bucket exists or not.
 #[derive(Clone, Debug)]
 pub struct BucketExistsResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// The name of the bucket being checked.
     pub bucket: String,
+
+    /// Whether the bucket exists or not.
     pub exists: bool,
 }
 

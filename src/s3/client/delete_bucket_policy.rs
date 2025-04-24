@@ -19,7 +19,6 @@ use super::Client;
 use crate::s3::builders::DeleteBucketPolicy;
 
 impl Client {
-    /// Create a DeleteBucketPolicy request builder.
     /// Creates a [`DeleteBucketPolicy`] request builder.
     ///
     /// To execute the request, call [`DeleteBucketPolicy::send()`](crate::s3::types::S3Api::send),
@@ -32,12 +31,12 @@ impl Client {
     /// use minio::s3::response::DeleteBucketPolicyResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {    
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: DeleteBucketPolicyResponse =
-    ///         client.delete_bucket_policy("bucket-name").send().await.unwrap();
+    ///     let resp: DeleteBucketPolicyResponse = client
+    ///         .delete_bucket_policy("bucket-name")
+    ///         .send().await.unwrap();
     ///     println!("policy of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```

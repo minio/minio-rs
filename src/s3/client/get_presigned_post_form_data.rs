@@ -17,7 +17,6 @@ use crate::s3::Client;
 use crate::s3::builders::{GetPresignedPolicyFormData, PostPolicy};
 
 impl Client {
-    /// Create a GetPresignedPolicyFormData builder.
     /// Creates a [`GetPresignedPolicyFormData`] request builder.
     ///
     /// To execute the request, call [`GetPresignedPolicyFormData::send()`](crate::s3::types::S3Api::send),
@@ -28,7 +27,6 @@ impl Client {
     /// ```no_run
     /// use http::Method;
     /// use std::collections::HashMap;
-    ///
     /// use chrono::{DateTime, Utc};
     /// use minio::s3::Client;
     /// use minio::s3::types::S3Api;
@@ -36,8 +34,7 @@ impl Client {
     /// use minio::s3::utils::utc_now;
     ///
     /// pub fn create_post_policy_example(bucket_name: &str, object_name: &str) -> PostPolicy {
-    /// let expiration: DateTime<Utc> = utc_now() + chrono::Duration::days(5);
-    ///
+    ///     let expiration: DateTime<Utc> = utc_now() + chrono::Duration::days(5);
     ///     let mut policy = PostPolicy::new(&bucket_name, expiration).unwrap();
     ///     policy.add_equals_condition("key", &object_name).unwrap();
     ///     policy
@@ -50,7 +47,8 @@ impl Client {
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
     ///     let policy: PostPolicy = create_post_policy_example("bucket-name", "object-name");
-    ///     let resp: HashMap<String, String> = client.get_presigned_post_form_data(policy)
+    ///     let resp: HashMap<String, String> = client
+    ///         .get_presigned_post_form_data(policy)
     ///         .send().await.unwrap();
     ///     println!("presigned post form data: '{:?}'", resp);
     /// }

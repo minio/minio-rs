@@ -34,7 +34,6 @@ impl Client {
     /// use minio::s3::response::SetBucketVersioningResponse;
     /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here

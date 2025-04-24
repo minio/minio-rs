@@ -23,9 +23,13 @@ use std::mem;
 /// Response of [set_bucket_notification()](crate::s3::client::Client::set_bucket_notification) API
 #[derive(Debug)]
 pub struct SetBucketNotificationResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
     pub bucket: String,
 }
 

@@ -19,7 +19,32 @@ use super::Client;
 use crate::s3::builders::SetBucketEncryption;
 
 impl Client {
-    /// Create a SetBucketEncryption request builder.
+    /// Creates a [`SetBucketEncryption`] request builder.
+    ///
+    /// To execute the request, call [`SetBucketEncryption::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`SetBucketEncryptionResponse`](crate::s3::response::SetBucketEncryptionResponse).
+    ///
+    /// 🛈 This operation is not supported for express buckets.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::types::SseConfig;
+    /// use minio::s3::Client;
+    /// use minio::s3::response::SetBucketEncryptionResponse;
+    /// use minio::s3::types::S3Api;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let config = SseConfig::default();
+    ///     let resp: SetBucketEncryptionResponse = client
+    ///         .set_bucket_encryption("bucket-name")
+    ///         .sse_config(config)
+    ///         .send().await.unwrap();
+    ///     println!("set encryption on bucket '{}'", resp.bucket);
+    /// }
+    /// ```
     pub fn set_bucket_encryption<S: Into<String>>(&self, bucket: S) -> SetBucketEncryption {
         SetBucketEncryption::new(self.clone(), bucket.into())
     }

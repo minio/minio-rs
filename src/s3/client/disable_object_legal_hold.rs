@@ -33,12 +33,12 @@ impl Client {
     /// use minio::s3::response::DisableObjectLegalHoldResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: DisableObjectLegalHoldResponse =
-    ///         client.disable_object_legal_hold("bucket-name", "object-name").send().await.unwrap();
+    ///     let resp: DisableObjectLegalHoldResponse = client
+    ///         .disable_object_legal_hold("bucket-name", "object-name")
+    ///         .send().await.unwrap();
     ///     println!("legal hold of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```

@@ -21,16 +21,30 @@ use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;
 
-/// Response of
-/// [disable_object_legal_hold()](crate::s3::client::Client::disable_object_legal_hold)
-/// API
+/// Response from the [`disable_object_legal_hold`](crate::s3::client::Client::disable_object_legal_hold) API call,
+/// indicating that a legal hold has been successfully removed from a specific object version in an S3 bucket.
+///
+/// Removing a legal hold allows the specified object version to be deleted or overwritten, subject to the bucket's
+/// retention configuration and permissions.
+///
+/// For more information, refer to the [AWS S3 PutObjectLegalHold API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObjectLegalHold.html).
 #[derive(Clone, Debug)]
 pub struct DisableObjectLegalHoldResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
     pub bucket: String,
+
+    /// Key (name) identifying the object within the bucket.
     pub object: String,
+
+    /// The version ID of the object from which the legal hold was removed.
+    ///
+    /// If versioning is not enabled on the bucket, this field may be `None`.
     pub version_id: Option<String>,
 }
 

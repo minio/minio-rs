@@ -32,12 +32,12 @@ impl Client {
     /// use minio::s3::types::S3Api;
     /// use std::sync::Arc;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     /// let client: Client = Default::default(); // configure your client here
-    ///     let resp: ListBucketsResponse =
-    ///         client.list_buckets().send().await.unwrap();
+    ///     let resp: ListBucketsResponse = client
+    ///         .list_buckets()
+    ///         .send().await.unwrap();
     ///     println!("retrieved buckets '{:?}'", resp.buckets);
     /// }
     /// ```
