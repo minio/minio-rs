@@ -30,7 +30,8 @@ async fn put_object() {
     let object_name = rand_object_name();
 
     let size = 16_u64;
-    ctx.client
+    let resp: PutObjectContentResponse = ctx
+        .client
         .put_object_content(
             &bucket_name,
             &object_name,
@@ -39,7 +40,11 @@ async fn put_object() {
         .send()
         .await
         .unwrap();
-    let resp = ctx
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.object_size, size);
+
+    let resp: StatObjectResponse = ctx
         .client
         .stat_object(&bucket_name, &object_name)
         .send()
@@ -47,18 +52,23 @@ async fn put_object() {
         .unwrap();
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.object, object_name);
-    assert_eq!(resp.size as u64, size);
-    ctx.client
-        .remove_object(&bucket_name, object_name.as_str())
+    assert_eq!(resp.size, size);
+
+    let resp: RemoveObjectResponse = ctx
+        .client
+        .remove_object(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
+    assert!(!resp.version_id.is_some());
+
     // Validate delete succeeded.
-    let resp = ctx
+    let resp: Result<StatObjectResponse, Error> = ctx
         .client
         .stat_object(&bucket_name, &object_name)
         .send()
         .await;
+
     match resp.err().unwrap() {
         Error::S3Error(er) => {
             assert_eq!(er.code, ErrorCode::NoSuchKey)
@@ -94,7 +104,7 @@ async fn put_object_multipart() {
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.size as u64, size);
     ctx.client
-        .remove_object(&bucket_name, object_name.as_str())
+        .remove_object(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -135,7 +145,7 @@ async fn put_object_content_1() {
         );
         let resp: RemoveObjectResponse = ctx
             .client
-            .remove_object(&bucket_name, object_name.as_str())
+            .remove_object(&bucket_name, &object_name)
             .send()
             .await
             .unwrap();
@@ -175,7 +185,7 @@ async fn put_object_content_2() {
         assert_eq!(resp.size, *size);
         assert_eq!(resp.etag, etag);
         ctx.client
-            .remove_object(&bucket_name, object_name.as_str())
+            .remove_object(&bucket_name, &object_name)
             .send()
             .await
             .unwrap();
@@ -229,7 +239,7 @@ async fn put_object_content_3() {
                 assert_eq!(resp.size, sizes[idx]);
                 assert_eq!(resp.etag, etag);
                 client
-                    .remove_object(&test_bucket, object_name.as_str())
+                    .remove_object(&test_bucket, &object_name)
                     .send()
                     .await
                     .unwrap();

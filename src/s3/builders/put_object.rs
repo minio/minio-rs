@@ -415,10 +415,11 @@ impl ToS3Request for UploadPart {
                 }
             }
             if let Some(part_number) = self.part_number {
-                if !(1..=10000).contains(&part_number) {
-                    return Err(Error::InvalidPartNumber(
-                        "part number must be between 1 and 10000".into(),
-                    ));
+                if !(1..=MAX_MULTIPART_COUNT).contains(&part_number) {
+                    return Err(Error::InvalidPartNumber(format!(
+                        "part number must be between 1 and {}",
+                        MAX_MULTIPART_COUNT
+                    )));
                 }
             }
         }

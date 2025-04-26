@@ -44,7 +44,11 @@ impl Client {
 
     /// copy object is a high-order API that calls [`stat_object`] and based on the results calls
     /// either [`compose_object`] or [`copy_object_internal`]  to copy the object.
-    pub fn copy_object<S: Into<String>>(&self, bucket: S, object: S) -> CopyObject {
+    pub fn copy_object<S1: Into<String>, S2: Into<String>>(
+        &self,
+        bucket: S1,
+        object: S2,
+    ) -> CopyObject {
         CopyObject::new(self.clone(), bucket.into(), object.into())
     }
 

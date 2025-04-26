@@ -493,7 +493,7 @@ pub mod xml {
 
     impl Element<'_> {
         pub fn name(&self) -> &str {
-            self.inner.name.as_str()
+            &self.inner.name
         }
 
         pub fn get_child_text(&self, tag: &str) -> Option<String> {

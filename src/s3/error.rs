@@ -178,13 +178,6 @@ pub enum Error {
     NoClientProvided,
     TagDecodingError(String, String),
     ContentLengthUnknown,
-
-    //TODO are the following still needed?
-    NoSuchTagSet,
-    ReplicationConfigurationNotFoundError,
-    NoSuchObjectLockConfiguration,
-    NoSuchBucketPolicy,
-    NoSuchBucket,
 }
 
 impl std::error::Error for Error {}
@@ -354,13 +347,6 @@ impl fmt::Display for Error {
                 error_message, input
             ),
             Error::ContentLengthUnknown => write!(f, "content length is unknown"),
-            Error::NoSuchTagSet => write!(f, "no such tag set"),
-            Error::ReplicationConfigurationNotFoundError => {
-                write!(f, "Replication configuration not found")
-            }
-            Error::NoSuchObjectLockConfiguration => write!(f, "no such object lock"),
-            Error::NoSuchBucketPolicy => write!(f, "no such bucket policy"),
-            Error::NoSuchBucket => write!(f, "no such bucket"),
         }
     }
 }

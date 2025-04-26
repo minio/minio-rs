@@ -41,7 +41,7 @@ impl FromS3Response for AppendObjectResponse {
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
         let mut resp = resp?;
-        let headers = mem::take(resp.headers_mut());
+        let headers: HeaderMap = mem::take(resp.headers_mut());
 
         let etag: String = match headers.get("etag") {
             Some(v) => v.to_str()?.to_string().trim_matches('"').to_string(),

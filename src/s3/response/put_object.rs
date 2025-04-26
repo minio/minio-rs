@@ -85,12 +85,6 @@ impl FromS3Response for CreateMultipartUploadResponse {
         req: S3Request,
         resp: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let bucket = req
-            .bucket
-            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
-        let object = req
-            .object
-            .ok_or_else(|| Error::InvalidObjectName("no object specified".into()))?;
         let mut resp = resp?;
 
         let headers: HeaderMap = mem::take(resp.headers_mut());
@@ -99,11 +93,11 @@ impl FromS3Response for CreateMultipartUploadResponse {
         let upload_id: String =
             get_text(&root, "UploadId").map_err(|e| Error::InvalidUploadId(e.to_string()))?;
 
-        Ok(CreateMultipartUploadResponse {
+        Ok(Self {
             headers,
             region: req.inner_region,
-            bucket,
-            object,
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
             upload_id,
         })
     }

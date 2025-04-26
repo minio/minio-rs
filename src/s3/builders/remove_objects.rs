@@ -23,6 +23,7 @@ use std::pin::Pin;
 
 use tokio_stream::iter as stream_iter;
 
+use crate::s3::client::MAX_MULTIPART_COUNT;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::DeleteError;
 use crate::s3::types::ListEntry;
@@ -36,6 +37,12 @@ use crate::s3::{
 };
 
 // region: object-to-delete
+
+pub trait ValidKey: Into<String> {}
+impl ValidKey for String {}
+impl ValidKey for &str {}
+impl ValidKey for &String {}
+
 /// Specify an object to be deleted. The object can be specified by key or by
 /// key and version_id via the From trait.
 #[derive(Debug, Clone, Default)]
@@ -45,30 +52,30 @@ pub struct ObjectToDelete {
 }
 
 /// A key can be converted into a DeleteObject. The version_id is set to None.
-impl From<&str> for ObjectToDelete {
-    fn from(key: &str) -> Self {
+impl<K: ValidKey> From<K> for ObjectToDelete {
+    fn from(key: K) -> Self {
         Self {
-            key: key.to_owned(),
+            key: key.into(),
             version_id: None,
         }
     }
 }
 
 /// A tuple of key and version_id can be converted into a DeleteObject.
-impl From<(&str, &str)> for ObjectToDelete {
-    fn from((key, version_id): (&str, &str)) -> Self {
+impl<K: ValidKey> From<(K, &str)> for ObjectToDelete {
+    fn from((key, version_id): (K, &str)) -> Self {
         Self {
-            key: key.to_string(),
+            key: key.into(),
             version_id: Some(version_id.to_string()),
         }
     }
 }
 
 /// A tuple of key and option version_id can be converted into a DeleteObject.
-impl From<(&str, Option<&str>)> for ObjectToDelete {
-    fn from((key, version_id): (&str, Option<&str>)) -> Self {
+impl<K: ValidKey> From<(K, Option<&str>)> for ObjectToDelete {
+    fn from((key, version_id): (K, Option<&str>)) -> Self {
         Self {
-            key: key.to_string(),
+            key: key.into(),
             version_id: version_id.map(|v| v.to_string()),
         }
     }
@@ -358,7 +365,7 @@ impl RemoveObjects {
         let mut objects = Vec::new();
         while let Some(object) = self.objects.items.next().await {
             objects.push(object);
-            if objects.len() >= 1000 {
+            if objects.len() >= MAX_MULTIPART_COUNT as usize {
                 break;
             }
         }
