@@ -23,7 +23,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::check_bucket_name;
 use http::Method;
 
-/// Argument builder for [make_bucket()](Client::make_bucket) API
+/// Argument builder for [make_bucket()](crate::s3::client::Client::make_bucket) API
 #[derive(Clone, Debug, Default)]
 pub struct MakeBucket {
     client: Client,

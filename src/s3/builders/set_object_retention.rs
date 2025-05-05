@@ -25,7 +25,7 @@ use crate::s3::utils::{
 use bytes::Bytes;
 use http::Method;
 
-/// Argument builder for [set_object_retention()](Client::set_object_retention) API
+/// Argument builder for [set_object_retention()](crate::s3::client::Client::set_object_retention) API
 #[derive(Clone, Debug, Default)]
 pub struct SetObjectRetention {
     client: Client,

@@ -23,7 +23,7 @@ use crate::s3::{
     types::{S3Api, S3Request, ToS3Request},
 };
 
-/// Argument builder for [list_buckets()](Client::list_buckets) API.
+/// Argument builder for [list_buckets()](crate::s3::client::Client::list_buckets) API.
 #[derive(Clone, Debug, Default)]
 pub struct ListBuckets {
     client: Client,

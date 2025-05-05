@@ -23,7 +23,7 @@ use crate::s3::utils::{check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
 
-/// Argument builder for [set_bucket_encryption()](Client::set_bucket_encryption) API
+/// Argument builder for [set_bucket_encryption()](crate::s3::client::Client::set_bucket_encryption) API
 #[derive(Clone, Debug, Default)]
 pub struct SetBucketEncryption {
     client: Client,

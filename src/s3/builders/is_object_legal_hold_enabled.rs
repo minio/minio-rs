@@ -21,7 +21,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, check_object_name, insert};
 use http::Method;
 
-/// Argument builder for [is_object_legal_hold_enabled()](Client::is_object_legal_hold_enabled) API
+/// Argument builder for [is_object_legal_hold_enabled()](crate::s3::client::Client::is_object_legal_hold_enabled) API
 #[derive(Clone, Debug, Default)]
 pub struct IsObjectLegalHoldEnabled {
     client: Client,

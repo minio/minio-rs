@@ -20,7 +20,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
-/// Argument builder for [delete_bucket_policy()](Client::delete_bucket_policy) API
+/// Argument builder for [delete_bucket_policy()](crate::s3::client::Client::delete_bucket_policy) API
 pub type DeleteBucketPolicy = BucketCommon<DeleteBucketPolicyPhantomData>;
 
 #[derive(Default, Debug)]

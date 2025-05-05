@@ -24,7 +24,7 @@ use bytes::Bytes;
 use http::Method;
 use std::collections::HashMap;
 
-/// Argument builder for [set_object_tags()](Client::set_object_tags) API
+/// Argument builder for [set_object_tags()](crate::s3::client::Client::set_object_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct SetObjectTags {
     client: Client,

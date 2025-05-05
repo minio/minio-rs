@@ -20,7 +20,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
-/// Argument builder for [get_object_lock_config()](Client::get_object_lock_config) API
+/// Argument builder for [get_object_lock_config()](crate::s3::client::Client::get_object_lock_config) API
 pub type GetObjectLockConfig = BucketCommon<GetObjectLockConfigPhantomData>;
 
 #[derive(Default, Debug)]

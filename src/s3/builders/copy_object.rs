@@ -325,7 +325,7 @@ impl ToS3Request for CopyObjectInternal {
     }
 }
 
-/// Argument builder for [copy_object()](Client::copy_object_old) API
+/// Argument builder for [copy_object()](crate::s3::client::Client::copy_object_old) API
 #[derive(Clone, Debug, Default)]
 pub struct CopyObject {
     client: Client,
@@ -409,9 +409,7 @@ impl CopyObject {
         self.tagging_directive = tagging_directive;
         self
     }
-}
 
-impl CopyObject {
     pub async fn send(self) -> Result<CopyObjectResponse, Error> {
         {
             if let Some(v) = &self.sse {
@@ -612,9 +610,7 @@ impl ComposeObjectInternal {
         self.sources = sources;
         self
     }
-}
 
-impl ComposeObjectInternal {
     #[async_recursion]
     pub async fn send(self) -> (Result<ComposeObjectResponse, Error>, String) {
         let mut upload_id = String::new();
@@ -885,9 +881,7 @@ impl ComposeObject {
         self.sources = sources;
         self
     }
-}
 
-impl ComposeObject {
     pub async fn send(self) -> Result<ComposeObjectResponse, Error> {
         {
             if let Some(v) = &self.sse {
@@ -963,35 +957,23 @@ impl ComposeSource {
     /// use minio::s3::builders::ComposeSource;
     /// let src = ComposeSource::new("my-src-bucket", "my-src-object").unwrap();
     /// ```
-    pub fn new(bucket_name: &str, object_name: &str) -> Result<ComposeSource, Error> {
+    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self, Error> {
         check_bucket_name(bucket_name, true)?;
         check_object_name(object_name)?;
 
-        Ok(ComposeSource {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
+        Ok(Self {
             bucket: bucket_name.to_owned(),
             object: object_name.to_owned(),
-            version_id: None,
-            ssec: None,
-            offset: None,
-            length: None,
-            match_etag: None,
-            not_match_etag: None,
-            modified_since: None,
-            unmodified_since: None,
-            object_size: None,
-            headers: None,
+            ..Default::default()
         })
     }
 
     pub fn get_object_size(&self) -> u64 {
-        self.object_size.expect("A: ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This shoud not happen.")
+        self.object_size.expect("A: ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This should not happen.")
     }
 
     pub fn get_headers(&self) -> Multimap {
-        self.headers.as_ref().expect("B: ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This shoud not happen.").clone()
+        self.headers.as_ref().expect("B: ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This should not happen.").clone()
     }
 
     pub fn build_headers(&mut self, object_size: u64, etag: String) -> Result<(), Error> {
@@ -1098,24 +1080,14 @@ pub struct CopySource {
 }
 
 impl CopySource {
-    pub fn new(bucket_name: &str, object_name: &str) -> Result<CopySource, Error> {
+    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self, Error> {
         check_bucket_name(bucket_name, true)?;
         check_object_name(object_name)?;
 
-        Ok(CopySource {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
+        Ok(Self {
             bucket: bucket_name.to_owned(),
             object: object_name.to_owned(),
-            version_id: None,
-            ssec: None,
-            offset: None,
-            length: None,
-            match_etag: None,
-            not_match_etag: None,
-            modified_since: None,
-            unmodified_since: None,
+            ..Default::default()
         })
     }
 

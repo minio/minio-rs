@@ -20,7 +20,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
-/// Argument builder for [get_bucket_notification()](Client::get_bucket_notification) API
+/// Argument builder for [get_bucket_notification()](crate::s3::client::Client::get_bucket_notification) API
 pub type GetBucketNotification = BucketCommon<GetBucketNotificationPhantomData>;
 
 #[derive(Default, Debug)]

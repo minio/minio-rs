@@ -25,7 +25,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use http::Method;
 
-/// Argument builder for [bucket_exists()](Client::bucket_exists) API
+/// Argument builder for [bucket_exists()](crate::s3::client::Client::bucket_exists) API
 #[derive(Default)]
 pub struct SelectObjectContent {
     client: Client,

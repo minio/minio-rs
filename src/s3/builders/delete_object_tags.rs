@@ -21,7 +21,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, check_object_name, insert};
 use http::Method;
 
-/// Argument builder for [delete_object_tags()](Client::delete_object_tags) API
+/// Argument builder for [delete_object_tags()](crate::s3::client::Client::delete_object_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct DeleteObjectTags {
     client: Client,

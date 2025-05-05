@@ -22,7 +22,7 @@ use crate::s3::utils::{check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
 
-/// Argument builder for [delete_bucket_notification()](Client::delete_bucket_notification) API
+/// Argument builder for [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API
 pub type DeleteBucketNotification = BucketCommon<DeleteBucketNotificationPhantomData>;
 
 #[derive(Default, Debug)]

@@ -21,7 +21,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, check_object_name, insert};
 use http::Method;
 
-/// Argument builder for [get_object_tags()](Client::get_object_tags) API
+/// Argument builder for [get_object_tags()](crate::s3::client::Client::get_object_tags) API
 #[derive(Clone, Debug, Default)]
 pub struct GetObjectTags {
     client: Client,

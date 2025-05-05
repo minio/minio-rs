@@ -20,7 +20,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
-/// Argument builder for [delete_bucket_tags()](Client::delete_bucket_tags) API
+/// Argument builder for [delete_bucket_tags()](crate::s3::client::Client::delete_bucket_tags) API
 pub type DeleteBucketTags = BucketCommon<DeleteBucketTagsPhantomData>;
 
 #[derive(Default, Debug)]

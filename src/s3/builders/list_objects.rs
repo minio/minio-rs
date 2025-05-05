@@ -174,7 +174,6 @@ struct ListObjectsV2 {
     continuation_token: Option<String>,
     fetch_owner: bool,
     include_user_metadata: bool,
-    unsorted: bool,
 }
 
 #[async_trait]
@@ -241,9 +240,6 @@ impl ToS3Request for ListObjectsV2 {
             if self.include_user_metadata {
                 query_params.add("metadata", "true");
             }
-            if self.unsorted {
-                query_params.add("unsorted", "true");
-            }
         }
 
         Ok(S3Request::new(self.client, Method::GET)
@@ -270,7 +266,6 @@ impl From<ListObjects> for ListObjectsV2 {
             continuation_token: value.continuation_token,
             fetch_owner: value.fetch_owner,
             include_user_metadata: value.include_user_metadata,
-            unsorted: value.unsorted,
         }
     }
 }
@@ -294,7 +289,6 @@ struct ListObjectVersions {
     key_marker: Option<String>,
     version_id_marker: Option<String>,
     include_user_metadata: bool,
-    unsorted: bool,
 }
 
 #[async_trait]
@@ -361,9 +355,6 @@ impl ToS3Request for ListObjectVersions {
             if self.include_user_metadata {
                 query_params.add("metadata", "true");
             }
-            if self.unsorted {
-                query_params.add("unsorted", "true");
-            }
         }
 
         Ok(S3Request::new(self.client, Method::GET)
@@ -389,7 +380,6 @@ impl From<ListObjects> for ListObjectVersions {
             key_marker: value.key_marker,
             version_id_marker: value.version_id_marker,
             include_user_metadata: value.include_user_metadata,
-            unsorted: value.unsorted,
         }
     }
 }
@@ -435,7 +425,6 @@ pub struct ListObjects {
     recursive: bool,
     use_api_v1: bool,
     include_versions: bool,
-    unsorted: bool,
 }
 
 #[async_trait]
@@ -551,7 +540,11 @@ impl ListObjects {
         self
     }
 
-    /// Set this to use ListObjectsV1. Defaults to false.
+    /// Set this to use ListObjectsV1. Defaults to false. 
+    /// * For general purpose buckets, ListObjectsV2 returns objects in 
+    /// lexicographical order based on their key names.
+    /// * For directory buckets (S3-Express), ListObjectsV2 returns objects
+    /// in an unspecified order.
     pub fn use_api_v1(mut self, use_api_v1: bool) -> Self {
         self.use_api_v1 = use_api_v1;
         self
@@ -561,12 +554,6 @@ impl ListObjects {
     /// `use_api_v1` is set.
     pub fn include_versions(mut self, include_versions: bool) -> Self {
         self.include_versions = include_versions;
-        self
-    }
-
-    /// Set this to allow unsorted versions. Defaults to false
-    pub fn unsorted(mut self, unsorted: bool) -> Self {
-        self.unsorted = unsorted;
         self
     }
 }

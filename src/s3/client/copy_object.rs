@@ -28,8 +28,6 @@ impl Client {
     /// To execute the request, call [`UploadPartCopy::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`UploadPartCopyResponse`](crate::s3::response::UploadPartCopyResponse).    
     ///
-    /// 🛈 This operation is not supported for regular non-express buckets.
-    ///
     /// # Example
     ///
     /// ```no_run

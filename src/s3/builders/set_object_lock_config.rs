@@ -23,7 +23,7 @@ use crate::s3::utils::{check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
 
-/// Argument builder for [set_object_lock_config()](Client::set_object_lock_config) API
+/// Argument builder for [set_object_lock_config()](crate::s3::client::Client::set_object_lock_config) API
 
 #[derive(Clone, Debug, Default)]
 pub struct SetObjectLockConfig {

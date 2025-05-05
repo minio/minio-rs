@@ -20,7 +20,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
-/// Argument builder for [delete_bucket_encryption()](Client::delete_bucket_encryption) API
+/// Argument builder for [delete_bucket_encryption()](crate::s3::client::Client::delete_bucket_encryption) API
 pub type DeleteBucketEncryption = BucketCommon<DeleteBucketEncryptionPhantomData>;
 
 #[derive(Default, Debug)]

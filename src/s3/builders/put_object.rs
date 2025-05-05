@@ -36,7 +36,7 @@ use std::{collections::HashMap, sync::Arc};
 // region: multipart-upload
 
 /// Argument for
-/// [create_multipart_upload()](Client::create_multipart_upload)
+/// [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload)
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct CreateMultipartUpload {
@@ -145,7 +145,7 @@ impl ToS3Request for CreateMultipartUpload {
 // region: abort-multipart-upload
 
 /// Argument for
-/// [abort_multipart_upload()](Client::abort_multipart_upload)
+/// [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload)
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct AbortMultipartUpload {
@@ -214,7 +214,7 @@ impl ToS3Request for AbortMultipartUpload {
 // region: complete-multipart-upload
 
 /// Argument for
-/// [complete_multipart_upload()](Client::complete_multipart_upload)
+/// [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload)
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct CompleteMultipartUpload {
@@ -317,7 +317,7 @@ impl ToS3Request for CompleteMultipartUpload {
 
 // region: upload-part
 
-/// Argument for [upload_part()](Client::upload_part) S3 API
+/// Argument for [upload_part()](crate::s3::client::Client::upload_part) S3 API
 #[derive(Debug, Clone, Default)]
 pub struct UploadPart {
     client: Client,

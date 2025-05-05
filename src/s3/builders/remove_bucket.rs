@@ -20,7 +20,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::check_bucket_name;
 use http::Method;
 
-/// Argument builder for [remove_bucket()](Client::remove_bucket) API
+/// Argument builder for [remove_bucket()](crate::s3::client::Client::remove_bucket) API
 pub type RemoveBucket = BucketCommon<RemoveBucketPhantomData>;
 
 #[derive(Default, Debug)]

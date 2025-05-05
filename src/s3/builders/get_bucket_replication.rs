@@ -20,7 +20,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
-/// Argument builder for [get_bucket_replication()](Client::get_bucket_replication) API
+/// Argument builder for [get_bucket_replication()](crate::s3::client::Client::get_bucket_replication) API
 pub type GetBucketReplication = BucketCommon<GetBucketReplicationPhantomData>;
 
 #[derive(Default, Debug)]

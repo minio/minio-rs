@@ -18,12 +18,23 @@ use minio::s3::types::ToStream;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use std::collections::HashSet;
+use quickcheck::TestResult;
 use tokio_stream::StreamExt;
 
-async fn list_objects(use_api_v1: bool, include_versions: bool, unsorted: bool, express: bool) {
-    const N_OBJECTS: usize = 100;
+async fn list_objects(
+    use_api_v1: bool, include_versions: bool, express: bool, 
+    n_prefixes: usize, n_objects: usize) 
+{
+    if express {
+        if use_api_v1 {
+            panic!("S3-Express does not support V1 API");
+        }
+        if include_versions {
+            panic!("S3-Express does not support versioning");
+        }
+    }
     let ctx = TestContext::new_from_env();
-
+    
     let is_express = ctx.client.is_minio_express();
     if is_express && !express {
         println!("Skipping test because it is running in MinIO Express mode");
@@ -36,27 +47,29 @@ async fn list_objects(use_api_v1: bool, include_versions: bool, unsorted: bool, 
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
     let mut names_set_before: HashSet<String> = HashSet::new();
-    let mut names_vec_after: Vec<String> = Vec::with_capacity(N_OBJECTS);
+    let mut names_vec_after: Vec<String> = Vec::with_capacity(n_prefixes*n_objects);
 
-    for _ in 1..=N_OBJECTS {
-        let object_name: String = rand_object_name();
-        let resp: PutObjectContentResponse = ctx
-            .client
-            .put_object_content(&bucket_name, &object_name, "hello world")
-            .send()
-            .await
-            .unwrap();
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.object, object_name);
-        names_set_before.insert(object_name);
+    for _ in 0..n_prefixes {
+        let prefix: String = rand_object_name();
+        for _ in 0..=n_objects {
+            let object_name: String = format!("{}/{}", prefix, rand_object_name());
+            let resp: PutObjectContentResponse = ctx
+                .client
+                .put_object_content(&bucket_name, &object_name, "hello world")
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(resp.bucket, bucket_name);
+            assert_eq!(resp.object, object_name);
+            names_set_before.insert(object_name);
+        }
     }
-
     let mut stream = ctx
         .client
         .list_objects(&bucket_name)
         .use_api_v1(use_api_v1)
         .include_versions(include_versions)
-        .unsorted(unsorted)
+        .recursive(true)
         .to_stream()
         .await;
 
@@ -68,18 +81,14 @@ async fn list_objects(use_api_v1: bool, include_versions: bool, unsorted: bool, 
     }
     assert_eq!(names_vec_after.len(), names_set_before.len());
     let is_sorted: bool = names_vec_after.iter().is_sorted();
-
-    if unsorted {
-        // we expect the results to be unsorted
-        assert!(
-            !is_sorted,
-            "expected the results to be unsorted, yet the list of objects is sorted"
-        );
+    
+    if express {
+        // we do not expect the results to be sorted, but it still might be
     } else {
         // we expect the results to be sorted
         assert!(
             is_sorted,
-            "expected the results to be sorted, yet the list of objects is unsorted"
+            "With regular (non S3-Express) we expected the results to be sorted, yet the list of objects is unsorted"
         );
     }
     let names_set_after: HashSet<String> = names_vec_after.into_iter().collect();
@@ -87,26 +96,28 @@ async fn list_objects(use_api_v1: bool, include_versions: bool, unsorted: bool, 
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn list_objects_v1_no_versions_sorted() {
-    list_objects(true, false, false, false).await;
+async fn list_objects_v1_no_versions() {
+    list_objects(true, false, false, 10, 10).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn list_objects_v1_with_versions_sorted() {
-    list_objects(true, true, false, false).await;
+async fn list_objects_v1_with_versions() {
+    list_objects(true, true, false, 10, 10).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn list_objects_v2_no_versions_sorted() {
-    list_objects(false, false, false, false).await;
+async fn list_objects_v2_no_versions() {
+    list_objects(false, false, false, 10, 10).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn list_objects_v2_with_versions_sorted() {
-    list_objects(false, true, false, false).await;
+async fn list_objects_v2_with_versions() {
+    list_objects(false, true, false, 10, 10).await;
 }
 
-//#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn list_objects_v2_no_versions_unsorted() {
-    list_objects(false, false, true, true).await;
+/// Test for S3-Express: List objects with S3-Express are only supported with V2 API, without 
+/// versions, and yield unsorted results.
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn list_objects_express() {
+    list_objects(false, false, true,10, 10).await;
 }
