@@ -185,44 +185,41 @@ impl std::error::Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::TimeParseError(e) => write!(f, "{}", e),
-            Error::InvalidUrl(e) => write!(f, "{}", e),
-            Error::IOError(e) => write!(f, "{}", e),
-            Error::XmlParseError(e) => write!(f, "{}", e),
-            Error::HttpError(e) => write!(f, "{}", e),
-            Error::StrError(e) => write!(f, "{}", e),
-            Error::IntError(e) => write!(f, "{}", e),
-            Error::BoolError(e) => write!(f, "{}", e),
-            Error::Utf8Error(e) => write!(f, "{}", e),
-            Error::JsonError(e) => write!(f, "{}", e),
-            Error::XmlError(m) => write!(f, "{}", m),
-            Error::InvalidBucketName(m) => write!(f, "{}", m),
-            Error::InvalidObjectName(m) => write!(f, "{}", m),
-            Error::InvalidUploadId(m) => write!(f, "{}", m),
-            Error::InvalidPartNumber(m) => write!(f, "{}", m),
-            Error::InvalidUserMetadata(m) => write!(f, "{}", m),
-            Error::EmptyParts(m) => write!(f, "{}", m),
-            Error::InvalidRetentionMode(m) => write!(f, "invalid retention mode {}", m),
-            Error::InvalidRetentionConfig(m) => write!(f, "invalid retention configuration; {}", m),
+            Error::TimeParseError(e) => write!(f, "{e}"),
+            Error::InvalidUrl(e) => write!(f, "{e}"),
+            Error::IOError(e) => write!(f, "{e}"),
+            Error::XmlParseError(e) => write!(f, "{e}"),
+            Error::HttpError(e) => write!(f, "{e}"),
+            Error::StrError(e) => write!(f, "{e}"),
+            Error::IntError(e) => write!(f, "{e}"),
+            Error::BoolError(e) => write!(f, "{e}"),
+            Error::Utf8Error(e) => write!(f, "{e}"),
+            Error::JsonError(e) => write!(f, "{e}"),
+            Error::XmlError(m) => write!(f, "{m}"),
+            Error::InvalidBucketName(m) => write!(f, "{m}"),
+            Error::InvalidObjectName(m) => write!(f, "{m}"),
+            Error::InvalidUploadId(m) => write!(f, "{m}"),
+            Error::InvalidPartNumber(m) => write!(f, "{m}"),
+            Error::InvalidUserMetadata(m) => write!(f, "{m}"),
+            Error::EmptyParts(m) => write!(f, "{m}"),
+            Error::InvalidRetentionMode(m) => write!(f, "invalid retention mode {m}"),
+            Error::InvalidRetentionConfig(m) => write!(f, "invalid retention configuration; {m}"),
             Error::InvalidMinPartSize(s) => {
-                write!(f, "part size {} is not supported; minimum allowed 5MiB", s)
+                write!(f, "part size {s} is not supported; minimum allowed 5MiB")
             }
             Error::InvalidMaxPartSize(s) => {
-                write!(f, "part size {} is not supported; maximum allowed 5GiB", s)
+                write!(f, "part size {s} is not supported; maximum allowed 5GiB")
             }
-            Error::InvalidObjectSize(s) => write!(
-                f,
-                "object size {} is not supported; maximum allowed 5TiB",
-                s
-            ),
+            Error::InvalidObjectSize(s) => {
+                write!(f, "object size {s} is not supported; maximum allowed 5TiB",)
+            }
             Error::MissingPartSize => write!(
                 f,
                 "valid part size must be provided when object size is unknown"
             ),
             Error::InvalidPartCount(os, ps, pc) => write!(
                 f,
-                "object size {} and part size {} make more than {} parts for upload",
-                os, ps, pc
+                "object size {os} and part size {ps} make more than {pc} parts for upload"
             ),
             Error::TooManyParts => write!(f, "too many parts for upload"),
             Error::SseTlsRequired(m) => write!(
@@ -230,16 +227,15 @@ impl fmt::Display for Error {
                 "{}SSE operation must be performed over a secure connection",
                 m.as_ref().map_or(String::new(), |v| v.clone())
             ),
-            Error::TooMuchData(s) => write!(f, "too much data in the stream - exceeds {} bytes", s),
+            Error::TooMuchData(s) => write!(f, "too much data in the stream - exceeds {s} bytes"),
             Error::InsufficientData(expected, got) => write!(
                 f,
-                "not enough data in the stream; expected: {}, got: {} bytes",
-                expected, got
+                "not enough data in the stream; expected: {expected}, got: {got} bytes",
             ),
-            Error::InvalidBaseUrl(m) => write!(f, "{}", m),
-            Error::UrlBuildError(m) => write!(f, "{}", m),
-            Error::InvalidLegalHold(s) => write!(f, "invalid legal hold {}", s),
-            Error::RegionMismatch(br, r) => write!(f, "region must be {}, but passed {}", br, r),
+            Error::InvalidBaseUrl(m) => write!(f, "{m}"),
+            Error::UrlBuildError(m) => write!(f, "{m}"),
+            Error::InvalidLegalHold(s) => write!(f, "invalid legal hold {s}"),
+            Error::RegionMismatch(br, r) => write!(f, "region must be {br}, but passed {r}"),
             Error::S3Error(er) => write!(
                 f,
                 "s3 operation failed; code: {:?}, message: {}, resource: {}, request_id: {}, host_id: {}, bucket_name: {}, object_name: {}",
@@ -253,19 +249,18 @@ impl fmt::Display for Error {
             ),
             Error::InvalidResponse(sc, ct) => write!(
                 f,
-                "invalid response received; status code: {}; content-type: {}",
-                sc, ct
+                "invalid response received; status code: {sc}; content-type: {ct}"
             ),
-            Error::ServerError(sc) => write!(f, "server failed with HTTP status code {}", sc),
-            Error::InvalidSelectExpression(m) => write!(f, "{}", m),
-            Error::InvalidHeaderValueType(v) => write!(f, "invalid header value type {}", v),
+            Error::ServerError(sc) => write!(f, "server failed with HTTP status code {sc}"),
+            Error::InvalidSelectExpression(m) => write!(f, "{m}"),
+            Error::InvalidHeaderValueType(v) => write!(f, "invalid header value type {v}"),
             Error::CrcMismatch(t, e, g) => {
-                write!(f, "{} CRC mismatch; expected: {}, got: {}", t, e, g)
+                write!(f, "{t} CRC mismatch; expected: {e}, got: {g}")
             }
-            Error::UnknownEventType(et) => write!(f, "unknown event type {}", et),
-            Error::SelectError(ec, em) => write!(f, "error code: {}, error message: {}", ec, em),
-            Error::UnsupportedApi(a) => write!(f, "{} API is not supported in Amazon AWS S3", a),
-            Error::InvalidComposeSource(m) => write!(f, "{}", m),
+            Error::UnknownEventType(et) => write!(f, "unknown event type {et}"),
+            Error::SelectError(ec, em) => write!(f, "error code: {ec}, error message: {em}"),
+            Error::UnsupportedApi(a) => write!(f, "{a} API is not supported in Amazon AWS S3"),
+            Error::InvalidComposeSource(m) => write!(f, "{m}"),
             Error::InvalidComposeSourceOffset(b, o, v, of, os) => write!(
                 f,
                 "source {}/{}{}: offset {} is beyond object size {}",
@@ -296,8 +291,8 @@ impl fmt::Display for Error {
                 cs,
                 os
             ),
-            Error::InvalidDirective(m) => write!(f, "{}", m),
-            Error::InvalidCopyDirective(m) => write!(f, "{}", m),
+            Error::InvalidDirective(m) => write!(f, "{m}"),
+            Error::InvalidCopyDirective(m) => write!(f, "{m}"),
             Error::InvalidComposeSourcePartSize(b, o, v, s, es) => write!(
                 f,
                 "source {}/{}{}: size {} must be greater than {}",
@@ -321,8 +316,7 @@ impl fmt::Display for Error {
             ),
             Error::InvalidMultipartCount(c) => write!(
                 f,
-                "Compose sources create more than allowed multipart count {}",
-                c
+                "Compose sources create more than allowed multipart count {c}",
             ),
             Error::MissingLifecycleAction => write!(
                 f,
@@ -333,19 +327,17 @@ impl fmt::Display for Error {
                 "ExpiredObjectDeleteMarker must not be provided along with Date and Days"
             ),
             Error::InvalidDateAndDays(m) => {
-                write!(f, "Only one of date or days of {} must be set", m)
+                write!(f, "Only one of date or days of {m} must be set")
             }
             Error::InvalidLifecycleRuleId => write!(f, "id must be exceed 255 characters"),
             Error::InvalidFilter => write!(f, "only one of And, Prefix or Tag must be provided"),
-            Error::InvalidVersioningStatus(m) => write!(f, "{}", m),
-            Error::PostPolicyError(m) => write!(f, "{}", m),
-            Error::InvalidObjectLockConfig(m) => write!(f, "{}", m),
+            Error::InvalidVersioningStatus(m) => write!(f, "{m}"),
+            Error::PostPolicyError(m) => write!(f, "{m}"),
+            Error::InvalidObjectLockConfig(m) => write!(f, "{m}"),
             Error::NoClientProvided => write!(f, "no client provided"),
-            Error::TagDecodingError(input, error_message) => write!(
-                f,
-                "tag decoding failed: {} on input '{}'",
-                error_message, input
-            ),
+            Error::TagDecodingError(input, error_message) => {
+                write!(f, "tag decoding failed: {error_message} on input '{input}'")
+            }
             Error::ContentLengthUnknown => write!(f, "content length is unknown"),
         }
     }

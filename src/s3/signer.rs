@@ -66,16 +66,8 @@ fn get_canonical_request_hash(
     signed_headers: &str,
     content_sha256: &str,
 ) -> String {
-    // CanonicalRequest =
-    //   HTTPRequestMethod + '\n' +
-    //   CanonicalURI + '\n' +
-    //   CanonicalQueryString + '\n' +
-    //   CanonicalHeaders + '\n\n' +
-    //   SignedHeaders + '\n' +
-    //   HexEncode(Hash(RequestPayload))
     let canonical_request = format!(
-        "{}\n{}\n{}\n{}\n\n{}\n{}",
-        method, uri, query_string, headers, signed_headers, content_sha256
+        "{method}\n{uri}\n{query_string}\n{headers}\n\n{signed_headers}\n{content_sha256}",
     );
     sha256_hash(canonical_request.as_bytes())
 }
@@ -114,8 +106,7 @@ fn get_authorization(
     signature: &str,
 ) -> String {
     format!(
-        "AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders={}, Signature={}",
-        access_key, scope, signed_headers, signature
+        "AWS4-HMAC-SHA256 Credential={access_key}/{scope}, SignedHeaders={signed_headers}, Signature={signature}",
     )
 }
 

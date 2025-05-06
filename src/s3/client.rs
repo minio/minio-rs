@@ -251,7 +251,7 @@ impl Client {
     /// Returns whether this client is configured to use the express endpoint and is minio enterprise.
     pub fn is_minio_express(&self) -> bool {
         if self.shared.express.get().is_some() {
-            self.shared.express.get().unwrap().clone()
+            *self.shared.express.get().unwrap()
         } else {
             task::block_in_place(|| match tokio::runtime::Runtime::new() {
                 Ok(rt) => {
@@ -482,12 +482,8 @@ impl Client {
             // Sort headers alphabetically by name
             header_strings.sort();
 
-            let body_str: String = String::from_utf8(
-                body.clone()
-                    .unwrap_or(&SegmentedBytes::new())
-                    .to_bytes()
-                    .to_vec(),
-            )?;
+            let body_str: String =
+                String::from_utf8(body.unwrap_or(&SegmentedBytes::new()).to_bytes().to_vec())?;
 
             println!(
                 "S3 request: {} url={:?}; headers={:?}; body={}\n",
@@ -534,15 +530,12 @@ impl Client {
             retry,
         );
 
-        match e {
-            Error::S3Error(ref err) => {
-                if (err.code == ErrorCode::NoSuchBucket) || (err.code == ErrorCode::RetryHead) {
-                    if let Some(v) = bucket_name {
-                        self.shared.region_map.remove(v);
-                    }
+        if let Error::S3Error(ref err) = e {
+            if (err.code == ErrorCode::NoSuchBucket) || (err.code == ErrorCode::RetryHead) {
+                if let Some(v) = bucket_name {
+                    self.shared.region_map.remove(v);
                 }
             }
-            _ => {}
         };
 
         Err(e)
@@ -699,12 +692,12 @@ impl SharedClientItems {
             409 => match bucket_name {
                 Some(_) => (ErrorCode::NoSuchBucket, "Bucket does not exist".into()),
                 _ => (
-                    ErrorCode::ResourceConflict.into(),
+                    ErrorCode::ResourceConflict,
                     "Request resource conflicts".into(),
                 ),
             },
             501 => (
-                ErrorCode::MethodNotAllowed.into(),
+                ErrorCode::MethodNotAllowed,
                 "The specified method is not allowed against this resource".into(),
             ),
             _ => return Error::ServerError(http_status_code),

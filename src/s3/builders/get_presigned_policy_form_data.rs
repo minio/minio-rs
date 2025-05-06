@@ -144,13 +144,12 @@ impl PostPolicy {
             || v.eq_ignore_ascii_case("content-length-range")
         {
             return Err(Error::PostPolicyError(format!(
-                "{} is unsupported for equals condition",
-                element
+                "{element} is unsupported for equals condition",
             )));
         }
 
         if PostPolicy::is_reserved_element(v.as_str()) {
-            return Err(Error::PostPolicyError(format!("{} cannot set", element)));
+            return Err(Error::PostPolicyError(format!("{element} cannot set")));
         }
 
         self.eq_conditions.insert(v, value.to_string());
@@ -200,13 +199,12 @@ impl PostPolicy {
             || (v.starts_with("x-amz-") && v.starts_with("x-amz-meta-"))
         {
             return Err(Error::PostPolicyError(format!(
-                "{} is unsupported for starts-with condition",
-                element
+                "{element} is unsupported for starts-with condition",
             )));
         }
 
         if PostPolicy::is_reserved_element(v.as_str()) {
-            return Err(Error::PostPolicyError(format!("{} cannot set", element)));
+            return Err(Error::PostPolicyError(format!("{element} cannot set")));
         }
 
         self.starts_with_conditions.insert(v, value.to_string());

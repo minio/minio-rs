@@ -97,8 +97,7 @@ impl ToS3Request for CreateBucket {
         let data: String = match region_str.as_str() {
             DEFAULT_REGION => String::new(),
             _ => format!(
-                "<CreateBucketConfiguration><LocationConstraint>{}</LocationConstraint></CreateBucketConfiguration>",
-                region_str
+                "<CreateBucketConfiguration><LocationConstraint>{region_str}</LocationConstraint></CreateBucketConfiguration>",
             ),
         };
 

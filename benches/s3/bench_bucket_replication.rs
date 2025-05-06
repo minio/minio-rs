@@ -24,9 +24,9 @@ use minio::s3::types::S3Api;
 use minio_common::example::create_bucket_replication_config_example;
 
 #[allow(dead_code)]
-pub(crate) fn bench_set_bucket_replication(criterion: &mut Criterion) {
+pub(crate) fn bench_put_bucket_replication(criterion: &mut Criterion) {
     benchmark_s3_api(
-        "set_bucket_replication",
+        "put_bucket_replication",
         criterion,
         || async {
             let mut ctx = Ctx2::new().await;

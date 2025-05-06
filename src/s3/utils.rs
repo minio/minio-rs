@@ -276,22 +276,19 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
 
     if bucket_name.contains("..") || bucket_name.contains(".-") || bucket_name.contains("-.") {
         return Err(Error::InvalidBucketName(format!(
-            "bucket name ('{}') contains invalid successive characters '..', '.-' or '-.'",
-            bucket_name
+            "bucket name ('{bucket_name}') contains invalid successive characters '..', '.-' or '-.'",
         )));
     }
 
     if strict {
         if !VALID_BUCKET_NAME_STRICT_REGEX.is_match(bucket_name) {
             return Err(Error::InvalidBucketName(format!(
-                "bucket name ('{}') does not follow S3 standards strictly",
-                bucket_name
+                "bucket name ('{bucket_name}') does not follow S3 standards strictly",
             )));
         }
     } else if !VALID_BUCKET_NAME_REGEX.is_match(bucket_name) {
         return Err(Error::InvalidBucketName(format!(
-            "bucket name ('{}') does not follow S3 standards",
-            bucket_name
+            "bucket name ('{bucket_name}') does not follow S3 standards"
         )));
     }
 
@@ -312,9 +309,9 @@ pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), Error> {
 pub fn get_text(element: &Element, tag: &str) -> Result<String, Error> {
     Ok(element
         .get_child(tag)
-        .ok_or(Error::XmlError(format!("<{}> tag not found", tag)))?
+        .ok_or(Error::XmlError(format!("<{tag}> tag not found")))?
         .get_text()
-        .ok_or(Error::XmlError(format!("text of <{}> tag not found", tag)))?
+        .ok_or(Error::XmlError(format!("text of <{tag}> tag not found")))?
         .to_string())
 }
 
@@ -508,13 +505,13 @@ pub mod xml {
             let i = self
                 .child_element_index
                 .get_first(tag)
-                .ok_or(Error::XmlError(format!("<{}> tag not found", tag)))?;
+                .ok_or(Error::XmlError(format!("<{tag}> tag not found")))?;
             self.inner.children[i]
                 .as_element()
                 .unwrap()
                 .get_text()
                 .map(|x| x.to_string())
-                .ok_or(Error::XmlError(format!("text of <{}> tag not found", tag)))
+                .ok_or(Error::XmlError(format!("text of <{tag}> tag not found")))
         }
 
         // Returns all children with given tag along with their index.

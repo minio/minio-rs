@@ -40,10 +40,11 @@ impl Client {
     /// async fn main() {    
     ///     let client: Client = Default::default(); // configure your client here
     ///     let data1: SegmentedBytes = SegmentedBytes::from("aaaa".to_string());
+    ///     todo!();
     ///     let resp: UploadPartCopyResponse = client
-    ///         .upload_part_copy("bucket-name", "object-name", data1)
+    ///         .upload_part_copy("bucket-name", "object-name", "TODO")
     ///         .send().await.unwrap();
-    ///     println!("size of the final object is {} bytes", resp.object_size);
+    ///     println!("uploaded {}", resp.object);
     /// }
     /// ```
     pub fn upload_part_copy<S1: Into<String>, S2: Into<String>, S3: Into<String>>(

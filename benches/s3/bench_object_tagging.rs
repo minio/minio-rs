@@ -21,12 +21,12 @@ use minio::s3::response::PutObjectTaggingResponse;
 use minio::s3::types::S3Api;
 use minio_common::example::create_tags_example;
 
-pub(crate) fn bench_set_object_tags(criterion: &mut Criterion) {
-    if skip_express_mode("bench_set_object_tags") {
+pub(crate) fn bench_put_object_tagging(criterion: &mut Criterion) {
+    if skip_express_mode("bench_put_object_tagging") {
         return;
     }
     benchmark_s3_api(
-        "set_object_tags",
+        "put_object_tagging",
         criterion,
         || async { Ctx2::new_with_object(false).await },
         |ctx| {
@@ -35,12 +35,12 @@ pub(crate) fn bench_set_object_tags(criterion: &mut Criterion) {
         },
     )
 }
-pub(crate) fn bench_get_object_tags(criterion: &mut Criterion) {
-    if skip_express_mode("bench_get_object_tags") {
+pub(crate) fn bench_get_object_tagging(criterion: &mut Criterion) {
+    if skip_express_mode("bench_get_object_tagging") {
         return;
     }
     benchmark_s3_api(
-        "get_object_tags",
+        "get_object_tagging",
         criterion,
         || async {
             let ctx = Ctx2::new_with_object(false).await;

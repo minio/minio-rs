@@ -129,18 +129,18 @@ pub fn match_aws_s3_endpoint(value: &str) -> bool {
 }
 
 fn get_aws_info(
-    host: &String,
+    host: &str,
     https: bool,
     region: &mut String,
     aws_s3_prefix: &mut String,
     aws_domain_suffix: &mut String,
     dualstack: &mut bool,
 ) -> Result<(), Error> {
-    if !match_hostname(host.as_str()) {
+    if !match_hostname(host) {
         return Ok(());
     }
 
-    if AWS_ELB_ENDPOINT_REGEX.is_match(host.as_str()) {
+    if AWS_ELB_ENDPOINT_REGEX.is_match(host) {
         let token = host
             .get(..host.rfind(".elb.amazonaws.com").unwrap() - 1)
             .unwrap();
@@ -151,17 +151,17 @@ fn get_aws_info(
         return Ok(());
     }
 
-    if !match_aws_endpoint(host.as_str()) {
+    if !match_aws_endpoint(host) {
         return Ok(());
     }
 
-    if !match_aws_s3_endpoint(host.as_str()) {
+    if !match_aws_s3_endpoint(host) {
         return Err(Error::UrlBuildError(
             String::from("invalid Amazon AWS host ") + host,
         ));
     }
 
-    let matcher = AWS_S3_PREFIX_REGEX.find(host.as_str()).unwrap();
+    let matcher = AWS_S3_PREFIX_REGEX.find(host).unwrap();
     let s3_prefix = host.get(..matcher.end()).unwrap();
 
     if s3_prefix.contains("s3-accesspoint") && !https {
@@ -301,7 +301,7 @@ impl FromStr for BaseUrl {
         let mut aws_domain_suffix = String::new();
         let mut dualstack: bool = false;
         get_aws_info(
-            &host.to_string(),
+            host,
             https,
             &mut region,
             &mut aws_s3_prefix,

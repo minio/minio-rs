@@ -18,7 +18,7 @@ mod bench_bucket_lifecycle;
 mod bench_bucket_notification;
 mod bench_bucket_policy;
 mod bench_bucket_replication;
-mod bench_bucket_tags;
+mod bench_bucket_tagging;
 mod bench_bucket_versioning;
 mod bench_list_bucket;
 mod bench_object_append;
@@ -27,7 +27,7 @@ mod bench_object_legal_hold;
 mod bench_object_lock_config;
 mod bench_object_put;
 mod bench_object_retention;
-mod bench_object_tags;
+mod bench_object_tagging;
 mod common_benches;
 
 use criterion::{Criterion, criterion_group, criterion_main};
@@ -40,7 +40,7 @@ use crate::bench_bucket_notification::*;
 use crate::bench_bucket_policy::*;
 #[allow(unused_imports)]
 use crate::bench_bucket_replication::*;
-use crate::bench_bucket_tags::*;
+use crate::bench_bucket_tagging::*;
 use crate::bench_bucket_versioning::*;
 use crate::bench_list_bucket::*;
 #[allow(unused_imports)]
@@ -51,7 +51,7 @@ use crate::bench_object_legal_hold::*;
 use crate::bench_object_lock_config::*;
 use crate::bench_object_put::bench_object_put;
 use crate::bench_object_retention::*;
-use crate::bench_object_tags::*;
+use crate::bench_object_tagging::*;
 
 criterion_group!(
     name = benches;
@@ -63,27 +63,27 @@ criterion_group!(
         .measurement_time(Duration::from_secs_f32(10.0));
     targets =
         bench_bucket_exists,
-        bench_set_bucket_lifecycle,
+        bench_put_bucket_lifecycle,
         bench_get_bucket_lifecycle,
         bench_delete_bucket_lifecycle,
         //
-        //bench_set_bucket_notification, //A specified destination ARN does not exist or is not well-formed
+        //bench_put_bucket_notification, //A specified destination ARN does not exist or is not well-formed
         //bench_get_bucket_notification,
         //bench_delete_bucket_notification,
         //
-        bench_set_bucket_policy,
+        bench_put_bucket_policy,
         bench_get_bucket_policy,
         bench_delete_bucket_policy,
         //
-        //bench_set_bucket_replication, //TODO setup permissions to allow replication
+        //bench_put_bucket_replication, //TODO setup permissions to allow replication
         //bench_get_bucket_replication,
         //bench_delete_bucket_replication,
         //
-        bench_set_bucket_tags,
-        bench_get_bucket_tags,
-        bench_delete_bucket_tags,
+        bench_put_bucket_tagging,
+        bench_get_bucket_tagging,
+        bench_delete_bucket_tagging,
         //
-        bench_set_bucket_versioning,
+        bench_put_bucket_versioning,
         bench_get_bucket_versioning,
         //
         bench_list_buckets,
@@ -91,19 +91,18 @@ criterion_group!(
         bench_object_append,
         bench_object_put,
         //
-        bench_enable_object_legal_hold,
-        bench_disable_object_legal_hold,
-        bench_is_object_legal_hold,
+        bench_put_object_legal_hold,
+        bench_get_object_legal_hold,
         //
-        bench_set_object_lock_config,
+        bench_put_object_lock_config,
         bench_get_object_lock_config,
         bench_delete_object_lock_config,
         //
-        bench_set_object_retention,
+        bench_put_object_retention,
         bench_get_object_retention,
         //
-        bench_set_object_tags,
-        bench_get_object_tags
+        bench_put_object_tagging,
+        bench_get_object_tagging
 );
 
 criterion_main!(benches);

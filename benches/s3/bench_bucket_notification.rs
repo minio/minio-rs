@@ -21,9 +21,9 @@ use minio::s3::types::S3Api;
 use minio_common::example::create_bucket_notification_config_example;
 
 #[allow(dead_code)]
-pub(crate) fn bench_set_bucket_notification(criterion: &mut Criterion) {
+pub(crate) fn bench_put_bucket_notification(criterion: &mut Criterion) {
     benchmark_s3_api(
-        "set_bucket_notification",
+        "put_bucket_notification",
         criterion,
         || async { Ctx2::new().await },
         |ctx| {

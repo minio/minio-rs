@@ -293,12 +293,7 @@ impl AppendObjectContent {
             part_number += 1;
             let buffer_size = part_content.len() as u64;
 
-            assert!(
-                buffer_size <= part_size,
-                "{:?} <= {:?}",
-                buffer_size,
-                part_size
-            );
+            assert!(buffer_size <= part_size, "{buffer_size} <= {part_size}",);
 
             if buffer_size == 0 && part_number > 1 {
                 // We are done as we appended at least 1 part and we have

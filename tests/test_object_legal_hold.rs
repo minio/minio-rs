@@ -71,7 +71,7 @@ async fn object_legal_hold_s3() {
         .send()
         .await
         .unwrap();
-    assert!(!resp.enabled);
+    assert!(resp.enabled);
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);

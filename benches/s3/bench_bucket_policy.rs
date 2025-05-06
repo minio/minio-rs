@@ -20,9 +20,9 @@ use minio::s3::builders::{DeleteBucketPolicy, GetBucketPolicy, PutBucketPolicy};
 use minio::s3::types::S3Api;
 use minio_common::example::create_bucket_policy_config_example;
 
-pub(crate) fn bench_set_bucket_policy(criterion: &mut Criterion) {
+pub(crate) fn bench_put_bucket_policy(criterion: &mut Criterion) {
     benchmark_s3_api(
-        "set_bucket_policy",
+        "put_bucket_policy",
         criterion,
         || async { Ctx2::new().await },
         |ctx| {

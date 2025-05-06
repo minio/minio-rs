@@ -417,8 +417,7 @@ impl ToS3Request for UploadPart {
             if let Some(part_number) = self.part_number {
                 if !(1..=MAX_MULTIPART_COUNT).contains(&part_number) {
                     return Err(Error::InvalidPartNumber(format!(
-                        "part number must be between 1 and {}",
-                        MAX_MULTIPART_COUNT
+                        "part number must be between 1 and {MAX_MULTIPART_COUNT}"
                     )));
                 }
             }
@@ -767,12 +766,7 @@ impl PutObjectContent {
             let buffer_size = part_content.len() as u64;
             total_read += buffer_size;
 
-            assert!(
-                buffer_size <= part_size,
-                "{:?} <= {:?}",
-                buffer_size,
-                part_size
-            );
+            assert!(buffer_size <= part_size, "{buffer_size} <= {part_size}",);
 
             if (buffer_size == 0) && (part_number > 1) {
                 // We are done as we uploaded at least 1 part and we have reached the end of the stream.
@@ -887,8 +881,7 @@ fn into_headers_put_object(
             }
             if !k.starts_with("x-amz-meta-") {
                 return Err(Error::InvalidUserMetadata(format!(
-                    "user metadata key '{}' does not start with 'x-amz-meta-'",
-                    k
+                    "user metadata key '{k}' does not start with 'x-amz-meta-'",
                 )));
             }
         }

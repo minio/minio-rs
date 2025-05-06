@@ -548,9 +548,9 @@ impl ListObjects {
 
     /// Set this to use ListObjectsV1. Defaults to false.
     /// * For general purpose buckets, ListObjectsV2 returns objects in
-    /// lexicographical order based on their key names.
+    ///   lexicographical order based on their key names.
     /// * For directory buckets (S3-Express), ListObjectsV2 returns objects
-    /// in an unspecified order implementation-dependent order.
+    ///   in an unspecified order implementation-dependent order.
     pub fn use_api_v1(mut self, use_api_v1: bool) -> Self {
         self.use_api_v1 = use_api_v1;
         self

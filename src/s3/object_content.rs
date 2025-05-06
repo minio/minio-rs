@@ -197,10 +197,11 @@ impl ObjectContent {
         if file_path.is_dir() {
             return Err(std::io::Error::other("path is a directory"));
         }
-        let parent_dir = file_path.parent().ok_or(std::io::Error::other(format!(
-            "path {:?} does not have a parent directory",
-            file_path
-        )))?;
+        let parent_dir = file_path.parent().ok_or_else(|| {
+            std::io::Error::other(format!(
+                "path {file_path:?} does not have a parent directory"
+            ))
+        })?;
         if !parent_dir.is_dir() {
             fs::create_dir_all(parent_dir).await?;
         }

@@ -29,12 +29,12 @@ pub(crate) fn bench_get_bucket_versioning(criterion: &mut Criterion) {
         |ctx| GetBucketVersioning::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }
-pub(crate) fn bench_set_bucket_versioning(criterion: &mut Criterion) {
-    if skip_express_mode("bench_set_bucket_versioning") {
+pub(crate) fn bench_put_bucket_versioning(criterion: &mut Criterion) {
+    if skip_express_mode("bench_put_bucket_versioning") {
         return;
     }
     benchmark_s3_api(
-        "set_bucket_versioning",
+        "put_bucket_versioning",
         criterion,
         || async { Ctx2::new().await },
         |ctx| {

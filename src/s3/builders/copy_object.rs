@@ -100,8 +100,7 @@ impl ToS3Request for UploadPartCopy {
             }
             if !(1..=MAX_MULTIPART_COUNT).contains(&self.part_number) {
                 return Err(Error::InvalidPartNumber(format!(
-                    "part number must be between 1 and {}",
-                    MAX_MULTIPART_COUNT
+                    "part number must be between 1 and {MAX_MULTIPART_COUNT}"
                 )));
             }
         }
@@ -752,7 +751,7 @@ impl ComposeObjectInternal {
                         let mut headers_copy = headers.clone();
                         headers_copy.add(
                             "x-amz-copy-source-range",
-                            format!("bytes={}-{}", offset, end_bytes),
+                            format!("bytes={offset}-{end_bytes}"),
                         );
 
                         let resp: UploadPartCopyResponse = match self

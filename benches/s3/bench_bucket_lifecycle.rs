@@ -20,9 +20,9 @@ use minio::s3::builders::{DeleteBucketLifecycle, GetBucketLifecycle, PutBucketLi
 use minio::s3::types::S3Api;
 use minio_common::example::create_bucket_lifecycle_config_examples;
 
-pub(crate) fn bench_set_bucket_lifecycle(criterion: &mut Criterion) {
+pub(crate) fn bench_put_bucket_lifecycle(criterion: &mut Criterion) {
     benchmark_s3_api(
-        "set_bucket_lifecycle",
+        "put_bucket_lifecycle",
         criterion,
         || async { Ctx2::new().await },
         |ctx| {

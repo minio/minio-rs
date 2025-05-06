@@ -18,12 +18,12 @@ use criterion::Criterion;
 use minio::s3::builders::{DeleteObjectLockConfig, GetObjectLockConfig, PutObjectLockConfig};
 use minio_common::example::create_object_lock_config_example;
 
-pub(crate) fn bench_set_object_lock_config(criterion: &mut Criterion) {
-    if skip_express_mode("bench_set_object_lock_config") {
+pub(crate) fn bench_put_object_lock_config(criterion: &mut Criterion) {
+    if skip_express_mode("bench_put_object_lock_config") {
         return;
     }
     benchmark_s3_api(
-        "set_object_lock_config",
+        "put_object_lock_config",
         criterion,
         || async { Ctx2::new_with_object(true).await },
         |ctx| {
