@@ -19,10 +19,10 @@ use super::Client;
 use crate::s3::builders::ListBucketNotification;
 
 impl Client {
-    /// Creates a [`ListenBucketNotification`] request builder.
+    /// Creates a [`ListBucketNotification`] request builder.
     ///
-    /// To execute the request, call [`ListenBucketNotification::send()`](crate::s3::types::S3Api::send),
-    /// which returns a tuple of [`ListenBucketNotificationResponse`](crate::s3::response::ListBucketNotificationResponse) and a
+    /// To execute the request, call [`ListBucketNotification::send()`](crate::s3::types::S3Api::send),
+    /// which returns a tuple of [`ListBucketNotificationResponse`](crate::s3::response::ListBucketNotificationResponse) and a
     /// stream of [`NotificationRecords`](crate::s3::types::NotificationRecords). The former contains the HTTP headers
     /// returned by the server and the latter is a stream of notification
     /// records. In normal operation (when there are no errors), the stream

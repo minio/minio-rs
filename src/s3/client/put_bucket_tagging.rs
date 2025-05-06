@@ -21,8 +21,8 @@ use crate::s3::builders::PutBucketTagging;
 impl Client {
     /// Creates a [`PutBucketTagging`] request builder.
     ///
-    /// To execute the request, call [`SetBucketTags::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`SetBucketTagsResponse`](crate::s3::response::PutBucketTaggingResponse).
+    /// To execute the request, call [`PutBucketTagging::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`PutBucketTaggingResponse`](crate::s3::response::PutBucketTaggingResponse).
     ///
     /// 🛈 This operation is not supported for express buckets.
     ///
@@ -45,13 +45,13 @@ impl Client {
     ///     tags.insert(String::from("User"), String::from("jsmith"));
     ///
     ///     let resp: PutBucketTaggingResponse = client
-    ///         .put_bucket_tags("bucket-name")
+    ///         .put_bucket_tagging("bucket-name")
     ///         .tags(tags)
     ///         .send().await.unwrap();
     ///     println!("set tags on bucket '{}'", resp.bucket);
     /// }
     /// ```
-    pub fn put_bucket_tags<S: Into<String>>(&self, bucket: S) -> PutBucketTagging {
+    pub fn put_bucket_tagging<S: Into<String>>(&self, bucket: S) -> PutBucketTagging {
         PutBucketTagging::new(self.clone(), bucket.into())
     }
 }

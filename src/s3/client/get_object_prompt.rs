@@ -23,7 +23,7 @@ impl Client {
     /// Creates a [`GetObjectPrompt`] request builder. Prompt an object using natural language.
     ///
     /// To execute the request, call [`GetObjectPrompt::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`ObjectPromptResponse`](crate::s3::response::GetObjectPromptResponse).
+    /// which returns a [`Result`] containing a [`GetObjectPromptResponse`](crate::s3::response::GetObjectPromptResponse).
     ///
     /// # Example
     ///

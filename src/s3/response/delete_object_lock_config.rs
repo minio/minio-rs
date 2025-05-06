@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;
 
-/// Response from the [`delete_object_lock_config_response`](crate::s3::client::Client::delete_object_lock_config_response) API call,
+/// Response from the [`delete_object_lock_config`](crate::s3::client::Client::delete_object_lock_config) API call,
 /// indicating that the Object Lock configuration has been successfully removed from the specified S3 bucket.
 ///
 /// Removing the Object Lock configuration disables the default retention settings for new objects added to the bucket.

@@ -20,7 +20,7 @@ impl Client {
     /// Creates a [`GetPresignedPolicyFormData`] request builder.
     ///
     /// To execute the request, call [`GetPresignedPolicyFormData::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`GetPresignedPolicyFormDataResponse`](crate::s3::response::GetPresignedPolicyFormDataResponse).
+    /// which returns a `HashMap<String, String>` with the presigned policy.
     ///
     /// # Example
     ///

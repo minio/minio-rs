@@ -29,7 +29,7 @@ impl Client {
     /// Creates a [`DeleteBucket`] request builder.
     ///
     /// To execute the request, call [`DeleteBucket::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`DeleteBucketResponse`](crate::s3::response::DeleteBucketResponse).
+    /// which returns a [`Result`] containing a [`DeleteBucketResponse`].
     ///
     /// # Example
     ///

@@ -22,7 +22,7 @@ use http::HeaderMap;
 use std::mem;
 
 /// Response of
-/// [put_object_retention_response()](crate::s3::client::Client::put_object_retention_response)
+/// [put_object_retention()](crate::s3::client::Client::put_object_retention)
 /// API
 #[derive(Clone, Debug)]
 pub struct PutObjectRetentionResponse {

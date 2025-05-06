@@ -61,7 +61,7 @@ impl SegmentedBytes {
         }
     }
 
-    /// Copy all the content into a single [Bytes](bytes::Bytes) object.
+    /// Copy all the content into a single [Bytes] object.
     ///
     /// ⚠️ This function is slow and intended for testing/debugging only.
     /// Do not use in performance-critical code.

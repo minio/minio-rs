@@ -326,7 +326,7 @@ impl ToS3Request for CopyObjectInternal {
     }
 }
 
-/// Argument builder for [copy_object()](crate::s3::client::Client::copy_object_old) API
+/// Argument builder for [copy_object()](Client::copy_object) API
 #[derive(Clone, Debug, Default)]
 pub struct CopyObject {
     client: Client,
@@ -929,7 +929,7 @@ impl ComposeObject {
 // region: misc
 
 #[derive(Clone, Debug, Default)]
-/// Source object information for [compose object argument](ComposeObjectArgs)
+/// Source object information for [compose_object](Client::compose_object)
 pub struct ComposeSource {
     pub extra_headers: Option<Multimap>,
     pub extra_query_params: Option<Multimap>,

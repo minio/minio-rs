@@ -59,8 +59,8 @@ impl Client {
     ///         existing_object_replication_status: None,
     ///         filter: Some(Filter {
     ///             and_operator: Some(AndOperator {
-    ///     	        prefix: Some(String::from("TaxDocs")),
-    ///     	        tags: Some(tags),
+    ///                 prefix: Some(String::from("TaxDocs")),
+    ///                 tags: Some(tags),
     ///             }),
     ///             prefix: None,
     ///             tag: None,

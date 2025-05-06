@@ -35,7 +35,7 @@ async fn bucket_tags_s3() {
 
     let resp: PutBucketTaggingResponse = ctx
         .client
-        .put_bucket_tags(&bucket_name)
+        .put_bucket_tagging(&bucket_name)
         .tags(tags.clone())
         .send()
         .await
@@ -86,7 +86,7 @@ async fn bucket_tags_s3express() {
 
     let resp: Result<PutBucketTaggingResponse, Error> = ctx
         .client
-        .put_bucket_tags(&bucket_name)
+        .put_bucket_tagging(&bucket_name)
         .tags(tags.clone())
         .send()
         .await;

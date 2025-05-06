@@ -18,10 +18,10 @@ use crate::s3::builders::GetPresignedObjectUrl;
 use http::Method;
 
 impl Client {
-    /// Creates a [`GetPresignedObjectURL`] request builder.
+    /// Creates a [`GetPresignedObjectUrl`] request builder.
     ///
-    /// To execute the request, call [`GetPresignedObjectURL::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`GetPresignedObjectURLResponse`](crate::s3::response::GetPresignedObjectURLResponse).
+    /// To execute the request, call [`GetPresignedObjectUrl::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`GetPresignedObjectUrlResponse`](crate::s3::response::GetPresignedObjectUrlResponse).
     ///
     /// # Example
     ///
