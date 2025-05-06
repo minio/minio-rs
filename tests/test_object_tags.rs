@@ -16,8 +16,8 @@
 use minio::s3::builders::ObjectContent;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
-    DeleteObjectTagsResponse, GetObjectTagsResponse, PutObjectContentResponse,
-    SetObjectTagsResponse,
+    DeleteObjectTaggingResponse, GetObjectTaggingResponse, PutObjectContentResponse,
+    PutObjectTaggingResponse,
 };
 use minio::s3::types::S3Api;
 use minio_common::rand_src::RandSrc;
@@ -58,9 +58,9 @@ async fn object_tags() {
         (String::from("User"), String::from("jsmith")),
     ]);
 
-    let resp: SetObjectTagsResponse = ctx
+    let resp: PutObjectTaggingResponse = ctx
         .client
-        .set_object_tags(&bucket_name, &object_name)
+        .put_object_tagging(&bucket_name, &object_name)
         .tags(tags.clone())
         .send()
         .await
@@ -70,9 +70,9 @@ async fn object_tags() {
     assert_eq!(resp.version_id, None);
     assert_eq!(resp.region, DEFAULT_REGION);
 
-    let resp: GetObjectTagsResponse = ctx
+    let resp: GetObjectTaggingResponse = ctx
         .client
-        .get_object_tags(&bucket_name, &object_name)
+        .get_object_tagging(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -82,9 +82,9 @@ async fn object_tags() {
     assert_eq!(resp.version_id, None);
     assert_eq!(resp.region, DEFAULT_REGION);
 
-    let resp: DeleteObjectTagsResponse = ctx
+    let resp: DeleteObjectTaggingResponse = ctx
         .client
-        .delete_object_tags(&bucket_name, &object_name)
+        .delete_object_tagging(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -93,9 +93,9 @@ async fn object_tags() {
     assert_eq!(resp.version_id, None);
     assert_eq!(resp.region, DEFAULT_REGION);
 
-    let resp: GetObjectTagsResponse = ctx
+    let resp: GetObjectTaggingResponse = ctx
         .client
-        .get_object_tags(&bucket_name, &object_name)
+        .get_object_tagging(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();

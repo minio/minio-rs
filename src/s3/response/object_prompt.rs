@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use http::HeaderMap;
 use std::mem;
 
-pub struct ObjectPromptResponse {
+pub struct GetObjectPromptResponse {
     /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
 
@@ -38,7 +38,7 @@ pub struct ObjectPromptResponse {
 }
 
 #[async_trait]
-impl FromS3Response for ObjectPromptResponse {
+impl FromS3Response for GetObjectPromptResponse {
     async fn from_s3response(
         req: S3Request,
         resp: Result<reqwest::Response, Error>,

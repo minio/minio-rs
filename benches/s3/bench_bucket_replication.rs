@@ -17,9 +17,9 @@ use crate::common_benches::{Ctx2, benchmark_s3_api};
 
 use criterion::Criterion;
 use minio::s3::builders::{
-    DeleteBucketReplication, GetBucketReplication, SetBucketReplication, VersioningStatus,
+    DeleteBucketReplication, GetBucketReplication, PutBucketReplication, VersioningStatus,
 };
-use minio::s3::response::SetBucketVersioningResponse;
+use minio::s3::response::PutBucketVersioningResponse;
 use minio::s3::types::S3Api;
 use minio_common::example::create_bucket_replication_config_example;
 
@@ -32,17 +32,17 @@ pub(crate) fn bench_set_bucket_replication(criterion: &mut Criterion) {
             let mut ctx = Ctx2::new().await;
             ctx.new_aux().await;
 
-            let _resp: SetBucketVersioningResponse = ctx
+            let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .set_bucket_versioning(&ctx.bucket)
+                .put_bucket_versioning(&ctx.bucket)
                 .versioning_status(VersioningStatus::Enabled)
                 .send()
                 .await
                 .unwrap();
 
-            let _resp: SetBucketVersioningResponse = ctx
+            let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .set_bucket_versioning(&ctx.aux_bucket.clone().unwrap())
+                .put_bucket_versioning(&ctx.aux_bucket.clone().unwrap())
                 .versioning_status(VersioningStatus::Enabled)
                 .send()
                 .await
@@ -53,7 +53,7 @@ pub(crate) fn bench_set_bucket_replication(criterion: &mut Criterion) {
         |ctx| {
             let config =
                 create_bucket_replication_config_example(ctx.aux_bucket.clone().unwrap().as_str());
-            SetBucketReplication::new(ctx.client.clone(), ctx.bucket.clone())
+            PutBucketReplication::new(ctx.client.clone(), ctx.bucket.clone())
                 .replication_config(config)
         },
     )
@@ -67,17 +67,17 @@ pub(crate) fn bench_get_bucket_replication(criterion: &mut Criterion) {
             let mut ctx = Ctx2::new().await;
             ctx.new_aux().await;
 
-            let _resp: SetBucketVersioningResponse = ctx
+            let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .set_bucket_versioning(&ctx.bucket)
+                .put_bucket_versioning(&ctx.bucket)
                 .versioning_status(VersioningStatus::Enabled)
                 .send()
                 .await
                 .unwrap();
 
-            let _resp: SetBucketVersioningResponse = ctx
+            let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .set_bucket_versioning(&ctx.aux_bucket.clone().unwrap())
+                .put_bucket_versioning(&ctx.aux_bucket.clone().unwrap())
                 .versioning_status(VersioningStatus::Enabled)
                 .send()
                 .await
@@ -97,17 +97,17 @@ pub(crate) fn bench_delete_bucket_replication(criterion: &mut Criterion) {
             let mut ctx = Ctx2::new().await;
             ctx.new_aux().await;
 
-            let _resp: SetBucketVersioningResponse = ctx
+            let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .set_bucket_versioning(&ctx.bucket)
+                .put_bucket_versioning(&ctx.bucket)
                 .versioning_status(VersioningStatus::Enabled)
                 .send()
                 .await
                 .unwrap();
 
-            let _resp: SetBucketVersioningResponse = ctx
+            let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .set_bucket_versioning(&ctx.aux_bucket.clone().unwrap())
+                .put_bucket_versioning(&ctx.aux_bucket.clone().unwrap())
                 .versioning_status(VersioningStatus::Enabled)
                 .send()
                 .await

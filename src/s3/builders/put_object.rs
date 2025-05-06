@@ -530,6 +530,7 @@ impl ToS3Request for PutObject {
 /// PutObjectContent takes a `ObjectContent` stream and uploads it to MinIO/S3.
 ///
 /// It is a higher level API and handles multipart uploads transparently.
+#[derive(Default)]
 pub struct PutObjectContent {
     client: Client,
 
@@ -567,18 +568,7 @@ impl PutObjectContent {
             bucket,
             object,
             input_content: content.into(),
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            user_metadata: None,
-            sse: None,
-            tags: None,
-            retention: None,
-            legal_hold: false,
-            part_size: Size::Unknown,
-            content_type: None,
-            content_stream: ContentStream::empty(),
-            part_count: None,
+            ..Default::default()
         }
     }
 
@@ -941,10 +931,7 @@ fn into_headers_put_object(
     if !map.contains_key("Content-Type") {
         map.insert(
             "Content-Type".into(),
-            match content_type {
-                Some(content_type) => content_type.clone(),
-                None => "application/octet-stream".into(),
-            },
+            content_type.unwrap_or_else(|| "application/octet-stream".into()),
         );
     }
 

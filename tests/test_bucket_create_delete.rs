@@ -15,7 +15,7 @@
 
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::error::{Error, ErrorCode};
-use minio::s3::response::{BucketExistsResponse, MakeBucketResponse, RemoveBucketResponse};
+use minio::s3::response::{BucketExistsResponse, CreateBucketResponse, DeleteBucketResponse};
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_bucket_name;
@@ -26,7 +26,7 @@ async fn bucket_create() {
     let bucket_name = rand_bucket_name();
 
     // try to create a bucket that does not exist
-    let resp: MakeBucketResponse = ctx.client.make_bucket(&bucket_name).send().await.unwrap();
+    let resp: CreateBucketResponse = ctx.client.create_bucket(&bucket_name).send().await.unwrap();
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
 
@@ -37,7 +37,8 @@ async fn bucket_create() {
     assert_eq!(resp.region, DEFAULT_REGION);
 
     // try to create a bucket that already exists
-    let resp: Result<MakeBucketResponse, Error> = ctx.client.make_bucket(&bucket_name).send().await;
+    let resp: Result<CreateBucketResponse, Error> =
+        ctx.client.create_bucket(&bucket_name).send().await;
     match resp {
         Ok(_) => panic!("Bucket already exists, but was created again"),
         Err(Error::S3Error(e)) if e.code == ErrorCode::BucketAlreadyOwnedByYou => {
@@ -53,8 +54,8 @@ async fn bucket_delete() {
     let bucket_name = rand_bucket_name();
 
     // try to remove a bucket that does not exist
-    let resp: Result<RemoveBucketResponse, Error> =
-        ctx.client.remove_bucket(&bucket_name).send().await;
+    let resp: Result<DeleteBucketResponse, Error> =
+        ctx.client.delete_bucket(&bucket_name).send().await;
     match resp {
         Ok(_) => panic!("Bucket does not exist, but was removed"),
         Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchBucket => {
@@ -64,7 +65,7 @@ async fn bucket_delete() {
     }
 
     // create a new bucket
-    let resp: MakeBucketResponse = ctx.client.make_bucket(&bucket_name).send().await.unwrap();
+    let resp: CreateBucketResponse = ctx.client.create_bucket(&bucket_name).send().await.unwrap();
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
 
@@ -75,7 +76,7 @@ async fn bucket_delete() {
     assert_eq!(resp.region, DEFAULT_REGION);
 
     // try to remove a bucket that exists
-    let resp: RemoveBucketResponse = ctx.client.remove_bucket(&bucket_name).send().await.unwrap();
+    let resp: DeleteBucketResponse = ctx.client.delete_bucket(&bucket_name).send().await.unwrap();
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
 

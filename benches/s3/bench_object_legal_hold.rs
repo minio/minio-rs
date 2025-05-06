@@ -16,9 +16,7 @@
 use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 
 use criterion::Criterion;
-use minio::s3::builders::{
-    DisableObjectLegalHold, EnableObjectLegalHold, IsObjectLegalHoldEnabled,
-};
+use minio::s3::builders::{EnableObjectLegalHold, GetObjectLegalHold, PutObjectLegalHold};
 use minio::s3::types::S3Api;
 
 pub(crate) fn bench_enable_object_legal_hold(criterion: &mut Criterion) {
@@ -42,9 +40,7 @@ pub(crate) fn bench_disable_object_legal_hold(criterion: &mut Criterion) {
         "disable_object_legal_hold",
         criterion,
         || async { Ctx2::new_with_object(true).await },
-        |ctx| {
-            DisableObjectLegalHold::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
-        },
+        |ctx| PutObjectLegalHold::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone()),
     )
 }
 pub(crate) fn bench_is_object_legal_hold(criterion: &mut Criterion) {
@@ -63,12 +59,6 @@ pub(crate) fn bench_is_object_legal_hold(criterion: &mut Criterion) {
                 .unwrap();
             ctx
         },
-        |ctx| {
-            IsObjectLegalHoldEnabled::new(
-                ctx.client.clone(),
-                ctx.bucket.clone(),
-                ctx.object.clone(),
-            )
-        },
+        |ctx| GetObjectLegalHold::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone()),
     )
 }

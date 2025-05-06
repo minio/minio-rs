@@ -20,10 +20,12 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
-/// Argument builder for [get_object_lock_config()](crate::s3::client::Client::get_object_lock_config) API
+/// Argument builder for the [`GetObjectLockConfig`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObjectLockConfiguration.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::get_object_lock_config`](crate::s3::client::Client::get_object_lock_config) method.
 pub type GetObjectLockConfig = BucketCommon<GetObjectLockConfigPhantomData>;
 
-#[derive(Default, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct GetObjectLockConfigPhantomData;
 
 impl S3Api for GetObjectLockConfig {

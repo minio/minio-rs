@@ -23,9 +23,7 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response of
-/// [set_object_retention_response()](crate::s3::client::Client::set_object_retention_response)
-/// API
+/// Response of [get_object_retention()](crate::s3::client::Client::get_object_retention) API
 #[derive(Clone, Debug)]
 pub struct GetObjectRetentionResponse {
     /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.

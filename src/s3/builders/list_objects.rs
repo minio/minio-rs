@@ -57,7 +57,9 @@ fn delim_helper(delim: Option<String>, recursive: bool) -> Option<String> {
 
 // region: list-objects-v1
 
-/// Argument for ListObjectsV1 S3 API.
+/// Argument builder for the [`ListObjectsV1`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::list_objects`](crate::s3::client::Client::list_objects) method.
 #[derive(Clone, Debug, Default)]
 struct ListObjectsV1 {
     client: Client,
@@ -157,7 +159,9 @@ impl From<ListObjects> for ListObjectsV1 {
 
 // region: list-objects-v2
 
-/// Argument for ListObjectsV2 S3 API.
+/// Argument builder for the [`ListObjectsV2`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::list_objects`](crate::s3::client::Client::list_objects) method.
 #[derive(Clone, Debug, Default)]
 struct ListObjectsV2 {
     client: Client,
@@ -273,7 +277,9 @@ impl From<ListObjects> for ListObjectsV2 {
 
 // region: list-object-versions
 
-/// Argument for ListObjectVersions S3 API
+/// Argument builder for the [`ListObjectVersions`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectVersions.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::list_objects`](crate::s3::client::Client::list_objects) method.
 #[derive(Clone, Debug, Default)]
 struct ListObjectVersions {
     client: Client,
@@ -391,8 +397,8 @@ impl From<ListObjects> for ListObjectVersions {
 /// Argument builder for
 /// [list_objects()](crate::s3::client::Client::list_objects) API.
 ///
-/// Use the various builder methods to set parameters on the request. Finally to
-/// send the request and consume the results use the `ToStream` instance to get
+/// Use the various builder methods to set parameters on the request. Finally, to
+/// send the request and consume the results. Use the `ToStream` instance to get
 /// a stream of results. Pagination is automatically performed.
 #[derive(Clone, Debug, Default)]
 pub struct ListObjects {
@@ -475,7 +481,7 @@ impl ListObjects {
     }
 
     /// Disable setting the `EncodingType` parameter in the ListObjects request.
-    /// By default it is set to `url`.
+    /// By default, it is set to `url`.
     pub fn disable_url_encoding(mut self, disable_url_encoding: bool) -> Self {
         self.disable_url_encoding = disable_url_encoding;
         self
@@ -540,11 +546,11 @@ impl ListObjects {
         self
     }
 
-    /// Set this to use ListObjectsV1. Defaults to false. 
-    /// * For general purpose buckets, ListObjectsV2 returns objects in 
+    /// Set this to use ListObjectsV1. Defaults to false.
+    /// * For general purpose buckets, ListObjectsV2 returns objects in
     /// lexicographical order based on their key names.
     /// * For directory buckets (S3-Express), ListObjectsV2 returns objects
-    /// in an unspecified order.
+    /// in an unspecified order implementation-dependent order.
     pub fn use_api_v1(mut self, use_api_v1: bool) -> Self {
         self.use_api_v1 = use_api_v1;
         self

@@ -18,7 +18,7 @@ mod common;
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
 use minio::s3::Client;
 use minio::s3::response::{
-    DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, SetBucketLifecycleResponse,
+    DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, PutBucketLifecycleResponse,
 };
 use minio::s3::types::{Filter, LifecycleConfig, LifecycleRule, S3Api};
 
@@ -57,8 +57,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         transition_storage_class: None,
     }];
 
-    let resp: SetBucketLifecycleResponse = client
-        .set_bucket_lifecycle(bucket_name)
+    let resp: PutBucketLifecycleResponse = client
+        .put_bucket_lifecycle(bucket_name)
         .life_cycle_config(LifecycleConfig { rules })
         .send()
         .await?;

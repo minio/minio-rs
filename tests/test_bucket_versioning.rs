@@ -16,7 +16,7 @@
 use minio::s3::builders::VersioningStatus;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::error::{Error, ErrorCode};
-use minio::s3::response::{GetBucketVersioningResponse, SetBucketVersioningResponse};
+use minio::s3::response::{GetBucketVersioningResponse, PutBucketVersioningResponse};
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
 
@@ -29,9 +29,9 @@ async fn bucket_versioning_s3() {
     }
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
-    let resp: SetBucketVersioningResponse = ctx
+    let resp: PutBucketVersioningResponse = ctx
         .client
-        .set_bucket_versioning(&bucket_name)
+        .put_bucket_versioning(&bucket_name)
         .versioning_status(VersioningStatus::Enabled)
         .send()
         .await
@@ -49,9 +49,9 @@ async fn bucket_versioning_s3() {
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
 
-    let resp: SetBucketVersioningResponse = ctx
+    let resp: PutBucketVersioningResponse = ctx
         .client
-        .set_bucket_versioning(&bucket_name)
+        .put_bucket_versioning(&bucket_name)
         .versioning_status(VersioningStatus::Suspended)
         .send()
         .await
@@ -79,9 +79,9 @@ async fn bucket_versioning_s3express() {
     }
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
-    let resp: Result<SetBucketVersioningResponse, Error> = ctx
+    let resp: Result<PutBucketVersioningResponse, Error> = ctx
         .client
-        .set_bucket_versioning(&bucket_name)
+        .put_bucket_versioning(&bucket_name)
         .versioning_status(VersioningStatus::Enabled)
         .send()
         .await;

@@ -20,10 +20,12 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
-/// Argument builder for [delete_bucket_policy()](crate::s3::client::Client::delete_bucket_policy) API
+/// Argument builder for the [`DeleteBucketPolicy`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucketPolicy.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::delete_bucket_policy`](crate::s3::client::Client::delete_bucket_policy) method.
 pub type DeleteBucketPolicy = BucketCommon<DeleteBucketPolicyPhantomData>;
 
-#[derive(Default, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DeleteBucketPolicyPhantomData;
 
 impl S3Api for DeleteBucketPolicy {

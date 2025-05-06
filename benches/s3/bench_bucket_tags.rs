@@ -16,7 +16,7 @@
 use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 
 use criterion::Criterion;
-use minio::s3::builders::{DeleteBucketTags, GetBucketTags, SetBucketTags};
+use minio::s3::builders::{DeleteBucketTagging, GetBucketTagging, PutBucketTagging};
 use minio::s3::types::S3Api;
 use minio_common::example::create_tags_example;
 
@@ -29,7 +29,8 @@ pub(crate) fn bench_set_bucket_tags(criterion: &mut Criterion) {
         criterion,
         || async { Ctx2::new().await },
         |ctx| {
-            SetBucketTags::new(ctx.client.clone(), ctx.bucket.clone()).tags(create_tags_example())
+            PutBucketTagging::new(ctx.client.clone(), ctx.bucket.clone())
+                .tags(create_tags_example())
         },
     )
 }
@@ -43,14 +44,14 @@ pub(crate) fn bench_get_bucket_tags(criterion: &mut Criterion) {
         || async {
             let ctx = Ctx2::new().await;
             ctx.client
-                .set_bucket_tags(&ctx.bucket)
+                .put_bucket_tags(&ctx.bucket)
                 .tags(create_tags_example())
                 .send()
                 .await
                 .unwrap();
             ctx
         },
-        |ctx| GetBucketTags::new(ctx.client.clone(), ctx.bucket.clone()),
+        |ctx| GetBucketTagging::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }
 pub(crate) fn bench_delete_bucket_tags(criterion: &mut Criterion) {
@@ -61,6 +62,6 @@ pub(crate) fn bench_delete_bucket_tags(criterion: &mut Criterion) {
         "delete_bucket_tags",
         criterion,
         || async { Ctx2::new().await },
-        |ctx| DeleteBucketTags::new(ctx.client.clone(), ctx.bucket.clone()),
+        |ctx| DeleteBucketTagging::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }

@@ -21,7 +21,6 @@ use crate::s3::builders::StatObject;
 impl Client {
     /// Creates a [`StatObject`] request builder. Given a bucket and object name, return some statistics.
     ///
-    ///
     /// To execute the request, call [`StatObject::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`StatObjectResponse`](crate::s3::response::StatObjectResponse).    
     ///

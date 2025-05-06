@@ -20,10 +20,10 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::check_bucket_name;
 use http::Method;
 
-/// Argument builder for [bucket_exists()](crate::s3::client::Client::bucket_exists) API
+/// This struct constructs the parameters required for the [`Client::bucket_exists`](crate::s3::client::Client::bucket_exists) method.
 pub type BucketExists = BucketCommon<BucketExistsPhantomData>;
 
-#[derive(Default, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct BucketExistsPhantomData;
 
 impl S3Api for BucketExists {

@@ -15,7 +15,7 @@
 
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
-    DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, SetBucketLifecycleResponse,
+    DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, PutBucketLifecycleResponse,
 };
 use minio::s3::types::{LifecycleConfig, S3Api};
 use minio_common::example::create_bucket_lifecycle_config_examples;
@@ -28,9 +28,9 @@ async fn bucket_lifecycle() {
 
     let config: LifecycleConfig = create_bucket_lifecycle_config_examples();
 
-    let resp: SetBucketLifecycleResponse = ctx
+    let resp: PutBucketLifecycleResponse = ctx
         .client
-        .set_bucket_lifecycle(&bucket_name)
+        .put_bucket_lifecycle(&bucket_name)
         .life_cycle_config(config.clone())
         .send()
         .await

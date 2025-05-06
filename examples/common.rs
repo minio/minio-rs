@@ -43,7 +43,7 @@ pub async fn create_bucket_if_not_exists(
 
     // Make 'bucket_name' bucket if not exist.
     if !resp.exists {
-        client.make_bucket(bucket_name).send().await.unwrap();
+        client.create_bucket(bucket_name).send().await.unwrap();
     };
     Ok(())
 }

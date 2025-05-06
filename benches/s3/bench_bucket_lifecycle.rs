@@ -16,7 +16,7 @@
 use crate::common_benches::{Ctx2, benchmark_s3_api};
 
 use criterion::Criterion;
-use minio::s3::builders::{DeleteBucketLifecycle, GetBucketLifecycle, SetBucketLifecycle};
+use minio::s3::builders::{DeleteBucketLifecycle, GetBucketLifecycle, PutBucketLifecycle};
 use minio::s3::types::S3Api;
 use minio_common::example::create_bucket_lifecycle_config_examples;
 
@@ -27,7 +27,7 @@ pub(crate) fn bench_set_bucket_lifecycle(criterion: &mut Criterion) {
         || async { Ctx2::new().await },
         |ctx| {
             let config = create_bucket_lifecycle_config_examples();
-            SetBucketLifecycle::new(ctx.client.clone(), ctx.bucket.clone())
+            PutBucketLifecycle::new(ctx.client.clone(), ctx.bucket.clone())
                 .life_cycle_config(config)
         },
     )
@@ -40,7 +40,7 @@ pub(crate) fn bench_get_bucket_lifecycle(criterion: &mut Criterion) {
             let ctx = Ctx2::new().await;
             let config = create_bucket_lifecycle_config_examples();
             ctx.client
-                .set_bucket_lifecycle(&ctx.bucket)
+                .put_bucket_lifecycle(&ctx.bucket)
                 .life_cycle_config(config)
                 .send()
                 .await

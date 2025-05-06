@@ -31,7 +31,9 @@ use http::Method;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// Argument builder for [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) API
+/// Argument builder for the [`UploadPartCopy`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::upload_part_copy`](crate::s3::client::Client::upload_part_copy) method.
 #[derive(Clone, Debug, Default)]
 pub struct UploadPartCopy {
     client: Client,
@@ -1150,20 +1152,20 @@ fn into_headers_copy_object(
         }
 
         if !tagging.is_empty() {
-            map.insert("x-amz-tagging".into(), tagging);
+            map.add("x-amz-tagging", tagging);
         }
     }
 
     if let Some(v) = retention {
-        map.insert("x-amz-object-lock-mode".into(), v.mode.to_string());
-        map.insert(
-            "x-amz-object-lock-retain-until-date".into(),
+        map.add("x-amz-object-lock-mode", v.mode.to_string());
+        map.add(
+            "x-amz-object-lock-retain-until-date",
             to_iso8601utc(v.retain_until_date),
         );
     }
 
     if legal_hold {
-        map.insert("x-amz-object-lock-legal-hold".into(), "ON".into());
+        map.add("x-amz-object-lock-legal-hold", "ON");
     }
 
     map

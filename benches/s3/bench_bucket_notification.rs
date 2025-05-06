@@ -16,7 +16,7 @@
 use crate::common_benches::{Ctx2, benchmark_s3_api};
 
 use criterion::Criterion;
-use minio::s3::builders::{DeleteBucketNotification, GetBucketNotification, SetBucketNotification};
+use minio::s3::builders::{DeleteBucketNotification, GetBucketNotification, PutBucketNotification};
 use minio::s3::types::S3Api;
 use minio_common::example::create_bucket_notification_config_example;
 
@@ -28,7 +28,7 @@ pub(crate) fn bench_set_bucket_notification(criterion: &mut Criterion) {
         || async { Ctx2::new().await },
         |ctx| {
             let config = create_bucket_notification_config_example();
-            SetBucketNotification::new(ctx.client.clone(), ctx.bucket.clone())
+            PutBucketNotification::new(ctx.client.clone(), ctx.bucket.clone())
                 .notification_config(config)
         },
     )
@@ -42,7 +42,7 @@ pub(crate) fn bench_get_bucket_notification(criterion: &mut Criterion) {
             let ctx = Ctx2::new().await;
             let config = create_bucket_notification_config_example();
             ctx.client
-                .set_bucket_notification(&ctx.bucket)
+                .put_bucket_notification(&ctx.bucket)
                 .notification_config(config)
                 .send()
                 .await

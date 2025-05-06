@@ -20,7 +20,7 @@ use minio::s3::builders::ObjectContent;
 use minio::s3::client::ClientBuilder;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
-use minio::s3::response::ObjectPromptResponse;
+use minio::s3::response::GetObjectPromptResponse;
 use minio::s3::types::S3Api;
 use std::path::Path;
 
@@ -66,8 +66,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         filename.display()
     );
 
-    let resp: ObjectPromptResponse = client
-        .object_prompt(bucket_name, object_name, "what is it about?")
+    let resp: GetObjectPromptResponse = client
+        .get_object_prompt(bucket_name, object_name, "what is it about?")
         //.lambda_arn("arn:minio:s3-object-lambda::_:webhook") // this is the default value
         .send()
         .await?;

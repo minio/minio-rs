@@ -15,7 +15,9 @@
 
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::error::{Error, ErrorCode};
-use minio::s3::response::{DeleteBucketTagsResponse, GetBucketTagsResponse, SetBucketTagsResponse};
+use minio::s3::response::{
+    DeleteBucketTaggingResponse, GetBucketTaggingResponse, PutBucketTaggingResponse,
+};
 use minio::s3::types::S3Api;
 use minio_common::example::create_tags_example;
 use minio_common::test_context::TestContext;
@@ -31,9 +33,9 @@ async fn bucket_tags_s3() {
 
     let tags = create_tags_example();
 
-    let resp: SetBucketTagsResponse = ctx
+    let resp: PutBucketTaggingResponse = ctx
         .client
-        .set_bucket_tags(&bucket_name)
+        .put_bucket_tags(&bucket_name)
         .tags(tags.clone())
         .send()
         .await
@@ -41,9 +43,9 @@ async fn bucket_tags_s3() {
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
 
-    let resp: GetBucketTagsResponse = ctx
+    let resp: GetBucketTaggingResponse = ctx
         .client
-        .get_bucket_tags(&bucket_name)
+        .get_bucket_tagging(&bucket_name)
         .send()
         .await
         .unwrap();
@@ -51,18 +53,18 @@ async fn bucket_tags_s3() {
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
 
-    let resp: DeleteBucketTagsResponse = ctx
+    let resp: DeleteBucketTaggingResponse = ctx
         .client
-        .delete_bucket_tags(&bucket_name)
+        .delete_bucket_tagging(&bucket_name)
         .send()
         .await
         .unwrap();
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
 
-    let resp: GetBucketTagsResponse = ctx
+    let resp: GetBucketTaggingResponse = ctx
         .client
-        .get_bucket_tags(&bucket_name)
+        .get_bucket_tagging(&bucket_name)
         .send()
         .await
         .unwrap();
@@ -82,9 +84,9 @@ async fn bucket_tags_s3express() {
 
     let tags = create_tags_example();
 
-    let resp: Result<SetBucketTagsResponse, Error> = ctx
+    let resp: Result<PutBucketTaggingResponse, Error> = ctx
         .client
-        .set_bucket_tags(&bucket_name)
+        .put_bucket_tags(&bucket_name)
         .tags(tags.clone())
         .send()
         .await;
@@ -93,15 +95,15 @@ async fn bucket_tags_s3express() {
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 
-    let resp: Result<GetBucketTagsResponse, Error> =
-        ctx.client.get_bucket_tags(&bucket_name).send().await;
+    let resp: Result<GetBucketTaggingResponse, Error> =
+        ctx.client.get_bucket_tagging(&bucket_name).send().await;
     match resp {
         Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 
-    let resp: Result<DeleteBucketTagsResponse, Error> =
-        ctx.client.delete_bucket_tags(&bucket_name).send().await;
+    let resp: Result<DeleteBucketTaggingResponse, Error> =
+        ctx.client.delete_bucket_tagging(&bucket_name).send().await;
     match resp {
         Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),

@@ -18,7 +18,7 @@ use minio::s3::client::DEFAULT_REGION;
 use minio::s3::error::{Error, ErrorCode};
 use minio::s3::response::{
     DeleteBucketReplicationResponse, GetBucketReplicationResponse, GetBucketVersioningResponse,
-    SetBucketPolicyResponse, SetBucketReplicationResponse, SetBucketVersioningResponse,
+    PutBucketPolicyResponse, PutBucketReplicationResponse, PutBucketVersioningResponse,
 };
 use minio::s3::types::{ReplicationConfig, S3Api};
 use minio_common::example::{
@@ -39,9 +39,9 @@ async fn bucket_replication_s3() {
     let (bucket_name2, _cleanup2) = ctx2.create_bucket_helper().await;
 
     {
-        let resp: SetBucketVersioningResponse = ctx
+        let resp: PutBucketVersioningResponse = ctx
             .client
-            .set_bucket_versioning(&bucket_name)
+            .put_bucket_versioning(&bucket_name)
             .versioning_status(VersioningStatus::Enabled)
             .send()
             .await
@@ -49,9 +49,9 @@ async fn bucket_replication_s3() {
         assert_eq!(resp.bucket, bucket_name);
         assert_eq!(resp.region, DEFAULT_REGION);
 
-        let resp: SetBucketVersioningResponse = ctx
+        let resp: PutBucketVersioningResponse = ctx
             .client
-            .set_bucket_versioning(&bucket_name2)
+            .put_bucket_versioning(&bucket_name2)
             .versioning_status(VersioningStatus::Enabled)
             .send()
             .await
@@ -72,17 +72,17 @@ async fn bucket_replication_s3() {
         if false {
             //TODO: to allow replication policy needs to be applied, but this fails
             let config: String = create_bucket_policy_config_example_for_replication();
-            let _resp: SetBucketPolicyResponse = ctx
+            let _resp: PutBucketPolicyResponse = ctx
                 .client
-                .set_bucket_policy(&bucket_name)
+                .put_bucket_policy(&bucket_name)
                 .config(config.clone())
                 .send()
                 .await
                 .unwrap();
 
-            let _resp: SetBucketPolicyResponse = ctx
+            let _resp: PutBucketPolicyResponse = ctx
                 .client
-                .set_bucket_policy(&bucket_name2)
+                .put_bucket_policy(&bucket_name2)
                 .config(config.clone())
                 .send()
                 .await
@@ -95,9 +95,9 @@ async fn bucket_replication_s3() {
 
         //TODO setup permissions that allow replication
         // TODO panic: called `Result::unwrap()` on an `Err` value: S3Error(ErrorResponse { code: "XMinioAdminRemoteTargetNotFoundError", message: "The remote target does not exist",
-        let resp: SetBucketReplicationResponse = ctx
+        let resp: PutBucketReplicationResponse = ctx
             .client
-            .set_bucket_replication(&bucket_name)
+            .put_bucket_replication(&bucket_name)
             .replication_config(config.clone())
             .send()
             .await
@@ -146,9 +146,9 @@ async fn bucket_replication_s3express() {
 
     let config: ReplicationConfig = create_bucket_replication_config_example(&bucket_name);
 
-    let resp: Result<SetBucketReplicationResponse, Error> = ctx
+    let resp: Result<PutBucketReplicationResponse, Error> = ctx
         .client
-        .set_bucket_replication(&bucket_name)
+        .put_bucket_replication(&bucket_name)
         .replication_config(config.clone())
         .send()
         .await;

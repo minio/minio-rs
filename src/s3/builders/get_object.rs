@@ -26,7 +26,9 @@ use crate::s3::{
     utils::{UtcTime, check_bucket_name, to_http_header_value},
 };
 
-/// Argument builder for [list_objects()](crate::s3::client::Client::get_object) API.
+/// Argument builder for the [`GetObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::get_object`](crate::s3::client::Client::get_object) method.
 #[derive(Debug, Clone, Default)]
 pub struct GetObject {
     client: Client,

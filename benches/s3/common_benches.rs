@@ -16,7 +16,7 @@
 use criterion::Criterion;
 use minio::s3::Client;
 use minio::s3::error::Error;
-use minio::s3::response::{MakeBucketResponse, PutObjectContentResponse};
+use minio::s3::response::{CreateBucketResponse, PutObjectContentResponse};
 use minio::s3::types::{FromS3Response, S3Api, S3Request};
 use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::test_context::TestContext;
@@ -61,9 +61,9 @@ impl Ctx2 {
         }
         let ctx = TestContext::new_from_env();
         let bucket_name: String = rand_bucket_name();
-        let _resp: MakeBucketResponse = ctx
+        let _resp: CreateBucketResponse = ctx
             .client
-            .make_bucket(&bucket_name)
+            .create_bucket(&bucket_name)
             .object_lock(object_lock)
             .send()
             .await
@@ -92,9 +92,9 @@ impl Ctx2 {
         let bucket_name: String = rand_bucket_name();
         self.aux_bucket = Some(bucket_name.clone());
         self._aux_cleanup = Some(CleanupGuard::new(self.client.clone(), &bucket_name));
-        let _resp: MakeBucketResponse = self
+        let _resp: CreateBucketResponse = self
             .client
-            .make_bucket(&bucket_name)
+            .create_bucket(&bucket_name)
             .object_lock(false)
             .send()
             .await

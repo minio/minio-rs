@@ -18,7 +18,7 @@ mod common;
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
 use minio::s3::Client;
 use minio::s3::builders::VersioningStatus;
-use minio::s3::response::{GetBucketVersioningResponse, SetBucketVersioningResponse};
+use minio::s3::response::{GetBucketVersioningResponse, PutBucketVersioningResponse};
 use minio::s3::types::S3Api;
 
 #[tokio::main]
@@ -37,8 +37,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         resp.mfa_delete
     );
 
-    let _resp: SetBucketVersioningResponse = client
-        .set_bucket_versioning(bucket_name)
+    let _resp: PutBucketVersioningResponse = client
+        .put_bucket_versioning(bucket_name)
         .versioning_status(VersioningStatus::Enabled)
         .send()
         .await?;
@@ -52,8 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         resp.mfa_delete
     );
 
-    let _resp: SetBucketVersioningResponse = client
-        .set_bucket_versioning(bucket_name)
+    let _resp: PutBucketVersioningResponse = client
+        .put_bucket_versioning(bucket_name)
         .versioning_status(VersioningStatus::Suspended)
         .send()
         .await?;
@@ -67,8 +67,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         resp.mfa_delete
     );
 
-    let _resp: SetBucketVersioningResponse = client
-        .set_bucket_versioning(bucket_name)
+    let _resp: PutBucketVersioningResponse = client
+        .put_bucket_versioning(bucket_name)
         //.versioning_status(VersioningStatus::Suspended)
         .send()
         .await?;

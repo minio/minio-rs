@@ -1,0 +1,80 @@
+// MinIO Rust Library for Amazon S3 Compatible Cloud Storage
+// Copyright 2025 MinIO, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use crate::s3::error::Error;
+use crate::s3::multimap::MultimapExt;
+use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::{get_text, take_bucket, take_object};
+use async_trait::async_trait;
+use bytes::Buf;
+use http::HeaderMap;
+use std::collections::HashMap;
+use std::mem;
+use xmltree::Element;
+
+/// Response of
+/// [get_object_tags()](crate::s3::client::Client::get_object_tagging)
+/// API
+#[derive(Clone, Debug)]
+pub struct GetObjectTaggingResponse {
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
+    pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
+    pub region: String,
+
+    /// Name of the bucket containing the object.
+    pub bucket: String,
+
+    /// Key (path) identifying the object within the bucket.
+    pub object: String,
+
+    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
+    pub version_id: Option<String>,
+
+    /// Tags associated with the object.
+    pub tags: HashMap<String, String>,
+}
+
+#[async_trait]
+impl FromS3Response for GetObjectTaggingResponse {
+    async fn from_s3response(
+        req: S3Request,
+        resp: Result<reqwest::Response, Error>,
+    ) -> Result<Self, Error> {
+        let mut resp = resp?;
+
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+
+        let body = resp.bytes().await?;
+        let mut root = Element::parse(body.reader())?;
+        let element = root
+            .get_mut_child("TagSet")
+            .ok_or(Error::XmlError("<TagSet> tag not found".to_string()))?;
+        let mut tags = HashMap::new();
+        while let Some(v) = element.take_child("Tag") {
+            tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
+        }
+
+        Ok(Self {
+            headers,
+            region: req.inner_region,
+            bucket: take_bucket(req.bucket)?,
+            object: take_object(req.object)?,
+            version_id: req.query_params.take_version(),
+            tags,
+        })
+    }
+}

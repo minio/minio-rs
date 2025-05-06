@@ -17,7 +17,7 @@ mod common;
 
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
 use minio::s3::Client;
-use minio::s3::response::{GetBucketEncryptionResponse, SetBucketEncryptionResponse};
+use minio::s3::response::{GetBucketEncryptionResponse, PutBucketEncryptionResponse};
 use minio::s3::types::{S3Api, SseConfig};
 
 #[tokio::main]
@@ -35,8 +35,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = SseConfig::default();
     log::info!("going to set encryption config={:?}", config);
 
-    let _resp: SetBucketEncryptionResponse = client
-        .set_bucket_encryption(bucket_name)
+    let _resp: PutBucketEncryptionResponse = client
+        .put_bucket_encryption(bucket_name)
         .sse_config(config.clone())
         .send()
         .await?;

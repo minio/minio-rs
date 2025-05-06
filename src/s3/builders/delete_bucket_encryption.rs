@@ -20,10 +20,12 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
-/// Argument builder for [delete_bucket_encryption()](crate::s3::client::Client::delete_bucket_encryption) API
+/// Argument builder for the [`DeleteBucketEncryption`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucketEncryption.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::delete_bucket_encryption`](crate::s3::client::Client::delete_bucket_encryption) method.
 pub type DeleteBucketEncryption = BucketCommon<DeleteBucketEncryptionPhantomData>;
 
-#[derive(Default, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DeleteBucketEncryptionPhantomData;
 
 impl S3Api for DeleteBucketEncryption {

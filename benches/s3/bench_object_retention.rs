@@ -16,8 +16,8 @@
 use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 
 use criterion::Criterion;
-use minio::s3::builders::{GetObjectRetention, SetObjectRetention};
-use minio::s3::response::SetObjectRetentionResponse;
+use minio::s3::builders::{GetObjectRetention, PutObjectRetention};
+use minio::s3::response::PutObjectRetentionResponse;
 use minio::s3::types::{RetentionMode, S3Api};
 use minio::s3::utils::utc_now;
 
@@ -30,7 +30,7 @@ pub(crate) fn bench_set_object_retention(criterion: &mut Criterion) {
         criterion,
         || async { Ctx2::new_with_object(true).await },
         |ctx| {
-            SetObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
+            PutObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
                 .retention_mode(Some(RetentionMode::GOVERNANCE))
                 .retain_until_date(Some(utc_now() + chrono::Duration::days(1)))
         },
@@ -45,8 +45,8 @@ pub(crate) fn bench_get_object_retention(criterion: &mut Criterion) {
         criterion,
         || async {
             let ctx = Ctx2::new_with_object(true).await;
-            let _resp: SetObjectRetentionResponse =
-                SetObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
+            let _resp: PutObjectRetentionResponse =
+                PutObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
                     .retention_mode(Some(RetentionMode::GOVERNANCE))
                     .retain_until_date(Some(utc_now() + chrono::Duration::days(1)))
                     .send()
