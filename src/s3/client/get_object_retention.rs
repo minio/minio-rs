@@ -33,12 +33,12 @@ impl Client {
     /// use minio::s3::response::GetObjectRetentionResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: GetObjectRetentionResponse =
-    ///         client.get_object_retention("bucket-name", "object-name").send().await.unwrap();
+    ///     let resp: GetObjectRetentionResponse = client
+    ///         .get_object_retention("bucket-name", "object-name")
+    ///         .send().await.unwrap();
     ///     println!("retrieved retention mode '{:?}' until '{:?}' from bucket '{}' is enabled", resp.retention_mode, resp.retain_until_date, resp.bucket);
     /// }
     /// ```

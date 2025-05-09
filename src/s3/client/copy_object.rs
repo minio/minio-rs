@@ -22,7 +22,31 @@ use crate::s3::builders::{
 };
 
 impl Client {
-    /// Executes [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) S3 API
+    /// Creates a [`UploadPartCopy`] request builder.
+    /// See [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) S3 API
+    ///
+    /// To execute the request, call [`UploadPartCopy::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`UploadPartCopyResponse`](crate::s3::response::UploadPartCopyResponse).    
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::{UploadPartCopyResponse};
+    /// use minio::s3::segmented_bytes::SegmentedBytes;
+    /// use minio::s3::types::S3Api;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {    
+    ///     let client: Client = Default::default(); // configure your client here
+    ///     let data1: SegmentedBytes = SegmentedBytes::from("aaaa".to_string());
+    ///     todo!();
+    ///     let resp: UploadPartCopyResponse = client
+    ///         .upload_part_copy("bucket-name", "object-name", "TODO")
+    ///         .send().await.unwrap();
+    ///     println!("uploaded {}", resp.object);
+    /// }
+    /// ```
     pub fn upload_part_copy<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
         &self,
         bucket: S1,
@@ -34,7 +58,7 @@ impl Client {
 
     /// Create a CopyObject request builder. This is a lower-level API that
     /// performs a non-multipart object copy.
-    pub fn copy_object_internal<S1: Into<String>, S2: Into<String>>(
+    pub(crate) fn copy_object_internal<S1: Into<String>, S2: Into<String>>(
         &self,
         bucket: S1,
         object: S2,
@@ -42,8 +66,8 @@ impl Client {
         CopyObjectInternal::new(self.clone(), bucket.into(), object.into())
     }
 
-    /// copy object is a high-order API that calls [`stat_object`] and based on the results calls
-    /// either [`compose_object`] or [`copy_object_internal`]  to copy the object.
+    /// copy object is a high-order API that calls [stat_object](Client::stat_object) and based on the results calls
+    /// either [compose_object](Client::compose_object) or [`copy_object_internal`](Client::copy_object_internal) to copy the object.
     pub fn copy_object<S1: Into<String>, S2: Into<String>>(
         &self,
         bucket: S1,
@@ -60,8 +84,8 @@ impl Client {
         ComposeObjectInternal::new(self.clone(), bucket.into(), object.into())
     }
 
-    /// compose object is high-order API that calls [`compose_object_internal`] and if that call fails,
-    /// it calls ['abort_multipart_upload`].
+    /// compose object is high-order API that calls [`compose_object_internal`](Client::compose_object_internal) and if that call fails,
+    /// it calls ['abort_multipart_upload`](Client::abort_multipart_upload).
     pub fn compose_object<S1: Into<String>, S2: Into<String>>(
         &self,
         bucket: S1,

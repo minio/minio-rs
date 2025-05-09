@@ -16,8 +16,8 @@
 use minio::s3::builders::ObjectContent;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
-    GetObjectRetentionResponse, MakeBucketResponse, PutObjectContentResponse,
-    SetObjectRetentionResponse,
+    CreateBucketResponse, GetObjectRetentionResponse, PutObjectContentResponse,
+    PutObjectRetentionResponse,
 };
 use minio::s3::types::{RetentionMode, S3Api};
 use minio::s3::utils::{to_iso8601utc, utc_now};
@@ -35,9 +35,9 @@ async fn object_retention() {
     }
 
     let bucket_name: String = rand_bucket_name();
-    let resp: MakeBucketResponse = ctx
+    let resp: CreateBucketResponse = ctx
         .client
-        .make_bucket(&bucket_name)
+        .create_bucket(&bucket_name)
         .object_lock(true)
         .send()
         .await
@@ -66,9 +66,9 @@ async fn object_retention() {
     //assert_eq!(resp.etag, "");
 
     let retain_until_date = utc_now() + chrono::Duration::days(1);
-    let obj_resp: SetObjectRetentionResponse = ctx
+    let obj_resp: PutObjectRetentionResponse = ctx
         .client
-        .set_object_retention(&bucket_name, &object_name)
+        .put_object_retention(&bucket_name, &object_name)
         .retention_mode(Some(RetentionMode::GOVERNANCE))
         .retain_until_date(Some(retain_until_date))
         .send()
@@ -91,9 +91,9 @@ async fn object_retention() {
         to_iso8601utc(retain_until_date)
     );
 
-    let resp: SetObjectRetentionResponse = ctx
+    let resp: PutObjectRetentionResponse = ctx
         .client
-        .set_object_retention(&bucket_name, &object_name)
+        .put_object_retention(&bucket_name, &object_name)
         .bypass_governance_mode(true)
         .send()
         .await

@@ -22,15 +22,31 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response of
-/// [get_bucket_encryption()](crate::s3::client::Client::get_bucket_encryption)
-/// API
+/// Response from the [`get_bucket_encryption`](crate::s3::client::Client::get_bucket_encryption) API call,
+/// providing the default server-side encryption configuration of an S3 bucket.
+///
+/// This configuration determines how Amazon S3 encrypts objects stored in the bucket by default.
+/// It can specify encryption using Amazon S3 managed keys (SSE-S3), AWS Key Management Service (SSE-KMS),
+/// or dual-layer encryption with AWS KMS keys (DSSE-KMS).
+///
+/// For more information, refer to the [AWS S3 GetBucketEncryption API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketEncryption.html).
 #[derive(Clone, Debug)]
 pub struct GetBucketEncryptionResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket whose encryption configuration is retrieved.
     pub bucket: String,
+
+    /// The default server-side encryption configuration of the bucket.
+    ///
+    /// This includes the encryption algorithm and, if applicable, the AWS KMS key ID used for encrypting objects.
+    ///
+    /// If the bucket has no default encryption configuration, the `get_bucket_encryption` API call may return an error
+    /// with the code `ServerSideEncryptionConfigurationNotFoundError`. It's advisable to handle this case appropriately in your application.
     pub config: SseConfig,
 }
 

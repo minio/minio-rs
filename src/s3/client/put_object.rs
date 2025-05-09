@@ -40,7 +40,6 @@ impl Client {
     /// use minio::s3::types::S3Api;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here

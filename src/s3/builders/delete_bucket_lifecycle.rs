@@ -20,10 +20,12 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
-/// Argument builder for [delete_bucket_lifecycle()](Client::delete_bucket_lifecycle) API
+/// Argument builder for the [`DeleteBucketLifecycle`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucketLifecycle.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::delete_bucket_lifecycle`](crate::s3::client::Client::delete_bucket_lifecycle) method.
 pub type DeleteBucketLifecycle = BucketCommon<DeleteBucketLifecyclePhantomData>;
 
-#[derive(Default, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DeleteBucketLifecyclePhantomData;
 
 impl S3Api for DeleteBucketLifecycle {

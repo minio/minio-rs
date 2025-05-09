@@ -61,15 +61,7 @@ impl SegmentedBytes {
         }
     }
 
-    pub fn into_iter(self) -> SegmentedBytesIntoIterator {
-        SegmentedBytesIntoIterator {
-            sb: self,
-            current_segment: 0,
-            current_segment_index: 0,
-        }
-    }
-
-    /// Copy all the content into a single [Bytes](bytes::Bytes) object.
+    /// Copy all the content into a single [Bytes] object.
     ///
     /// ⚠️ This function is slow and intended for testing/debugging only.
     /// Do not use in performance-critical code.

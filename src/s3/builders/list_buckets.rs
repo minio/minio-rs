@@ -23,7 +23,9 @@ use crate::s3::{
     types::{S3Api, S3Request, ToS3Request},
 };
 
-/// Argument builder for [list_buckets()](Client::list_buckets) API.
+/// Argument builder for the [`ListBuckets`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::list_buckets`](crate::s3::client::Client::list_buckets) method.
 #[derive(Clone, Debug, Default)]
 pub struct ListBuckets {
     client: Client,

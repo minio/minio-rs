@@ -23,7 +23,7 @@ use crate::s3::signer::presign_v4;
 use crate::s3::utils::{UtcTime, check_bucket_name, check_object_name, utc_now};
 use http::Method;
 
-/// Argument for [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API
+/// This struct constructs the parameters required for the [`Client::get_presigned_object_url`](crate::s3::client::Client::get_presigned_object_url) method.
 #[derive(Clone, Debug, Default)]
 pub struct GetPresignedObjectUrl {
     client: Client,

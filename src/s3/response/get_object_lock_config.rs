@@ -22,15 +22,23 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response of
-/// [get_object_lock_config_response()](crate::s3::client::Client::get_object_lock_config_response)
-/// API
+/// Response from the [`get_object_lock_config`](crate::s3::client::Client::get_object_lock_config) API call,
+/// which retrieves the Object Lock configuration of a bucket.
+///
+/// This configuration determines the default retention mode and period applied to new objects,
+/// helping to enforce write-once-read-many (WORM) protection.
 #[derive(Clone, Debug)]
 pub struct GetObjectLockConfigResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket for which the Object Lock configuration is retrieved.
     pub bucket: String,
+
+    /// The Object Lock configuration of the bucket, including retention settings and legal hold status.
     pub config: ObjectLockConfig,
 }
 

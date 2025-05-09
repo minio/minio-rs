@@ -33,13 +33,13 @@ impl Client {
     /// use minio::s3::response::GetBucketVersioningResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: GetBucketVersioningResponse =
-    ///         client.get_bucket_versioning("bucket-name").send().await.unwrap();
-    ///     println!("retrieved versioning status '{:?}' from bucket '{}' is enabled", resp.status, resp.bucket);
+    ///     let resp: GetBucketVersioningResponse = client
+    ///         .get_bucket_versioning("bucket-name")
+    ///         .send().await.unwrap();
+    ///     println!("retrieved versioning status '{:?}' from bucket '{}'", resp.status, resp.bucket);
     /// }
     /// ```
     pub fn get_bucket_versioning<S: Into<String>>(&self, bucket: S) -> GetBucketVersioning {

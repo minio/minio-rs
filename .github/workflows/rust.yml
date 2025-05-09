@@ -19,11 +19,12 @@ jobs:
     - uses: actions/checkout@v4
     - name: Build
       run: |
+        cargo --version
         cargo fmt --all -- --check
         cargo clippy --all-targets --all-features
         cargo build --bins --examples --tests --benches --verbose
 
-    - name: Run tests S3
+    - name: Run tests
       run: |
         ./tests/start-server.sh
         export SERVER_ENDPOINT=localhost:9000

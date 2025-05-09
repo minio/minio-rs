@@ -33,12 +33,12 @@ impl Client {
     /// use minio::s3::response::DeleteBucketReplicationResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {    
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: DeleteBucketReplicationResponse =
-    ///         client.delete_bucket_replication("bucket-name").send().await.unwrap();
+    ///     let resp: DeleteBucketReplicationResponse = client
+    ///         .delete_bucket_replication("bucket-name")
+    ///         .send().await.unwrap();
     ///     println!("replication of bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```

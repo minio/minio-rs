@@ -31,13 +31,13 @@ impl Client {
     /// use minio::s3::response::GetBucketPolicyResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: GetBucketPolicyResponse =
-    ///         client.get_bucket_policy("bucket-name").send().await.unwrap();
-    ///     println!("retrieved bucket policy config '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
+    ///     let resp: GetBucketPolicyResponse = client
+    ///         .get_bucket_policy("bucket-name")
+    ///         .send().await.unwrap();
+    ///     println!("retrieved bucket policy config '{:?}' from bucket '{}'", resp.config, resp.bucket);
     /// }
     /// ```
     pub fn get_bucket_policy<S: Into<String>>(&self, bucket: S) -> GetBucketPolicy {

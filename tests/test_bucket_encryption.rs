@@ -15,7 +15,7 @@
 
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
-    DeleteBucketEncryptionResponse, GetBucketEncryptionResponse, SetBucketEncryptionResponse,
+    DeleteBucketEncryptionResponse, GetBucketEncryptionResponse, PutBucketEncryptionResponse,
 };
 use minio::s3::types::{S3Api, SseConfig};
 use minio_common::test_context::TestContext;
@@ -29,9 +29,9 @@ async fn bucket_encryption() {
 
     if false {
         // TODO this gives a runtime error
-        let resp: SetBucketEncryptionResponse = ctx
+        let resp: PutBucketEncryptionResponse = ctx
             .client
-            .set_bucket_encryption(&bucket_name)
+            .put_bucket_encryption(&bucket_name)
             .sse_config(config.clone())
             .send()
             .await

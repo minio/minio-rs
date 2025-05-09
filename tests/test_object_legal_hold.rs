@@ -17,8 +17,8 @@ use bytes::Bytes;
 
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
-    DisableObjectLegalHoldResponse, EnableObjectLegalHoldResponse,
-    IsObjectLegalHoldEnabledResponse, MakeBucketResponse, PutObjectContentResponse,
+    CreateBucketResponse, GetObjectLegalHoldResponse, PutObjectContentResponse,
+    PutObjectLegalHoldResponse,
 };
 use minio::s3::types::S3Api;
 use minio_common::cleanup_guard::CleanupGuard;
@@ -33,9 +33,9 @@ async fn object_legal_hold_s3() {
         return;
     }
     let bucket_name: String = rand_bucket_name();
-    let _resp: MakeBucketResponse = ctx
+    let _resp: CreateBucketResponse = ctx
         .client
-        .make_bucket(&bucket_name)
+        .create_bucket(&bucket_name)
         .object_lock(true)
         .send()
         .await
@@ -53,52 +53,47 @@ async fn object_legal_hold_s3() {
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.object_size, data.len() as u64);
-    //println!("response of put object content: resp={:?}", resp);
 
-    let resp: DisableObjectLegalHoldResponse = ctx
+    let resp: PutObjectLegalHoldResponse = ctx
         .client
-        .disable_object_legal_hold(&bucket_name, &object_name)
+        .put_object_legal_hold(&bucket_name, &object_name, true)
         .send()
         .await
         .unwrap();
-    //println!("response of setting object legal hold: resp={:?}", resp);
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
     assert_eq!(resp.version_id, None);
 
-    let resp: IsObjectLegalHoldEnabledResponse = ctx
+    let resp: GetObjectLegalHoldResponse = ctx
         .client
-        .is_object_legal_hold_enabled(&bucket_name, &object_name)
+        .get_object_legal_hold(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
-    //println!("response of getting object legal hold: resp={:?}", resp);
-    assert!(!resp.enabled);
+    assert!(resp.enabled);
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
     assert_eq!(resp.version_id, None);
 
-    let resp: EnableObjectLegalHoldResponse = ctx
+    let resp: PutObjectLegalHoldResponse = ctx
         .client
-        .enable_object_legal_hold(&bucket_name, &object_name)
+        .put_object_legal_hold(&bucket_name, &object_name, true)
         .send()
         .await
         .unwrap();
-    //println!("response of setting object legal hold: resp={:?}", resp);
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
     assert_eq!(resp.version_id, None);
 
-    let resp: IsObjectLegalHoldEnabledResponse = ctx
+    let resp: GetObjectLegalHoldResponse = ctx
         .client
-        .is_object_legal_hold_enabled(&bucket_name, &object_name)
+        .get_object_legal_hold(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
-    //println!("response of getting object legal hold: resp={:?}", resp);
     assert!(resp.enabled);
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.bucket, bucket_name);

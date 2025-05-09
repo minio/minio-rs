@@ -15,7 +15,7 @@
 
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
-    DeleteBucketPolicyResponse, GetBucketPolicyResponse, SetBucketPolicyResponse,
+    DeleteBucketPolicyResponse, GetBucketPolicyResponse, PutBucketPolicyResponse,
 };
 use minio::s3::types::S3Api;
 use minio_common::example::create_bucket_policy_config_example;
@@ -28,9 +28,9 @@ async fn bucket_policy() {
 
     let config: String = create_bucket_policy_config_example(&bucket_name);
 
-    let resp: SetBucketPolicyResponse = ctx
+    let resp: PutBucketPolicyResponse = ctx
         .client
-        .set_bucket_policy(&bucket_name)
+        .put_bucket_policy(&bucket_name)
         .config(config.clone())
         .send()
         .await

@@ -23,7 +23,7 @@ use crate::s3::utils::{
 use serde_json::{Value, json};
 use std::collections::HashMap;
 
-/// Argument for [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API
+/// This struct constructs the parameters required for the [`Client::get_presigned_object_url`](crate::s3::client::Client::get_presigned_object_url) method.
 pub struct GetPresignedPolicyFormData {
     client: Client,
     policy: PostPolicy,
@@ -54,6 +54,7 @@ impl GetPresignedPolicyFormData {
 ///
 /// Condition elements and respective condition for Post policy is available <a
 /// href="https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html#sigv4-PolicyConditions">here</a>.
+#[derive(Clone, Debug, Default)]
 pub struct PostPolicy {
     pub region: Option<String>,
     pub bucket: String,
@@ -81,17 +82,13 @@ impl PostPolicy {
     /// let expiration = utc_now() + Duration::days(7);
     /// let policy = PostPolicy::new("bucket-name", expiration).unwrap();
     /// ```
-    pub fn new(bucket_name: &str, expiration: UtcTime) -> Result<PostPolicy, Error> {
+    pub fn new(bucket_name: &str, expiration: UtcTime) -> Result<Self, Error> {
         check_bucket_name(bucket_name, true)?;
 
-        Ok(PostPolicy {
-            region: None,
+        Ok(Self {
             bucket: bucket_name.to_owned(),
             expiration,
-            eq_conditions: HashMap::new(),
-            starts_with_conditions: HashMap::new(),
-            lower_limit: None,
-            upper_limit: None,
+            ..Default::default()
         })
     }
 
@@ -147,13 +144,12 @@ impl PostPolicy {
             || v.eq_ignore_ascii_case("content-length-range")
         {
             return Err(Error::PostPolicyError(format!(
-                "{} is unsupported for equals condition",
-                element
+                "{element} is unsupported for equals condition",
             )));
         }
 
         if PostPolicy::is_reserved_element(v.as_str()) {
-            return Err(Error::PostPolicyError(format!("{} cannot set", element)));
+            return Err(Error::PostPolicyError(format!("{element} cannot set")));
         }
 
         self.eq_conditions.insert(v, value.to_string());
@@ -203,13 +199,12 @@ impl PostPolicy {
             || (v.starts_with("x-amz-") && v.starts_with("x-amz-meta-"))
         {
             return Err(Error::PostPolicyError(format!(
-                "{} is unsupported for starts-with condition",
-                element
+                "{element} is unsupported for starts-with condition",
             )));
         }
 
         if PostPolicy::is_reserved_element(v.as_str()) {
-            return Err(Error::PostPolicyError(format!("{} cannot set", element)));
+            return Err(Error::PostPolicyError(format!("{element} cannot set")));
         }
 
         self.starts_with_conditions.insert(v, value.to_string());

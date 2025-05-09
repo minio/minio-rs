@@ -22,15 +22,30 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response of
-/// [get_bucket_lifecycle()](crate::s3::client::Client::get_bucket_lifecycle)
-/// API
+/// Response from the [`get_bucket_lifecycle`](crate::s3::client::Client::get_bucket_lifecycle) API call,
+/// providing the lifecycle configuration of an S3 bucket.
+///
+/// The lifecycle configuration defines rules for managing the lifecycle of objects in the bucket,
+/// such as transitioning objects to different storage classes or expiring them after a specified period.
+///
+/// For more information, refer to the [AWS S3 GetBucketLifecycleConfiguration API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketLifecycleConfiguration.html).
 #[derive(Clone, Debug)]
 pub struct GetBucketLifecycleResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket whose lifecycle configuration is retrieved.
     pub bucket: String,
+
+    /// The lifecycle configuration of the bucket.
+    ///
+    /// This includes a set of rules that define actions applied to objects, such as transitioning
+    /// them to different storage classes, expiring them, or aborting incomplete multipart uploads.
+    ///
+    /// If the bucket has no lifecycle configuration, this field may contain an empty configuration.
     pub config: LifecycleConfig,
 }
 

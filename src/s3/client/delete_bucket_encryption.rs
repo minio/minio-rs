@@ -31,12 +31,12 @@ impl Client {
     /// use minio::s3::response::DeleteBucketEncryptionResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {    
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: DeleteBucketEncryptionResponse =
-    ///         client.delete_bucket_encryption("bucket-name").send().await.unwrap();
+    ///     let resp: DeleteBucketEncryptionResponse = client
+    ///         .delete_bucket_encryption("bucket-name")
+    ///         .send().await.unwrap();
     ///     println!("bucket '{}' is deleted", resp.bucket);
     /// }
     /// ```

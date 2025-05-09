@@ -27,7 +27,7 @@ use crate::s3::{
     utils::{UtcTime, check_bucket_name, to_http_header_value},
 };
 
-/// Argument builder for [list_objects()](Client::get_object) API.
+/// This struct constructs the parameters required for the [`Client::stat_object`](crate::s3::client::Client::stat_object) method.
 #[derive(Debug, Clone, Default)]
 pub struct StatObject {
     client: Client,

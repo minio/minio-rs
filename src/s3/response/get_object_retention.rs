@@ -23,19 +23,28 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response of
-/// [set_object_retention_response()](crate::s3::client::Client::set_object_retention_response)
-/// API
+/// Response of [get_object_retention()](crate::s3::client::Client::get_object_retention) API
 #[derive(Clone, Debug)]
 pub struct GetObjectRetentionResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
     pub bucket: String,
 
+    /// Key (path) identifying the object within the bucket.
     pub object: String,
+
+    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
     pub version_id: Option<String>,
+
+    /// The retention mode of the object.
     pub retention_mode: Option<RetentionMode>,
+
+    /// The date until which the object is retained.
     pub retain_until_date: Option<UtcTime>,
 }
 

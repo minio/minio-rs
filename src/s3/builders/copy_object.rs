@@ -31,7 +31,9 @@ use http::Method;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// Argument builder for [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) API
+/// Argument builder for the [`UploadPartCopy`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::upload_part_copy`](crate::s3::client::Client::upload_part_copy) method.
 #[derive(Clone, Debug, Default)]
 pub struct UploadPartCopy {
     client: Client,
@@ -98,8 +100,7 @@ impl ToS3Request for UploadPartCopy {
             }
             if !(1..=MAX_MULTIPART_COUNT).contains(&self.part_number) {
                 return Err(Error::InvalidPartNumber(format!(
-                    "part number must be between 1 and {}",
-                    MAX_MULTIPART_COUNT
+                    "part number must be between 1 and {MAX_MULTIPART_COUNT}"
                 )));
             }
         }
@@ -325,7 +326,7 @@ impl ToS3Request for CopyObjectInternal {
     }
 }
 
-/// Argument builder for [copy_object()](Client::copy_object_old) API
+/// Argument builder for [copy_object()](Client::copy_object) API
 #[derive(Clone, Debug, Default)]
 pub struct CopyObject {
     client: Client,
@@ -409,9 +410,7 @@ impl CopyObject {
         self.tagging_directive = tagging_directive;
         self
     }
-}
 
-impl CopyObject {
     pub async fn send(self) -> Result<CopyObjectResponse, Error> {
         {
             if let Some(v) = &self.sse {
@@ -612,9 +611,7 @@ impl ComposeObjectInternal {
         self.sources = sources;
         self
     }
-}
 
-impl ComposeObjectInternal {
     #[async_recursion]
     pub async fn send(self) -> (Result<ComposeObjectResponse, Error>, String) {
         let mut upload_id = String::new();
@@ -754,7 +751,7 @@ impl ComposeObjectInternal {
                         let mut headers_copy = headers.clone();
                         headers_copy.add(
                             "x-amz-copy-source-range",
-                            format!("bytes={}-{}", offset, end_bytes),
+                            format!("bytes={offset}-{end_bytes}"),
                         );
 
                         let resp: UploadPartCopyResponse = match self
@@ -885,9 +882,7 @@ impl ComposeObject {
         self.sources = sources;
         self
     }
-}
 
-impl ComposeObject {
     pub async fn send(self) -> Result<ComposeObjectResponse, Error> {
         {
             if let Some(v) = &self.sse {
@@ -934,7 +929,7 @@ impl ComposeObject {
 // region: misc
 
 #[derive(Clone, Debug, Default)]
-/// Source object information for [compose object argument](ComposeObjectArgs)
+/// Source object information for [compose_object](Client::compose_object)
 pub struct ComposeSource {
     pub extra_headers: Option<Multimap>,
     pub extra_query_params: Option<Multimap>,
@@ -963,35 +958,23 @@ impl ComposeSource {
     /// use minio::s3::builders::ComposeSource;
     /// let src = ComposeSource::new("my-src-bucket", "my-src-object").unwrap();
     /// ```
-    pub fn new(bucket_name: &str, object_name: &str) -> Result<ComposeSource, Error> {
+    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self, Error> {
         check_bucket_name(bucket_name, true)?;
         check_object_name(object_name)?;
 
-        Ok(ComposeSource {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
+        Ok(Self {
             bucket: bucket_name.to_owned(),
             object: object_name.to_owned(),
-            version_id: None,
-            ssec: None,
-            offset: None,
-            length: None,
-            match_etag: None,
-            not_match_etag: None,
-            modified_since: None,
-            unmodified_since: None,
-            object_size: None,
-            headers: None,
+            ..Default::default()
         })
     }
 
     pub fn get_object_size(&self) -> u64 {
-        self.object_size.expect("A: ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This shoud not happen.")
+        self.object_size.expect("A: ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This should not happen.")
     }
 
     pub fn get_headers(&self) -> Multimap {
-        self.headers.as_ref().expect("B: ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This shoud not happen.").clone()
+        self.headers.as_ref().expect("B: ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This should not happen.").clone()
     }
 
     pub fn build_headers(&mut self, object_size: u64, etag: String) -> Result<(), Error> {
@@ -1098,24 +1081,14 @@ pub struct CopySource {
 }
 
 impl CopySource {
-    pub fn new(bucket_name: &str, object_name: &str) -> Result<CopySource, Error> {
+    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self, Error> {
         check_bucket_name(bucket_name, true)?;
         check_object_name(object_name)?;
 
-        Ok(CopySource {
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
+        Ok(Self {
             bucket: bucket_name.to_owned(),
             object: object_name.to_owned(),
-            version_id: None,
-            ssec: None,
-            offset: None,
-            length: None,
-            match_etag: None,
-            not_match_etag: None,
-            modified_since: None,
-            unmodified_since: None,
+            ..Default::default()
         })
     }
 
@@ -1178,20 +1151,20 @@ fn into_headers_copy_object(
         }
 
         if !tagging.is_empty() {
-            map.insert("x-amz-tagging".into(), tagging);
+            map.add("x-amz-tagging", tagging);
         }
     }
 
     if let Some(v) = retention {
-        map.insert("x-amz-object-lock-mode".into(), v.mode.to_string());
-        map.insert(
-            "x-amz-object-lock-retain-until-date".into(),
+        map.add("x-amz-object-lock-mode", v.mode.to_string());
+        map.add(
+            "x-amz-object-lock-retain-until-date",
             to_iso8601utc(v.retain_until_date),
         );
     }
 
     if legal_hold {
-        map.insert("x-amz-object-lock-legal-hold".into(), "ON".into());
+        map.add("x-amz-object-lock-legal-hold", "ON");
     }
 
     map

@@ -28,7 +28,11 @@ use http::Method;
 use std::sync::Arc;
 
 // region: append-object
-#[derive(Debug, Clone, Default)]
+
+/// Argument builder for the [`AppendObject`](https://docs.aws.amazon.com/AmazonS3/latest/userguide/directory-buckets-objects-append.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::append_object`](crate::s3::client::Client::append_object) method.
+#[derive(Clone, Debug, Default)]
 pub struct AppendObject {
     client: Client,
 
@@ -107,9 +111,14 @@ impl ToS3Request for AppendObject {
 
 // region: append-object-content
 
-/// AppendObjectContent takes a `ObjectContent` stream and appends it to MinIO/S3.
+/// Argument builder for the [`AppendObject`](https://docs.aws.amazon.com/AmazonS3/latest/userguide/directory-buckets-objects-append.html) S3 API operation.
 ///
-/// It is a higher level API and handles multipart appends transparently.
+/// This struct constructs the parameters required for the [`Client::append_object_content`](crate::s3::client::Client::append_object_content) method.
+/// It is High-level API for appending content to an object using multipart uploads.
+///
+/// `AppendObjectContent` consumes an [`ObjectContent`] stream and transparently appends it to an existing object in MinIO or S3,
+/// managing multipart upload details internally.
+#[derive(Default)]
 pub struct AppendObjectContent {
     client: Client,
 
@@ -284,12 +293,7 @@ impl AppendObjectContent {
             part_number += 1;
             let buffer_size = part_content.len() as u64;
 
-            assert!(
-                buffer_size <= part_size,
-                "{:?} <= {:?}",
-                buffer_size,
-                part_size
-            );
+            assert!(buffer_size <= part_size, "{buffer_size} <= {part_size}",);
 
             if buffer_size == 0 && part_number > 1 {
                 // We are done as we appended at least 1 part and we have

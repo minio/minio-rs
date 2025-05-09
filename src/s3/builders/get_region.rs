@@ -22,7 +22,7 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
-/// Argument builder for [get_region()](Client::get_region) API
+/// This struct constructs the parameters required for the [`Client::get_region`](crate::s3::client::Client::get_region) method.
 #[derive(Clone, Debug, Default)]
 pub struct GetRegion {
     client: Client,

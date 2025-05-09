@@ -22,15 +22,35 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
+/// Represents the response of the `upload_part_copy` API call.
+/// This struct contains metadata and information about the part being copied during a multipart upload.
+///
+/// # Fields
+///
+/// * `headers` - HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
+/// * `region` - The AWS region where the bucket resides.
+/// * `bucket` - Name of the bucket containing the object.
+/// * `object` - Key (path) identifying the object within the bucket.
+/// * `etag` - Entity tag representing a specific version of the object.
+/// * `version_id` - Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
 #[derive(Clone, Debug)]
 pub struct UploadPartCopyResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
     pub bucket: String,
 
+    /// Key (path) identifying the object within the bucket.
     pub object: String,
+
+    /// Entity tag representing a specific version of the object.
     pub etag: String,
+
+    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
     pub version_id: Option<String>,
 }
 
@@ -67,7 +87,7 @@ impl FromS3Response for UploadPartCopyResponse {
 
 #[derive(Clone, Debug)]
 pub struct CopyObjectInternalResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
     pub region: String,
     pub bucket: String,
@@ -114,29 +134,66 @@ impl FromS3Response for CopyObjectInternalResponse {
     }
 }
 
-/// Response of
-/// [copy_object()](crate::s3::client::Client::copy_object_old)
-/// API
+/// Represents the response of the `copy_object` API call.
+/// This struct contains metadata and information about the object being copied.
+///
+/// # Fields
+///
+/// * `headers` - HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
+/// * `region` - The AWS region where the bucket resides.
+/// * `bucket` - Name of the bucket containing the object.
+/// * `object` - Key (path) identifying the object within the bucket.
+/// * `etag` - Entity tag representing a specific version of the object.
+/// * `version_id` - Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
 #[derive(Clone, Debug)]
 pub struct CopyObjectResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket containing the object.
     pub bucket: String,
 
+    /// Key (path) identifying the object within the bucket.
     pub object: String,
+
+    /// Entity tag representing a specific version of the object.
     pub etag: String,
+
+    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
     pub version_id: Option<String>,
 }
 
-/// Response of [compose_object()](crate::s3::client::Client::compose_object) API
+/// Represents the response of the `[compose_object()](crate::s3::client::Client::compose_object) API call.
+/// This struct contains metadata and information about the composed object.
+///
+/// # Fields
+///
+/// * `headers` - HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
+/// * `bucket` - Name of the bucket containing the composed object.
+/// * `object` - Key (path) identifying the composed object within the bucket.
+/// * `region` - The AWS region where the bucket resides.
+/// * `etag` - Entity tag representing a specific version of the composed object.
+/// * `version_id` - Version ID of the composed object, if versioning is enabled.
 #[derive(Debug, Clone)]
 pub struct ComposeObjectResponse {
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// Name of the bucket containing the composed object.
     pub bucket: String,
+
+    /// Key (path) identifying the composed object within the bucket.
     pub object: String,
 
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Entity tag representing a specific version of the composed object.
     pub etag: String,
+
+    /// Version ID of the composed object, if versioning is enabled.
     pub version_id: Option<String>,
 }

@@ -15,7 +15,7 @@
 
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
-    DeleteObjectLockConfigResponse, GetObjectLockConfigResponse, SetObjectLockConfigResponse,
+    DeleteObjectLockConfigResponse, GetObjectLockConfigResponse, PutObjectLockConfigResponse,
 };
 use minio::s3::types::{ObjectLockConfig, RetentionMode, S3Api};
 use minio_common::cleanup_guard::CleanupGuard;
@@ -32,7 +32,7 @@ async fn object_lock_config() {
 
     let bucket_name: String = rand_bucket_name();
     ctx.client
-        .make_bucket(&bucket_name)
+        .create_bucket(&bucket_name)
         .object_lock(true)
         .send()
         .await
@@ -43,9 +43,9 @@ async fn object_lock_config() {
     let config =
         ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();
 
-    let resp: SetObjectLockConfigResponse = ctx
+    let resp: PutObjectLockConfigResponse = ctx
         .client
-        .set_object_lock_config(&bucket_name)
+        .put_object_lock_config(&bucket_name)
         .config(config)
         .send()
         .await

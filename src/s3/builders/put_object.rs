@@ -36,7 +36,7 @@ use std::{collections::HashMap, sync::Arc};
 // region: multipart-upload
 
 /// Argument for
-/// [create_multipart_upload()](Client::create_multipart_upload)
+/// [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload)
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct CreateMultipartUpload {
@@ -145,7 +145,7 @@ impl ToS3Request for CreateMultipartUpload {
 // region: abort-multipart-upload
 
 /// Argument for
-/// [abort_multipart_upload()](Client::abort_multipart_upload)
+/// [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload)
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct AbortMultipartUpload {
@@ -214,7 +214,7 @@ impl ToS3Request for AbortMultipartUpload {
 // region: complete-multipart-upload
 
 /// Argument for
-/// [complete_multipart_upload()](Client::complete_multipart_upload)
+/// [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload)
 /// API
 #[derive(Clone, Debug, Default)]
 pub struct CompleteMultipartUpload {
@@ -317,7 +317,7 @@ impl ToS3Request for CompleteMultipartUpload {
 
 // region: upload-part
 
-/// Argument for [upload_part()](Client::upload_part) S3 API
+/// Argument for [upload_part()](crate::s3::client::Client::upload_part) S3 API
 #[derive(Debug, Clone, Default)]
 pub struct UploadPart {
     client: Client,
@@ -417,8 +417,7 @@ impl ToS3Request for UploadPart {
             if let Some(part_number) = self.part_number {
                 if !(1..=MAX_MULTIPART_COUNT).contains(&part_number) {
                     return Err(Error::InvalidPartNumber(format!(
-                        "part number must be between 1 and {}",
-                        MAX_MULTIPART_COUNT
+                        "part number must be between 1 and {MAX_MULTIPART_COUNT}"
                     )));
                 }
             }
@@ -530,6 +529,7 @@ impl ToS3Request for PutObject {
 /// PutObjectContent takes a `ObjectContent` stream and uploads it to MinIO/S3.
 ///
 /// It is a higher level API and handles multipart uploads transparently.
+#[derive(Default)]
 pub struct PutObjectContent {
     client: Client,
 
@@ -567,18 +567,7 @@ impl PutObjectContent {
             bucket,
             object,
             input_content: content.into(),
-            extra_headers: None,
-            extra_query_params: None,
-            region: None,
-            user_metadata: None,
-            sse: None,
-            tags: None,
-            retention: None,
-            legal_hold: false,
-            part_size: Size::Unknown,
-            content_type: None,
-            content_stream: ContentStream::empty(),
-            part_count: None,
+            ..Default::default()
         }
     }
 
@@ -777,12 +766,7 @@ impl PutObjectContent {
             let buffer_size = part_content.len() as u64;
             total_read += buffer_size;
 
-            assert!(
-                buffer_size <= part_size,
-                "{:?} <= {:?}",
-                buffer_size,
-                part_size
-            );
+            assert!(buffer_size <= part_size, "{buffer_size} <= {part_size}",);
 
             if (buffer_size == 0) && (part_number > 1) {
                 // We are done as we uploaded at least 1 part and we have reached the end of the stream.
@@ -897,8 +881,7 @@ fn into_headers_put_object(
             }
             if !k.starts_with("x-amz-meta-") {
                 return Err(Error::InvalidUserMetadata(format!(
-                    "user metadata key '{}' does not start with 'x-amz-meta-'",
-                    k
+                    "user metadata key '{k}' does not start with 'x-amz-meta-'",
                 )));
             }
         }
@@ -941,10 +924,7 @@ fn into_headers_put_object(
     if !map.contains_key("Content-Type") {
         map.insert(
             "Content-Type".into(),
-            match content_type {
-                Some(content_type) => content_type.clone(),
-                None => "application/octet-stream".into(),
-            },
+            content_type.unwrap_or_else(|| "application/octet-stream".into()),
         );
     }
 

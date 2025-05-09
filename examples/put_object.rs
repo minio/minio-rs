@@ -48,7 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let resp: BucketExistsResponse = client.bucket_exists(&args.bucket).send().await.unwrap();
 
     if !resp.exists {
-        client.make_bucket(&args.bucket).send().await.unwrap();
+        client.create_bucket(&args.bucket).send().await.unwrap();
     }
 
     let content = ObjectContent::from(args.file.as_path());

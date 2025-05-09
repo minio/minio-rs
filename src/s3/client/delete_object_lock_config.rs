@@ -30,24 +30,23 @@ impl Client {
     ///
     /// ```no_run
     /// use minio::s3::Client;
-    /// use minio::s3::response::{DeleteObjectLockConfigResponse, MakeBucketResponse, SetObjectLockConfigResponse};
+    /// use minio::s3::response::{DeleteObjectLockConfigResponse, CreateBucketResponse, PutObjectLockConfigResponse};
     /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
-    ///
     ///
     /// #[tokio::main]
     /// async fn main() {    
     ///     let client: Client = Default::default(); // configure your client here
     ///     let bucket_name = "bucket-name";
     ///
-    ///     let resp: MakeBucketResponse =
-    ///         client.make_bucket(bucket_name).object_lock(true).send().await.unwrap();
+    ///     let resp: CreateBucketResponse =
+    ///         client.create_bucket(bucket_name).object_lock(true).send().await.unwrap();
     ///     println!("created bucket '{}' with object locking enabled", resp.bucket);
     ///
     ///     const DURATION_DAYS: i32 = 7;
     ///     let config = ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();
     ///
-    ///     let resp: SetObjectLockConfigResponse =     
-    ///         client.set_object_lock_config(bucket_name).config(config).send().await.unwrap();
+    ///     let resp: PutObjectLockConfigResponse =     
+    ///         client.put_object_lock_config(bucket_name).config(config).send().await.unwrap();
     ///     println!("configured object locking for bucket '{}'", resp.bucket);
     ///
     ///     let resp: DeleteObjectLockConfigResponse =

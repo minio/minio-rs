@@ -25,7 +25,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use http::Method;
 
-/// Argument builder for [bucket_exists()](Client::bucket_exists) API
+/// Argument builder for the [`SelectObjectContent`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_SelectObjectContent.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::select_object_content`](crate::s3::client::Client::select_object_content) method.
 #[derive(Default)]
 pub struct SelectObjectContent {
     client: Client,

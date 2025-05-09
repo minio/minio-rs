@@ -21,7 +21,9 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, check_object_name, insert};
 use http::Method;
 
-/// Argument builder for [get_object_retention()](Client::get_object_retention) API
+/// Argument builder for the [`GetObjectRetention`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObjectRetention.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::get_object_retention`](crate::s3::client::Client::get_object_retention) method.
 #[derive(Clone, Debug, Default)]
 pub struct GetObjectRetention {
     client: Client,

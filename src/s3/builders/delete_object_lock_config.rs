@@ -22,10 +22,10 @@ use crate::s3::utils::{check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
 
-/// Argument builder for [delete_object_lock_config()](Client::delete_object_lock_config) API
+/// This struct constructs the parameters required for the [`Client::delete_object_lock_config`](crate::s3::client::Client::delete_object_lock_config) method.
 pub type DeleteObjectLockConfig = BucketCommon<DeleteObjectLockConfigPhantomData>;
 
-#[derive(Default, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DeleteObjectLockConfigPhantomData;
 
 impl S3Api for DeleteObjectLockConfig {

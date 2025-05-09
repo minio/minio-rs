@@ -23,16 +23,39 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response of
-/// [get_bucket_versioning()](crate::s3::client::Client::get_bucket_versioning)
-/// API
+/// Response from the [`get_bucket_versioning`](crate::s3::client::Client::get_bucket_versioning) API call,
+/// providing the versioning configuration of a bucket.
+///
+/// This includes the current versioning status and the MFA (Multi-Factor Authentication) delete setting,
+/// if configured.
+///
+/// For more information, refer to the [AWS S3 GetBucketVersioning API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketVersioning.html).
 #[derive(Clone, Debug)]
 pub struct GetBucketVersioningResponse {
-    /// Set of HTTP headers returned by the server.
+    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
+
+    /// The AWS region where the bucket resides.
     pub region: String,
+
+    /// Name of the bucket whose versioning configuration is retrieved.
     pub bucket: String,
+
+    /// The versioning status of the bucket.
+    ///
+    /// - `Some(VersioningStatus::Enabled)`: Versioning is enabled.
+    /// - `Some(VersioningStatus::Suspended)`: Versioning is suspended.
+    /// - `None`: Versioning has never been configured for this bucket.
     pub status: Option<VersioningStatus>,
+
+    /// Indicates whether MFA delete is enabled for the bucket.
+    ///
+    /// - `Some(true)`: MFA delete is enabled.
+    /// - `Some(false)`: MFA delete is disabled.
+    /// - `None`: MFA delete has never been configured for this bucket.
+    ///
+    /// Note: MFA delete adds an extra layer of security by requiring additional authentication
+    /// for certain operations. For more details, see the [AWS S3 MFA Delete documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/MultiFactorAuthenticationDelete.html).
     pub mfa_delete: Option<bool>,
 }
 

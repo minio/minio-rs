@@ -31,13 +31,13 @@ impl Client {
     /// use minio::s3::response::GetBucketNotificationResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: GetBucketNotificationResponse =
-    ///         client.get_bucket_notification("bucket-name").send().await.unwrap();
-    ///     println!("retrieved bucket notification config '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
+    ///     let resp: GetBucketNotificationResponse = client
+    ///         .get_bucket_notification("bucket-name")
+    ///         .send().await.unwrap();
+    ///     println!("retrieved bucket notification config '{:?}' from bucket '{}'", resp.config, resp.bucket);
     /// }
     /// ```
     pub fn get_bucket_notification<S: Into<String>>(&self, bucket: S) -> GetBucketNotification {

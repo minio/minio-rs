@@ -27,7 +27,7 @@ impl Client {
     /// Creates a [`GetRegion`] request builder.
     ///
     /// To execute the request, call [`GetRegion::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`GetRegionResponse`](crate::s3::response::GetRegionResponse).
+    /// which returns a [`Result`] containing a [`GetRegionResponse`].
     ///
     /// # Example
     ///
@@ -36,12 +36,12 @@ impl Client {
     /// use minio::s3::response::GetRegionResponse;
     /// use minio::s3::types::S3Api;
     ///
-    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: GetRegionResponse =
-    ///         client.get_region("bucket-name").send().await.unwrap();
+    ///     let resp: GetRegionResponse = client
+    ///         .get_region("bucket-name")
+    ///         .send().await.unwrap();
     ///     println!("retrieved region '{:?}' for bucket '{}'", resp.region_response, resp.bucket);
     /// }
     /// ```

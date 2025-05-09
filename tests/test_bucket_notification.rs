@@ -15,7 +15,7 @@
 
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{
-    DeleteBucketNotificationResponse, GetBucketNotificationResponse, SetBucketNotificationResponse,
+    DeleteBucketNotificationResponse, GetBucketNotificationResponse, PutBucketNotificationResponse,
 };
 use minio::s3::types::{NotificationConfig, S3Api};
 use minio_common::example::create_bucket_notification_config_example;
@@ -30,9 +30,9 @@ async fn test_bucket_notification() {
 
     let config: NotificationConfig = create_bucket_notification_config_example();
 
-    let resp: SetBucketNotificationResponse = ctx
+    let resp: PutBucketNotificationResponse = ctx
         .client
-        .set_bucket_notification(&bucket_name)
+        .put_bucket_notification(&bucket_name)
         .notification_config(config.clone())
         .send()
         .await

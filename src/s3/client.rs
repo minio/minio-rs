@@ -43,50 +43,49 @@ use tokio::task;
 mod append_object;
 mod bucket_exists;
 mod copy_object;
+mod create_bucket;
+mod delete_bucket;
 mod delete_bucket_encryption;
 mod delete_bucket_lifecycle;
 mod delete_bucket_notification;
 mod delete_bucket_policy;
 mod delete_bucket_replication;
-mod delete_bucket_tags;
+mod delete_bucket_tagging;
 mod delete_object_lock_config;
-mod delete_object_tags;
-mod disable_object_legal_hold;
-mod enable_object_legal_hold;
+mod delete_object_tagging;
+mod delete_objects;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
 mod get_bucket_notification;
 mod get_bucket_policy;
 mod get_bucket_replication;
-mod get_bucket_tags;
+mod get_bucket_tagging;
 mod get_bucket_versioning;
 mod get_object;
+mod get_object_legal_hold;
 mod get_object_lock_config;
+mod get_object_prompt;
 mod get_object_retention;
-mod get_object_tags;
+mod get_object_tagging;
 mod get_presigned_object_url;
 mod get_presigned_post_form_data;
 mod get_region;
-mod is_object_legal_hold_enabled;
+mod list_bucket_notification;
 mod list_buckets;
 mod list_objects;
-mod listen_bucket_notification;
-mod make_bucket;
-mod object_prompt;
+mod put_bucket_encryption;
+mod put_bucket_lifecycle;
+mod put_bucket_notification;
+mod put_bucket_policy;
+mod put_bucket_replication;
+mod put_bucket_tagging;
+mod put_bucket_versioning;
 mod put_object;
-mod remove_bucket;
-mod remove_objects;
+mod put_object_legal_hold;
+mod put_object_lock_config;
+mod put_object_retention;
+mod put_object_tagging;
 mod select_object_content;
-mod set_bucket_encryption;
-mod set_bucket_lifecycle;
-mod set_bucket_notification;
-mod set_bucket_policy;
-mod set_bucket_replication;
-mod set_bucket_tags;
-mod set_bucket_versioning;
-mod set_object_lock_config;
-mod set_object_retention;
-mod set_object_tags;
 mod stat_object;
 
 use super::types::S3Api;
@@ -252,7 +251,7 @@ impl Client {
     /// Returns whether this client is configured to use the express endpoint and is minio enterprise.
     pub fn is_minio_express(&self) -> bool {
         if self.shared.express.get().is_some() {
-            self.shared.express.get().unwrap().clone()
+            *self.shared.express.get().unwrap()
         } else {
             task::block_in_place(|| match tokio::runtime::Runtime::new() {
                 Ok(rt) => {
@@ -483,12 +482,8 @@ impl Client {
             // Sort headers alphabetically by name
             header_strings.sort();
 
-            let body_str: String = String::from_utf8(
-                body.clone()
-                    .unwrap_or(&SegmentedBytes::new())
-                    .to_bytes()
-                    .to_vec(),
-            )?;
+            let body_str: String =
+                String::from_utf8(body.unwrap_or(&SegmentedBytes::new()).to_bytes().to_vec())?;
 
             println!(
                 "S3 request: {} url={:?}; headers={:?}; body={}\n",
@@ -535,15 +530,12 @@ impl Client {
             retry,
         );
 
-        match e {
-            Error::S3Error(ref err) => {
-                if (err.code == ErrorCode::NoSuchBucket) || (err.code == ErrorCode::RetryHead) {
-                    if let Some(v) = bucket_name {
-                        self.shared.region_map.remove(v);
-                    }
+        if let Error::S3Error(ref err) = e {
+            if (err.code == ErrorCode::NoSuchBucket) || (err.code == ErrorCode::RetryHead) {
+                if let Some(v) = bucket_name {
+                    self.shared.region_map.remove(v);
                 }
             }
-            _ => {}
         };
 
         Err(e)
@@ -700,12 +692,12 @@ impl SharedClientItems {
             409 => match bucket_name {
                 Some(_) => (ErrorCode::NoSuchBucket, "Bucket does not exist".into()),
                 _ => (
-                    ErrorCode::ResourceConflict.into(),
+                    ErrorCode::ResourceConflict,
                     "Request resource conflicts".into(),
                 ),
             },
             501 => (
-                ErrorCode::MethodNotAllowed.into(),
+                ErrorCode::MethodNotAllowed,
                 "The specified method is not allowed against this resource".into(),
             ),
             _ => return Error::ServerError(http_status_code),
