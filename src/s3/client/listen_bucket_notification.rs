@@ -16,13 +16,13 @@
 //! MinIO Extension API for S3 Buckets: ListenBucketNotification
 
 use super::Client;
-use crate::s3::builders::ListBucketNotification;
+use crate::s3::builders::ListenBucketNotification;
 
 impl Client {
-    /// Creates a [`ListBucketNotification`] request builder.
+    /// Creates a [`ListenBucketNotification`] request builder.
     ///
-    /// To execute the request, call [`ListBucketNotification::send()`](crate::s3::types::S3Api::send),
-    /// which returns a tuple of [`ListBucketNotificationResponse`](crate::s3::response::ListBucketNotificationResponse) and a
+    /// To execute the request, call [`ListenBucketNotification::send()`](crate::s3::types::S3Api::send),
+    /// which returns a tuple of [`ListenBucketNotificationResponse`](crate::s3::response::ListenBucketNotificationResponse) and a
     /// stream of [`NotificationRecords`](crate::s3::types::NotificationRecords). The former contains the HTTP headers
     /// returned by the server and the latter is a stream of notification
     /// records. In normal operation (when there are no errors), the stream
@@ -43,7 +43,7 @@ impl Client {
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
     ///     let (_resp, mut event_stream) = client
-    ///         .list_bucket_notification("bucket-name")
+    ///         .listen_bucket_notification("bucket-name")
     ///         .send().await .unwrap();
     ///
     ///     while let Some(event) = event_stream.next().await {
@@ -53,7 +53,10 @@ impl Client {
     ///     }
     /// }
     /// ```
-    pub fn list_bucket_notification<S: Into<String>>(&self, bucket: S) -> ListBucketNotification {
-        ListBucketNotification::new(self.clone(), bucket.into())
+    pub fn listen_bucket_notification<S: Into<String>>(
+        &self,
+        bucket: S,
+    ) -> ListenBucketNotification {
+        ListenBucketNotification::new(self.clone(), bucket.into())
     }
 }

@@ -21,16 +21,16 @@ use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::{
     client::Client,
     error::Error,
-    response::ListBucketNotificationResponse,
+    response::ListenBucketNotificationResponse,
     types::{NotificationRecords, S3Api, S3Request, ToS3Request},
     utils::check_bucket_name,
 };
 
-/// Argument builder for
-/// [listen_bucket_notification()](crate::s3::client::Client::list_bucket_notification)
-/// API.
+/// Argument builder for the [`ListenBucketNotification`](https://min.io/docs/minio/linux/developers/go/API.html#ListenBucketNotification)
+///
+/// This struct constructs the parameters required for the [`Client::listen_bucket_notification`](crate::s3::client::Client::listen_bucket_notification) method.
 #[derive(Clone, Debug, Default)]
-pub struct ListBucketNotification {
+pub struct ListenBucketNotification {
     client: Client,
 
     extra_headers: Option<Multimap>,
@@ -42,7 +42,7 @@ pub struct ListBucketNotification {
     events: Option<Vec<String>>,
 }
 
-impl ListBucketNotification {
+impl ListenBucketNotification {
     pub fn new(client: Client, bucket: String) -> Self {
         Self {
             client,
@@ -83,19 +83,19 @@ impl ListBucketNotification {
 }
 
 #[async_trait]
-impl S3Api for ListBucketNotification {
+impl S3Api for ListenBucketNotification {
     type S3Response = (
-        ListBucketNotificationResponse,
+        ListenBucketNotificationResponse,
         Box<dyn Stream<Item = Result<NotificationRecords, Error>> + Unpin + Send>,
     );
 }
 
-impl ToS3Request for ListBucketNotification {
+impl ToS3Request for ListenBucketNotification {
     fn to_s3request(self) -> Result<S3Request, Error> {
         {
             check_bucket_name(&self.bucket, true)?;
             if self.client.is_aws_host() {
-                return Err(Error::UnsupportedApi("ListBucketNotification".into()));
+                return Err(Error::UnsupportedApi("ListenBucketNotification".into()));
             }
         }
 
