@@ -45,7 +45,7 @@ async fn listen_bucket_notification() {
 
         let (_resp, mut event_stream) = ctx2
             .client
-            .list_bucket_notification(&bucket_name2)
+            .listen_bucket_notification(&bucket_name2)
             .send()
             .await
             .unwrap();

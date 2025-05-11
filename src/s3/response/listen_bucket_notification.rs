@@ -26,10 +26,10 @@ use crate::s3::{
 };
 
 /// Response of
-/// [list_bucket_notification()](crate::s3::client::Client::list_bucket_notification)
+/// [listen _bucket_notification()](crate::s3::client::Client::listen_bucket_notification)
 /// API
 #[derive(Debug)]
-pub struct ListBucketNotificationResponse {
+pub struct ListenBucketNotificationResponse {
     /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
 
@@ -43,7 +43,7 @@ pub struct ListBucketNotificationResponse {
 #[async_trait::async_trait]
 impl FromS3Response
     for (
-        ListBucketNotificationResponse,
+        ListenBucketNotificationResponse,
         Box<dyn Stream<Item = Result<NotificationRecords, Error>> + Unpin + Send>,
     )
 {
@@ -81,7 +81,7 @@ impl FromS3Response
         ));
 
         Ok((
-            ListBucketNotificationResponse {
+            ListenBucketNotificationResponse {
                 headers,
                 region: req.inner_region,
                 bucket: take_bucket(req.bucket)?,
