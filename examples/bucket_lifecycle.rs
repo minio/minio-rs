@@ -17,10 +17,11 @@ mod common;
 
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
 use minio::s3::Client;
+use minio::s3::lifecycle_config::{LifecycleConfig, LifecycleRule};
 use minio::s3::response::{
     DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, PutBucketLifecycleResponse,
 };
-use minio::s3::types::{Filter, LifecycleConfig, LifecycleRule, S3Api};
+use minio::s3::types::{Filter, S3Api};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -38,23 +39,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     let rules: Vec<LifecycleRule> = vec![LifecycleRule {
-        abort_incomplete_multipart_upload_days_after_initiation: None,
-        expiration_date: None,
-        expiration_days: Some(365),
-        expiration_expired_object_delete_marker: None,
-        filter: Filter {
-            and_operator: None,
-            prefix: Some(String::from("logs/")),
-            tag: None,
-        },
         id: String::from("rule1"),
-        noncurrent_version_expiration_noncurrent_days: None,
-        noncurrent_version_transition_noncurrent_days: None,
-        noncurrent_version_transition_storage_class: None,
+        expiration_days: Some(365),
+        filter: Filter {
+            prefix: Some(String::from("logs/")),
+            ..Default::default()
+        },
         status: true,
-        transition_date: None,
-        transition_days: None,
-        transition_storage_class: None,
+        ..Default::default()
     }];
 
     let resp: PutBucketLifecycleResponse = client

@@ -14,10 +14,12 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
-use crate::s3::types::{FromS3Response, LifecycleConfig, S3Request};
-use crate::s3::utils::take_bucket;
+use crate::s3::lifecycle_config::LifecycleConfig;
+use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::{UtcTime, take_bucket};
 use async_trait::async_trait;
 use bytes::Buf;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
@@ -47,6 +49,10 @@ pub struct GetBucketLifecycleResponse {
     ///
     /// If the bucket has no lifecycle configuration, this field may contain an empty configuration.
     pub config: LifecycleConfig,
+
+    /// Optional value of `X-Minio-LifecycleConfig-UpdatedAt` header, indicating the last update
+    /// time of the lifecycle configuration.
+    pub updated_at: Option<UtcTime>,
 }
 
 #[async_trait]
@@ -62,11 +68,21 @@ impl FromS3Response for GetBucketLifecycleResponse {
             let mut root = Element::parse(body.reader())?;
             LifecycleConfig::from_xml(&mut root)?
         };
+        let updated_at: Option<DateTime<Utc>> = headers
+            .get("x-minio-lifecycleconfig-updatedat")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| {
+                NaiveDateTime::parse_from_str(v, "%Y%m%dT%H%M%SZ")
+                    .ok()
+                    .map(|naive| DateTime::from_naive_utc_and_offset(naive, Utc))
+            });
+
         Ok(Self {
             headers,
             region: req.inner_region,
             bucket: take_bucket(req.bucket)?,
             config,
+            updated_at,
         })
     }
 }
