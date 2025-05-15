@@ -14,10 +14,12 @@
 // limitations under the License.
 
 use minio::s3::client::DEFAULT_REGION;
+use minio::s3::error::{Error, ErrorCode};
+use minio::s3::lifecycle_config::LifecycleConfig;
 use minio::s3::response::{
     DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, PutBucketLifecycleResponse,
 };
-use minio::s3::types::{LifecycleConfig, S3Api};
+use minio::s3::types::S3Api;
 use minio_common::example::create_bucket_lifecycle_config_examples;
 use minio_common::test_context::TestContext;
 
@@ -37,39 +39,47 @@ async fn bucket_lifecycle() {
         .unwrap();
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.region, DEFAULT_REGION);
-    //println!("response of setting lifecycle: resp={:?}", resp);
 
-    if false {
-        // TODO panics with: called `Result::unwrap()` on an `Err` value: XmlError("<Filter> tag not found")
-        let resp: GetBucketLifecycleResponse = ctx
-            .client
-            .get_bucket_lifecycle(&bucket_name)
-            .send()
-            .await
-            .unwrap();
-        assert_eq!(resp.config, config);
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.region, DEFAULT_REGION);
-        println!("response of getting lifecycle: resp={:?}", resp);
-    }
+    let resp: GetBucketLifecycleResponse = ctx
+        .client
+        .get_bucket_lifecycle(&bucket_name)
+        .with_updated_at(false)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.config, config);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
+    assert!(resp.updated_at.is_none());
 
-    let _resp: DeleteBucketLifecycleResponse = ctx
+    let resp: GetBucketLifecycleResponse = ctx
+        .client
+        .get_bucket_lifecycle(&bucket_name)
+        .with_updated_at(true)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.config, config);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
+    assert!(resp.updated_at.is_some());
+
+    let resp: DeleteBucketLifecycleResponse = ctx
         .client
         .delete_bucket_lifecycle(&bucket_name)
         .send()
         .await
         .unwrap();
-    //println!("response of deleting lifecycle: resp={:?}", resp);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
-    if false {
-        // TODO panics with: called `Result::unwrap()` on an `Err` value: XmlError("<Filter> tag not found")
-        let resp: GetBucketLifecycleResponse = ctx
-            .client
-            .get_bucket_lifecycle(&bucket_name)
-            .send()
-            .await
-            .unwrap();
-        println!("response of getting policy: resp={:?}", resp);
-        //assert_eq!(resp.config, LifecycleConfig::default());
+    let resp: Result<GetBucketLifecycleResponse, Error> =
+        ctx.client.get_bucket_lifecycle(&bucket_name).send().await;
+    match resp {
+        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NoSuchLifecycleConfiguration),
+        v => panic!(
+            "Expected error S3Error(NoSuchLifecycleConfiguration): but got {:?}",
+            v
+        ),
     }
 }

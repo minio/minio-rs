@@ -15,15 +15,18 @@
 
 use crate::s3::Client;
 use crate::s3::error::Error;
+use crate::s3::lifecycle_config::LifecycleConfig;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::PutBucketLifecycleResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::types::{LifecycleConfig, S3Api, S3Request, ToS3Request};
+use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
 
-/// Argument builder for [put_bucket_lifecycle()](crate::s3::client::Client::put_bucket_lifecycle) API
+/// Argument builder for the [`PutBucketLifecycle`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketLifecycle.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::put_bucket_lifecycle`](crate::s3::client::Client::put_bucket_lifecycle) method.
 #[derive(Clone, Debug, Default)]
 pub struct PutBucketLifecycle {
     client: Client,

@@ -31,26 +31,19 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketLifecycleResponse;
-    /// use minio::s3::types::{Filter, LifecycleConfig, LifecycleRule, S3Api};
+    /// use minio::s3::types::{Filter, S3Api};
+    /// use minio::s3::lifecycle_config::{LifecycleRule, LifecycleConfig};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    /// let client: Client = Default::default(); // configure your client here
     ///
     ///     let rules: Vec<LifecycleRule> = vec![LifecycleRule {
-    ///         abort_incomplete_multipart_upload_days_after_initiation: None,
-    ///         expiration_date: None,
-    ///         expiration_days: Some(365),
-    ///         expiration_expired_object_delete_marker: None,
-    ///         filter: Filter {and_operator: None, prefix: Some(String::from("logs/")), tag: None},
     ///         id: String::from("rule1"),
-    ///         noncurrent_version_expiration_noncurrent_days: None,
-    ///         noncurrent_version_transition_noncurrent_days: None,
-    ///         noncurrent_version_transition_storage_class: None,
+    ///         filter: Filter {and_operator: None, prefix: Some(String::from("logs/")), tag: None},
+    ///         expiration_days: Some(365),
     ///         status: true,
-    ///         transition_date: None,
-    ///         transition_days: None,
-    ///         transition_storage_class: None,
+    ///         ..Default::default()
     ///     }];
     ///
     ///     let resp: PutBucketLifecycleResponse = client

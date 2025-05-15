@@ -37,6 +37,7 @@ pub enum ErrorCode {
     ServerSideEncryptionConfigurationNotFoundError,
     NoSuchTagSet,
     NoSuchObjectLockConfiguration,
+    NoSuchLifecycleConfiguration,
     NoSuchKey,
     ResourceNotFound,
     MethodNotAllowed,
@@ -66,6 +67,7 @@ impl ErrorCode {
             }
             "nosuchtagset" => ErrorCode::NoSuchTagSet,
             "nosuchobjectlockconfiguration" => ErrorCode::NoSuchObjectLockConfiguration,
+            "nosuchlifecycleconfiguration" => ErrorCode::NoSuchLifecycleConfiguration,
             "nosuchkey" => ErrorCode::NoSuchKey,
             "resourcenotfound" => ErrorCode::ResourceNotFound,
             "methodnotallowed" => ErrorCode::MethodNotAllowed,
