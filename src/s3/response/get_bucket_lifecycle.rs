@@ -65,8 +65,8 @@ impl FromS3Response for GetBucketLifecycleResponse {
         let headers: HeaderMap = mem::take(resp.headers_mut());
         let config: LifecycleConfig = {
             let body = resp.bytes().await?;
-            let mut root = Element::parse(body.reader())?;
-            LifecycleConfig::from_xml(&mut root)?
+            let root = Element::parse(body.reader())?;
+            LifecycleConfig::from_xml(&root)?
         };
         let updated_at: Option<DateTime<Utc>> = headers
             .get("x-minio-lifecycleconfig-updatedat")

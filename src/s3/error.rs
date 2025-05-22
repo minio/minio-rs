@@ -46,6 +46,7 @@ pub enum ErrorCode {
     NotSupported,
     BucketNotEmpty,
     BucketAlreadyOwnedByYou,
+    InvalidWriteOffset,
 
     OtherError(String),
 }
@@ -76,6 +77,7 @@ impl ErrorCode {
             "notsupported" => ErrorCode::NotSupported,
             "bucketnotempty" => ErrorCode::BucketNotEmpty,
             "bucketalreadyownedbyyou" => ErrorCode::BucketAlreadyOwnedByYou,
+            "invalidwriteoffset" => ErrorCode::InvalidWriteOffset,
 
             v => ErrorCode::OtherError(v.to_owned()),
         }
