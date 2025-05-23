@@ -43,14 +43,6 @@ async fn main() {
 - Builders implement [`ToS3Request`] for request conversion and [`S3Api`] for execution
 - Responses implement [`FromS3Response`] for consistent deserialization
 
-#![allow(clippy::result_large_err)]
-#![allow(clippy::too_many_arguments)]
-pub mod s3;
-
-#[cfg(test)]
-#[macro_use]
-extern crate quickcheck;
-
 
 ## Examples
 
