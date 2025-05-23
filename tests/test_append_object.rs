@@ -26,6 +26,48 @@ use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use tokio::sync::mpsc;
 
+/// create an object with the given content and check that it is created correctly
+async fn create_object_helper(
+    content: &str,
+    bucket_name: &str,
+    object_name: &str,
+    ctx: &TestContext,
+) {
+    let data: SegmentedBytes = SegmentedBytes::from(content.to_string());
+    let size = content.len() as u64;
+    // create an object (with put) that contains "aaaa"
+    let resp: PutObjectResponse = ctx
+        .client
+        .put_object(bucket_name, object_name, data)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+
+    let resp: GetObjectResponse = ctx
+        .client
+        .get_object(bucket_name, object_name)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.object_size, size);
+
+    // double check that the content we just have put is "aaaa"
+    let content1: String = String::from_utf8(
+        resp.content
+            .to_segmented_bytes()
+            .await
+            .unwrap()
+            .to_bytes()
+            .to_vec(),
+    )
+    .unwrap();
+    assert_eq!(content, content1);
+}
+
 /// Append to the end of an existing object (happy flow)
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn append_object_0() {
@@ -40,44 +82,12 @@ async fn append_object_0() {
 
     let content1 = "aaaa";
     let content2 = "bbbb";
-
     let size = content1.len() as u64;
-    let data1: SegmentedBytes = SegmentedBytes::from(content1.to_string());
-    let data2: SegmentedBytes = SegmentedBytes::from(content2.to_string());
 
-    // first create an object (with put) that contains "aaaa"
-    let resp: PutObjectResponse = ctx
-        .client
-        .put_object(&bucket_name, &object_name, data1)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-
-    let resp: GetObjectResponse = ctx
-        .client
-        .get_object(&bucket_name, &object_name)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size);
-
-    // double check that the content we just have put is "aaaa"
-    let content: String = String::from_utf8(
-        resp.content
-            .to_segmented_bytes()
-            .await
-            .unwrap()
-            .to_bytes()
-            .to_vec(),
-    )
-    .unwrap();
-    assert_eq!(content, content1);
+    create_object_helper(content1, &bucket_name, &object_name, &ctx).await;
 
     // now append "bbbb" to the end of the object
+    let data2: SegmentedBytes = SegmentedBytes::from(content2.to_string());
     let offset_bytes = size;
     let resp: AppendObjectResponse = ctx
         .client
@@ -127,44 +137,12 @@ async fn append_object_1() {
 
     let content1 = "aaaa";
     let content2 = "bbbb";
-
     let size = content1.len() as u64;
-    let data1: SegmentedBytes = SegmentedBytes::from(content1.to_string());
-    let data2: SegmentedBytes = SegmentedBytes::from(content2.to_string());
 
-    // first create an object (with put) that contains "aaaa"
-    let resp: PutObjectResponse = ctx
-        .client
-        .put_object(&bucket_name, &object_name, data1)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-
-    let resp: GetObjectResponse = ctx
-        .client
-        .get_object(&bucket_name, &object_name)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size);
-
-    // double check that the content we just have put is "aaaa"
-    let content: String = String::from_utf8(
-        resp.content
-            .to_segmented_bytes()
-            .await
-            .unwrap()
-            .to_bytes()
-            .to_vec(),
-    )
-    .unwrap();
-    assert_eq!(content, content1);
+    create_object_helper(content1, &bucket_name, &object_name, &ctx).await;
 
     // now append "bbbb" to the beginning of the object
+    let data2: SegmentedBytes = SegmentedBytes::from(content2.to_string());
     let offset_bytes = 0; // byte 0, thus the beginning of the file
     let resp: AppendObjectResponse = ctx
         .client
@@ -213,45 +191,13 @@ async fn append_object_2() {
 
     let content1 = "aaaa";
     let content2 = "bbbb";
-
     let size = content1.len() as u64;
-    let data1: SegmentedBytes = SegmentedBytes::from(content1.to_string());
-    let data2: SegmentedBytes = SegmentedBytes::from(content2.to_string());
 
-    // first create an object (with put) that contains "aaaa"
-    let resp: PutObjectResponse = ctx
-        .client
-        .put_object(&bucket_name, &object_name, data1)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-
-    let resp: GetObjectResponse = ctx
-        .client
-        .get_object(&bucket_name, &object_name)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size);
-
-    // double check that the content we just have put is "aaaa"
-    let content: String = String::from_utf8(
-        resp.content
-            .to_segmented_bytes()
-            .await
-            .unwrap()
-            .to_bytes()
-            .to_vec(),
-    )
-    .unwrap();
-    assert_eq!(content, content1);
+    create_object_helper(content1, &bucket_name, &object_name, &ctx).await;
 
     // now try to append "bbbb" to the object at an invalid offset
     let offset_bytes = size - 1;
+    let data2: SegmentedBytes = SegmentedBytes::from(content2.to_string());
     let resp: Result<AppendObjectResponse, Error> = ctx
         .client
         .append_object(&bucket_name, &object_name, data2, offset_bytes)
@@ -281,44 +227,12 @@ async fn append_object_3() {
 
     let content1 = "aaaa";
     let content2 = "bbbb";
-
     let size = content1.len() as u64;
-    let data1: SegmentedBytes = SegmentedBytes::from(content1.to_string());
-    let data2: SegmentedBytes = SegmentedBytes::from(content2.to_string());
 
-    // first create an object (with put) that contains "aaaa"
-    let resp: PutObjectResponse = ctx
-        .client
-        .put_object(&bucket_name, &object_name, data1)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-
-    let resp: GetObjectResponse = ctx
-        .client
-        .get_object(&bucket_name, &object_name)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size);
-
-    // double check that the content we just have put is "aaaa"
-    let content: String = String::from_utf8(
-        resp.content
-            .to_segmented_bytes()
-            .await
-            .unwrap()
-            .to_bytes()
-            .to_vec(),
-    )
-    .unwrap();
-    assert_eq!(content, content1);
+    create_object_helper(content1, &bucket_name, &object_name, &ctx).await;
 
     // now try to append "bbbb" to the object at an invalid offset
+    let data2: SegmentedBytes = SegmentedBytes::from(content2.to_string());
     let offset_bytes = size + 1;
     let resp: Result<AppendObjectResponse, Error> = ctx
         .client
@@ -430,39 +344,9 @@ async fn append_object_content_0() {
 
     let content1 = "aaaaa";
     let content2 = "bbbbb";
-
     let size = content1.len() as u64;
-    let data1: SegmentedBytes = SegmentedBytes::from(content1.to_string());
-    //let data2: SegmentedBytes = SegmentedBytes::from(content2.to_string());
 
-    let resp: PutObjectResponse = ctx
-        .client
-        .put_object(&bucket_name, &object_name, data1)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-
-    let resp: GetObjectResponse = ctx
-        .client
-        .get_object(&bucket_name, &object_name)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-
-    let content: String = String::from_utf8(
-        resp.content
-            .to_segmented_bytes()
-            .await
-            .unwrap()
-            .to_bytes()
-            .to_vec(),
-    )
-    .unwrap();
-    assert_eq!(content, content1);
+    create_object_helper(content1, &bucket_name, &object_name, &ctx).await;
 
     let resp: AppendObjectResponse = ctx
         .client
