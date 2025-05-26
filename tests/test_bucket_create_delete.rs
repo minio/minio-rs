@@ -15,6 +15,7 @@
 
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::error::{Error, ErrorCode};
+use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
 use minio::s3::response::{BucketExistsResponse, CreateBucketResponse, DeleteBucketResponse};
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
@@ -27,14 +28,14 @@ async fn bucket_create() {
 
     // try to create a bucket that does not exist
     let resp: CreateBucketResponse = ctx.client.create_bucket(&bucket_name).send().await.unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     // check that the bucket exists
     let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
-    assert!(resp.exists);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert!(resp.exists());
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     // try to create a bucket that already exists
     let resp: Result<CreateBucketResponse, Error> =
@@ -66,23 +67,23 @@ async fn bucket_delete() {
 
     // create a new bucket
     let resp: CreateBucketResponse = ctx.client.create_bucket(&bucket_name).send().await.unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     // check that the bucket exists
     let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
-    assert!(resp.exists);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert!(resp.exists());
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     // try to remove a bucket that exists
     let resp: DeleteBucketResponse = ctx.client.delete_bucket(&bucket_name).send().await.unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     // check that the bucket does not exist anymore
     let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
-    assert!(!resp.exists);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, "");
+    assert!(!resp.exists());
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), "");
 }

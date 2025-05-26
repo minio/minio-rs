@@ -14,10 +14,10 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, NotificationConfig, S3Request};
-use crate::s3::utils::take_bucket;
-use async_trait::async_trait;
-use bytes::Buf;
+use crate::{impl_from_s3response, impl_has_s3fields};
+use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
@@ -31,42 +31,23 @@ use xmltree::Element;
 /// For more information, refer to the [AWS S3 GetBucketNotificationConfiguration API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketNotificationConfiguration.html).
 #[derive(Clone, Debug)]
 pub struct GetBucketNotificationResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket whose notification configuration is retrieved.
-    pub bucket: String,
-
-    /// The notification configuration of the bucket.
-    ///
-    /// This includes the event types and the destinations (e.g., SNS topics, SQS queues, Lambda functions)
-    /// configured to receive notifications for those events.
-    ///
-    /// If the bucket has no notification configuration, this field may contain an empty configuration.
-    pub config: NotificationConfig,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 }
 
-#[async_trait]
-impl FromS3Response for GetBucketNotificationResponse {
-    async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        let mut resp = resp?;
+impl_from_s3response!(GetBucketNotificationResponse);
+impl_has_s3fields!(GetBucketNotificationResponse);
 
-        let headers: HeaderMap = mem::take(resp.headers_mut());
-        let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
-        let config = NotificationConfig::from_xml(&mut root)?;
+impl HasBucket for GetBucketNotificationResponse {}
+impl HasRegion for GetBucketNotificationResponse {}
 
-        Ok(Self {
-            headers,
-            region: req.inner_region,
-            bucket: take_bucket(req.bucket)?,
-            config,
-        })
+impl GetBucketNotificationResponse {
+    /// Returns the notification configuration of the bucket.
+    ///
+    /// This configuration includes the event types and the destinations (e.g., SNS topics, SQS queues, Lambda functions)
+    /// configured to receive notifications for those events.
+    pub fn config(&self) -> Result<NotificationConfig, Error> {
+        NotificationConfig::from_xml(&mut Element::parse(self.body.clone().reader())?)
     }
 }

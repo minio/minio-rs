@@ -16,7 +16,6 @@
 use super::{Client, DEFAULT_REGION};
 use crate::s3::builders::GetRegion;
 use crate::s3::error::Error;
-use crate::s3::response::GetRegionResponse;
 use crate::s3::types::S3Api;
 
 impl Client {
@@ -31,6 +30,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetRegionResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -38,7 +38,7 @@ impl Client {
     ///     let resp: GetRegionResponse = client
     ///         .get_region("bucket-name")
     ///         .send().await.unwrap();
-    ///     println!("retrieved region '{:?}' for bucket '{}'", resp.region_response, resp.bucket);
+    ///     println!("retrieved region '{:?}' for bucket '{}'", resp.region_response(), resp.bucket());
     /// }
     /// ```
     pub fn get_region<S: Into<String>>(&self, bucket: S) -> GetRegion {
@@ -82,18 +82,20 @@ impl Client {
             return Ok(v.value().clone());
         }
 
-        // Otherwise, fetch the region and cache it
-        let resp: GetRegionResponse = self.get_region(&bucket).send().await?;
-
-        let resolved_region: String = if resp.region_response.is_empty() {
-            DEFAULT_REGION.to_owned()
-        } else {
-            resp.region_response
+        // Otherwise, fetch the region from the server and cache it
+        let resolved_region: String = {
+            let region = self.get_region(&bucket).send().await?.region_response()?;
+            if !region.is_empty() {
+                region
+            } else {
+                DEFAULT_REGION.to_owned()
+            }
         };
 
         self.shared
             .region_map
             .insert(bucket, resolved_region.clone());
+
         Ok(resolved_region)
     }
 }

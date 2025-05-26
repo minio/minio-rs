@@ -30,6 +30,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::DeleteBucketTaggingResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {    
@@ -37,7 +38,7 @@ impl Client {
     ///     let resp: DeleteBucketTaggingResponse = client
     ///         .delete_bucket_tagging("bucket-name")
     ///         .send().await.unwrap();
-    ///     println!("tags of bucket '{}' are deleted", resp.bucket);
+    ///     println!("tags of bucket '{}' are deleted", resp.bucket());
     /// }
     /// ```
     pub fn delete_bucket_tagging<S: Into<String>>(&self, bucket: S) -> DeleteBucketTagging {

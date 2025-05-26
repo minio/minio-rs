@@ -17,6 +17,7 @@ mod common;
 
 use crate::common::{create_bucket_if_not_exists, create_client_on_localhost};
 use minio::s3::Client;
+use minio::s3::response::a_response_traits::HasObjectSize;
 use minio::s3::response::{AppendObjectResponse, StatObjectResponse};
 use minio::s3::segmented_bytes::SegmentedBytes;
 use minio::s3::types::S3Api;
@@ -54,19 +55,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             .await?;
 
         offset_bytes += data_size;
-        if resp.object_size != offset_bytes {
+        if resp.object_size() != offset_bytes {
             panic!(
                 "from the append_object: size mismatch: expected {}, got {}",
-                resp.object_size, offset_bytes
+                resp.object_size(),
+                offset_bytes
             )
         }
         //println!("Append response: {:#?}", resp);
 
         let resp: StatObjectResponse = client.stat_object(bucket_name, object_name).send().await?;
-        if resp.size != offset_bytes {
+        if resp.size()? != offset_bytes {
             panic!(
                 "from the stat_Object: size mismatch: expected {}, got {}",
-                resp.size, offset_bytes
+                resp.size()?,
+                offset_bytes
             )
         }
         println!("{}/{}", i, n_segments);

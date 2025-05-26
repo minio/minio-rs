@@ -13,12 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::impl_has_s3fields;
 use crate::s3::error::{Error, ErrorCode};
-use crate::s3::multimap::MultimapExt;
+use crate::s3::response::a_response_traits::{
+    HasBucket, HasObject, HasRegion, HasS3Fields, HasVersion,
+};
 use crate::s3::types::{FromS3Response, RetentionMode, S3Request};
-use crate::s3::utils::{UtcTime, from_iso8601utc, get_option_text, take_bucket, take_object};
+use crate::s3::utils::{UtcTime, from_iso8601utc, get_option_text};
 use async_trait::async_trait;
-use bytes::Buf;
+use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
@@ -26,67 +29,65 @@ use xmltree::Element;
 /// Response of [get_object_retention()](crate::s3::client::Client::get_object_retention) API
 #[derive(Clone, Debug)]
 pub struct GetObjectRetentionResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
+}
 
-    /// The AWS region where the bucket resides.
-    pub region: String,
+impl_has_s3fields!(GetObjectRetentionResponse);
 
-    /// Name of the bucket containing the object.
-    pub bucket: String,
+impl HasBucket for GetObjectRetentionResponse {}
+impl HasRegion for GetObjectRetentionResponse {}
+impl HasObject for GetObjectRetentionResponse {}
+impl HasVersion for GetObjectRetentionResponse {}
 
-    /// Key (path) identifying the object within the bucket.
-    pub object: String,
+impl GetObjectRetentionResponse {
+    /// Returns the retention mode of the object.
+    ///
+    /// This method retrieves the retention mode, which can be either `Governance` or `Compliance`.
+    pub fn retention_mode(&self) -> Result<Option<RetentionMode>, Error> {
+        if self.body.is_empty() {
+            return Ok(None);
+        }
+        let root = Element::parse(self.body.clone().reader())?;
+        Ok(match get_option_text(&root, "Mode") {
+            Some(v) => Some(RetentionMode::parse(&v)?),
+            _ => None,
+        })
+    }
 
-    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
-    pub version_id: Option<String>,
-
-    /// The retention mode of the object.
-    pub retention_mode: Option<RetentionMode>,
-
-    /// The date until which the object is retained.
-    pub retain_until_date: Option<UtcTime>,
+    /// Returns the date until which the object is retained.
+    ///
+    /// This method retrieves the retention date, which indicates when the object will no longer be retained.
+    pub fn retain_until_date(&self) -> Result<Option<UtcTime>, Error> {
+        if self.body.is_empty() {
+            return Ok(None);
+        }
+        let root = Element::parse(self.body.clone().reader())?;
+        Ok(match get_option_text(&root, "RetainUntilDate") {
+            Some(v) => Some(from_iso8601utc(&v)?),
+            _ => None,
+        })
+    }
 }
 
 #[async_trait]
 impl FromS3Response for GetObjectRetentionResponse {
     async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        match resp {
-            Ok(mut r) => {
-                let headers = mem::take(r.headers_mut());
-                let body = r.bytes().await?;
-                let root = Element::parse(body.reader())?;
-                let retention_mode = match get_option_text(&root, "Mode") {
-                    Some(v) => Some(RetentionMode::parse(&v)?),
-                    _ => None,
-                };
-                let retain_until_date = match get_option_text(&root, "RetainUntilDate") {
-                    Some(v) => Some(from_iso8601utc(&v)?),
-                    _ => None,
-                };
-
-                Ok(Self {
-                    headers,
-                    region: req.inner_region,
-                    bucket: take_bucket(req.bucket)?,
-                    object: take_object(req.object)?,
-                    version_id: req.query_params.take_version(),
-                    retention_mode,
-                    retain_until_date,
-                })
-            }
+        match response {
+            Ok(mut resp) => Ok(Self {
+                request,
+                headers: mem::take(resp.headers_mut()),
+                body: resp.bytes().await?,
+            }),
             Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchObjectLockConfiguration => {
                 Ok(Self {
+                    request,
                     headers: e.headers,
-                    region: req.inner_region,
-                    bucket: take_bucket(req.bucket)?,
-                    object: take_object(req.object)?,
-                    version_id: req.query_params.take_version(),
-                    retention_mode: None,
-                    retain_until_date: None,
+                    body: Bytes::new(),
                 })
             }
             Err(e) => Err(e),

@@ -129,12 +129,7 @@ pub enum Error {
     StrError(reqwest::header::ToStrError),
     IntError(std::num::ParseIntError),
     BoolError(std::str::ParseBoolError),
-
     Utf8Error(Box<dyn std::error::Error + Send + Sync + 'static>),
-    /// Occurs when converting Vec<u8> to String (e.g. String::from_utf8)
-    //FromUtf8Error(alloc::string::FromUtf8Error),
-    /// Occurs when converting &[u8] to &str (e.g. std::str::from_utf8)
-    //Utf8Error(std::str::Utf8Error),
     JsonError(serde_json::Error),
     XmlError(String),
     InvalidBaseUrl(String),
@@ -203,7 +198,6 @@ impl fmt::Display for Error {
             Error::IntError(e) => write!(f, "{e}"),
             Error::BoolError(e) => write!(f, "{e}"),
             Error::Utf8Error(e) => write!(f, "{e}"),
-            //Error::FromUtf8Error(e) => write!(f, "{e}"),
             Error::JsonError(e) => write!(f, "{e}"),
             Error::XmlError(m) => write!(f, "{m}"),
             Error::InvalidBucketName(m) => write!(f, "{m}"),

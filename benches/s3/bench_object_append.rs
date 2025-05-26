@@ -43,7 +43,7 @@ pub(crate) async fn bench_object_append(criterion: &mut Criterion) {
             })
             .unwrap();
 
-            let offset_bytes: u64 = resp.size;
+            let offset_bytes: u64 = resp.size().unwrap();
             AppendObject::new(
                 ctx.client.clone(),
                 ctx.bucket.clone(),

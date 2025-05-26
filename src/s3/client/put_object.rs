@@ -29,7 +29,11 @@ impl Client {
     ///
     /// For handling large files requiring multipart upload, see [`create_multipart_upload`](#method.create_multipart_upload).
     ///
-    /// To execute the request, call [`PutObject::send()`](crate::s3::types::S3Api::send),
+    /// For handling large files requiring multipart upload, see [`create_multipart_upload`](#method.create_multipart_upload).
+    ///
+    /// For handling large files requiring multipart upload, see [`create_multipart_upload`](#method.create_multipart_upload).
+    ///
+    /// To execute the request, call [`PutObjects::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`PutObjectResponse`](crate::s3::response::PutObjectResponse).
     ///
     /// For more information, refer to the [AWS S3 PutObject API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html).
@@ -41,6 +45,7 @@ impl Client {
     /// use minio::s3::response::PutObjectResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
+    /// use minio::s3::response::a_response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -48,7 +53,7 @@ impl Client {
     ///     let data = SegmentedBytes::from("Hello world".to_string());
     ///     let resp: PutObjectResponse =
     ///         client.put_object("bucket-name", "object-name", data).send().await.unwrap();
-    ///     println!("successfully put object '{}'", resp.object);
+    ///     println!("successfully put object '{}'", resp.object());
     /// }
     /// ```
     pub fn put_object<S1: Into<String>, S2: Into<String>>(
@@ -80,7 +85,7 @@ impl Client {
     ///     let resp: CreateMultipartUploadResponse = client
     ///         .create_multipart_upload("bucket-name", "large-object")
     ///         .send().await.unwrap();
-    ///     println!("Initiated multipart upload with UploadId '{}'", resp.upload_id);
+    ///     println!("Initiated multipart upload with UploadId '{:?}'", resp.upload_id().await);
     /// }
     /// ```
     pub fn create_multipart_upload<S1: Into<String>, S2: Into<String>>(
@@ -135,8 +140,8 @@ impl Client {
     /// ```no_run
     /// use minio::s3::Client;
     /// use minio::s3::response::CompleteMultipartUploadResponse;
-    /// use minio::s3::types::S3Api;
-    /// use minio::s3::types::PartInfo;
+    /// use minio::s3::types::{S3Api, PartInfo};
+    /// use minio::s3::response::a_response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -145,7 +150,7 @@ impl Client {
     ///     let resp: CompleteMultipartUploadResponse = client
     ///         .complete_multipart_upload("bucket-name", "object-name", "upload-id-123", parts)
     ///         .send().await.unwrap();
-    ///     println!("Completed multipart upload for '{}'", resp.object);
+    ///     println!("Completed multipart upload for '{}'", resp.object());
     /// }
     /// ```
     pub fn complete_multipart_upload<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
@@ -178,6 +183,7 @@ impl Client {
     /// use minio::s3::response::UploadPartResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
+    /// use minio::s3::response::a_response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -186,7 +192,7 @@ impl Client {
     ///     let resp: UploadPartResponse = client
     ///         .upload_part("bucket-name", "object-name", "upload-id", 1, data)
     ///         .send().await.unwrap();
-    ///     println!("Uploaded object: {}", resp.object);
+    ///     println!("Uploaded object: {}", resp.object());
     /// }
     /// ```
     pub fn upload_part<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
@@ -220,6 +226,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::PutObjectContentResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::{HasObject, HasEtagFromHeaders};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -228,7 +235,7 @@ impl Client {
     ///     let resp: PutObjectContentResponse = client
     ///         .put_object_content("bucket", "object", content)
     ///         .send().await.unwrap();
-    ///     println!("Uploaded object '{}' with ETag '{}'", resp.object, resp.etag);
+    ///     println!("Uploaded object '{}' with ETag '{:?}'", resp.object(), resp.etag());
     /// }
     /// ```
     pub fn put_object_content<S1: Into<String>, S2: Into<String>, C: Into<ObjectContent>>(

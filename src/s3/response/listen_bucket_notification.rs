@@ -13,27 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::impl_has_s3fields;
+use crate::s3::response::a_response_traits::HasS3Fields;
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion};
 use crate::s3::error::Error;
 use crate::s3::types::{FromS3Response, NotificationRecords, S3Request};
-use crate::s3::utils::take_bucket;
-use futures_util::{Stream, StreamExt, TryStreamExt};
+use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
-
 /// Response of
-/// [listen _bucket_notification()](crate::s3::client::Client::listen_bucket_notification)
+/// [listen_bucket_notification()](crate::s3::client::Client::listen_bucket_notification)
 /// API
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ListenBucketNotificationResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket containing the object.
-    pub bucket: String,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes, // Note: not used
 }
+
+impl_has_s3fields!(ListenBucketNotificationResponse);
+
+impl HasBucket for ListenBucketNotificationResponse {}
+impl HasRegion for ListenBucketNotificationResponse {}
 
 #[async_trait::async_trait]
 impl FromS3Response
@@ -43,14 +44,13 @@ impl FromS3Response
     )
 {
     async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let mut resp = resp?;
-        let headers: HeaderMap = mem::take(resp.headers_mut());
+        let mut resp = response?;
 
-        // A simple stateful decoder that buffers bytes and yields complete lines
-        let byte_stream = resp.bytes_stream(); // This is a futures::Stream<Item = Result<Bytes, reqwest::Error>>
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+        let byte_stream = resp.bytes_stream();
 
         let line_stream = Box::pin(async_stream::try_stream! {
             let mut buf = Vec::new();
@@ -94,9 +94,9 @@ impl FromS3Response
 
         Ok((
             ListenBucketNotificationResponse {
+                request,
                 headers,
-                region: req.inner_region,
-                bucket: take_bucket(req.bucket)?,
+                body: Bytes::new(),
             },
             Box::new(line_stream),
         ))

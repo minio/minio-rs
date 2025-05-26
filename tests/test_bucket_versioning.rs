@@ -16,6 +16,7 @@
 use minio::s3::builders::VersioningStatus;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::error::{Error, ErrorCode};
+use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
 use minio::s3::response::{GetBucketVersioningResponse, PutBucketVersioningResponse};
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
@@ -36,8 +37,8 @@ async fn bucket_versioning_s3() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetBucketVersioningResponse = ctx
         .client
@@ -45,9 +46,9 @@ async fn bucket_versioning_s3() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status, Some(VersioningStatus::Enabled));
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.status().unwrap(), Some(VersioningStatus::Enabled));
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: PutBucketVersioningResponse = ctx
         .client
@@ -56,8 +57,8 @@ async fn bucket_versioning_s3() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetBucketVersioningResponse = ctx
         .client
@@ -65,9 +66,9 @@ async fn bucket_versioning_s3() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status, Some(VersioningStatus::Suspended));
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.status().unwrap(), Some(VersioningStatus::Suspended));
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 }
 
 #[tokio::test(flavor = "multi_thread")]

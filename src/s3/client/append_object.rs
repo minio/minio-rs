@@ -36,6 +36,7 @@ impl Client {
     /// use minio::s3::response::{AppendObjectResponse, PutObjectResponse};
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasObjectSize;
     ///
     /// #[tokio::main]
     /// async fn main() {    
@@ -49,7 +50,7 @@ impl Client {
     ///     let resp: AppendObjectResponse = client
     ///         .append_object("bucket-name", "object-name", data2, offset_bytes)
     ///         .send().await.unwrap();
-    ///     println!("size of the final object is {} bytes", resp.object_size);
+    ///     println!("size of the final object is {} bytes", resp.object_size());
     /// }
     /// ```
     pub fn append_object<S1: Into<String>, S2: Into<String>>(
@@ -85,10 +86,11 @@ impl Client {
     /// use minio::s3::builders::ObjectContent;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasObjectSize;
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    /// let client: Client = Default::default(); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let data1: SegmentedBytes = SegmentedBytes::from("aaaa".to_string());
     ///     let content2: String = "bbbb".to_string();
     ///     let resp: PutObjectResponse = client
@@ -97,7 +99,7 @@ impl Client {
     ///     let resp: AppendObjectResponse = client
     ///         .append_object_content("bucket-name", "object-name", content2)
     ///         .send().await.unwrap();
-    ///     println!("size of the final object is {} bytes", resp.object_size);
+    ///     println!("size of the final object is {} bytes", resp.object_size());
     /// }
     /// ```
     pub fn append_object_content<S1: Into<String>, S2: Into<String>, C: Into<ObjectContent>>(

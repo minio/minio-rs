@@ -14,78 +14,30 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::{
+    HasBucket, HasEtagFromHeaders, HasObject, HasObjectSize, HasRegion, HasS3Fields, HasVersion,
+};
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::{take_bucket, take_object};
-use async_trait::async_trait;
+use crate::{impl_from_s3response, impl_has_s3fields};
+use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
 /// Represents the response of the `append_object` API call.
 /// This struct contains metadata and information about the object being appended.
-///
-/// # Fields
-///
-/// * `headers` - HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-/// * `region` - The AWS region where the bucket resides.
-/// * `bucket` - Name of the bucket containing the object.
-/// * `object` - Key (path) identifying the object within the bucket.
-/// * `etag` - Entity tag representing a specific version of the object.
-/// * `version_id` - Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
-/// * `object_size` - Value of the `x-amz-object-size` header.
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct AppendObjectResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket containing the object.
-    pub bucket: String,
-
-    /// Key (path) identifying the object within the bucket.
-    pub object: String,
-
-    /// Entity tag representing a specific version of the object.
-    pub etag: String,
-
-    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
-    pub version_id: Option<String>,
-
-    /// Value of the `x-amz-object-size` header.
-    pub object_size: u64,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 }
 
-#[async_trait]
-impl FromS3Response for AppendObjectResponse {
-    async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        let mut resp = resp?;
-        let headers: HeaderMap = mem::take(resp.headers_mut());
+impl_from_s3response!(AppendObjectResponse);
+impl_has_s3fields!(AppendObjectResponse);
 
-        let etag: String = match headers.get("etag") {
-            Some(v) => v.to_str()?.to_string().trim_matches('"').to_string(),
-            _ => String::new(),
-        };
-        let version_id: Option<String> = match headers.get("x-amz-version-id") {
-            Some(v) => Some(v.to_str()?.to_string()),
-            None => None,
-        };
-        let object_size: u64 = match headers.get("x-amz-object-size") {
-            Some(v) => v.to_str()?.parse::<u64>()?,
-            None => 0,
-        };
-
-        Ok(Self {
-            headers,
-            bucket: take_bucket(req.bucket)?,
-            object: take_object(req.object)?,
-            region: req.inner_region,
-            etag,
-            version_id,
-            object_size,
-        })
-    }
-}
+impl HasBucket for AppendObjectResponse {}
+impl HasObject for AppendObjectResponse {}
+impl HasRegion for AppendObjectResponse {}
+impl HasVersion for AppendObjectResponse {}
+impl HasEtagFromHeaders for AppendObjectResponse {}
+impl HasObjectSize for AppendObjectResponse {}

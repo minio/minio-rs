@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use minio::s3::client::DEFAULT_REGION;
+use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
 use minio::s3::response::{
     DeleteBucketPolicyResponse, GetBucketPolicyResponse, PutBucketPolicyResponse,
 };
@@ -35,8 +36,8 @@ async fn bucket_policy() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetBucketPolicyResponse = ctx
         .client
@@ -47,9 +48,9 @@ async fn bucket_policy() {
     // TODO create a proper comparison of the retrieved config and the provided config
     // println!("response of getting policy: resp.config={:?}", resp.config);
     // assert_eq!(&resp.config, &config);
-    assert!(!resp.config.is_empty());
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert!(!resp.config().unwrap().is_empty());
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: DeleteBucketPolicyResponse = ctx
         .client
@@ -57,8 +58,8 @@ async fn bucket_policy() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetBucketPolicyResponse = ctx
         .client
@@ -66,7 +67,7 @@ async fn bucket_policy() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.config, "{}");
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.config().unwrap(), "{}");
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 }

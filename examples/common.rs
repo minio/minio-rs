@@ -42,7 +42,7 @@ pub async fn create_bucket_if_not_exists(
     let resp: BucketExistsResponse = client.bucket_exists(bucket_name).send().await?;
 
     // Make 'bucket_name' bucket if not exist.
-    if !resp.exists {
+    if !resp.exists() {
         client.create_bucket(bucket_name).send().await.unwrap();
     };
     Ok(())

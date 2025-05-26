@@ -13,49 +13,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::impl_has_s3fields;
 use crate::s3::error::{Error, ErrorCode};
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
+use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
 /// Represents the response of the [delete_bucket_policy()](crate::s3::client::Client::delete_bucket_policy) API call.
 /// This struct contains metadata and information about the bucket whose policy was removed.
-///
-/// # Fields
-///
-/// * `headers` - HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-/// * `region` - The AWS region where the bucket resides.
-/// * `bucket` - Name of the bucket from which the Bucket Policy was removed.
 #[derive(Clone, Debug)]
 pub struct DeleteBucketPolicyResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket from which the Bucket Policy was removed.
-    pub bucket: String,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 }
+
+impl_has_s3fields!(DeleteBucketPolicyResponse);
+
+impl HasBucket for DeleteBucketPolicyResponse {}
+impl HasRegion for DeleteBucketPolicyResponse {}
 
 #[async_trait]
 impl FromS3Response for DeleteBucketPolicyResponse {
     async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        match resp {
-            Ok(mut r) => Ok(Self {
-                headers: mem::take(r.headers_mut()),
-                region: req.inner_region,
-                bucket: take_bucket(req.bucket)?,
+        match response {
+            Ok(mut resp) => Ok(Self {
+                request,
+                headers: mem::take(resp.headers_mut()),
+                body: resp.bytes().await?,
             }),
             Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchBucketPolicy => Ok(Self {
+                request,
                 headers: e.headers,
-                region: req.inner_region,
-                bucket: take_bucket(req.bucket)?,
+                body: Bytes::new(),
             }),
             Err(e) => Err(e),
         }

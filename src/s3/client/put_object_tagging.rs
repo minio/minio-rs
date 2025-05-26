@@ -31,10 +31,11 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::PutObjectTaggingResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// let client: Client = Default::default(); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let tags = HashMap::from([
     ///         (String::from("Project"), String::from("Project One")),
     ///         (String::from("User"), String::from("jsmith")),
@@ -43,7 +44,7 @@ impl Client {
     ///         .put_object_tagging("bucket-name", "object-name")
     ///         .tags(tags)
     ///         .send().await.unwrap();
-    ///     println!("set the object tags for object '{}'", resp.object);
+    ///     println!("set the object tags for object '{}'", resp.object());
     /// }
     /// ```
     pub fn put_object_tagging<S: Into<String>>(&self, bucket: S, object: S) -> PutObjectTagging {

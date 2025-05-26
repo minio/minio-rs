@@ -13,10 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::impl_has_s3fields;
 use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
+use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
@@ -25,31 +27,36 @@ use std::mem;
 /// API
 #[derive(Clone, Debug)]
 pub struct CreateBucketResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket containing the object.
-    pub bucket: String,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 }
+
+impl_has_s3fields!(CreateBucketResponse);
+
+impl HasBucket for CreateBucketResponse {}
+impl HasRegion for CreateBucketResponse {}
 
 #[async_trait]
 impl FromS3Response for CreateBucketResponse {
     async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let mut req = req;
-        let bucket: String = take_bucket(req.bucket)?;
-        req.client.add_bucket_region(&bucket, &req.inner_region);
-        let mut resp = resp?;
+        let mut resp: reqwest::Response = response?;
+
+        let mut request = request;
+        let bucket: &str = request
+            .bucket
+            .as_deref()
+            .ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))?;
+        let region: &str = &request.inner_region;
+        request.client.add_bucket_region(bucket, region);
 
         Ok(Self {
+            request,
             headers: mem::take(resp.headers_mut()),
-            region: req.inner_region,
-            bucket,
+            body: resp.bytes().await?,
         })
     }
 }

@@ -40,7 +40,7 @@
 //!         .await
 //!         .expect("request failed");
 //!
-//!     println!("Bucket exists: {}", exists.exists);
+//!     println!("Bucket exists: {}", exists.exists());
 //! }
 //! ```
 //!

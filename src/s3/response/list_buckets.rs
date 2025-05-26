@@ -14,10 +14,11 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::HasS3Fields;
 use crate::s3::types::{Bucket, FromS3Response, S3Request};
 use crate::s3::utils::{from_iso8601utc, get_text};
-use async_trait::async_trait;
-use bytes::Buf;
+use crate::{impl_from_s3response, impl_has_s3fields};
+use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
@@ -25,24 +26,18 @@ use xmltree::Element;
 /// Response of [list_buckets()](crate::s3::client::Client::list_buckets) API
 #[derive(Debug, Clone)]
 pub struct ListBucketsResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// the list of buckets that are present in the account.
-    pub buckets: Vec<Bucket>,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 }
 
-#[async_trait]
-impl FromS3Response for ListBucketsResponse {
-    async fn from_s3response(
-        _req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        let mut resp = resp?;
-        let headers: HeaderMap = mem::take(resp.headers_mut());
+impl_from_s3response!(ListBucketsResponse);
+impl_has_s3fields!(ListBucketsResponse);
 
-        let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
+impl ListBucketsResponse {
+    /// Returns the list of buckets in the account.
+    pub fn buckets(&self) -> Result<Vec<Bucket>, Error> {
+        let mut root = Element::parse(self.body().clone().reader())?;
         let buckets_xml = root
             .get_mut_child("Buckets")
             .ok_or(Error::XmlError("<Buckets> tag not found".into()))?;
@@ -55,7 +50,6 @@ impl FromS3Response for ListBucketsResponse {
                 creation_date: from_iso8601utc(&get_text(&bucket, "CreationDate")?)?,
             })
         }
-
-        Ok(Self { headers, buckets })
+        Ok(buckets)
     }
 }

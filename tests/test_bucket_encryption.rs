@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use minio::s3::client::DEFAULT_REGION;
+use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
 use minio::s3::response::{
     DeleteBucketEncryptionResponse, GetBucketEncryptionResponse, PutBucketEncryptionResponse,
 };
@@ -36,9 +37,9 @@ async fn bucket_encryption() {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.config, config);
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.region, DEFAULT_REGION);
+        assert_eq!(resp.config().unwrap(), config);
+        assert_eq!(resp.bucket(), bucket_name);
+        assert_eq!(resp.region(), DEFAULT_REGION);
     }
 
     let resp: GetBucketEncryptionResponse = ctx
@@ -47,9 +48,9 @@ async fn bucket_encryption() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.config, config);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.config().unwrap(), config);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: DeleteBucketEncryptionResponse = ctx
         .client
@@ -57,8 +58,8 @@ async fn bucket_encryption() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetBucketEncryptionResponse = ctx
         .client
@@ -66,8 +67,8 @@ async fn bucket_encryption() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.config, SseConfig::default());
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.config().unwrap(), SseConfig::default());
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
     //println!("response of getting encryption config: resp.sse_config={:?}", resp.config);
 }

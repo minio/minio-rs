@@ -36,10 +36,15 @@ async fn list_buckets() {
     let mut count = 0;
     let resp: ListBucketsResponse = ctx.client.list_buckets().send().await.unwrap();
 
-    for bucket in resp.buckets.iter() {
+    for bucket in resp.buckets().unwrap().iter() {
         if names.contains(&bucket.name) {
             count += 1;
-        }
+        } // else if bucket.name.len() == 8 {
+        //    match ctx.client.delete_and_purge_bucket(&bucket.name).await {
+        //        Ok(_) => println!("Deleted bucket: {}", bucket.name),
+        //        Err(e) => println!("Failed to delete bucket {}: {}", bucket.name, e)
+        //    }
+        //}
     }
     assert_eq!(guards.len(), N_BUCKETS);
     assert_eq!(count, N_BUCKETS);

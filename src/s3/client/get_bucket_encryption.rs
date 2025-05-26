@@ -28,6 +28,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetBucketEncryptionResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -35,7 +36,7 @@ impl Client {
     ///     let resp: GetBucketEncryptionResponse = client
     ///         .get_bucket_encryption("bucket-name")
     ///         .send().await.unwrap();
-    ///     println!("retrieved SseConfig '{:?}' from bucket '{}'", resp.config, resp.bucket);
+    ///     println!("retrieved SseConfig '{:?}' from bucket '{}'", resp.config(), resp.bucket());
     /// }
     /// ```
     pub fn get_bucket_encryption<S: Into<String>>(&self, bucket: S) -> GetBucketEncryption {

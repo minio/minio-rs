@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use minio::s3::client::DEFAULT_REGION;
+use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
 use minio::s3::response::{
     DeleteBucketNotificationResponse, GetBucketNotificationResponse, PutBucketNotificationResponse,
 };
@@ -42,8 +43,8 @@ async fn test_bucket_notification() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
     //println!("response of setting notification: resp={:?}", resp);
 
     let resp: GetBucketNotificationResponse = ctx
@@ -52,24 +53,25 @@ async fn test_bucket_notification() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.config, config);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    let config2 = resp.config().unwrap();
+    assert_eq!(config2, config);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
     //println!("response of getting notification: resp={:?}", resp);
 
-    assert_eq!(resp.config.queue_config_list.as_ref().unwrap().len(), 1);
+    assert_eq!(config2.queue_config_list.as_ref().unwrap().len(), 1);
     assert!(
-        resp.config.queue_config_list.as_ref().unwrap()[0]
+        config2.queue_config_list.as_ref().unwrap()[0]
             .events
             .contains(&String::from("s3:ObjectCreated:Put"))
     );
     assert!(
-        resp.config.queue_config_list.as_ref().unwrap()[0]
+        config2.queue_config_list.as_ref().unwrap()[0]
             .events
             .contains(&String::from("s3:ObjectCreated:Copy"))
     );
     assert_eq!(
-        resp.config.queue_config_list.as_ref().unwrap()[0]
+        config2.queue_config_list.as_ref().unwrap()[0]
             .prefix_filter_rule
             .as_ref()
             .unwrap()
@@ -77,7 +79,7 @@ async fn test_bucket_notification() {
         "images"
     );
     assert_eq!(
-        resp.config.queue_config_list.as_ref().unwrap()[0]
+        config2.queue_config_list.as_ref().unwrap()[0]
             .suffix_filter_rule
             .as_ref()
             .unwrap()
@@ -85,7 +87,7 @@ async fn test_bucket_notification() {
         "pg"
     );
     assert_eq!(
-        resp.config.queue_config_list.as_ref().unwrap()[0].queue,
+        config2.queue_config_list.as_ref().unwrap()[0].queue,
         SQS_ARN
     );
 
@@ -95,8 +97,8 @@ async fn test_bucket_notification() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
     //println!("response of deleting notification: resp={:?}", resp);
 
     let resp: GetBucketNotificationResponse = ctx
@@ -105,7 +107,7 @@ async fn test_bucket_notification() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
-    assert_eq!(resp.config, NotificationConfig::default());
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.config().unwrap(), NotificationConfig::default());
 }

@@ -16,6 +16,7 @@
 use async_std::stream::StreamExt;
 use minio::s3::builders::ObjectToDelete;
 use minio::s3::response::PutObjectContentResponse;
+use minio::s3::response::a_response_traits::{HasBucket, HasObject};
 use minio::s3::types::ToStream;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
@@ -34,8 +35,8 @@ async fn remove_objects() {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.object, object_name);
+        assert_eq!(resp.bucket(), bucket_name);
+        assert_eq!(resp.object(), object_name);
         names.push(object_name);
     }
     let del_items: Vec<ObjectToDelete> = names
@@ -53,10 +54,12 @@ async fn remove_objects() {
     let mut del_count = 0;
     while let Some(item) = resp.next().await {
         let res = item.unwrap();
-        for obj in res.result.iter() {
+        let del_result = res.result().unwrap();
+        del_count += del_result.len();
+
+        for obj in del_result.into_iter() {
             assert!(obj.is_deleted());
         }
-        del_count += res.result.len();
     }
     assert_eq!(del_count, 3);
 }

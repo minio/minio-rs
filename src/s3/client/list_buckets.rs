@@ -37,7 +37,7 @@ impl Client {
     ///     let resp: ListBucketsResponse = client
     ///         .list_buckets()
     ///         .send().await.unwrap();
-    ///     println!("retrieved buckets '{:?}'", resp.buckets);
+    ///     println!("retrieved buckets '{:?}'", resp.buckets());
     /// }
     /// ```
     pub fn list_buckets(&self) -> ListBuckets {

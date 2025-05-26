@@ -33,14 +33,15 @@ impl Client {
     /// use minio::s3::response::DeleteObjectResponse;
     /// use minio::s3::builders::ObjectToDelete;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasVersion;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// let client: Client = Default::default(); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: DeleteObjectResponse = client
     ///         .delete_object("bucket-name", ObjectToDelete::from("object-name"))
     ///         .send().await.unwrap();
-    ///     println!("the object is deleted. The delete marker has version '{:?}'", resp.version_id);
+    ///     println!("the object is deleted. The delete marker has version '{:?}'", resp.version_id());
     /// }
     /// ```
     pub fn delete_object<S: Into<String>, D: Into<ObjectToDelete>>(
