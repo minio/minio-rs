@@ -15,10 +15,11 @@
 
 use crate::s3::builders::VersioningStatus;
 use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::{get_option_text, take_bucket};
-use async_trait::async_trait;
-use bytes::Buf;
+use crate::s3::utils::get_option_text;
+use crate::{impl_from_s3response, impl_has_s3fields};
+use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
@@ -32,59 +33,40 @@ use xmltree::Element;
 /// For more information, refer to the [AWS S3 GetBucketVersioning API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketVersioning.html).
 #[derive(Clone, Debug)]
 pub struct GetBucketVersioningResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket whose versioning configuration is retrieved.
-    pub bucket: String,
-
-    /// The versioning status of the bucket.
-    ///
-    /// - `Some(VersioningStatus::Enabled)`: Versioning is enabled.
-    /// - `Some(VersioningStatus::Suspended)`: Versioning is suspended.
-    /// - `None`: Versioning has never been configured for this bucket.
-    pub status: Option<VersioningStatus>,
-
-    /// Indicates whether MFA delete is enabled for the bucket.
-    ///
-    /// - `Some(true)`: MFA delete is enabled.
-    /// - `Some(false)`: MFA delete is disabled.
-    /// - `None`: MFA delete has never been configured for this bucket.
-    ///
-    /// Note: MFA delete adds an extra layer of security by requiring additional authentication
-    /// for certain operations. For more details, see the [AWS S3 MFA Delete documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/MultiFactorAuthenticationDelete.html).
-    pub mfa_delete: Option<bool>,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 }
 
-#[async_trait]
-impl FromS3Response for GetBucketVersioningResponse {
-    async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        let mut resp = resp?;
+impl_from_s3response!(GetBucketVersioningResponse);
+impl_has_s3fields!(GetBucketVersioningResponse);
 
-        let headers: HeaderMap = mem::take(resp.headers_mut());
+impl HasBucket for GetBucketVersioningResponse {}
+impl HasRegion for GetBucketVersioningResponse {}
 
-        let body = resp.bytes().await?;
-        let root = Element::parse(body.reader())?;
-        let status: Option<VersioningStatus> =
-            get_option_text(&root, "Status").map(|v| match v.as_str() {
-                "Enabled" => VersioningStatus::Enabled,
-                _ => VersioningStatus::Suspended, // Default case
-            });
-        let mfa_delete: Option<bool> =
-            get_option_text(&root, "MFADelete").map(|v| v.eq_ignore_ascii_case("Enabled"));
+impl GetBucketVersioningResponse {
+    /// Returns the versioning status of the bucket.
+    ///
+    /// This method retrieves the current versioning status, which can be:
+    /// - `Some(VersioningStatus::Enabled)` if versioning is enabled.
+    /// - `Some(VersioningStatus::Suspended)` if versioning is suspended.
+    /// - `None` if versioning has never been configured for this bucket.
+    pub fn status(&self) -> Result<Option<VersioningStatus>, Error> {
+        let root = Element::parse(self.body.clone().reader())?;
+        Ok(get_option_text(&root, "Status").map(|v| match v.as_str() {
+            "Enabled" => VersioningStatus::Enabled,
+            _ => VersioningStatus::Suspended, // Default case
+        }))
+    }
 
-        Ok(Self {
-            headers,
-            region: req.inner_region,
-            bucket: take_bucket(req.bucket)?,
-            status,
-            mfa_delete,
-        })
+    /// Returns whether MFA delete is enabled for the bucket.
+    ///
+    /// This method retrieves the MFA delete setting, which can be:
+    /// - `Some(true)` if MFA delete is enabled.
+    /// - `Some(false)` if MFA delete is disabled.
+    /// - `None` if MFA delete has never been configured for this bucket.
+    pub fn mfa_delete(&self) -> Result<Option<bool>, Error> {
+        let root = Element::parse(self.body.clone().reader())?;
+        Ok(get_option_text(&root, "MFADelete").map(|v| v.eq_ignore_ascii_case("Enabled")))
     }
 }

@@ -88,7 +88,7 @@ impl ErrorCode {
 /// Error response for S3 operations
 pub struct ErrorResponse {
     /// Headers as returned by the server.
-    pub headers: HeaderMap,
+    pub(crate) headers: HeaderMap,
     pub code: ErrorCode,
     pub message: String,
     pub resource: String,
@@ -129,7 +129,10 @@ pub enum Error {
     StrError(reqwest::header::ToStrError),
     IntError(std::num::ParseIntError),
     BoolError(std::str::ParseBoolError),
-    Utf8Error(alloc::string::FromUtf8Error),
+    /// Occurs when converting Vec<u8> to String (e.g. String::from_utf8)
+    FromUtf8Error(alloc::string::FromUtf8Error),
+    /// Occurs when converting &[u8] to &str (e.g. std::str::from_utf8)
+    Utf8Error(std::str::Utf8Error),
     JsonError(serde_json::Error),
     XmlError(String),
     InvalidBucketName(String),
@@ -198,6 +201,7 @@ impl fmt::Display for Error {
             Error::IntError(e) => write!(f, "{e}"),
             Error::BoolError(e) => write!(f, "{e}"),
             Error::Utf8Error(e) => write!(f, "{e}"),
+            Error::FromUtf8Error(e) => write!(f, "{e}"),
             Error::JsonError(e) => write!(f, "{e}"),
             Error::XmlError(m) => write!(f, "{m}"),
             Error::InvalidBucketName(m) => write!(f, "{m}"),
@@ -397,6 +401,12 @@ impl From<std::str::ParseBoolError> for Error {
 
 impl From<alloc::string::FromUtf8Error> for Error {
     fn from(err: alloc::string::FromUtf8Error) -> Self {
+        Error::FromUtf8Error(err)
+    }
+}
+
+impl From<std::str::Utf8Error> for Error {
+    fn from(err: std::str::Utf8Error) -> Self {
         Error::Utf8Error(err)
     }
 }

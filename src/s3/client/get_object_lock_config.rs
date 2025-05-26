@@ -30,6 +30,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetObjectLockConfigResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -37,7 +38,7 @@ impl Client {
     ///     let resp: GetObjectLockConfigResponse = client
     ///         .get_object_lock_config("bucket-name")
     ///         .send().await.unwrap();
-    ///     println!("retrieved object lock config '{:?}' from bucket '{}' is enabled", resp.config, resp.bucket);
+    ///     println!("retrieved object lock config '{:?}' from bucket '{}' is enabled", resp.config(), resp.bucket());
     /// }
     /// ```
     pub fn get_object_lock_config<S: Into<String>>(&self, bucket: S) -> GetObjectLockConfig {

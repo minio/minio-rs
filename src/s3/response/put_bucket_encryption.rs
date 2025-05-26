@@ -14,10 +14,11 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request, SseConfig};
-use crate::s3::utils::{get_option_text, get_text, take_bucket};
-use async_trait::async_trait;
-use bytes::Buf;
+use crate::s3::utils::{get_option_text, get_text};
+use crate::{impl_from_s3response, impl_has_s3fields};
+use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
@@ -27,30 +28,21 @@ use xmltree::Element;
 /// API
 #[derive(Clone, Debug)]
 pub struct PutBucketEncryptionResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket containing the object.
-    pub bucket: String,
-
-    /// Server-side encryption configuration.
-    pub config: SseConfig,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 }
 
-#[async_trait]
-impl FromS3Response for PutBucketEncryptionResponse {
-    async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        let mut resp = resp?;
+impl_from_s3response!(PutBucketEncryptionResponse);
+impl_has_s3fields!(PutBucketEncryptionResponse);
 
-        let headers: HeaderMap = mem::take(resp.headers_mut());
-        let body = resp.bytes().await?;
-        let mut root = Element::parse(body.reader())?;
+impl HasBucket for PutBucketEncryptionResponse {}
+impl HasRegion for PutBucketEncryptionResponse {}
+
+impl PutBucketEncryptionResponse {
+    /// Returns the server-side encryption configuration.
+    pub fn config(&self) -> Result<SseConfig, Error> {
+        let mut root = Element::parse(self.body().clone().reader())?;
 
         let rule = root
             .get_mut_child("Rule")
@@ -62,14 +54,9 @@ impl FromS3Response for PutBucketEncryptionResponse {
                 "<ApplyServerSideEncryptionByDefault> tag not found",
             )))?;
 
-        Ok(Self {
-            headers,
-            region: req.inner_region,
-            bucket: take_bucket(req.bucket)?,
-            config: SseConfig {
-                sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
-                kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID"),
-            },
+        Ok(SseConfig {
+            sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
+            kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID"),
         })
     }
 }

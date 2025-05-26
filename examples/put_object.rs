@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let resp: BucketExistsResponse = client.bucket_exists(&args.bucket).send().await.unwrap();
 
-    if !resp.exists {
+    if !resp.exists() {
         client.create_bucket(&args.bucket).send().await.unwrap();
     }
 

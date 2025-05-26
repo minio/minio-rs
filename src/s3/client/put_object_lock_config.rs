@@ -30,6 +30,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::{CreateBucketResponse, PutObjectLockConfigResponse};
     /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -38,14 +39,14 @@ impl Client {
     ///
     ///     let resp: CreateBucketResponse =
     ///         client.create_bucket(bucket_name).object_lock(true).send().await.unwrap();
-    ///     println!("created bucket '{}' with object locking enabled", resp.bucket);
+    ///     println!("created bucket '{}' with object locking enabled", resp.bucket());
     ///
     ///     const DURATION_DAYS: i32 = 7;
     ///     let config = ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();
     ///
     ///     let resp: PutObjectLockConfigResponse =
     ///         client.put_object_lock_config(bucket_name).config(config).send().await.unwrap();
-    ///     println!("configured object locking for bucket '{}'", resp.bucket);
+    ///     println!("configured object locking for bucket '{}'", resp.bucket());
     /// }
     /// ```
     pub fn put_object_lock_config<S: Into<String>>(&self, bucket: S) -> PutObjectLockConfig {

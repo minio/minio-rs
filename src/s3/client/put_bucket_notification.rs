@@ -28,11 +28,11 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::types::{NotificationConfig, PrefixFilterRule, QueueConfig, S3Api, SuffixFilterRule};
     /// use minio::s3::response::PutBucketNotificationResponse;
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
-    ///
     ///     let config = NotificationConfig {
     ///         cloud_func_config_list: None,
     ///         queue_config_list: Some(vec![QueueConfig {
@@ -56,7 +56,7 @@ impl Client {
     ///         .put_bucket_notification("bucket-name")
     ///         .notification_config(config)
     ///         .send().await.unwrap();
-    ///     println!("set bucket notification for bucket '{:?}'", resp.bucket);
+    ///     println!("set bucket notification for bucket '{:?}'", resp.bucket());
     /// }
     /// ```
     pub fn put_bucket_notification<S: Into<String>>(&self, bucket: S) -> PutBucketNotification {

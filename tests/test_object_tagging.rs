@@ -15,6 +15,9 @@
 
 use minio::s3::builders::ObjectContent;
 use minio::s3::client::DEFAULT_REGION;
+use minio::s3::response::a_response_traits::{
+    HasBucket, HasObject, HasRegion, HasTagging, HasVersion,
+};
 use minio::s3::response::{
     DeleteObjectTaggingResponse, GetObjectTaggingResponse, PutObjectContentResponse,
     PutObjectTaggingResponse,
@@ -47,11 +50,11 @@ async fn object_tags() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size);
-    assert_eq!(resp.version_id, None);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size(), size);
+    assert_eq!(resp.version_id(), None);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let tags = HashMap::from([
         (String::from("Project"), String::from("Project One")),
@@ -65,10 +68,10 @@ async fn object_tags() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.version_id, None);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.version_id(), None);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetObjectTaggingResponse = ctx
         .client
@@ -76,11 +79,11 @@ async fn object_tags() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.tags, tags);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.version_id, None);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.tags().unwrap(), tags);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.version_id(), None);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: DeleteObjectTaggingResponse = ctx
         .client
@@ -88,10 +91,10 @@ async fn object_tags() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.version_id, None);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.version_id(), None);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetObjectTaggingResponse = ctx
         .client
@@ -99,9 +102,9 @@ async fn object_tags() {
         .send()
         .await
         .unwrap();
-    assert!(resp.tags.is_empty());
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.version_id, None);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert!(resp.tags().unwrap().is_empty());
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.version_id(), None);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 }

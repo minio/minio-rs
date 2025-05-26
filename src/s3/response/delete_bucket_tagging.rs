@@ -14,44 +14,24 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::take_bucket;
-use async_trait::async_trait;
+use crate::{impl_from_s3response, impl_has_s3fields};
+use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
 /// Represents the response of the [delete_bucket_tagging()](crate::s3::client::Client::delete_bucket_tagging) API call.
 /// This struct contains metadata and information about the bucket whose tags were removed.
-///
-/// # Fields
-///
-/// * `headers` - HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-/// * `region` - The AWS region where the bucket resides.
-/// * `bucket` - Name of the bucket from which the tags were removed.
 #[derive(Clone, Debug)]
 pub struct DeleteBucketTaggingResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket from which the tags were removed.
-    pub bucket: String,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 }
 
-#[async_trait]
-impl FromS3Response for DeleteBucketTaggingResponse {
-    async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        let mut resp = resp?;
+impl_from_s3response!(DeleteBucketTaggingResponse);
+impl_has_s3fields!(DeleteBucketTaggingResponse);
 
-        Ok(Self {
-            headers: mem::take(resp.headers_mut()),
-            region: req.inner_region,
-            bucket: take_bucket(req.bucket)?,
-        })
-    }
-}
+impl HasBucket for DeleteBucketTaggingResponse {}
+impl HasRegion for DeleteBucketTaggingResponse {}

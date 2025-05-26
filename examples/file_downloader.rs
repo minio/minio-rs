@@ -55,7 +55,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let get_object = client.get_object(bucket_name, object_name).send().await?;
 
-    get_object.content.to_file(Path::new(download_path)).await?;
+    get_object
+        .content()?
+        .to_file(Path::new(download_path))
+        .await?;
 
     log::info!("Object '{object_name}' is successfully downloaded to file '{download_path}'.");
 

@@ -19,6 +19,7 @@ use crate::s3::builders::{
 };
 use crate::s3::error::Error;
 use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::response::a_response_traits::HasObjectSize;
 use crate::s3::response::{AppendObjectResponse, StatObjectResponse};
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::Sse;
@@ -26,7 +27,6 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, check_object_name};
 use http::Method;
 use std::sync::Arc;
-
 // region: append-object
 
 /// Argument builder for the [`AppendObject`](https://docs.aws.amazon.com/AmazonS3/latest/userguide/directory-buckets-objects-append.html) S3 API operation.
@@ -234,7 +234,7 @@ impl AppendObjectContent {
             .await?;
         //println!("statObjectResponse={:#?}", resp);
 
-        let current_file_size = resp.size;
+        let current_file_size = resp.size()?;
 
         // In the first part read, if:
         //
@@ -322,7 +322,7 @@ impl AppendObjectContent {
             let resp: AppendObjectResponse = append_object.send().await?;
             //println!("AppendObjectResponse: object_size={:?}", resp.object_size);
 
-            next_offset_bytes = resp.object_size;
+            next_offset_bytes = resp.object_size();
 
             // Finally check if we are done.
             if buffer_size < part_size {

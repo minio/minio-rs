@@ -17,9 +17,11 @@ use crate::s3::Client;
 use crate::s3::client::{MAX_MULTIPART_COUNT, MAX_PART_SIZE};
 use crate::s3::error::Error;
 use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::response::a_response_traits::HasEtagFromBody;
 use crate::s3::response::{
-    AbortMultipartUploadResponse, ComposeObjectResponse, CopyObjectInternalResponse,
-    CopyObjectResponse, CreateMultipartUploadResponse, StatObjectResponse, UploadPartCopyResponse,
+    AbortMultipartUploadResponse, CompleteMultipartUploadResponse, ComposeObjectResponse,
+    CopyObjectInternalResponse, CopyObjectResponse, CreateMultipartUploadResponse,
+    StatObjectResponse, UploadPartCopyResponse,
 };
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{Directive, PartInfo, Retention, S3Api, S3Request, ToS3Request};
@@ -445,7 +447,7 @@ impl CopyObject {
 
         if self.source.offset.is_some()
             || self.source.length.is_some()
-            || stat_resp.size > MAX_PART_SIZE
+            || stat_resp.size()? > MAX_PART_SIZE
         {
             if let Some(v) = &self.metadata_directive {
                 match v {
@@ -499,14 +501,8 @@ impl CopyObject {
                 .send()
                 .await?;
 
-            Ok(CopyObjectResponse {
-                headers: resp.headers,
-                bucket: resp.bucket,
-                object: resp.object,
-                region: resp.region,
-                etag: resp.etag,
-                version_id: resp.version_id,
-            })
+            let resp: CopyObjectResponse = resp; // retype to CopyObjectResponse
+            Ok(resp)
         } else {
             let resp: CopyObjectInternalResponse = self
                 .client
@@ -526,14 +522,8 @@ impl CopyObject {
                 .send()
                 .await?;
 
-            Ok(CopyObjectResponse {
-                headers: resp.headers,
-                bucket: resp.bucket,
-                object: resp.object,
-                region: resp.region,
-                etag: resp.etag,
-                version_id: resp.version_id,
-            })
+            let resp: CopyObjectResponse = resp; // retype to CopyObjectResponse
+            Ok(resp)
         }
     }
 }
@@ -652,17 +642,9 @@ impl ComposeObjectInternal {
                 Err(e) => return (Err(e), upload_id),
             };
 
-            (
-                Ok(ComposeObjectResponse {
-                    headers: resp.headers,
-                    bucket: resp.bucket,
-                    object: resp.object,
-                    region: resp.region,
-                    etag: resp.etag,
-                    version_id: resp.version_id,
-                }),
-                upload_id,
-            )
+            let resp: ComposeObjectResponse = resp; // retype to ComposeObjectResponse
+
+            (Ok(resp), upload_id)
         } else {
             let headers: Multimap = into_headers_copy_object(
                 self.extra_headers,
@@ -687,7 +669,11 @@ impl ComposeObjectInternal {
             };
 
             // the multipart upload was successful: update the upload_id
-            upload_id.push_str(&cmu.upload_id);
+            let upload_id_cmu: String = match cmu.upload_id().await {
+                Ok(v) => v,
+                Err(e) => return (Err(e), upload_id),
+            };
+            upload_id.push_str(&upload_id_cmu);
 
             let mut part_number = 0_u16;
             let ssec_headers: Multimap = match self.sse {
@@ -739,9 +725,14 @@ impl ComposeObjectInternal {
                         Err(e) => return (Err(e), upload_id),
                     };
 
+                    let etag = match resp.etag() {
+                        Ok(v) => v,
+                        Err(e) => return (Err(e), upload_id),
+                    };
+
                     parts.push(PartInfo {
                         number: part_number,
-                        etag: resp.etag,
+                        etag,
                         size,
                     });
                 } else {
@@ -773,9 +764,14 @@ impl ComposeObjectInternal {
                             Err(e) => return (Err(e), upload_id),
                         };
 
+                        let etag = match resp.etag() {
+                            Ok(v) => v,
+                            Err(e) => return (Err(e), upload_id),
+                        };
+
                         parts.push(PartInfo {
                             number: part_number,
-                            etag: resp.etag,
+                            etag,
                             size,
                         });
 
@@ -785,7 +781,7 @@ impl ComposeObjectInternal {
                 }
             }
 
-            let resp = self
+            let resp: Result<CompleteMultipartUploadResponse, Error> = self
                 .client
                 .complete_multipart_upload(&self.bucket, &self.object, &upload_id, parts)
                 .region(self.region)
@@ -793,17 +789,14 @@ impl ComposeObjectInternal {
                 .await;
 
             match resp {
-                Ok(v) => (
-                    Ok(ComposeObjectResponse {
+                Ok(v) => {
+                    let resp = ComposeObjectResponse {
+                        request: v.request,
                         headers: v.headers,
-                        bucket: v.bucket,
-                        object: v.object,
-                        region: v.region,
-                        etag: v.etag,
-                        version_id: v.version_id,
-                    }),
-                    upload_id,
-                ),
+                        body: v.body,
+                    };
+                    (Ok(resp), upload_id)
+                }
                 Err(e) => (Err(e), upload_id),
             }
         }

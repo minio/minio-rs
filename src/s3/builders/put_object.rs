@@ -15,6 +15,7 @@
 
 use super::ObjectContent;
 use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::response::a_response_traits::HasEtagFromHeaders;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::utils::{check_object_name, insert};
 use crate::s3::{
@@ -665,7 +666,7 @@ impl PutObjectContent {
         {
             let size = seg_bytes.len() as u64;
 
-            let res: PutObjectResponse = PutObject(UploadPart {
+            let resp: PutObjectResponse = PutObject(UploadPart {
                 client: self.client.clone(),
                 extra_headers: self.extra_headers.clone(),
                 extra_query_params: self.extra_query_params.clone(),
@@ -685,15 +686,7 @@ impl PutObjectContent {
             .send()
             .await?;
 
-            Ok(PutObjectContentResponse {
-                headers: res.headers,
-                bucket: res.bucket,
-                object: res.object,
-                region: res.region,
-                object_size: size,
-                etag: res.etag,
-                version_id: res.version_id,
-            })
+            Ok(PutObjectContentResponse::new(resp, size))
         } else if object_size.is_known() && (seg_bytes.len() as u64) < part_size {
             // Not enough data!
             let expected: u64 = object_size.as_u64().unwrap();
@@ -722,21 +715,17 @@ impl PutObjectContent {
             .await?;
 
             let client = self.client.clone();
+            let upload_id: String = create_mpu_resp.upload_id().await?;
+
             let mpu_res = self
-                .send_mpu(
-                    part_size,
-                    create_mpu_resp.upload_id.clone(),
-                    object_size,
-                    seg_bytes,
-                )
+                .send_mpu(part_size, upload_id.clone(), object_size, seg_bytes)
                 .await;
 
             if mpu_res.is_err() {
                 // If we failed to complete the multipart upload, we should abort it.
-                let _ =
-                    AbortMultipartUpload::new(client, bucket, object, create_mpu_resp.upload_id)
-                        .send()
-                        .await;
+                let _ = AbortMultipartUpload::new(client, bucket, object, upload_id)
+                    .send()
+                    .await;
             }
             mpu_res
         }
@@ -815,7 +804,7 @@ impl PutObjectContent {
 
             parts.push(PartInfo {
                 number: part_number,
-                etag: resp.etag,
+                etag: resp.etag()?,
                 size: buffer_size,
             });
 
@@ -835,7 +824,7 @@ impl PutObjectContent {
             }
         }
 
-        let res: CompleteMultipartUploadResponse = CompleteMultipartUpload {
+        let resp: CompleteMultipartUploadResponse = CompleteMultipartUpload {
             client: self.client,
             extra_headers: self.extra_headers,
             extra_query_params: self.extra_query_params,
@@ -848,15 +837,7 @@ impl PutObjectContent {
         .send()
         .await?;
 
-        Ok(PutObjectContentResponse {
-            headers: res.headers,
-            bucket: res.bucket,
-            object: res.object,
-            region: res.region,
-            object_size: size,
-            etag: res.etag,
-            version_id: res.version_id,
-        })
+        Ok(PutObjectContentResponse::new(resp, size))
     }
 }
 

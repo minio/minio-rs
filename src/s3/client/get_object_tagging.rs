@@ -30,6 +30,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetObjectTaggingResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::{HasBucket, HasObject, HasTagging};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -37,7 +38,7 @@ impl Client {
     ///     let resp: GetObjectTaggingResponse = client
     ///         .get_object_tagging("bucket-name", "object-name")
     ///         .send().await.unwrap();
-    ///     println!("retrieved object tags '{:?}' from object '{}' in bucket '{}' is enabled", resp.tags, resp.object, resp.bucket);
+    ///     println!("retrieved object tags '{:?}' from object '{}' in bucket '{}' is enabled", resp.tags(), resp.object(), resp.bucket());
     /// }
     /// ```
     pub fn get_object_tagging<S1: Into<String>, S2: Into<String>>(
