@@ -67,7 +67,7 @@ impl Client {
     }
 
     /// copy object is a high-order API that calls [stat_object](Client::stat_object) and based on the results calls
-    /// either [compose_object](Client::compose_object) or [`copy_object_internal`](Client::copy_object_internal) to copy the object.
+    /// [compose_object](Client::compose_object) to copy the object.
     pub fn copy_object<S1: Into<String>, S2: Into<String>>(
         &self,
         bucket: S1,
@@ -84,7 +84,7 @@ impl Client {
         ComposeObjectInternal::new(self.clone(), bucket.into(), object.into())
     }
 
-    /// compose object is high-order API that calls [`compose_object_internal`](Client::compose_object_internal) and if that call fails,
+    /// compose object is high-order API that calls an internal compose object, and if that call fails,
     /// it calls ['abort_multipart_upload`](Client::abort_multipart_upload).
     pub fn compose_object<S1: Into<String>, S2: Into<String>>(
         &self,
