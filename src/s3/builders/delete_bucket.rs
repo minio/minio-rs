@@ -25,6 +25,7 @@ use http::Method;
 /// This struct constructs the parameters required for the [`Client::delete_bucket`](crate::s3::client::Client::delete_bucket) method.
 pub type DeleteBucket = BucketCommon<DeleteBucketPhantomData>;
 
+#[doc(hidden)]
 #[derive(Clone, Debug, Default)]
 pub struct DeleteBucketPhantomData;
 

@@ -23,6 +23,7 @@ use http::Method;
 /// This struct constructs the parameters required for the [`Client::bucket_exists`](crate::s3::client::Client::bucket_exists) method.
 pub type BucketExists = BucketCommon<BucketExistsPhantomData>;
 
+#[doc(hidden)]
 #[derive(Clone, Debug, Default)]
 pub struct BucketExistsPhantomData;
 

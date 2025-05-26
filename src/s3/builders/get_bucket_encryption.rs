@@ -25,6 +25,7 @@ use http::Method;
 /// This struct constructs the parameters required for the [`Client::get_bucket_encryption`](crate::s3::client::Client::get_bucket_encryption) method.
 pub type GetBucketEncryption = BucketCommon<GetBucketEncryptionPhantomData>;
 
+#[doc(hidden)]
 #[derive(Clone, Debug, Default)]
 pub struct GetBucketEncryptionPhantomData;
 

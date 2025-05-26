@@ -52,6 +52,7 @@ impl GetRegion {
     }
 }
 
+#[doc(hidden)]
 #[derive(Default, Debug)]
 pub struct GetRegionPhantomData;
 
