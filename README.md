@@ -1,4 +1,11 @@
-# MinIO Rust SDK for Amazon S3 Compatible Cloud Storage [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Sourcegraph](https://sourcegraph.com/github.com/minio/minio-rs/-/badge.svg)](https://sourcegraph.com/github.com/minio/minio-rs?badge) [![Apache V2 License](https://img.shields.io/badge/license-Apache%20V2-blue.svg)](https://github.com/minio/minio-rs/blob/master/LICENSE)
+# MinIO Rust SDK for Amazon S3 Compatible Cloud Storage
+
+[![CI](https://github.com/minio/minio-rs/actions/workflows/rust.yml/badge.svg?branch=master)](https://github.com/minio/minio-rs/actions/workflows/rust.yml)
+[![docs.rs](https://docs.rs/minio/badge.svg)](https://docs.rs/minio/latest/minio/)
+[![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) 
+[![Sourcegraph](https://sourcegraph.com/github.com/minio/minio-rs/-/badge.svg)](https://sourcegraph.com/github.com/minio/minio-rs?badge)
+[![crates.io](https://img.shields.io/crates/v/minio)](https://crates.io/crates/minio)
+[![Apache V2 License](https://img.shields.io/badge/license-Apache%20V2-blue.svg)](https://github.com/minio/minio-rs/blob/master/LICENSE)
 
 The MinIO Rust SDK is a Simple Storage Service (aka S3) client for performing bucket and object operations to any Amazon S3 compatible object storage service.
 It provides a strongly-typed, async-first interface to the MinIO and Amazon S3-compatible object storage APIs.
