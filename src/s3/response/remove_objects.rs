@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Responses for RemoveObject APIs.
-
 use async_trait::async_trait;
 use bytes::Buf;
 use http::HeaderMap;

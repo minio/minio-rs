@@ -15,7 +15,7 @@
 
 use async_trait::async_trait;
 use bytes::Buf;
-use http::HeaderMap;
+use http::{HeaderMap, HeaderValue};
 use std::mem;
 use xmltree::Element;
 
@@ -69,6 +69,7 @@ impl FromS3Response for PutObjectResponse {
     }
 }
 
+/// Response of [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload) API
 #[derive(Debug, Clone)]
 pub struct CreateMultipartUploadResponse {
     /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
@@ -103,10 +104,13 @@ impl FromS3Response for CreateMultipartUploadResponse {
     }
 }
 
+/// Response of [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload) API
 pub type AbortMultipartUploadResponse = CreateMultipartUploadResponse;
 
+/// Response of [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload) API
 pub type CompleteMultipartUploadResponse = PutObjectResponse;
 
+/// Response of [upload_part()](crate::s3::client::Client::upload_part) API
 pub type UploadPartResponse = PutObjectResponse;
 
 #[derive(Debug, Clone)]

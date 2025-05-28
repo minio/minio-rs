@@ -76,6 +76,7 @@ impl CreateMultipartUpload {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -181,6 +182,7 @@ impl AbortMultipartUpload {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -261,6 +263,7 @@ impl CompleteMultipartUpload {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -373,6 +376,7 @@ impl UploadPart {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -481,6 +485,7 @@ impl PutObject {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.0.region = region;
         self
@@ -581,6 +586,7 @@ impl PutObjectContent {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self

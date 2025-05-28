@@ -13,16 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! S3 APIs for listing objects.
-
 use super::Client;
 use crate::s3::builders::ListBuckets;
 
 impl Client {
-    /// Creates a [`ListBuckets`] request builder.
+    /// Creates a [`ListBuckets`] request builder to retrieve the list of all buckets owned by the authenticated sender of the request.
     ///
     /// To execute the request, call [`ListBuckets::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`ListBucketsResponse`](crate::s3::response::ListBucketsResponse).
+    ///
+    /// For more information, refer to the [AWS S3 ListBuckets API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html).
     ///
     /// # Example
     ///
@@ -30,11 +30,10 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::ListBucketsResponse;
     /// use minio::s3::types::S3Api;
-    /// use std::sync::Arc;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// let client: Client = Default::default(); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: ListBucketsResponse = client
     ///         .list_buckets()
     ///         .send().await.unwrap();

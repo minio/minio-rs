@@ -61,6 +61,7 @@ impl ListenBucketNotification {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self

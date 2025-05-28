@@ -90,12 +90,34 @@ mod stat_object;
 
 use super::types::S3Api;
 
+/// The default AWS region to be used if no other region is specified.
 pub const DEFAULT_REGION: &str = "us-east-1";
+
+/// Minimum allowed size (in bytes) for a multipart upload part (except the last).
+///
+/// Used in multipart uploads to ensure each part (except the final one)
+/// meets the required minimum size for transfer or storage.
 pub const MIN_PART_SIZE: u64 = 5_242_880; // 5 MiB
+
+/// Maximum allowed size (in bytes) for a single multipart upload part.
+///
+/// In multipart uploads, no part can exceed this size limit.
+/// This constraint ensures compatibility with services that enforce
+/// a 5 GiB maximum per part.
 pub const MAX_PART_SIZE: u64 = 5_368_709_120; // 5 GiB
+
+/// Maximum allowed size (in bytes) for a single object upload.
+///
+/// This is the upper limit for the total size of an object stored using
+/// multipart uploads. It applies to the combined size of all parts,
+/// ensuring the object does not exceed 5 TiB.
 pub const MAX_OBJECT_SIZE: u64 = 5_497_558_138_880; // 5 TiB
+
+/// Maximum number of parts allowed in a multipart upload.
+///
+/// Multipart uploads are limited to a total of 10,000 parts. If the object
+/// exceeds this count, each part must be larger to remain within the limit.
 pub const MAX_MULTIPART_COUNT: u16 = 10_000;
-pub const DEFAULT_EXPIRY_SECONDS: u32 = 604_800; // 7 days
 
 /// Client Builder manufactures a Client using given parameters.
 #[derive(Debug, Default)]

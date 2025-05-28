@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::client::DEFAULT_EXPIRY_SECONDS;
 use crate::s3::creds::Credentials;
 use crate::s3::error::Error;
 use crate::s3::multimap::{Multimap, MultimapExt};
@@ -22,6 +21,9 @@ use crate::s3::response::GetPresignedObjectUrlResponse;
 use crate::s3::signer::presign_v4;
 use crate::s3::utils::{UtcTime, check_bucket_name, check_object_name, utc_now};
 use http::Method;
+
+/// The default expiry time in seconds for a [`GetPresignedObjectUrl`].
+pub const DEFAULT_EXPIRY_SECONDS: u32 = 604_800; // 7 days
 
 /// This struct constructs the parameters required for the [`Client::get_presigned_object_url`](crate::s3::client::Client::get_presigned_object_url) method.
 #[derive(Clone, Debug, Default)]
@@ -35,6 +37,7 @@ pub struct GetPresignedObjectUrl {
     object: String,
     version_id: Option<String>,
     method: Method,
+
     expiry_seconds: Option<u32>,
     request_time: Option<UtcTime>,
 }
@@ -51,8 +54,21 @@ impl GetPresignedObjectUrl {
         }
     }
 
+    /// Sets the expiry time for the presigned URL, defaulting to 7 days if not specified.
+    pub fn expiry_seconds(mut self, seconds: u32) -> Self {
+        self.expiry_seconds = Some(seconds);
+        self
+    }
+
+    /// Sets the request time for the presigned URL, defaulting to the current time if not specified.
+    pub fn request_time(mut self, time: UtcTime) -> Self {
+        self.request_time = Some(time);
+        self
+    }
+
+    /// Sends the request to generate a presigned URL for an S3 object.
     pub async fn send(self) -> Result<GetPresignedObjectUrlResponse, Error> {
-        // NOTE: this send function is async to be comparable with other functions...
+        // NOTE: this send function is async and because of that, not comparable with other send functions...
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
 

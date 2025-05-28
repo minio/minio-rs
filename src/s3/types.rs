@@ -56,6 +56,7 @@ impl S3Request {
         }
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -715,6 +716,7 @@ impl RequestParameters {
         self.0.get("principalId")
     }
 
+    /// Gets the region for the request
     pub fn region(&self) -> Option<&String> {
         self.0.get("region")
     }

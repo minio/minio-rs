@@ -70,6 +70,7 @@ impl UploadPartCopy {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -165,6 +166,7 @@ impl CopyObjectInternal {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -368,6 +370,7 @@ impl CopyObject {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -572,6 +575,7 @@ impl ComposeObjectInternal {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -843,6 +847,7 @@ impl ComposeObject {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self

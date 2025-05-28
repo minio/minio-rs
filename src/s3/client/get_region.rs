@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! S3 APIs for downloading objects.
-
 use super::{Client, DEFAULT_REGION};
 use crate::s3::builders::GetRegion;
 use crate::s3::error::Error;
