@@ -14,11 +14,11 @@
 // limitations under the License.
 
 use super::Client;
-use crate::s3::builders::{DeleteBucket, ObjectToDelete, RemoveObject};
+use crate::s3::builders::{DeleteBucket, DeleteObject, ObjectToDelete};
 use crate::s3::error::{Error, ErrorCode};
 use crate::s3::response::DeleteResult;
 use crate::s3::response::{
-    DeleteBucketResponse, PutObjectLegalHoldResponse, RemoveObjectResponse, RemoveObjectsResponse,
+    DeleteBucketResponse, DeleteObjectResponse, DeleteObjectsResponse, PutObjectLegalHoldResponse,
 };
 use crate::s3::types::{S3Api, ToStream};
 use futures::StreamExt;
@@ -60,14 +60,14 @@ impl Client {
 
             while let Some(items) = stream.next().await {
                 let mut resp = self
-                    .remove_objects(
+                    .delete_objects_streaming(
                         &bucket,
                         items?.contents.into_iter().map(ObjectToDelete::from),
                     )
                     .to_stream()
                     .await;
                 while let Some(item) = resp.next().await {
-                    let _resp: RemoveObjectsResponse = item?;
+                    let _resp: DeleteObjectsResponse = item?;
                 }
             }
         } else {
@@ -79,7 +79,7 @@ impl Client {
 
             while let Some(items) = stream.next().await {
                 let mut resp = self
-                    .remove_objects(
+                    .delete_objects_streaming(
                         &bucket,
                         items?.contents.into_iter().map(ObjectToDelete::from),
                     )
@@ -88,7 +88,7 @@ impl Client {
                     .await;
 
                 while let Some(item) = resp.next().await {
-                    let resp: RemoveObjectsResponse = item?;
+                    let resp: DeleteObjectsResponse = item?;
                     for obj in resp.result.into_iter() {
                         match obj {
                             DeleteResult::Deleted(_) => {}
@@ -100,7 +100,7 @@ impl Client {
                                     .send()
                                     .await?;
 
-                                let _resp: RemoveObjectResponse = RemoveObject::new(
+                                let _resp: DeleteObjectResponse = DeleteObject::new(
                                     self.clone(),
                                     bucket.clone(),
                                     ObjectToDelete::from(v),

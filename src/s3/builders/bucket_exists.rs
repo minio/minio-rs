@@ -21,6 +21,9 @@ use crate::s3::utils::check_bucket_name;
 use http::Method;
 
 /// This struct constructs the parameters required for the [`Client::bucket_exists`](crate::s3::client::Client::bucket_exists) method.
+///
+/// See [Amazon S3: Working with Buckets](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingBucket.html)
+/// for more information about checking if a bucket exists.
 pub type BucketExists = BucketCommon<BucketExistsPhantomData>;
 
 #[doc(hidden)]

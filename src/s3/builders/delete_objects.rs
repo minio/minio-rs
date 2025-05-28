@@ -31,7 +31,7 @@ use crate::s3::utils::{check_object_name, insert};
 use crate::s3::{
     Client,
     error::Error,
-    response::{RemoveObjectResponse, RemoveObjectsResponse},
+    response::{DeleteObjectResponse, DeleteObjectsResponse},
     types::{S3Api, S3Request, ToS3Request, ToStream},
     utils::{check_bucket_name, md5sum_hash},
 };
@@ -101,10 +101,13 @@ impl From<DeleteError> for ObjectToDelete {
 
 // endregion: object-to-delete
 
-// region: remove-object
+// region: delete-object
 
+/// Argument builder for the [`RemoveObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::remove_object`](crate::s3::client::Client::delete_object) method.
 #[derive(Debug, Clone, Default)]
-pub struct RemoveObject {
+pub struct DeleteObject {
     client: Client,
 
     extra_headers: Option<Multimap>,
@@ -116,7 +119,7 @@ pub struct RemoveObject {
     bypass_governance_mode: bool,
 }
 
-impl RemoveObject {
+impl DeleteObject {
     pub fn new(client: Client, bucket: String, object: impl Into<ObjectToDelete>) -> Self {
         Self {
             client,
@@ -148,11 +151,11 @@ impl RemoveObject {
     }
 }
 
-impl S3Api for RemoveObject {
-    type S3Response = RemoveObjectResponse;
+impl S3Api for DeleteObject {
+    type S3Response = DeleteObjectResponse;
 }
 
-impl ToS3Request for RemoveObject {
+impl ToS3Request for DeleteObject {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object.key)?;
@@ -160,20 +163,25 @@ impl ToS3Request for RemoveObject {
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.add_version(self.object.version_id);
 
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
+        if self.bypass_governance_mode {
+            headers.add("x-amz-bypass-governance-retention", "true");
+        }
+
         Ok(S3Request::new(self.client, Method::DELETE)
             .region(self.region)
             .bucket(Some(self.bucket))
             .object(Some(self.object.key))
             .query_params(query_params)
-            .headers(self.extra_headers.unwrap_or_default()))
+            .headers(headers))
     }
 }
 
-// endregion: remove-object
+// endregion: delete-object
 
-// region: remove-object-api
+// region: delete-objects
 #[derive(Debug, Clone, Default)]
-pub struct RemoveObjectsApi {
+pub struct DeleteObjects {
     client: Client,
 
     bucket: String,
@@ -187,10 +195,9 @@ pub struct RemoveObjectsApi {
     region: Option<String>,
 }
 
-impl RemoveObjectsApi {
-    #[inline]
+impl DeleteObjects {
     pub fn new(client: Client, bucket: String, objects: Vec<ObjectToDelete>) -> Self {
-        RemoveObjectsApi {
+        DeleteObjects {
             client,
             bucket,
             objects,
@@ -228,11 +235,11 @@ impl RemoveObjectsApi {
     }
 }
 
-impl S3Api for RemoveObjectsApi {
-    type S3Response = RemoveObjectsResponse;
+impl S3Api for DeleteObjects {
+    type S3Response = DeleteObjectsResponse;
 }
 
-impl ToS3Request for RemoveObjectsApi {
+impl ToS3Request for DeleteObjects {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
@@ -273,30 +280,27 @@ impl ToS3Request for RemoveObjectsApi {
     }
 }
 
-// endregion: remove-object-api
+// endregion: delete-objects
 
-// region: delete-objects
+// region: object-stream
 
-/// Argument builder for the [`DeleteObjects`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html) S3 API operation.
-///
-/// This struct constructs the parameters required for the [`Client::delete`](crate::s3::client::Client::get_bucket_encryption) method.
-pub struct DeleteObjects {
+pub struct ObjectsStream {
     items: Pin<Box<dyn Stream<Item = ObjectToDelete> + Send + Sync>>,
 }
 
-impl DeleteObjects {
+impl ObjectsStream {
     pub fn from_stream(s: impl Stream<Item = ObjectToDelete> + Send + Sync + 'static) -> Self {
         Self { items: Box::pin(s) }
     }
 }
 
-impl From<ObjectToDelete> for DeleteObjects {
+impl From<ObjectToDelete> for ObjectsStream {
     fn from(delete_object: ObjectToDelete) -> Self {
         Self::from_stream(stream_iter(std::iter::once(delete_object)))
     }
 }
 
-impl<I> From<I> for DeleteObjects
+impl<I> From<I> for ObjectsStream
 where
     I: Iterator<Item = ObjectToDelete> + Send + Sync + 'static,
 {
@@ -305,15 +309,19 @@ where
     }
 }
 
-// endregion: delete-objects
+// endregion: object-stream
 
-// region: remove-objects
+// region: delete-objects-streaming
 
-pub struct RemoveObjects {
+/// Argument builder for the [`DeleteObjectsStreaming`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html) S3 API operation.
+/// Note that this API is not part of the official S3 API, but is a MinIO extension for streaming deletion of multiple objects.
+///
+/// This struct constructs the parameters required for the [`Client::`](crate::s3::client::Client::get_bucket_encryption) method.
+pub struct DeleteObjectsStreaming {
     client: Client,
 
     bucket: String,
-    objects: DeleteObjects,
+    objects: ObjectsStream,
 
     bypass_governance_mode: bool,
     verbose_mode: bool,
@@ -323,8 +331,8 @@ pub struct RemoveObjects {
     region: Option<String>,
 }
 
-impl RemoveObjects {
-    pub fn new(client: Client, bucket: String, objects: impl Into<DeleteObjects>) -> Self {
+impl DeleteObjectsStreaming {
+    pub fn new(client: Client, bucket: String, objects: impl Into<ObjectsStream>) -> Self {
         Self {
             client,
             bucket,
@@ -368,7 +376,7 @@ impl RemoveObjects {
         self
     }
 
-    async fn next_request(&mut self) -> Result<Option<RemoveObjectsApi>, Error> {
+    async fn next_request(&mut self) -> Result<Option<DeleteObjects>, Error> {
         let mut objects = Vec::new();
         while let Some(object) = self.objects.items.next().await {
             objects.push(object);
@@ -381,7 +389,7 @@ impl RemoveObjects {
         }
 
         Ok(Some(
-            RemoveObjectsApi::new(self.client.clone(), self.bucket.clone(), objects)
+            DeleteObjects::new(self.client.clone(), self.bucket.clone(), objects)
                 .bypass_governance_mode(self.bypass_governance_mode)
                 .verbose_mode(self.verbose_mode)
                 .extra_headers(self.extra_headers.clone())
@@ -392,8 +400,8 @@ impl RemoveObjects {
 }
 
 #[async_trait]
-impl ToStream for RemoveObjects {
-    type Item = RemoveObjectsResponse;
+impl ToStream for DeleteObjectsStreaming {
+    type Item = DeleteObjectsResponse;
 
     async fn to_stream(
         mut self,
@@ -414,4 +422,4 @@ impl ToStream for RemoveObjects {
     }
 }
 
-// endregion: remove-objects
+// endregion: delete-objects-streaming

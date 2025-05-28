@@ -27,6 +27,9 @@ use crate::s3::{
     utils::{UtcTime, check_bucket_name, to_http_header_value},
 };
 
+/// Argument builder for the [`StatObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObjectAttributes.html) S3 API operation.
+/// Retrieves all of the metadata from an object without returning the object itself.
+///
 /// This struct constructs the parameters required for the [`Client::stat_object`](crate::s3::client::Client::stat_object) method.
 #[derive(Debug, Clone, Default)]
 pub struct StatObject {

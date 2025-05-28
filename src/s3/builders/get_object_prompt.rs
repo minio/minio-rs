@@ -27,6 +27,9 @@ use bytes::Bytes;
 use http::Method;
 use serde_json::json;
 
+/// Argument builder for the `GetObjectPrompt` operation.
+///
+/// This struct constructs the parameters required for the [`Client::get_object_prompt`](crate::s3::client::Client::get_object_prompt) method.
 #[derive(Debug, Clone, Default)]
 pub struct GetObjectPrompt {
     client: Client,

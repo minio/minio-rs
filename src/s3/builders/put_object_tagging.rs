@@ -24,7 +24,9 @@ use bytes::Bytes;
 use http::Method;
 use std::collections::HashMap;
 
-/// Argument builder for [put_object_tagging()](crate::s3::client::Client::put_object_tagging) API
+/// Argument builder for the [`PutObjectTagging`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObjectTagging.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::put_object_tagging`](crate::s3::client::Client::put_object_tagging) method.
 #[derive(Clone, Debug, Default)]
 pub struct PutObjectTagging {
     client: Client,

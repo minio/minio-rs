@@ -19,6 +19,8 @@ use crate::s3::client::Client;
 use crate::s3::multimap::Multimap;
 
 /// Common parameters for bucket operations
+///
+/// See [Amazon S3 Buckets](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingBucket.html) for more information.
 #[derive(Clone, Debug, Default)]
 pub struct BucketCommon<A> {
     pub(crate) client: Client,

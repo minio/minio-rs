@@ -45,7 +45,7 @@ async fn remove_objects() {
 
     let mut resp = ctx
         .client
-        .remove_objects(&bucket_name, del_items.into_iter())
+        .delete_objects_streaming(&bucket_name, del_items.into_iter())
         .verbose_mode(true)
         .to_stream()
         .await;

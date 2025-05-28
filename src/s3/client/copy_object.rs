@@ -64,7 +64,7 @@ impl Client {
         CopyObjectInternal::new(self.clone(), bucket.into(), object.into())
     }
 
-    /// copy object is a high-order API that calls [stat_object](Client::stat_object) and based on the results calls
+    /// copy object is a higher-level API that calls [stat_object](Client::stat_object) and based on the results calls
     /// [compose_object](Client::compose_object) to copy the object.
     pub fn copy_object<S1: Into<String>, S2: Into<String>>(
         &self,
@@ -74,6 +74,8 @@ impl Client {
         CopyObject::new(self.clone(), bucket.into(), object.into())
     }
 
+    /// Create a ComposeObjectInternal request builder. This is a higher-level API that
+    /// performs a multipart object compose.
     pub(crate) fn compose_object_internal<S1: Into<String>, S2: Into<String>>(
         &self,
         bucket: S1,
@@ -82,7 +84,7 @@ impl Client {
         ComposeObjectInternal::new(self.clone(), bucket.into(), object.into())
     }
 
-    /// compose object is high-order API that calls an internal compose object, and if that call fails,
+    /// compose object is higher-level API that calls an internal compose object, and if that call fails,
     /// it calls ['abort_multipart_upload`](Client::abort_multipart_upload).
     pub fn compose_object<S1: Into<String>, S2: Into<String>>(
         &self,

@@ -17,7 +17,7 @@ use super::Client;
 use crate::s3::builders::BucketExists;
 
 impl Client {
-    /// Creates a [`BucketExists`] request builder.
+    /// Creates a [`BucketExists`] request builder to check if a bucket exists in S3.
     ///
     /// To execute the request, call [`BucketExists::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`BucketExistsResponse`](crate::s3::response::BucketExistsResponse).    

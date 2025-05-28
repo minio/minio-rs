@@ -1,5 +1,5 @@
 // MinIO Rust Library for Amazon S3 Compatible Cloud Storage
-// Copyright 2022-2024 MinIO, Inc.
+// Copyright 2022-2025 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,20 +26,23 @@ use crate::s3::{
 };
 
 #[derive(Debug, Clone)]
-pub struct RemoveObjectResponse {
+pub struct DeleteObjectResponse {
     /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
 
     /// Value of the `x-amz-delete-marker` header.
+    /// Indicates whether the specified object version that was permanently deleted was (true) or
+    /// was not (false) a delete marker before deletion. In a simple DELETE, this header indicates
+    /// whether (true) or not (false) the current version of the object is a delete marker.
     pub is_delete_marker: bool,
 
-    /// If a delete marker was created, this field will contain the version_id
-    /// of the delete marker. Value of the `x-amz-version-id` header.
+    /// Value of the `x-amz-version-id` header.
+    /// If a delete marker was created, this field will contain the version_id of the delete marker.
     pub version_id: Option<String>,
 }
 
 #[async_trait]
-impl FromS3Response for RemoveObjectResponse {
+impl FromS3Response for DeleteObjectResponse {
     async fn from_s3response(
         _req: S3Request,
         resp: Result<reqwest::Response, Error>,
@@ -55,7 +58,7 @@ impl FromS3Response for RemoveObjectResponse {
             .get("x-amz-version-id")
             .and_then(|v| v.to_str().ok().map(String::from));
 
-        Ok(RemoveObjectResponse {
+        Ok(DeleteObjectResponse {
             headers,
             is_delete_marker,
             version_id,
@@ -84,10 +87,10 @@ pub struct DeletedObject {
 /// Response of
 /// [delete_objects()](crate::s3::client::Client::delete_objects)
 /// S3 API. It is also returned by the
-/// [remove_objects()](crate::s3::client::Client::remove_objects) API in the
+/// [remove_objects()](crate::s3::client::Client::delete_objects_streaming) API in the
 /// form of a stream.
 #[derive(Clone, Debug)]
-pub struct RemoveObjectsResponse {
+pub struct DeleteObjectsResponse {
     /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
     pub headers: HeaderMap,
     pub result: Vec<DeleteResult>,
@@ -120,7 +123,7 @@ impl DeleteResult {
 }
 
 #[async_trait]
-impl FromS3Response for RemoveObjectsResponse {
+impl FromS3Response for DeleteObjectsResponse {
     async fn from_s3response(
         _req: S3Request,
         resp: Result<reqwest::Response, Error>,
