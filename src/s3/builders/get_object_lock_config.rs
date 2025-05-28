@@ -25,6 +25,7 @@ use http::Method;
 /// This struct constructs the parameters required for the [`Client::get_object_lock_config`](crate::s3::client::Client::get_object_lock_config) method.
 pub type GetObjectLockConfig = BucketCommon<GetObjectLockConfigPhantomData>;
 
+#[doc(hidden)]
 #[derive(Clone, Debug, Default)]
 pub struct GetObjectLockConfigPhantomData;
 

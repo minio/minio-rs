@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! S3 APIs for downloading objects.
-
 use crate::s3::builders::GetObjectPrompt;
 
 use super::Client;

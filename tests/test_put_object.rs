@@ -15,8 +15,9 @@
 
 use http::header;
 use minio::s3::builders::ObjectContent;
+use minio::s3::client;
 use minio::s3::error::{Error, ErrorCode};
-use minio::s3::response::{PutObjectContentResponse, RemoveObjectResponse, StatObjectResponse};
+use minio::s3::response::{DeleteObjectResponse, PutObjectContentResponse, StatObjectResponse};
 use minio::s3::types::S3Api;
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
@@ -54,9 +55,9 @@ async fn put_object() {
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.size, size);
 
-    let resp: RemoveObjectResponse = ctx
+    let resp: DeleteObjectResponse = ctx
         .client
-        .remove_object(&bucket_name, &object_name)
+        .delete_object(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
@@ -83,9 +84,10 @@ async fn put_object_multipart() {
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
     let object_name = rand_object_name();
 
-    let size: u64 = 16 + 5 * 1024 * 1024;
+    let size: u64 = 16 + client::MIN_PART_SIZE;
 
-    ctx.client
+    let resp: PutObjectContentResponse = ctx
+        .client
         .put_object_content(
             &bucket_name,
             &object_name,
@@ -94,7 +96,11 @@ async fn put_object_multipart() {
         .send()
         .await
         .unwrap();
-    let resp = ctx
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.object_size, size);
+
+    let resp: StatObjectResponse = ctx
         .client
         .stat_object(&bucket_name, &object_name)
         .send()
@@ -102,12 +108,15 @@ async fn put_object_multipart() {
         .unwrap();
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.object, object_name);
-    assert_eq!(resp.size as u64, size);
-    ctx.client
-        .remove_object(&bucket_name, &object_name)
+    assert_eq!(resp.size, size);
+
+    let resp: DeleteObjectResponse = ctx
+        .client
+        .delete_object(&bucket_name, &object_name)
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.version_id, None);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
@@ -143,9 +152,9 @@ async fn put_object_content_1() {
             resp.headers.get(header::CONTENT_TYPE).unwrap(),
             "image/jpeg"
         );
-        let resp: RemoveObjectResponse = ctx
+        let resp: DeleteObjectResponse = ctx
             .client
-            .remove_object(&bucket_name, &object_name)
+            .delete_object(&bucket_name, &object_name)
             .send()
             .await
             .unwrap();
@@ -185,7 +194,7 @@ async fn put_object_content_2() {
         assert_eq!(resp.size, *size);
         assert_eq!(resp.etag, etag);
         ctx.client
-            .remove_object(&bucket_name, &object_name)
+            .delete_object(&bucket_name, &object_name)
             .send()
             .await
             .unwrap();
@@ -239,7 +248,7 @@ async fn put_object_content_3() {
                 assert_eq!(resp.size, sizes[idx]);
                 assert_eq!(resp.etag, etag);
                 client
-                    .remove_object(&test_bucket, &object_name)
+                    .delete_object(&test_bucket, &object_name)
                     .send()
                     .await
                     .unwrap();

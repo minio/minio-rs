@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Responses for [minio::s3::client::Client](crate::s3::client::Client) APIs
-
 mod append_object;
 mod bucket_exists;
 mod copy_object;
@@ -26,6 +24,7 @@ mod delete_bucket_notification;
 mod delete_bucket_policy;
 mod delete_bucket_replication;
 mod delete_bucket_tagging;
+mod delete_object;
 mod delete_object_lock_config;
 mod delete_object_tagging;
 mod get_bucket_encryption;
@@ -58,7 +57,6 @@ mod put_object_legal_hold;
 mod put_object_lock_config;
 mod put_object_retention;
 mod put_object_tagging;
-mod remove_objects;
 mod select_object_content;
 mod stat_object;
 
@@ -73,6 +71,9 @@ pub use delete_bucket_notification::DeleteBucketNotificationResponse;
 pub use delete_bucket_policy::DeleteBucketPolicyResponse;
 pub use delete_bucket_replication::DeleteBucketReplicationResponse;
 pub use delete_bucket_tagging::DeleteBucketTaggingResponse;
+pub use delete_object::{
+    DeleteError, DeleteObjectResponse, DeleteObjectsResponse, DeleteResult, DeletedObject,
+};
 pub use delete_object_lock_config::DeleteObjectLockConfigResponse;
 pub use delete_object_tagging::DeleteObjectTaggingResponse;
 pub use get_bucket_encryption::GetBucketEncryptionResponse;
@@ -108,8 +109,5 @@ pub use put_object_legal_hold::PutObjectLegalHoldResponse;
 pub use put_object_lock_config::PutObjectLockConfigResponse;
 pub use put_object_retention::PutObjectRetentionResponse;
 pub use put_object_tagging::PutObjectTaggingResponse;
-pub use remove_objects::{
-    DeleteError, DeleteResult, DeletedObject, RemoveObjectResponse, RemoveObjectsResponse,
-};
 pub use select_object_content::SelectObjectContentResponse;
 pub use stat_object::StatObjectResponse;

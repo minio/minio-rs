@@ -70,6 +70,7 @@ impl UploadPartCopy {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -165,6 +166,7 @@ impl CopyObjectInternal {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -326,7 +328,9 @@ impl ToS3Request for CopyObjectInternal {
     }
 }
 
-/// Argument builder for [copy_object()](Client::copy_object) API
+/// Argument builder for [`CopyObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::copy_object`](crate::s3::client::Client::copy_object) method.
 #[derive(Clone, Debug, Default)]
 pub struct CopyObject {
     client: Client,
@@ -368,6 +372,7 @@ impl CopyObject {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -572,6 +577,7 @@ impl ComposeObjectInternal {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
@@ -804,6 +810,10 @@ impl ComposeObjectInternal {
     }
 }
 
+/// Argument builder for [`CopyObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html) S3 API operation.
+///
+/// See [Amazon S3 Multipart Upload](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html)
+/// This struct constructs the parameters required for the [`Client::copy_object`](crate::s3::client::Client::copy_object) method.
 #[derive(Clone, Debug, Default)]
 pub struct ComposeObject {
     client: Client,
@@ -843,6 +853,7 @@ impl ComposeObject {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self

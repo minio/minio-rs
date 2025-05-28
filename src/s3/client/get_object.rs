@@ -13,16 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! S3 APIs for downloading objects.
-
 use super::Client;
 use crate::s3::builders::GetObject;
 
 impl Client {
-    /// Creates a [`GetObject`] request builder.
-    ///
+    /// Creates a [`GetObject`] request builder to download an object from a specified S3 bucket.
+    /// This allows retrieval of the full content and metadata for the object.    
+    ///    
     /// To execute the request, call [`GetObject::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`GetObjectResponse`](crate::s3::response::GetObjectResponse).
+    ///
+    /// For more information, refer to the [AWS S3 GetObject API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html).
     ///
     /// # Example
     ///
@@ -39,7 +40,7 @@ impl Client {
     ///         .send().await.unwrap();
     ///     let content_bytes = resp.content.to_segmented_bytes().await.unwrap().to_bytes();
     ///     let content_str = String::from_utf8(content_bytes.to_vec()).unwrap();
-    ///     println!("retrieved content '{}'", content_str);
+    ///     println!("retrieved content '{content_str}'");
     /// }
     /// ```
     pub fn get_object<S1: Into<String>, S2: Into<String>>(

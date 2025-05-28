@@ -25,6 +25,7 @@ use http::Method;
 /// This struct constructs the parameters required for the [`Client::get_bucket_policy`](crate::s3::client::Client::get_bucket_policy) method.
 pub type GetBucketPolicy = BucketCommon<GetBucketPolicyPhantomData>;
 
+#[doc(hidden)]
 #[derive(Clone, Debug, Default)]
 pub struct GetBucketPolicyPhantomData;
 

@@ -25,6 +25,7 @@ use http::Method;
 /// This struct constructs the parameters required for the [`Client::delete_bucket_lifecycle`](crate::s3::client::Client::delete_bucket_lifecycle) method.
 pub type DeleteBucketLifecycle = BucketCommon<DeleteBucketLifecyclePhantomData>;
 
+#[doc(hidden)]
 #[derive(Clone, Debug, Default)]
 pub struct DeleteBucketLifecyclePhantomData;
 

@@ -25,6 +25,7 @@ use http::Method;
 /// This struct constructs the parameters required for the [`Client::get_bucket_versioning`](crate::s3::client::Client::get_bucket_versioning) method.
 pub type GetBucketVersioning = BucketCommon<GetBucketVersioningPhantomData>;
 
+#[doc(hidden)]
 #[derive(Clone, Debug, Default)]
 pub struct GetBucketVersioningPhantomData;
 

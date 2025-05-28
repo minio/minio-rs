@@ -22,6 +22,8 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
+/// Argument builder for the [`GetRegion`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html) S3 API operation.
+///
 /// This struct constructs the parameters required for the [`Client::get_region`](crate::s3::client::Client::get_region) method.
 #[derive(Clone, Debug, Default)]
 pub struct GetRegion {
@@ -52,6 +54,7 @@ impl GetRegion {
     }
 }
 
+#[doc(hidden)]
 #[derive(Default, Debug)]
 pub struct GetRegionPhantomData;
 

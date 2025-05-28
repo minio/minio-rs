@@ -17,10 +17,10 @@
 //!
 //! This crate provides a strongly-typed, async-first interface to the MinIO and Amazon S3-compatible object storage APIs.
 //!
-//! Each supported S3 operation has a corresponding request builder (e.g., [`BucketExists`], [`PutObject`], [`UploadPartCopy`]),
+//! Each supported S3 operation has a corresponding request builder (e.g., [`s3::builders::BucketExists`], [`s3::builders::PutObject`], [`s3::builders::UploadPartCopy`]),
 //! which allows users to configure request parameters using a fluent builder pattern.
 //!
-//! All request builders implement the [`S3Api`] trait, which provides the async [`send`](crate::s3::types::S3Api::send) method
+//! All request builders implement the [`s3::types::S3Api`] trait, which provides the async [`send`](crate::s3::types::S3Api::send) method
 //! to execute the request and return a typed response.
 //!
 //! ## Basic Usage
@@ -51,9 +51,9 @@
 //! - Transparent error handling via `Result<T, Error>`
 //!
 //! ## Design
-//! - Each API method on the [`Client`] returns a builder struct
-//! - Builders implement [`ToS3Request`] for request conversion and [`S3Api`] for execution
-//! - Responses implement [`FromS3Response`] for consistent deserialization
+//! - Each API method on the [`s3::client::Client`] returns a builder struct
+//! - Builders implement [`s3::types::ToS3Request`] for request conversion and [`s3::types::S3Api`] for execution
+//! - Responses implement [`s3::types::FromS3Response`] for consistent deserialization
 
 #![allow(clippy::result_large_err)]
 #![allow(clippy::too_many_arguments)]

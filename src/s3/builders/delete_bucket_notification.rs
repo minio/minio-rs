@@ -22,9 +22,14 @@ use crate::s3::utils::{check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
 
+/// Argument builder for the [`DeleteBucketNotification`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketNotificationConfiguration.html) S3 API operation.
+/// Note: on Amazon S3, a bucket notification is deleted by setting its configuration to empty.
+///
 /// This struct constructs the parameters required for the [`Client::delete_bucket_notification`](crate::s3::client::Client::delete_bucket_notification) method.
+/// See [Amazon S3: Managing Bucket Notifications](https://docs.aws.amazon.com/AmazonS3/latest/userguide/NotificationHowTo.html) for more information.
 pub type DeleteBucketNotification = BucketCommon<DeleteBucketNotificationPhantomData>;
 
+#[doc(hidden)]
 #[derive(Clone, Debug, Default)]
 pub struct DeleteBucketNotificationPhantomData;
 

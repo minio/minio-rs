@@ -25,6 +25,7 @@ use http::Method;
 /// This struct constructs the parameters required for the [`Client::delete_object_lock_config`](crate::s3::client::Client::delete_object_lock_config) method.
 pub type DeleteObjectLockConfig = BucketCommon<DeleteObjectLockConfigPhantomData>;
 
+#[doc(hidden)]
 #[derive(Clone, Debug, Default)]
 pub struct DeleteObjectLockConfigPhantomData;
 

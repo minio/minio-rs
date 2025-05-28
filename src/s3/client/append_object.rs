@@ -52,10 +52,10 @@ impl Client {
     ///     println!("size of the final object is {} bytes", resp.object_size);
     /// }
     /// ```
-    pub fn append_object<S: Into<String>>(
+    pub fn append_object<S1: Into<String>, S2: Into<String>>(
         &self,
-        bucket: S,
-        object: S,
+        bucket: S1,
+        object: S2,
         data: SegmentedBytes,
         offset_bytes: u64,
     ) -> AppendObject {
@@ -100,10 +100,10 @@ impl Client {
     ///     println!("size of the final object is {} bytes", resp.object_size);
     /// }
     /// ```
-    pub fn append_object_content<S: Into<String>, C: Into<ObjectContent>>(
+    pub fn append_object_content<S1: Into<String>, S2: Into<String>, C: Into<ObjectContent>>(
         &self,
-        bucket: S,
-        object: S,
+        bucket: S1,
+        object: S2,
         content: C,
     ) -> AppendObjectContent {
         AppendObjectContent::new(self.clone(), bucket.into(), object.into(), content)

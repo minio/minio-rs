@@ -23,7 +23,9 @@ use crate::s3::utils::{check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
 
-/// Argument builder for [put_bucket_encryption()](crate::s3::client::Client::put_bucket_encryption) API
+/// Argument builder for the [`PutBucketEncryption`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketEncryption.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::put_bucket_encryption`](crate::s3::client::Client::put_bucket_encryption) method.
 #[derive(Clone, Debug, Default)]
 pub struct PutBucketEncryption {
     client: Client,
@@ -55,11 +57,13 @@ impl PutBucketEncryption {
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self
     }
 
+    /// Sets the server-side encryption configuration for the bucket.
     pub fn sse_config(mut self, config: SseConfig) -> Self {
         self.config = config;
         self

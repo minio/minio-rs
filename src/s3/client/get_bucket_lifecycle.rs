@@ -13,14 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! S3 APIs for bucket objects.
-
 use super::Client;
 use crate::s3::builders::GetBucketLifecycle;
 
 impl Client {
-    /// Create a GetBucketLifecycle request builder.
-    ///
     /// Creates a [`GetBucketLifecycle`] request builder.
     ///
     /// To execute the request, call [`GetBucketLifecycle::send()`](crate::s3::types::S3Api::send),

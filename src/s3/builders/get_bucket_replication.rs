@@ -25,6 +25,7 @@ use http::Method;
 /// This struct constructs the parameters required for the [`Client::get_bucket_replication`](crate::s3::client::Client::get_bucket_replication) method.
 pub type GetBucketReplication = BucketCommon<GetBucketReplicationPhantomData>;
 
+#[doc(hidden)]
 #[derive(Clone, Debug, Default)]
 pub struct GetBucketReplicationPhantomData;
 

@@ -25,6 +25,7 @@ use http::Method;
 /// This struct constructs the parameters required for the [`Client::get_bucket_notification`](crate::s3::client::Client::get_bucket_notification) method.
 pub type GetBucketNotification = BucketCommon<GetBucketNotificationPhantomData>;
 
+#[doc(hidden)]
 #[derive(Default, Debug)]
 pub struct GetBucketNotificationPhantomData;
 

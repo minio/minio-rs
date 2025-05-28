@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! S3 APIs for bucket objects.
-
 use super::Client;
 use crate::s3::builders::GetBucketPolicy;
 

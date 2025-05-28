@@ -18,6 +18,9 @@ use std::marker::PhantomData;
 use crate::s3::client::Client;
 use crate::s3::multimap::Multimap;
 
+/// Common parameters for bucket operations
+///
+/// See [Amazon S3 Buckets](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingBucket.html) for more information.
 #[derive(Clone, Debug, Default)]
 pub struct BucketCommon<A> {
     pub(crate) client: Client,
@@ -39,16 +42,19 @@ impl<A: Default> BucketCommon<A> {
         }
     }
 
+    /// Sets extra headers for the request
     pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
         self.extra_headers = extra_headers;
         self
     }
 
+    /// Sets extra query parameters for the request
     pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
         self.extra_query_params = extra_query_params;
         self
     }
 
+    /// Sets the region for the request
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self

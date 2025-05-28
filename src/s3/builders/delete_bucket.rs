@@ -20,11 +20,13 @@ use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::check_bucket_name;
 use http::Method;
 
-/// Argument builder for the [`GetBucketEncryption`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucket.html) S3 API operation.
+/// Argument builder for the [`DeleteBucket`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucket.html) S3 API operation.
 ///
 /// This struct constructs the parameters required for the [`Client::delete_bucket`](crate::s3::client::Client::delete_bucket) method.
+/// See [Amazon S3: Deleting Buckets](https://docs.aws.amazon.com/AmazonS3/latest/userguide/delete-bucket.html) for more information.
 pub type DeleteBucket = BucketCommon<DeleteBucketPhantomData>;
 
+#[doc(hidden)]
 #[derive(Clone, Debug, Default)]
 pub struct DeleteBucketPhantomData;
 
