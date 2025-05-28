@@ -67,7 +67,7 @@ You can find the complete list of examples in the `examples` directory.
 
 ### file_downloader.rs
 
-* [Download af file from MinIO](examples/file_downloader.rs)
+* [Download a file from MinIO](examples/file_downloader.rs)
 
 ### object_prompt.rs 
 
