@@ -76,6 +76,7 @@ impl Client {
             let mut stream = self
                 .list_objects(&bucket)
                 .include_versions(true)
+                .recursive(true)
                 .to_stream()
                 .await;
 
