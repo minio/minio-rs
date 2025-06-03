@@ -32,17 +32,18 @@ impl Client {
     /// use minio::s3::builders::ObjectToDelete;
     /// use minio::s3::types::{S3Api, RetentionMode};
     /// use minio::s3::utils::utc_now;
+    /// use minio::s3::response::a_response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// let client: Client = Default::default(); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let retain_until_date = utc_now() + chrono::Duration::days(1);
     ///     let resp: PutObjectRetentionResponse = client
     ///         .put_object_retention("bucket-name", "object-name")
     ///         .retention_mode(Some(RetentionMode::GOVERNANCE))
     ///         .retain_until_date(Some(retain_until_date))
     ///         .send().await.unwrap();
-    ///     println!("set the object retention for object '{}'", resp.object);
+    ///     println!("set the object retention for object '{}'", resp.object());
     /// }
     /// ```
     pub fn put_object_retention<S1: Into<String>, S2: Into<String>>(

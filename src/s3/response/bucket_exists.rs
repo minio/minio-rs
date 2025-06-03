@@ -13,59 +13,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::impl_has_s3fields;
 use crate::s3::error::{Error, ErrorCode};
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
+use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
 /// Represents the response of the [bucket_exists()](crate::s3::client::Client::bucket_exists) API call.
 /// This struct contains metadata and information about the existence of a bucket.
-///
-/// # Fields
-///
-/// * `headers` - HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-/// * `region` - The AWS region where the bucket resides. If the bucket does not exist, this will be an empty string.
-/// * `bucket` - The name of the bucket being checked.
-/// * `exists` - A boolean indicating whether the bucket exists or not.
 #[derive(Clone, Debug)]
 pub struct BucketExistsResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// The name of the bucket being checked.
-    pub bucket: String,
-
-    /// Whether the bucket exists or not.
-    pub exists: bool,
+    pub(crate) exists: bool,
 }
+impl_has_s3fields!(BucketExistsResponse);
+
+impl HasBucket for BucketExistsResponse {}
+impl HasRegion for BucketExistsResponse {}
 
 #[async_trait]
 impl FromS3Response for BucketExistsResponse {
     async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        match resp {
-            Ok(mut r) => Ok(Self {
-                headers: mem::take(r.headers_mut()),
-                region: req.inner_region,
-                bucket: take_bucket(req.bucket)?,
+        match response {
+            Ok(mut resp) => Ok(Self {
+                request,
+                headers: mem::take(resp.headers_mut()),
+                body: resp.bytes().await?,
                 exists: true,
             }),
-            Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchBucket => {
-                Ok(Self {
-                    headers: e.headers,
-                    region: String::new(), // NOTE the bucket does not exist and the region is not provided
-                    bucket: take_bucket(req.bucket)?,
-                    exists: false,
-                })
-            }
+            Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchBucket => Ok(Self {
+                request,
+                headers: e.headers,
+                body: Bytes::new(),
+                exists: false,
+            }),
             Err(e) => Err(e),
         }
+    }
+}
+
+impl BucketExistsResponse {
+    /// Returns `true` if the bucket exists, `false` otherwise.
+    pub fn exists(&self) -> bool {
+        self.exists
     }
 }

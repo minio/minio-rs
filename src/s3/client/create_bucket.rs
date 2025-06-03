@@ -28,6 +28,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::CreateBucketResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -35,7 +36,7 @@ impl Client {
     ///     let resp: CreateBucketResponse = client
     ///         .create_bucket("bucket-name")
     ///         .send().await.unwrap();
-    ///     println!("Made bucket '{}' in region '{}'", resp.bucket, resp.region);
+    ///     println!("Made bucket '{}' in region '{}'", resp.bucket(), resp.region());
     /// }
     /// ```
     pub fn create_bucket<S: Into<String>>(&self, bucket: S) -> CreateBucket {

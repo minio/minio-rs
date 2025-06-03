@@ -28,6 +28,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::DeleteBucketEncryptionResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {    
@@ -35,7 +36,7 @@ impl Client {
     ///     let resp: DeleteBucketEncryptionResponse = client
     ///         .delete_bucket_encryption("bucket-name")
     ///         .send().await.unwrap();
-    ///     println!("bucket '{}' is deleted", resp.bucket);
+    ///     println!("bucket '{}' is deleted", resp.bucket());
     /// }
     /// ```
     pub fn delete_bucket_encryption<S: Into<String>>(&self, bucket: S) -> DeleteBucketEncryption {

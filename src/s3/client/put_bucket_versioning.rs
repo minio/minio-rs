@@ -31,6 +31,7 @@ impl Client {
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketVersioningResponse;
     /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -40,7 +41,7 @@ impl Client {
     ///         .put_bucket_versioning("bucket-name")
     ///         .versioning_status(VersioningStatus::Enabled)
     ///         .send().await.unwrap();
-    ///     println!("enabled versioning on bucket '{}'", resp.bucket);
+    ///     println!("enabled versioning on bucket '{}'", resp.bucket());
     /// }
     /// ```
     pub fn put_bucket_versioning<S: Into<String>>(&self, bucket: S) -> PutBucketVersioning {

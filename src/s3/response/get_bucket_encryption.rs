@@ -13,11 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::impl_has_s3fields;
 use crate::s3::error::{Error, ErrorCode};
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request, SseConfig};
-use crate::s3::utils::{get_option_text, get_text, take_bucket};
+use crate::s3::utils::{get_option_text, get_text};
 use async_trait::async_trait;
-use bytes::Buf;
+use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
@@ -32,64 +34,63 @@ use xmltree::Element;
 /// For more information, refer to the [AWS S3 GetBucketEncryption API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketEncryption.html).
 #[derive(Clone, Debug)]
 pub struct GetBucketEncryptionResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
+}
 
-    /// The AWS region where the bucket resides.
-    pub region: String,
+impl_has_s3fields!(GetBucketEncryptionResponse);
 
-    /// Name of the bucket whose encryption configuration is retrieved.
-    pub bucket: String,
+impl HasBucket for GetBucketEncryptionResponse {}
+impl HasRegion for GetBucketEncryptionResponse {}
 
-    /// The default server-side encryption configuration of the bucket.
+impl GetBucketEncryptionResponse {
+    /// Returns the default server-side encryption configuration of the bucket.
     ///
     /// This includes the encryption algorithm and, if applicable, the AWS KMS key ID used for encrypting objects.
-    ///
-    /// If the bucket has no default encryption configuration, the `get_bucket_encryption` API call may return an error
-    /// with the code `ServerSideEncryptionConfigurationNotFoundError`. It's advisable to handle this case appropriately in your application.
-    pub config: SseConfig,
+    /// If the bucket has no default encryption configuration, this method returns a default `SseConfig` with empty fields.
+    pub fn config(&self) -> Result<SseConfig, Error> {
+        if self.body.is_empty() {
+            return Ok(SseConfig::default());
+        }
+        let mut root = Element::parse(self.body.clone().reader())?; // clone of Bytes is inexpensive
+
+        let rule = root
+            .get_mut_child("Rule")
+            .ok_or(Error::XmlError("<Rule> tag not found".into()))?;
+
+        let sse_by_default = rule
+            .get_mut_child("ApplyServerSideEncryptionByDefault")
+            .ok_or(Error::XmlError(
+                "<ApplyServerSideEncryptionByDefault> tag not found".into(),
+            ))?;
+
+        Ok(SseConfig {
+            sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
+            kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID"),
+        })
+    }
 }
 
 #[async_trait]
 impl FromS3Response for GetBucketEncryptionResponse {
     async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        match resp {
-            Ok(mut r) => {
-                let headers: HeaderMap = mem::take(r.headers_mut());
-                let body = r.bytes().await?;
-                let mut root = Element::parse(body.reader())?;
-
-                let rule = root
-                    .get_mut_child("Rule")
-                    .ok_or(Error::XmlError("<Rule> tag not found".into()))?;
-
-                let sse_by_default = rule
-                    .get_mut_child("ApplyServerSideEncryptionByDefault")
-                    .ok_or(Error::XmlError(
-                        "<ApplyServerSideEncryptionByDefault> tag not found".into(),
-                    ))?;
-
-                Ok(Self {
-                    headers,
-                    region: req.inner_region,
-                    bucket: take_bucket(req.bucket)?,
-                    config: SseConfig {
-                        sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
-                        kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID"),
-                    },
-                })
-            }
+        match response {
+            Ok(mut resp) => Ok(Self {
+                request,
+                headers: mem::take(resp.headers_mut()),
+                body: resp.bytes().await?,
+            }),
             Err(Error::S3Error(e))
                 if e.code == ErrorCode::ServerSideEncryptionConfigurationNotFoundError =>
             {
                 Ok(Self {
+                    request,
                     headers: e.headers,
-                    region: req.inner_region,
-                    bucket: take_bucket(req.bucket)?,
-                    config: Default::default(),
+                    body: Bytes::new(),
                 })
             }
             Err(e) => Err(e),

@@ -13,15 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::impl_has_s3fields;
 use crate::s3::error::{Error, ErrorCode};
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields, HasTagging};
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::{get_text, take_bucket};
 use async_trait::async_trait;
-use bytes::Buf;
+use bytes::Bytes;
 use http::HeaderMap;
-use std::collections::HashMap;
 use std::mem;
-use xmltree::Element;
 
 /// Response from the [`get_bucket_tagging`](crate::s3::client::Client::get_bucket_tagging) API call,
 /// providing the set of tags associated with an S3 bucket.
@@ -32,57 +31,33 @@ use xmltree::Element;
 /// For more information, refer to the [AWS S3 GetBucketTagging API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketTagging.html).
 #[derive(Clone, Debug)]
 pub struct GetBucketTaggingResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket whose tags are retrieved.
-    pub bucket: String,
-
-    /// A collection of tags assigned to the bucket.
-    ///
-    /// Each tag is a key-value pair represented as a `HashMap<String, String>`.
-    /// If the bucket has no tags, this map will be empty.
-    ///
-    /// Note: If the bucket has no tags, the `get_bucket_tags` API call may return an error
-    /// with the code `NoSuchTagSet`. It's advisable to handle this case appropriately in your application.
-    pub tags: HashMap<String, String>,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 }
+
+impl_has_s3fields!(GetBucketTaggingResponse);
+
+impl HasBucket for GetBucketTaggingResponse {}
+impl HasRegion for GetBucketTaggingResponse {}
+impl HasTagging for GetBucketTaggingResponse {}
 
 #[async_trait]
 impl FromS3Response for GetBucketTaggingResponse {
     async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        match resp {
-            Ok(mut r) => {
-                let headers: HeaderMap = mem::take(r.headers_mut());
-                let body = r.bytes().await?;
-                let mut root = Element::parse(body.reader())?;
-
-                let element = root
-                    .get_mut_child("TagSet")
-                    .ok_or(Error::XmlError("<TagSet> tag not found".to_string()))?;
-                let mut tags = HashMap::new();
-                while let Some(v) = element.take_child("Tag") {
-                    tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
-                }
-
-                Ok(Self {
-                    headers,
-                    region: req.inner_region,
-                    bucket: take_bucket(req.bucket)?,
-                    tags,
-                })
-            }
+        match response {
+            Ok(mut resp) => Ok(Self {
+                request,
+                headers: mem::take(resp.headers_mut()),
+                body: resp.bytes().await?,
+            }),
             Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchTagSet => Ok(Self {
+                request,
                 headers: e.headers,
-                region: req.inner_region,
-                bucket: take_bucket(req.bucket)?,
-                tags: HashMap::new(),
+                body: Bytes::new(),
             }),
             Err(e) => Err(e),
         }

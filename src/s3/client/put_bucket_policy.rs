@@ -30,6 +30,7 @@ impl Client {
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketPolicyResponse;
     /// use minio::s3::types::{S3Api, AndOperator, Destination, Filter, ReplicationConfig, ReplicationRule};
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -63,7 +64,7 @@ impl Client {
     ///         .put_bucket_policy("bucket-name")
     ///         .config(config.to_owned())
     ///         .send().await.unwrap();
-    ///     println!("set bucket replication policy on bucket '{}'", resp.bucket);
+    ///     println!("set bucket replication policy on bucket '{}'", resp.bucket());
     /// }
     /// ```
     pub fn put_bucket_policy<S: Into<String>>(&self, bucket: S) -> PutBucketPolicy {

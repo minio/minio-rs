@@ -31,12 +31,13 @@ impl Client {
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketTaggingResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// use std::collections::HashMap;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// let client: Client = Default::default(); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///
     ///     let mut tags: HashMap<String, String> = HashMap::new();
     ///     tags.insert(String::from("Project"), String::from("Project One"));
@@ -46,7 +47,7 @@ impl Client {
     ///         .put_bucket_tagging("bucket-name")
     ///         .tags(tags)
     ///         .send().await.unwrap();
-    ///     println!("set tags on bucket '{}'", resp.bucket);
+    ///     println!("set tags on bucket '{}'", resp.bucket());
     /// }
     /// ```
     pub fn put_bucket_tagging<S: Into<String>>(&self, bucket: S) -> PutBucketTagging {

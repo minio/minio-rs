@@ -16,6 +16,7 @@
 use bytes::Bytes;
 
 use minio::s3::client::DEFAULT_REGION;
+use minio::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasVersion};
 use minio::s3::response::{
     CreateBucketResponse, GetObjectLegalHoldResponse, PutObjectContentResponse,
     PutObjectLegalHoldResponse,
@@ -50,9 +51,9 @@ async fn object_legal_hold_s3() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, data.len() as u64);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size(), data.len() as u64);
 
     let resp: PutObjectLegalHoldResponse = ctx
         .client
@@ -60,10 +61,10 @@ async fn object_legal_hold_s3() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
-    assert_eq!(resp.version_id, None);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.version_id(), None);
 
     let resp: GetObjectLegalHoldResponse = ctx
         .client
@@ -71,11 +72,11 @@ async fn object_legal_hold_s3() {
         .send()
         .await
         .unwrap();
-    assert!(resp.enabled);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
-    assert_eq!(resp.version_id, None);
+    assert!(resp.enabled().unwrap());
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.version_id(), None);
 
     let resp: PutObjectLegalHoldResponse = ctx
         .client
@@ -83,10 +84,10 @@ async fn object_legal_hold_s3() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
-    assert_eq!(resp.version_id, None);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.version_id(), None);
 
     let resp: GetObjectLegalHoldResponse = ctx
         .client
@@ -94,9 +95,9 @@ async fn object_legal_hold_s3() {
         .send()
         .await
         .unwrap();
-    assert!(resp.enabled);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
-    assert_eq!(resp.version_id, None);
+    assert!(resp.enabled().unwrap());
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.version_id(), None);
 }

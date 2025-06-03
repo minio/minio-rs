@@ -16,6 +16,7 @@
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::error::{Error, ErrorCode};
 use minio::s3::lifecycle_config::LifecycleConfig;
+use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
 use minio::s3::response::{
     DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, PutBucketLifecycleResponse,
 };
@@ -37,8 +38,8 @@ async fn bucket_lifecycle() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetBucketLifecycleResponse = ctx
         .client
@@ -47,10 +48,10 @@ async fn bucket_lifecycle() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.config, config);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
-    assert!(resp.updated_at.is_none());
+    assert_eq!(resp.config().unwrap(), config);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert!(resp.updated_at().is_none());
 
     let resp: GetBucketLifecycleResponse = ctx
         .client
@@ -59,10 +60,10 @@ async fn bucket_lifecycle() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.config, config);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
-    assert!(resp.updated_at.is_some());
+    assert_eq!(resp.config().unwrap(), config);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert!(resp.updated_at().is_some());
 
     let resp: DeleteBucketLifecycleResponse = ctx
         .client
@@ -70,8 +71,8 @@ async fn bucket_lifecycle() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: Result<GetBucketLifecycleResponse, Error> =
         ctx.client.get_bucket_lifecycle(&bucket_name).send().await;

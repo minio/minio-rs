@@ -60,6 +60,9 @@ mod put_object_tagging;
 mod select_object_content;
 mod stat_object;
 
+#[macro_use]
+pub mod a_response_traits;
+
 pub use append_object::AppendObjectResponse;
 pub use bucket_exists::BucketExistsResponse;
 pub use copy_object::*;

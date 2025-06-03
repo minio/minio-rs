@@ -324,6 +324,15 @@ pub fn get_option_text(element: &Element, tag: &str) -> Option<String> {
     None
 }
 
+/// Trim leading and trailing quotes from a string. It consumes the
+pub fn trim_quotes(mut s: String) -> String {
+    if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
+        s.drain(0..1); // remove the leading quote
+        s.pop(); // remove the trailing quote
+    }
+    s
+}
+
 /// Gets default text value of given XML element for given tag.
 pub fn get_default_text(element: &Element, tag: &str) -> String {
     element.get_child(tag).map_or(String::new(), |v| {
@@ -421,14 +430,6 @@ pub fn insert(data: Option<Multimap>, key: impl Into<String>) -> Multimap {
     let mut result: Multimap = data.unwrap_or_default();
     result.insert(key.into(), String::new());
     result
-}
-
-pub fn take_bucket(opt_bucket: Option<String>) -> Result<String, Error> {
-    opt_bucket.ok_or_else(|| Error::InvalidBucketName("no bucket specified".into()))
-}
-
-pub fn take_object(opt_object: Option<String>) -> Result<String, Error> {
-    opt_object.ok_or_else(|| Error::InvalidObjectName("no object specified".into()))
 }
 
 pub mod xml {

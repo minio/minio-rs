@@ -33,6 +33,7 @@ impl Client {
     /// use minio::s3::response::{UploadPartCopyResponse};
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {    
@@ -42,7 +43,7 @@ impl Client {
     ///     let resp: UploadPartCopyResponse = client
     ///         .upload_part_copy("bucket-name", "object-name", "TODO")
     ///         .send().await.unwrap();
-    ///     println!("uploaded {}", resp.object);
+    ///     println!("uploaded {}", resp.object());
     /// }
     /// ```
     pub fn upload_part_copy<S1: Into<String>, S2: Into<String>, S3: Into<String>>(

@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use minio::s3::builders::{ComposeSource, ObjectContent};
+use minio::s3::response::a_response_traits::{HasBucket, HasObject};
 use minio::s3::response::{ComposeObjectResponse, PutObjectContentResponse, StatObjectResponse};
 use minio::s3::types::S3Api;
 use minio_common::rand_src::RandSrc;
@@ -36,7 +37,7 @@ async fn compose_object() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.bucket(), bucket_name);
 
     let sources: Vec<ComposeSource> = {
         let mut sources = Vec::new();
@@ -53,8 +54,8 @@ async fn compose_object() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name_dst);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name_dst);
 
     let resp: StatObjectResponse = ctx
         .client
@@ -62,6 +63,6 @@ async fn compose_object() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.size, 5);
-    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.size().unwrap(), 5);
+    assert_eq!(resp.bucket(), bucket_name);
 }

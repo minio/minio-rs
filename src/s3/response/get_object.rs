@@ -13,75 +13,64 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::utils::{take_bucket, take_object};
+use crate::impl_has_s3fields;
+use crate::s3::response::a_response_traits::{
+    HasBucket, HasEtagFromHeaders, HasObject, HasRegion, HasS3Fields, HasVersion,
+};
 use crate::s3::{
     builders::ObjectContent,
     error::Error,
     types::{FromS3Response, S3Request},
 };
 use async_trait::async_trait;
+use bytes::Bytes;
 use futures_util::TryStreamExt;
 use http::HeaderMap;
 use std::mem;
 
 pub struct GetObjectResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes, // Note: not used
+    resp: reqwest::Response,
+}
 
-    /// The AWS region where the bucket resides.
-    pub region: String,
+impl_has_s3fields!(GetObjectResponse);
 
-    /// Name of the bucket containing the object.
-    pub bucket: String,
+impl HasBucket for GetObjectResponse {}
+impl HasRegion for GetObjectResponse {}
+impl HasObject for GetObjectResponse {}
+impl HasVersion for GetObjectResponse {}
+impl HasEtagFromHeaders for GetObjectResponse {}
 
-    /// Key (path) identifying the object within the bucket.
-    pub object: String,
+impl GetObjectResponse {
+    /// Returns the content of the object as a (streaming) byte buffer. Note: consumes the response.
+    pub fn content(self) -> Result<ObjectContent, Error> {
+        let content_length: u64 = self.object_size()?;
+        let body = self.resp.bytes_stream().map_err(std::io::Error::other);
+        Ok(ObjectContent::new_from_stream(body, Some(content_length)))
+    }
 
-    /// Entity tag representing a specific version of the object.
-    pub etag: Option<String>,
-
-    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
-    pub version_id: Option<String>,
-
-    /// The content of the object as a stream or byte buffer.
-    pub content: ObjectContent,
-
-    /// Size of the object in bytes.
-    pub object_size: u64,
+    /// Returns the content size (in Bytes) of the object.
+    pub fn object_size(&self) -> Result<u64, Error> {
+        self.resp
+            .content_length()
+            .ok_or(Error::ContentLengthUnknown)
+    }
 }
 
 #[async_trait]
 impl FromS3Response for GetObjectResponse {
     async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let mut resp = resp?;
-
-        let headers: HeaderMap = mem::take(resp.headers_mut());
-
-        let etag: Option<String> = headers
-            .get("etag")
-            .and_then(|v| v.to_str().ok())
-            .map(|s| s.trim_matches('"').to_string());
-
-        let version_id: Option<String> = headers
-            .get("x-amz-version-id")
-            .and_then(|v| v.to_str().ok().map(String::from));
-
-        let content_length: u64 = resp.content_length().ok_or(Error::ContentLengthUnknown)?;
-        let body = resp.bytes_stream().map_err(std::io::Error::other);
-        let content = ObjectContent::new_from_stream(body, Some(content_length));
-
+        let mut resp = response?;
         Ok(Self {
-            headers,
-            region: req.inner_region,
-            bucket: take_bucket(req.bucket)?,
-            object: take_object(req.object)?,
-            version_id,
-            content,
-            object_size: content_length,
-            etag,
+            request,
+            headers: mem::take(resp.headers_mut()),
+            body: Bytes::new(),
+            resp,
         })
     }
 }

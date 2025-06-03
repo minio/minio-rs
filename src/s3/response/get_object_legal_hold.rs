@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::{Error, ErrorCode};
-use crate::s3::multimap::MultimapExt;
+use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::{
+    HasBucket, HasObject, HasRegion, HasS3Fields, HasVersion,
+};
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::{get_default_text, take_bucket, take_object};
-use async_trait::async_trait;
-use bytes::Buf;
+use crate::s3::utils::get_default_text;
+use crate::{impl_from_s3response, impl_has_s3fields};
+use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
@@ -28,57 +30,28 @@ use xmltree::Element;
 /// API
 #[derive(Clone, Debug)]
 pub struct GetObjectLegalHoldResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket containing the object.
-    pub bucket: String,
-
-    /// Key (path) identifying the object within the bucket.
-    pub object: String,
-
-    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
-    pub version_id: Option<String>,
-
-    /// Indicates whether the object legal hold is enabled.
-    pub enabled: bool,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 }
 
-#[async_trait]
-impl FromS3Response for GetObjectLegalHoldResponse {
-    async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        match resp {
-            Ok(mut r) => {
-                let headers: HeaderMap = mem::take(r.headers_mut());
-                let body = r.bytes().await?;
-                let root = Element::parse(body.reader())?;
+impl_from_s3response!(GetObjectLegalHoldResponse);
+impl_has_s3fields!(GetObjectLegalHoldResponse);
 
-                Ok(Self {
-                    headers,
-                    region: req.inner_region,
-                    bucket: take_bucket(req.bucket)?,
-                    object: take_object(req.object)?,
-                    version_id: req.query_params.take_version(),
-                    enabled: get_default_text(&root, "Status") == "ON",
-                })
-            }
-            Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchObjectLockConfiguration => {
-                Ok(Self {
-                    headers: e.headers,
-                    region: req.inner_region,
-                    bucket: take_bucket(req.bucket)?,
-                    object: take_object(req.object)?,
-                    version_id: req.query_params.take_version(),
-                    enabled: false,
-                })
-            }
-            Err(e) => Err(e),
+impl HasBucket for GetObjectLegalHoldResponse {}
+impl HasRegion for GetObjectLegalHoldResponse {}
+impl HasObject for GetObjectLegalHoldResponse {}
+impl HasVersion for GetObjectLegalHoldResponse {}
+
+impl GetObjectLegalHoldResponse {
+    /// Returns the legal hold status of the object.
+    ///
+    /// This method retrieves whether the legal hold is enabled for the specified object.
+    pub fn enabled(&self) -> Result<bool, Error> {
+        if self.body.is_empty() {
+            return Ok(false); // No legal hold configuration present due to NoSuchObjectLockConfiguration
         }
+        let root = Element::parse(self.body.clone().reader())?;
+        Ok(get_default_text(&root, "Status") == "ON")
     }
 }

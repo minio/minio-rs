@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use minio::s3::client::DEFAULT_REGION;
+use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
 use minio::s3::response::{
     DeleteObjectLockConfigResponse, GetObjectLockConfigResponse, PutObjectLockConfigResponse,
 };
@@ -50,8 +51,8 @@ async fn object_lock_config() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetObjectLockConfigResponse = ctx
         .client
@@ -59,14 +60,13 @@ async fn object_lock_config() {
         .send()
         .await
         .unwrap();
-    assert_eq!(
-        resp.config.retention_mode.unwrap(),
-        RetentionMode::GOVERNANCE
-    );
-    assert_eq!(resp.config.retention_duration_days, Some(DURATION_DAYS));
-    assert!(resp.config.retention_duration_years.is_none());
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+
+    let config = resp.config().unwrap();
+    assert_eq!(config.retention_mode.unwrap(), RetentionMode::GOVERNANCE);
+    assert_eq!(config.retention_duration_days, Some(DURATION_DAYS));
+    assert!(config.retention_duration_years.is_none());
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: DeleteObjectLockConfigResponse = ctx
         .client
@@ -74,8 +74,8 @@ async fn object_lock_config() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetObjectLockConfigResponse = ctx
         .client
@@ -83,7 +83,8 @@ async fn object_lock_config() {
         .send()
         .await
         .unwrap();
-    assert!(resp.config.retention_mode.is_none());
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    let config = resp.config().unwrap();
+    assert!(config.retention_mode.is_none());
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 }
