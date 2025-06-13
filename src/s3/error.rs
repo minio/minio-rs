@@ -182,6 +182,10 @@ pub enum Error {
     NoClientProvided,
     TagDecodingError(String, String),
     ContentLengthUnknown,
+    Hook {
+        source: Box<dyn std::error::Error + Send + Sync>,
+        name: String,
+    },
 }
 
 impl std::error::Error for Error {}
@@ -343,6 +347,9 @@ impl fmt::Display for Error {
                 write!(f, "tag decoding failed: {error_message} on input '{input}'")
             }
             Error::ContentLengthUnknown => write!(f, "content length is unknown"),
+            Error::Hook { source, name } => {
+                write!(f, "{} interceptor failed: '{}'", name, source)
+            }
         }
     }
 }
