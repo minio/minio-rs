@@ -18,8 +18,10 @@
 use bytes::Bytes;
 use dashmap::DashMap;
 use http::HeaderMap;
-use hyper::http::Method;
+pub use hyper::http::Method;
 use reqwest::Body;
+pub use reqwest::{Error as ReqwestError, Response};
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
@@ -28,12 +30,13 @@ use std::sync::{Arc, OnceLock};
 use uuid::Uuid;
 
 use crate::s3::builders::{BucketExists, ComposeSource};
+pub use crate::s3::client::hooks::RequestLifecycleHooks;
 use crate::s3::creds::Provider;
 #[cfg(feature = "localhost")]
 use crate::s3::creds::StaticProvider;
 use crate::s3::error::{Error, IoError, NetworkError, S3ServerError, ValidationErr};
 use crate::s3::header_constants::*;
-use crate::s3::http::BaseUrl;
+use crate::s3::http::{BaseUrl, Url};
 use crate::s3::minio_error_response::{MinioErrorCode, MinioErrorResponse};
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::{HasEtagFromHeaders, HasS3Fields};
@@ -72,6 +75,7 @@ mod get_object_tagging;
 mod get_presigned_object_url;
 mod get_presigned_post_form_data;
 mod get_region;
+pub mod hooks;
 mod list_buckets;
 mod list_objects;
 mod listen_bucket_notification;
@@ -129,6 +133,7 @@ pub struct MinioClientBuilder {
     base_url: BaseUrl,
     /// Set the credential provider. If not, set anonymous access is used.
     provider: Option<Arc<dyn Provider + Send + Sync + 'static>>,
+    client_hooks: Vec<Arc<dyn RequestLifecycleHooks + Send + Sync + 'static>>,
     /// Set file for loading CAs certs to trust. This is in addition to the system trust store. The file must contain PEM encoded certificates.
     ssl_cert_file: Option<PathBuf>,
     /// Set flag to ignore certificate check. This is insecure and should only be used for testing.
@@ -144,10 +149,18 @@ impl MinioClientBuilder {
         Self {
             base_url,
             provider: None,
+            client_hooks: Vec::new(),
             ssl_cert_file: None,
             ignore_cert_check: None,
             app_info: None,
         }
+    }
+
+    /// Add a client hook to the builder. Hooks will be called after each other in
+    /// order they were added.
+    pub fn hook(mut self, hooks: Arc<dyn RequestLifecycleHooks + Send + Sync + 'static>) -> Self {
+        self.client_hooks.push(hooks);
+        self
     }
 
     /// Set the credential provider. If not, set anonymous access is used.
@@ -223,6 +236,7 @@ impl MinioClientBuilder {
             shared: Arc::new(SharedClientItems {
                 base_url: self.base_url,
                 provider: self.provider,
+                client_hooks: self.client_hooks,
                 region_map: Default::default(),
                 express: Default::default(),
             }),
@@ -441,55 +455,69 @@ impl MinioClient {
         body: Option<Arc<SegmentedBytes>>,
         retry: bool,
     ) -> Result<reqwest::Response, Error> {
-        let url = self.shared.base_url.build_url(
+        let mut url = self.shared.base_url.build_url(
             method,
             region,
             query_params,
             bucket_name,
             object_name,
         )?;
+        let mut extensions = http::Extensions::default();
 
-        {
-            headers.add(HOST, url.host_header_value());
-            let sha256: String = match *method {
-                Method::PUT | Method::POST => {
-                    if !headers.contains_key(CONTENT_TYPE) {
-                        headers.add(CONTENT_TYPE, "application/octet-stream");
-                    }
-                    let len: usize = body.as_ref().map_or(0, |b| b.len());
-                    headers.add(CONTENT_LENGTH, len.to_string());
-                    match body {
-                        None => EMPTY_SHA256.into(),
-                        Some(ref v) => {
-                            let clone = v.clone();
-                            async_std::task::spawn_blocking(move || sha256_hash_sb(clone)).await
-                        }
+        headers.add(HOST, url.host_header_value());
+        let sha256: String = match *method {
+            Method::PUT | Method::POST => {
+                if !headers.contains_key(CONTENT_TYPE) {
+                    headers.add(CONTENT_TYPE, "application/octet-stream");
+                }
+                let len: usize = body.as_ref().map_or(0, |b| b.len());
+                headers.add(CONTENT_LENGTH, len.to_string());
+                match body {
+                    None => EMPTY_SHA256.into(),
+                    Some(ref v) => {
+                        let clone = v.clone();
+                        async_std::task::spawn_blocking(move || sha256_hash_sb(clone)).await
                     }
                 }
-                _ => EMPTY_SHA256.into(),
-            };
-            headers.add(X_AMZ_CONTENT_SHA256, sha256.clone());
-
-            let date = utc_now();
-            headers.add(X_AMZ_DATE, to_amz_date(date));
-            if let Some(p) = &self.shared.provider {
-                let creds = p.fetch();
-                if creds.session_token.is_some() {
-                    headers.add(X_AMZ_SECURITY_TOKEN, creds.session_token.unwrap());
-                }
-                sign_v4_s3(
-                    method,
-                    &url.path,
-                    region,
-                    headers,
-                    query_params,
-                    &creds.access_key,
-                    &creds.secret_key,
-                    &sha256,
-                    date,
-                );
             }
+            _ => EMPTY_SHA256.into(),
+        };
+        headers.add(X_AMZ_CONTENT_SHA256, sha256.clone());
+
+        let date = utc_now();
+        headers.add(X_AMZ_DATE, to_amz_date(date));
+
+        self.run_before_signing_hooks(
+            method,
+            &mut url,
+            region,
+            headers,
+            query_params,
+            bucket_name,
+            object_name,
+            body.clone(),
+            &mut extensions,
+        )
+        .await?;
+
+        if let Some(p) = &self.shared.provider {
+            let creds = p.fetch();
+            if creds.session_token.is_some() {
+                headers.add(X_AMZ_SECURITY_TOKEN, creds.session_token.unwrap());
+            }
+            sign_v4_s3(
+                method,
+                &url.path,
+                region,
+                headers,
+                query_params,
+                &creds.access_key,
+                &creds.secret_key,
+                &sha256,
+                date,
+            );
         }
+
         let mut req = self.http_client.request(method.clone(), url.to_string());
 
         for (key, values) in headers.iter_all() {
@@ -522,7 +550,7 @@ impl MinioClient {
 
         if (*method == Method::PUT) || (*method == Method::POST) {
             //TODO: why-oh-why first collect into a vector and then iterate to a stream?
-            let bytes_vec: Vec<Bytes> = match body {
+            let bytes_vec: Vec<Bytes> = match body.clone() {
                 Some(v) => v.iter().collect(),
                 None => Vec::new(),
             };
@@ -532,7 +560,22 @@ impl MinioClient {
             req = req.body(Body::wrap_stream(stream));
         }
 
-        let resp: reqwest::Response = req.send().await.map_err(ValidationErr::from)?; //TODO request error handled by network error layer
+        let resp = req.send().await;
+
+        self.run_after_execute_hooks(
+            method,
+            &url,
+            region,
+            headers,
+            query_params,
+            bucket_name,
+            object_name,
+            &resp,
+            &mut extensions,
+        )
+        .await;
+
+        let resp = resp.map_err(ValidationErr::from)?;
         if resp.status().is_success() {
             return Ok(resp);
         }
@@ -612,6 +655,64 @@ impl MinioClient {
         .await
     }
 
+    async fn run_after_execute_hooks(
+        &self,
+        method: &Method,
+        url: &Url,
+        region: &str,
+        headers: &mut Multimap,
+        query_params: &Multimap,
+        bucket_name: Option<&str>,
+        object_name: Option<&str>,
+        resp: &Result<Response, reqwest::Error>,
+        extensions: &mut http::Extensions,
+    ) {
+        for hook in self.shared.client_hooks.iter() {
+            hook.after_execute(
+                method,
+                url,
+                region,
+                headers,
+                query_params,
+                bucket_name,
+                object_name,
+                resp,
+                extensions,
+            )
+            .await;
+        }
+    }
+
+    async fn run_before_signing_hooks(
+        &self,
+        method: &Method,
+        url: &mut Url,
+        region: &str,
+        headers: &mut Multimap,
+        query_params: &Multimap,
+        bucket_name: Option<&str>,
+        object_name: Option<&str>,
+        body: Option<Arc<SegmentedBytes>>,
+        extensions: &mut http::Extensions,
+    ) -> Result<(), Error> {
+        for hook in self.shared.client_hooks.iter() {
+            hook.before_signing_mut(
+                method,
+                url,
+                region,
+                headers,
+                query_params,
+                bucket_name,
+                object_name,
+                body.as_deref(),
+                extensions,
+            )
+            .await
+            .inspect_err(|e| log::warn!("Hook {} failed {e}", hook.name()))?;
+        }
+        Ok(())
+    }
+
     /// create an example client for testing on localhost
     #[cfg(feature = "localhost")]
     pub fn create_client_on_localhost()
@@ -632,6 +733,7 @@ impl MinioClient {
 pub(crate) struct SharedClientItems {
     pub(crate) base_url: BaseUrl,
     pub(crate) provider: Option<Arc<dyn Provider + Send + Sync + 'static>>,
+    client_hooks: Vec<Arc<dyn RequestLifecycleHooks + Send + Sync + 'static>>,
     region_map: DashMap<String, String>,
     express: OnceLock<bool>,
 }
