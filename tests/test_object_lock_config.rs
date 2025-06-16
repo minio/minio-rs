@@ -25,7 +25,7 @@ use minio_common::utils::rand_bucket_name;
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn object_lock_config() {
     let ctx = TestContext::new_from_env();
-    if ctx.client.is_minio_express() {
+    if ctx.client.is_minio_express().await {
         println!("Skipping test because it is running in MinIO Express mode");
         return;
     }

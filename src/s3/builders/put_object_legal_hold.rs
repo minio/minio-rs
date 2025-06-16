@@ -17,7 +17,6 @@ use crate::s3::Client;
 use crate::s3::error::Error;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::PutObjectLegalHoldResponse;
-use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
 use bytes::Bytes;
@@ -88,10 +87,10 @@ impl ToS3Request for PutObjectLegalHold {
             Some(true) => "<LegalHold><Status>ON</Status></LegalHold>",
             _ => "<LegalHold><Status>OFF</Status></LegalHold>",
         };
+        let bytes: Bytes = Bytes::from(payload);
         // TODO consider const payload with precalculated md5
 
-        headers.add("Content-MD5", md5sum_hash(payload.as_ref()));
-        let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(Bytes::from(payload)));
+        headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
 
         Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)
@@ -99,6 +98,6 @@ impl ToS3Request for PutObjectLegalHold {
             .query_params(query_params)
             .headers(headers)
             .object(Some(self.object))
-            .body(body))
+            .body(Some(bytes.into())))
     }
 }

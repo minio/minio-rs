@@ -17,7 +17,6 @@ use crate::s3::Client;
 use crate::s3::error::Error;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::SelectObjectContentResponse;
-use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::SseCustomerKey;
 use crate::s3::types::{S3Api, S3Request, SelectRequest, ToS3Request};
 use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
@@ -100,9 +99,7 @@ impl ToS3Request for SelectObjectContent {
                 return Err(Error::SseTlsRequired(None));
             }
         }
-        let region: String = self.client.get_region_cached(&self.bucket, &self.region)?;
-        let data = self.request.to_xml();
-        let bytes: Bytes = data.into();
+        let bytes: Bytes = self.request.to_xml().into();
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
@@ -110,14 +107,12 @@ impl ToS3Request for SelectObjectContent {
         let mut query_params: Multimap = insert(self.extra_query_params, "select");
         query_params.add("select-type", "2");
 
-        let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
-
         Ok(S3Request::new(self.client, Method::POST)
-            .region(Some(region))
+            .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(query_params)
-            .object(Some(self.object))
             .headers(headers)
-            .body(body))
+            .object(Some(self.object))
+            .body(Some(bytes.into())))
     }
 }

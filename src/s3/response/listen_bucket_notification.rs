@@ -13,17 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use futures_util::{Stream, TryStreamExt, stream};
+use crate::s3::error::Error;
+use crate::s3::types::{FromS3Response, NotificationRecords, S3Request};
+use crate::s3::utils::take_bucket;
+use futures_util::{Stream, StreamExt, TryStreamExt};
 use http::HeaderMap;
 use std::mem;
-use tokio::io::AsyncBufReadExt;
-use tokio_util::io::StreamReader;
-
-use crate::s3::utils::take_bucket;
-use crate::s3::{
-    error::Error,
-    types::{FromS3Response, NotificationRecords, S3Request},
-};
 
 /// Response of
 /// [listen _bucket_notification()](crate::s3::client::Client::listen_bucket_notification)
@@ -54,31 +49,48 @@ impl FromS3Response
         let mut resp = resp?;
         let headers: HeaderMap = mem::take(resp.headers_mut());
 
-        let stream_reader = StreamReader::new(resp.bytes_stream().map_err(std::io::Error::other));
+        // A simple stateful decoder that buffers bytes and yields complete lines
+        let byte_stream = resp.bytes_stream(); // This is a futures::Stream<Item = Result<Bytes, reqwest::Error>>
 
-        let record_stream = Box::pin(stream::unfold(
-            stream_reader,
-            move |mut reader| async move {
-                loop {
-                    let mut line = String::new();
-                    return match reader.read_line(&mut line).await {
-                        Ok(n) => {
-                            if n == 0 {
-                                return None;
-                            }
-                            let s = line.trim();
-                            if s.is_empty() {
-                                continue;
-                            }
-                            let records_res: Result<NotificationRecords, Error> =
-                                serde_json::from_str(s).map_err(|e| e.into());
-                            Some((records_res, reader))
-                        }
-                        Err(e) => Some((Err(e.into()), reader)),
-                    };
+        let line_stream = Box::pin(async_stream::try_stream! {
+            let mut buf = Vec::new();
+            let mut cursor = 0;
+
+            let mut stream = byte_stream.map_err(Error::from).boxed();
+
+            while let Some(chunk) = stream.next().await {
+                let chunk = chunk?;
+                buf.extend_from_slice(&chunk);
+
+                while let Some(pos) = buf[cursor..].iter().position(|&b| b == b'\n') {
+                    let end = cursor + pos;
+                    let line_bytes = &buf[..end];
+                    let line = std::str::from_utf8(line_bytes)?.trim();
+
+                    if !line.is_empty() {
+                        let parsed: NotificationRecords = serde_json::from_str(line)?;
+                        yield parsed;
+                    }
+
+                    cursor = end + 1;
                 }
-            },
-        ));
+
+                // Shift buffer left if needed
+                if cursor > 0 {
+                    buf.drain(..cursor);
+                    cursor = 0;
+                }
+            }
+
+            // Drain the remaining buffer if not empty
+            if !buf.is_empty() {
+                let line = std::str::from_utf8(&buf)?.trim();
+                if !line.is_empty() {
+                    let parsed: NotificationRecords = serde_json::from_str(line)?;
+                    yield parsed;
+                }
+            }
+        });
 
         Ok((
             ListenBucketNotificationResponse {
@@ -86,7 +98,7 @@ impl FromS3Response
                 region: req.inner_region,
                 bucket: take_bucket(req.bucket)?,
             },
-            Box::new(record_stream),
+            Box::new(line_stream),
         ))
     }
 }

@@ -18,8 +18,8 @@ use crate::common_benches::{Ctx2, benchmark_s3_api, skip_express_mode};
 use criterion::Criterion;
 use minio::s3::builders::{GetBucketVersioning, PutBucketVersioning, VersioningStatus};
 
-pub(crate) fn bench_get_bucket_versioning(criterion: &mut Criterion) {
-    if skip_express_mode("bench_get_bucket_versioning") {
+pub(crate) async fn bench_get_bucket_versioning(criterion: &mut Criterion) {
+    if skip_express_mode("bench_get_bucket_versioning").await {
         return;
     }
     benchmark_s3_api(
@@ -29,8 +29,8 @@ pub(crate) fn bench_get_bucket_versioning(criterion: &mut Criterion) {
         |ctx| GetBucketVersioning::new(ctx.client.clone(), ctx.bucket.clone()),
     )
 }
-pub(crate) fn bench_put_bucket_versioning(criterion: &mut Criterion) {
-    if skip_express_mode("bench_put_bucket_versioning") {
+pub(crate) async fn bench_put_bucket_versioning(criterion: &mut Criterion) {
+    if skip_express_mode("bench_put_bucket_versioning").await {
         return;
     }
     benchmark_s3_api(

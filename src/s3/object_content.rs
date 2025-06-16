@@ -13,15 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::PathBuf;
-use std::{ffi::OsString, path::Path, pin::Pin};
-
+use async_std::io::ReadExt;
 use bytes::Bytes;
-use futures_util::Stream;
+use futures::stream::{self, Stream, StreamExt};
 use rand::prelude::random;
-use tokio::fs;
-use tokio::io::AsyncWriteExt;
-use tokio_stream::StreamExt;
+use std::io::Write;
+use std::path::PathBuf;
+use std::{ffi::OsString, fs, path::Path, pin::Pin};
 
 use crate::s3::segmented_bytes::SegmentedBytes;
 #[cfg(test)]
@@ -151,15 +149,30 @@ impl ObjectContent {
     ) -> IoResult<(Pin<Box<dyn Stream<Item = IoResult<Bytes>> + Send>>, Size)> {
         match self.0 {
             ObjectContentInner::Stream(r, size) => Ok((r, size)),
+
             ObjectContentInner::FilePath(path) => {
-                let file = fs::File::open(&path).await?;
-                let size = file.metadata().await?.len();
-                let r = tokio_util::io::ReaderStream::new(file);
-                Ok((Box::pin(r), Some(size).into()))
+                let mut file = async_std::fs::File::open(&path).await?;
+                let metadata = file.metadata().await?;
+                let size = metadata.len();
+
+                // Define a stream that reads the file in chunks
+                let stream = async_stream::try_stream! {
+                    let mut buf = vec![0u8; 8192];
+                    loop {
+                        let n = file.read(&mut buf).await?;
+                        if n == 0 {
+                            break;
+                        }
+                        yield Bytes::copy_from_slice(&buf[..n]);
+                    }
+                };
+
+                Ok((Box::pin(stream), Some(size).into()))
             }
+
             ObjectContentInner::Bytes(sb) => {
                 let k = sb.len();
-                let r = Box::pin(tokio_stream::iter(sb.into_iter().map(Ok)));
+                let r = Box::pin(stream::iter(sb.into_iter().map(Ok)));
                 Ok((r, Some(k as u64).into()))
             }
         }
@@ -203,7 +216,7 @@ impl ObjectContent {
             ))
         })?;
         if !parent_dir.is_dir() {
-            fs::create_dir_all(parent_dir).await?;
+            fs::create_dir_all(parent_dir)?;
         }
         let file_name = file_path.file_name().ok_or(std::io::Error::other(
             "could not get filename component of path",
@@ -219,8 +232,7 @@ impl ObjectContent {
             .write(true)
             .create(true) // Ensures that the file will be created if it does not already exist
             .truncate(true) // Clears the contents (truncates the file size to 0) before writing
-            .open(&tmp_file_path)
-            .await?;
+            .open(&tmp_file_path)?;
         let (mut r, _) = self.to_stream().await?;
         while let Some(bytes) = r.next().await {
             let bytes = bytes?;
@@ -228,10 +240,10 @@ impl ObjectContent {
                 break;
             }
             total_bytes_written += bytes.len() as u64;
-            fp.write_all(&bytes).await?;
+            fp.write_all(&bytes)?;
         }
-        fp.flush().await?;
-        fs::rename(&tmp_file_path, file_path).await?;
+        fp.flush()?;
+        fs::rename(&tmp_file_path, file_path)?;
         Ok(total_bytes_written)
     }
 }
@@ -263,7 +275,7 @@ impl ContentStream {
 
     pub fn empty() -> Self {
         Self {
-            r: Box::pin(tokio_stream::iter(vec![])),
+            r: Box::pin(stream::iter(vec![])),
             extra: None,
             size: Some(0).into(),
         }

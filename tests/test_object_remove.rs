@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_std::stream::StreamExt;
 use minio::s3::builders::ObjectToDelete;
 use minio::s3::response::PutObjectContentResponse;
 use minio::s3::types::ToStream;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
-use tokio_stream::StreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn remove_objects() {

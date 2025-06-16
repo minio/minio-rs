@@ -21,8 +21,8 @@ use minio::s3::response::PutObjectRetentionResponse;
 use minio::s3::types::{RetentionMode, S3Api};
 use minio::s3::utils::utc_now;
 
-pub(crate) fn bench_put_object_retention(criterion: &mut Criterion) {
-    if skip_express_mode("bench_put_object_retention") {
+pub(crate) async fn bench_put_object_retention(criterion: &mut Criterion) {
+    if skip_express_mode("bench_put_object_retention").await {
         return;
     }
     benchmark_s3_api(
@@ -36,8 +36,8 @@ pub(crate) fn bench_put_object_retention(criterion: &mut Criterion) {
         },
     )
 }
-pub(crate) fn bench_get_object_retention(criterion: &mut Criterion) {
-    if skip_express_mode("bench_get_object_retention") {
+pub(crate) async fn bench_get_object_retention(criterion: &mut Criterion) {
+    if skip_express_mode("bench_get_object_retention").await {
         return;
     }
     benchmark_s3_api(

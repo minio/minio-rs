@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_std::stream::StreamExt;
 use minio::s3::response::PutObjectContentResponse;
 use minio::s3::types::ToStream;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use std::collections::HashSet;
-use tokio_stream::StreamExt;
 
 async fn list_objects(
     use_api_v1: bool,
@@ -37,7 +37,7 @@ async fn list_objects(
     }
     let ctx = TestContext::new_from_env();
 
-    let is_express = ctx.client.is_minio_express();
+    let is_express = ctx.client.is_minio_express().await;
     if is_express && !express {
         println!("Skipping test because it is running in MinIO Express mode");
         return;

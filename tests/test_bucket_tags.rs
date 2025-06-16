@@ -25,7 +25,7 @@ use minio_common::test_context::TestContext;
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn bucket_tags_s3() {
     let ctx = TestContext::new_from_env();
-    if ctx.client.is_minio_express() {
+    if ctx.client.is_minio_express().await {
         println!("Skipping test because it is running in MinIO Express mode");
         return;
     }
@@ -76,7 +76,7 @@ async fn bucket_tags_s3() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn bucket_tags_s3express() {
     let ctx = TestContext::new_from_env();
-    if !ctx.client.is_minio_express() {
+    if !ctx.client.is_minio_express().await {
         println!("Skipping test because it is NOT running in MinIO Express mode");
         return;
     }

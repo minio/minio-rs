@@ -24,8 +24,8 @@ use minio_common::test_context::TestContext;
 use tokio::task;
 
 #[allow(dead_code)]
-pub(crate) fn bench_object_append(criterion: &mut Criterion) {
-    if !TestContext::new_from_env().client.is_minio_express() {
+pub(crate) async fn bench_object_append(criterion: &mut Criterion) {
+    if !TestContext::new_from_env().client.is_minio_express().await {
         println!("Skipping benchmark because it is NOT running in MinIO Express mode");
         return;
     }

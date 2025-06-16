@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
     let client: Client = create_client_on_localhost()?;
 
-    if !client.is_minio_express() {
+    if !client.is_minio_express().await {
         println!("Need (MinIO) Express mode to run this example");
         return Ok(());
     }

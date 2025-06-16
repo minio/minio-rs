@@ -55,7 +55,7 @@ impl Client {
         bucket: S,
     ) -> Result<DeleteBucketResponse, Error> {
         let bucket: String = bucket.into();
-        if self.is_minio_express() {
+        if self.is_minio_express().await {
             let mut stream = self.list_objects(&bucket).to_stream().await;
 
             while let Some(items) = stream.next().await {
