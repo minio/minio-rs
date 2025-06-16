@@ -123,7 +123,7 @@ pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 #[derive(Debug, Default)]
 pub struct ClientBuilder {
     base_url: BaseUrl,
-    provider: Option<Arc<Box<(dyn Provider + Send + Sync + 'static)>>>,
+    provider: Option<Arc<dyn Provider + Send + Sync + 'static>>,
     ssl_cert_file: Option<PathBuf>,
     ignore_cert_check: Option<bool>,
     app_info: Option<(String, String)>,
@@ -139,12 +139,9 @@ impl ClientBuilder {
         }
     }
 
-    /// Set the credential provider. If not set anonymous access is used.
-    pub fn provider(
-        mut self,
-        provider: Option<Box<(dyn Provider + Send + Sync + 'static)>>,
-    ) -> Self {
-        self.provider = provider.map(Arc::new);
+    /// Set the credential provider. If not, set anonymous access is used.
+    pub fn provider<P: Provider + Send + Sync + 'static>(mut self, provider: Option<P>) -> Self {
+        self.provider = provider.map(|p| Arc::new(p) as Arc<dyn Provider + Send + Sync + 'static>);
         self
     }
 
@@ -245,11 +242,11 @@ impl Client {
     ///     "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
     ///     None,
     /// );
-    /// let client = Client::new(base_url, Some(Box::new(static_provider)), None, None).unwrap();
+    /// let client = Client::new(base_url, Some(static_provider), None, None).unwrap();
     /// ```
-    pub fn new(
+    pub fn new<P: Provider + Send + Sync + 'static>(
         base_url: BaseUrl,
-        provider: Option<Box<(dyn Provider + Send + Sync + 'static)>>,
+        provider: Option<P>,
         ssl_cert_file: Option<&Path>,
         ignore_cert_check: Option<bool>,
     ) -> Result<Self, Error> {
@@ -615,7 +612,7 @@ impl Client {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SharedClientItems {
     pub(crate) base_url: BaseUrl,
-    pub(crate) provider: Option<Arc<Box<(dyn Provider + Send + Sync + 'static)>>>,
+    pub(crate) provider: Option<Arc<dyn Provider + Send + Sync + 'static>>,
     region_map: DashMap<String, String>,
     express: OnceLock<bool>,
 }
