@@ -59,7 +59,7 @@ impl TestContext {
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
             let client = Client::new(
                 base_url.clone(),
-                Some(Box::new(static_provider)),
+                Some(static_provider),
                 ssl_cert_file,
                 Some(ignore_cert_check),
             )
@@ -116,7 +116,7 @@ impl TestContext {
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
             let client = Client::new(
                 base_url.clone(),
-                Some(Box::new(static_provider)),
+                Some(static_provider),
                 Some(&*ssl_cert_file),
                 Some(ignore_cert_check),
             )
