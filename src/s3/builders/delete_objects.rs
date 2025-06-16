@@ -241,7 +241,7 @@ impl ToS3Request for DeleteObjects {
     fn to_s3request(self) -> Result<S3Request, Error> {
         check_bucket_name(&self.bucket, true)?;
 
-        let mut data = String::from("<Delete>");
+        let mut data: String = String::from("<Delete>");
         if !self.verbose_mode {
             data.push_str("<Quiet>true</Quiet>");
         }

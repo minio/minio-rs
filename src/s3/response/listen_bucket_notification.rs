@@ -14,13 +14,15 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::response::a_response_traits::HasS3Fields;
-use crate::s3::response::a_response_traits::{HasBucket, HasRegion};
 use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, NotificationRecords, S3Request};
+use async_std::stream::Stream;
 use bytes::Bytes;
+use futures_util::{StreamExt, TryStreamExt};
 use http::HeaderMap;
 use std::mem;
+
 /// Response of
 /// [listen_bucket_notification()](crate::s3::client::Client::listen_bucket_notification)
 /// API

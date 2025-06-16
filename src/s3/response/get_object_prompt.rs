@@ -39,6 +39,8 @@ impl GetObjectPromptResponse {
     ///
     /// This method retrieves the content of the object as a UTF-8 encoded string.
     pub fn prompt_response(&self) -> Result<&str, Error> {
-        std::str::from_utf8(&self.body).map_err(Error::Utf8Error)
+        std::str::from_utf8(&self.body).map_err(|e| {
+            Error::Utf8Error(format!("Failed to parse prompt_response as UTF-8: {}", e).into())
+        })
     }
 }

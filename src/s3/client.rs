@@ -301,7 +301,6 @@ impl Client {
             express
         }
     }
-
     /// Add a bucket-region pair to the region cache if it does not exist.
     pub(crate) fn add_bucket_region(&mut self, bucket: &str, region: impl Into<String>) {
         self.shared

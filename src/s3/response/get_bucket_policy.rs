@@ -47,7 +47,9 @@ impl GetBucketPolicyResponse {
     /// This method retrieves the policy associated with the bucket, which defines permissions
     /// for accessing the bucket and its contents.
     pub fn config(&self) -> Result<&str, Error> {
-        std::str::from_utf8(&self.body).map_err(Error::Utf8Error)
+        std::str::from_utf8(&self.body).map_err(|e| {
+            Error::Utf8Error(format!("Failed to parse bucket policy as UTF-8: {}", e).into())
+        })
     }
 }
 
