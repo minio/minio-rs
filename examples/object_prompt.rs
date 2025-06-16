@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let static_provider = StaticProvider::new("admin", "admin", None);
 
     let client = ClientBuilder::new(base_url.clone())
-        .provider(Some(Box::new(static_provider)))
+        .provider(Some(static_provider))
         .ignore_cert_check(Some(true))
         .build()?;
 

@@ -16,7 +16,7 @@ pub fn create_client_on_play() -> Result<Client, Box<dyn std::error::Error + Sen
     );
 
     let client = ClientBuilder::new(base_url.clone())
-        .provider(Some(Box::new(static_provider)))
+        .provider(Some(static_provider))
         .build()?;
     Ok(client)
 }
@@ -29,7 +29,7 @@ pub fn create_client_on_localhost() -> Result<Client, Box<dyn std::error::Error 
     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
 
     let client = ClientBuilder::new(base_url.clone())
-        .provider(Some(Box::new(static_provider)))
+        .provider(Some(static_provider))
         .build()?;
     Ok(client)
 }

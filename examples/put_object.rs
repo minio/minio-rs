@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     let client: Client = ClientBuilder::new("https://play.min.io".parse()?)
-        .provider(Some(Box::new(static_provider)))
+        .provider(Some(static_provider))
         .build()?;
 
     let resp: BucketExistsResponse = client.bucket_exists(&args.bucket).send().await.unwrap();
