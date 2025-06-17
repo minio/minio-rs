@@ -69,7 +69,7 @@ async fn create_object_helper(
 }
 
 /// Append to the end of an existing object (happy flow)
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn append_object_0() {
     let ctx = TestContext::new_from_env();
     if !ctx.client.is_minio_express().await {
@@ -124,7 +124,7 @@ async fn append_object_0() {
 }
 
 /// Append to the beginning of an existing object (happy flow)
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn append_object_1() {
     let ctx = TestContext::new_from_env();
     if !ctx.client.is_minio_express().await {
@@ -178,7 +178,7 @@ async fn append_object_1() {
 }
 
 /// Append to the middle of an existing object (error InvalidWriteOffset)
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn append_object_2() {
     let ctx = TestContext::new_from_env();
     if !ctx.client.is_minio_express().await {
@@ -214,7 +214,7 @@ async fn append_object_2() {
 }
 
 /// Append beyond the size of an existing object (error InvalidWriteOffset)
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn append_object_3() {
     let ctx = TestContext::new_from_env();
     if !ctx.client.is_minio_express().await {
@@ -250,7 +250,7 @@ async fn append_object_3() {
 }
 
 /// Append to the beginning/end of a non-existing object (happy flow)
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn append_object_4() {
     let ctx = TestContext::new_from_env();
     if !ctx.client.is_minio_express().await {
@@ -301,7 +301,7 @@ async fn append_object_4() {
 }
 
 /// Append beyond the size of a non-existing object (error NoSuchKey)
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn append_object_5() {
     let ctx = TestContext::new_from_env();
     if !ctx.client.is_minio_express().await {
@@ -331,7 +331,7 @@ async fn append_object_5() {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn append_object_content_0() {
     let ctx = TestContext::new_from_env();
     if !ctx.client.is_minio_express().await {
@@ -381,7 +381,7 @@ async fn append_object_content_0() {
     assert_eq!(resp.object_size, size * 2);
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn append_object_content_1() {
     let ctx = TestContext::new_from_env();
     if !ctx.client.is_minio_express().await {
@@ -433,7 +433,7 @@ async fn append_object_content_1() {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn append_object_content_2() {
     let ctx = TestContext::new_from_env();
     if !ctx.client.is_minio_express().await {
@@ -484,7 +484,7 @@ async fn append_object_content_2() {
 }
 
 /// Test sending AppendObject across async tasks.
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn append_object_content_3() {
     let ctx = TestContext::new_from_env();
     if !ctx.client.is_minio_express().await {

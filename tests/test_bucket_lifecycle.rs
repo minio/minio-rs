@@ -23,7 +23,7 @@ use minio::s3::types::S3Api;
 use minio_common::example::create_bucket_lifecycle_config_examples;
 use minio_common::test_context::TestContext;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn bucket_lifecycle() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;

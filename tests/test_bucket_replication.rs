@@ -26,7 +26,7 @@ use minio_common::example::{
 };
 use minio_common::test_context::TestContext;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn bucket_replication_s3() {
     let ctx = TestContext::new_from_env();
     if ctx.client.is_minio_express().await {
@@ -134,7 +134,7 @@ async fn bucket_replication_s3() {
     //println!("response of getting replication: resp={:?}", resp);
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn bucket_replication_s3express() {
     let ctx = TestContext::new_from_env();
 

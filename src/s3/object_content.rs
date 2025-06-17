@@ -13,11 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_std::io::ReadExt;
+use async_std::io::{ReadExt, WriteExt};
 use bytes::Bytes;
 use futures::stream::{self, Stream, StreamExt};
 use rand::prelude::random;
-use std::io::Write;
 use std::path::PathBuf;
 use std::{ffi::OsString, fs, path::Path, pin::Pin};
 
@@ -216,7 +215,7 @@ impl ObjectContent {
             ))
         })?;
         if !parent_dir.is_dir() {
-            fs::create_dir_all(parent_dir)?;
+            async_std::fs::create_dir_all(parent_dir).await?;
         }
         let file_name = file_path.file_name().ok_or(std::io::Error::other(
             "could not get filename component of path",
@@ -228,11 +227,12 @@ impl ObjectContent {
             .join(Path::new(tmp_file_name.as_os_str()));
 
         let mut total_bytes_written = 0;
-        let mut fp = fs::OpenOptions::new()
+        let mut fp = async_std::fs::OpenOptions::new()
             .write(true)
             .create(true) // Ensures that the file will be created if it does not already exist
             .truncate(true) // Clears the contents (truncates the file size to 0) before writing
-            .open(&tmp_file_path)?;
+            .open(&tmp_file_path)
+            .await?;
         let (mut r, _) = self.to_stream().await?;
         while let Some(bytes) = r.next().await {
             let bytes = bytes?;
@@ -240,9 +240,9 @@ impl ObjectContent {
                 break;
             }
             total_bytes_written += bytes.len() as u64;
-            fp.write_all(&bytes)?;
+            fp.write_all(&bytes).await?;
         }
-        fp.flush()?;
+        fp.flush().await?;
         fs::rename(&tmp_file_path, file_path)?;
         Ok(total_bytes_written)
     }

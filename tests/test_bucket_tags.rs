@@ -22,7 +22,7 @@ use minio::s3::types::S3Api;
 use minio_common::example::create_tags_example;
 use minio_common::test_context::TestContext;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn bucket_tags_s3() {
     let ctx = TestContext::new_from_env();
     if ctx.client.is_minio_express().await {
@@ -73,7 +73,7 @@ async fn bucket_tags_s3() {
     assert_eq!(resp.region, DEFAULT_REGION);
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn bucket_tags_s3express() {
     let ctx = TestContext::new_from_env();
     if !ctx.client.is_minio_express().await {

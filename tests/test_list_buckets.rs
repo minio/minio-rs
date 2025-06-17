@@ -18,7 +18,7 @@ use minio::s3::types::S3Api;
 use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::test_context::TestContext;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn list_buckets() {
     const N_BUCKETS: usize = 3;
     let ctx = TestContext::new_from_env();
