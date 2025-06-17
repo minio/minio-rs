@@ -127,7 +127,7 @@ pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 pub struct ClientBuilder {
     base_url: BaseUrl,
     provider: Option<Arc<dyn Provider + Send + Sync + 'static>>,
-    client_hooks: Option<Vec<Arc<dyn ClientHooks>>>,
+    client_hooks: Vec<Arc<dyn ClientHooks + Send + Sync + 'static>>,
     ssl_cert_file: Option<PathBuf>,
     ignore_cert_check: Option<bool>,
     app_info: Option<(String, String)>,
@@ -145,10 +145,8 @@ impl ClientBuilder {
 
     /// Add a client hook to the builder. Hooks will be called after each other in
     /// order they were added.
-    pub fn hook(mut self, hooks: Arc<dyn ClientHooks>) -> Self {
-        if let Some(ch) = self.client_hooks.as_mut() {
-            ch.push(hooks);
-        }
+    pub fn hook(mut self, hooks: Arc<dyn ClientHooks + Send + Sync + 'static>) -> Self {
+        self.client_hooks.push(hooks);
         self
     }
 
@@ -223,6 +221,7 @@ impl ClientBuilder {
             shared: Arc::new(SharedClientItems {
                 base_url: self.base_url,
                 provider: self.provider,
+                client_hooks: self.client_hooks,
                 ..Default::default()
             }),
         })
@@ -490,6 +489,7 @@ impl Client {
             &mut extensions,
         )
         .await?;
+
         if let Some(p) = &self.shared.provider {
             let creds = p.fetch();
             if creds.session_token.is_some() {
