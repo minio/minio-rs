@@ -15,6 +15,7 @@
 
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::error::{Error, ErrorCode};
+use minio::s3::response::a_response_traits::{HasBucket, HasRegion, HasTagging};
 use minio::s3::response::{
     DeleteBucketTaggingResponse, GetBucketTaggingResponse, PutBucketTaggingResponse,
 };
@@ -40,8 +41,8 @@ async fn bucket_tags_s3() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetBucketTaggingResponse = ctx
         .client
@@ -49,9 +50,9 @@ async fn bucket_tags_s3() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.tags, tags);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.tags().unwrap(), tags);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: DeleteBucketTaggingResponse = ctx
         .client
@@ -59,8 +60,8 @@ async fn bucket_tags_s3() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetBucketTaggingResponse = ctx
         .client
@@ -68,9 +69,9 @@ async fn bucket_tags_s3() {
         .send()
         .await
         .unwrap();
-    assert!(resp.tags.is_empty());
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert!(resp.tags().unwrap().is_empty());
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 }
 
 #[tokio::test(flavor = "multi_thread")]

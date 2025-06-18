@@ -15,6 +15,7 @@
 
 use async_std::stream::StreamExt;
 use minio::s3::response::PutObjectContentResponse;
+use minio::s3::response::a_response_traits::{HasBucket, HasObject};
 use minio::s3::types::ToStream;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
@@ -61,8 +62,8 @@ async fn list_objects(
                 .send()
                 .await
                 .unwrap();
-            assert_eq!(resp.bucket, bucket_name);
-            assert_eq!(resp.object, object_name);
+            assert_eq!(resp.bucket(), bucket_name);
+            assert_eq!(resp.object(), object_name);
             names_set_before.insert(object_name);
         }
     }

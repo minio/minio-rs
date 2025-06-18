@@ -28,6 +28,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::BucketExistsResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {    
@@ -35,7 +36,7 @@ impl Client {
     ///     let resp: BucketExistsResponse = client
     ///         .bucket_exists("bucket-name")
     ///         .send().await.unwrap();
-    ///     println!("bucket '{}' exists: {}", resp.bucket, resp.exists);
+    ///     println!("bucket '{}' exists: {}", resp.bucket(), resp.exists());
     /// }
     /// ```
     pub fn bucket_exists<S: Into<String>>(&self, bucket: S) -> BucketExists {

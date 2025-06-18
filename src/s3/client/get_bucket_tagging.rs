@@ -30,6 +30,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetBucketTaggingResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::{HasBucket, HasTagging};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -37,7 +38,7 @@ impl Client {
     ///     let resp: GetBucketTaggingResponse = client
     ///         .get_bucket_tagging("bucket-name")
     ///         .send().await.unwrap();
-    ///     println!("retrieved bucket tags '{:?}' from bucket '{}'", resp.tags, resp.bucket);
+    ///     println!("retrieved bucket tags '{:?}' from bucket '{}'", resp.tags(), resp.bucket());
     /// }
     /// ```
     pub fn get_bucket_tagging<S: Into<String>>(&self, bucket: S) -> GetBucketTagging {

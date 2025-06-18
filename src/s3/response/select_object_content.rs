@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::impl_has_s3fields;
 use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request, SelectProgress};
-use crate::s3::utils::{copy_slice, crc32, get_text, take_bucket, take_object, uint32};
+use crate::s3::utils::{copy_slice, crc32, get_text, uint32};
 use async_trait::async_trait;
+use bytes::Bytes;
 use http::HeaderMap;
 use std::collections::{HashMap, VecDeque};
 use std::io::BufReader;
@@ -29,21 +32,12 @@ use xmltree::Element;
 /// Response of [select_object_content()](crate::s3::client::Client::select_object_content) API
 #[derive(Debug)]
 pub struct SelectObjectContentResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket containing the object.
-    pub bucket: String,
-
-    /// Key (path) identifying the object within the bucket.
-    pub object: String,
-
-    pub progress: SelectProgress,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 
     resp: reqwest::Response,
+    pub progress: SelectProgress,
 
     done: bool,
     buf: VecDeque<u8>,
@@ -65,6 +59,12 @@ pub struct SelectObjectContentResponse {
     payload: Vec<u8>,
     payload_index: usize,
 }
+
+impl_has_s3fields!(SelectObjectContentResponse);
+
+impl HasBucket for SelectObjectContentResponse {}
+impl HasRegion for SelectObjectContentResponse {}
+impl HasObject for SelectObjectContentResponse {}
 
 impl SelectObjectContentResponse {
     fn reset(&mut self) {
@@ -331,22 +331,22 @@ impl SelectObjectContentResponse {
 #[async_trait]
 impl FromS3Response for SelectObjectContentResponse {
     async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let mut resp = resp?;
+        let mut resp = response?;
 
         Ok(Self {
+            request,
             headers: mem::take(resp.headers_mut()),
-            region: req.inner_region,
-            bucket: take_bucket(req.bucket)?,
-            object: take_object(req.object)?,
+            body: Bytes::new(), // NOTE: note used
+            resp,
+
             progress: SelectProgress {
                 bytes_scanned: 0,
                 bytes_progressed: 0,
                 bytes_returned: 0,
             },
-            resp,
             done: false,
             buf: VecDeque::<u8>::new(),
             prelude: [0_u8; 8],

@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .send()
         .await?;
 
-    log::info!("Object prompt result: '{}'", resp.prompt_response);
+    log::info!("Object prompt result: '{}'", resp.prompt_response()?);
 
     Ok(())
 }

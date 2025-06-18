@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use minio::s3::error::{Error, ErrorCode};
+use minio::s3::response::a_response_traits::{HasBucket, HasObject};
 use minio::s3::response::{PutObjectContentResponse, SelectObjectContentResponse};
 use minio::s3::types::{S3Api, SelectRequest};
 use minio_common::example::{create_select_content_data, create_select_content_request};
@@ -38,8 +39,8 @@ async fn select_object_content_s3() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
 
     let select_request: SelectRequest = create_select_content_request();
 

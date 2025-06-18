@@ -21,6 +21,7 @@ use crate::s3::response::{
     DeleteBucketResponse, DeleteObjectResponse, DeleteObjectsResponse, PutObjectLegalHoldResponse,
 };
 use crate::s3::types::{S3Api, ToStream};
+use bytes::Bytes;
 use futures::StreamExt;
 
 impl Client {
@@ -35,13 +36,14 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::DeleteBucketResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
     ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: DeleteBucketResponse =
     ///         client.delete_bucket("bucket-name").send().await.unwrap();
-    ///     println!("bucket '{}' in region '{}' is removed", resp.bucket, resp.region);
+    ///     println!("bucket '{}' in region '{}' is removed", resp.bucket(), resp.region());
     /// }
     /// ```
     pub fn delete_bucket<S: Into<String>>(&self, bucket: S) -> DeleteBucket {
@@ -90,7 +92,7 @@ impl Client {
 
                 while let Some(item) = resp.next().await {
                     let resp: DeleteObjectsResponse = item?;
-                    for obj in resp.result.into_iter() {
+                    for obj in resp.result()?.into_iter() {
                         match obj {
                             DeleteResult::Deleted(_) => {}
                             DeleteResult::Error(v) => {
@@ -115,14 +117,15 @@ impl Client {
                 }
             }
         }
-        match self.delete_bucket(bucket).send().await {
+        let request: DeleteBucket = self.delete_bucket(bucket);
+        match request.send().await {
             Ok(resp) => Ok(resp),
             Err(Error::S3Error(e)) => {
                 if e.code == ErrorCode::NoSuchBucket {
                     Ok(DeleteBucketResponse {
+                        request: Default::default(), //TODO consider how to handle this
+                        body: Bytes::new(),
                         headers: e.headers,
-                        bucket: e.bucket_name,
-                        region: String::new(),
                     })
                 } else {
                     Err(Error::S3Error(e))

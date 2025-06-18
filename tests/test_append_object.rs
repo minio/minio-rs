@@ -15,6 +15,9 @@
 
 use minio::s3::builders::ObjectContent;
 use minio::s3::error::{Error, ErrorCode};
+use minio::s3::response::a_response_traits::{
+    HasBucket, HasEtagFromHeaders, HasObject, HasObjectSize,
+};
 use minio::s3::response::{
     AppendObjectResponse, GetObjectResponse, PutObjectContentResponse, PutObjectResponse,
     StatObjectResponse,
@@ -42,8 +45,8 @@ async fn create_object_helper(
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
 
     let resp: GetObjectResponse = ctx
         .client
@@ -51,13 +54,14 @@ async fn create_object_helper(
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size().unwrap(), size);
 
     // double check that the content we just have put is "aaaa"
     let content1: String = String::from_utf8(
-        resp.content
+        resp.content()
+            .unwrap()
             .to_segmented_bytes()
             .await
             .unwrap()
@@ -95,9 +99,9 @@ async fn append_object_0() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size * 2);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size(), size * 2);
 
     let resp: GetObjectResponse = ctx
         .client
@@ -106,9 +110,14 @@ async fn append_object_0() {
         .await
         .unwrap();
 
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size().unwrap(), size * 2);
+
     // retrieve the content of the object and check that it is "aaaabbbb"
     let content: String = String::from_utf8(
-        resp.content
+        resp.content()
+            .unwrap()
             .to_segmented_bytes()
             .await
             .unwrap()
@@ -117,10 +126,6 @@ async fn append_object_0() {
     )
     .unwrap();
     assert_eq!(content, format!("{}{}", content1, content2));
-
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size * 2);
 }
 
 /// Append to the beginning of an existing object (happy flow)
@@ -150,9 +155,9 @@ async fn append_object_1() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size(), size);
 
     let resp: GetObjectResponse = ctx
         .client
@@ -161,9 +166,14 @@ async fn append_object_1() {
         .await
         .unwrap();
 
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size().unwrap(), size);
+
     // retrieve the content of the object and check that it is "bbbb"
     let content: String = String::from_utf8(
-        resp.content
+        resp.content()
+            .unwrap()
             .to_segmented_bytes()
             .await
             .unwrap()
@@ -172,9 +182,6 @@ async fn append_object_1() {
     )
     .unwrap();
     assert_eq!(content, content2);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size);
 }
 
 /// Append to the middle of an existing object (error InvalidWriteOffset)
@@ -273,9 +280,9 @@ async fn append_object_4() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size(), size);
 
     let resp: GetObjectResponse = ctx
         .client
@@ -283,10 +290,14 @@ async fn append_object_4() {
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size().unwrap(), size);
 
     // retrieve the content of the object and check that it is "aaaa"
     let content: String = String::from_utf8(
-        resp.content
+        resp.content()
+            .unwrap()
             .to_segmented_bytes()
             .await
             .unwrap()
@@ -295,9 +306,6 @@ async fn append_object_4() {
     )
     .unwrap();
     assert_eq!(content, content1);
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size);
 }
 
 /// Append beyond the size of a non-existing object (error NoSuchKey)
@@ -354,9 +362,9 @@ async fn append_object_content_0() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size * 2);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size(), size * 2);
 
     let resp: GetObjectResponse = ctx
         .client
@@ -364,9 +372,13 @@ async fn append_object_content_0() {
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size().unwrap(), size * 2);
 
     let content: String = String::from_utf8(
-        resp.content
+        resp.content()
+            .unwrap()
             .to_segmented_bytes()
             .await
             .unwrap()
@@ -375,10 +387,6 @@ async fn append_object_content_0() {
     )
     .unwrap();
     assert_eq!(content, format!("{}{}", content1, content2));
-
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size * 2);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -403,9 +411,9 @@ async fn append_object_content_1() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, part_size);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size(), part_size);
 
     for i in 1..n_parts {
         let expected_size: u64 = (i + 1) * part_size;
@@ -417,9 +425,9 @@ async fn append_object_content_1() {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.object, object_name);
-        assert_eq!(resp.object_size, expected_size);
+        assert_eq!(resp.bucket(), bucket_name);
+        assert_eq!(resp.object(), object_name);
+        assert_eq!(resp.object_size(), expected_size);
 
         let resp: StatObjectResponse = ctx
             .client
@@ -427,9 +435,9 @@ async fn append_object_content_1() {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.object, object_name);
-        assert_eq!(resp.size, expected_size);
+        assert_eq!(resp.bucket(), bucket_name);
+        assert_eq!(resp.object(), object_name);
+        assert_eq!(resp.size().unwrap(), expected_size);
     }
 }
 
@@ -455,9 +463,9 @@ async fn append_object_content_2() {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.object, object_name);
-        assert_eq!(resp.object_size, *size);
+        assert_eq!(resp.bucket(), bucket_name);
+        assert_eq!(resp.object(), object_name);
+        assert_eq!(resp.object_size(), *size);
 
         let expected_size: u64 = 2 * (*size);
         let data2: ObjectContent = ObjectContent::new_from_stream(RandSrc::new(*size), Some(*size));
@@ -467,9 +475,9 @@ async fn append_object_content_2() {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.object, object_name);
-        assert_eq!(resp.object_size, expected_size);
+        assert_eq!(resp.bucket(), bucket_name);
+        assert_eq!(resp.object(), object_name);
+        assert_eq!(resp.object_size(), expected_size);
 
         let resp: StatObjectResponse = ctx
             .client
@@ -477,9 +485,9 @@ async fn append_object_content_2() {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.object, object_name);
-        assert_eq!(resp.size, expected_size);
+        assert_eq!(resp.bucket(), bucket_name);
+        assert_eq!(resp.object(), object_name);
+        assert_eq!(resp.size().unwrap(), expected_size);
     }
 }
 
@@ -528,23 +536,23 @@ async fn append_object_content_3() {
                     .send()
                     .await
                     .unwrap();
-                assert_eq!(resp.object_size, initial_size);
+                assert_eq!(resp.object_size(), initial_size);
 
                 let resp: AppendObjectResponse = client
                     .append_object_content(&test_bucket, &object_name, item)
                     .send()
                     .await
                     .unwrap();
-                assert_eq!(resp.object_size, sizes[idx] + initial_size);
-                let etag = resp.etag;
+                assert_eq!(resp.object_size(), sizes[idx] + initial_size);
+                let etag: String = resp.etag().unwrap();
 
                 let resp: StatObjectResponse = client
                     .stat_object(&test_bucket, &object_name)
                     .send()
                     .await
                     .unwrap();
-                assert_eq!(resp.size, sizes[idx] + initial_size);
-                assert_eq!(resp.etag, etag);
+                assert_eq!(resp.size().unwrap(), sizes[idx] + initial_size);
+                assert_eq!(resp.etag().unwrap(), etag);
                 client
                     .delete_object(&test_bucket, &object_name)
                     .send()

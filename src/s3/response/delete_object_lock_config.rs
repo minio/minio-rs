@@ -14,9 +14,10 @@
 // limitations under the License.
 
 use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::take_bucket;
-use async_trait::async_trait;
+use crate::{impl_from_s3response, impl_has_s3fields};
+use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
@@ -29,28 +30,13 @@ use std::mem;
 /// For more information, refer to the [AWS S3 DeleteObjectLockConfiguration API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjectLockConfiguration.html).
 #[derive(Clone, Debug)]
 pub struct DeleteObjectLockConfigResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket from which the Object Lock configuration was removed.    
-    pub bucket: String,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 }
 
-#[async_trait]
-impl FromS3Response for DeleteObjectLockConfigResponse {
-    async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        let mut resp = resp?;
+impl_from_s3response!(DeleteObjectLockConfigResponse);
+impl_has_s3fields!(DeleteObjectLockConfigResponse);
 
-        Ok(Self {
-            headers: mem::take(resp.headers_mut()),
-            region: req.inner_region,
-            bucket: take_bucket(req.bucket)?,
-        })
-    }
-}
+impl HasBucket for DeleteObjectLockConfigResponse {}
+impl HasRegion for DeleteObjectLockConfigResponse {}

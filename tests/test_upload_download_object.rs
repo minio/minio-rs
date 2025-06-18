@@ -15,6 +15,7 @@
 
 use hex::ToHex;
 use minio::s3::builders::ObjectContent;
+use minio::s3::response::a_response_traits::{HasBucket, HasObject};
 use minio::s3::response::{GetObjectResponse, PutObjectContentResponse};
 use minio::s3::types::S3Api;
 use minio_common::rand_reader::RandReader;
@@ -65,9 +66,9 @@ async fn upload_download_object(size: u64) {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size(), size);
 
     let filename: String = rand_object_name();
     let resp: GetObjectResponse = ctx
@@ -76,11 +77,12 @@ async fn upload_download_object(size: u64) {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
 
     // save the object to a file
-    resp.content
+    resp.content()
+        .unwrap()
         .to_file(PathBuf::from(&filename).as_path())
         .await
         .unwrap();

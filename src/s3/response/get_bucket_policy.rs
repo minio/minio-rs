@@ -13,10 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::impl_has_s3fields;
 use crate::s3::error::{Error, ErrorCode};
+use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::take_bucket;
 use async_trait::async_trait;
+use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
@@ -29,45 +31,44 @@ use std::mem;
 /// For more information, refer to the [AWS S3 GetBucketPolicy API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketPolicy.html).
 #[derive(Clone, Debug)]
 pub struct GetBucketPolicyResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
+}
 
-    /// The AWS region where the bucket resides.
-    pub region: String,
+impl_has_s3fields!(GetBucketPolicyResponse);
 
-    /// Name of the bucket whose policy is retrieved.
-    pub bucket: String,
+impl HasBucket for GetBucketPolicyResponse {}
+impl HasRegion for GetBucketPolicyResponse {}
 
-    /// The bucket policy as a JSON-formatted string.
+impl GetBucketPolicyResponse {
+    /// Returns the bucket policy as a JSON-formatted string.
     ///
-    /// This policy defines access permissions for the bucket. It specifies who can access the bucket,
-    /// what actions they can perform, and under what conditions.
-    ///
-    /// For example, a policy might grant read-only access to anonymous users or restrict access to specific IP addresses.
-    ///
-    /// Note: If the bucket has no policy, the `get_bucket_policy` API call may return an error
-    /// with the code `NoSuchBucketPolicy`. It's advisable to handle this case appropriately in your application.
-    pub config: String,
+    /// This method retrieves the policy associated with the bucket, which defines permissions
+    /// for accessing the bucket and its contents.
+    pub fn config(&self) -> Result<&str, Error> {
+        std::str::from_utf8(&self.body).map_err(|e| {
+            Error::Utf8Error(format!("Failed to parse bucket policy as UTF-8: {}", e).into())
+        })
+    }
 }
 
 #[async_trait]
 impl FromS3Response for GetBucketPolicyResponse {
     async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        match resp {
-            Ok(mut r) => Ok(Self {
-                headers: mem::take(r.headers_mut()),
-                region: req.inner_region,
-                bucket: take_bucket(req.bucket)?,
-                config: r.text().await?,
+        match response {
+            Ok(mut resp) => Ok(Self {
+                request,
+                headers: mem::take(resp.headers_mut()),
+                body: resp.bytes().await?,
             }),
             Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchBucketPolicy => Ok(Self {
+                request,
                 headers: e.headers,
-                region: req.inner_region,
-                bucket: take_bucket(req.bucket)?,
-                config: String::from("{}"),
+                body: Bytes::from_static("{}".as_ref()),
             }),
             Err(e) => Err(e),
         }

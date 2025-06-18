@@ -12,12 +12,8 @@
 
 //! Response types for ListObjects APIs
 
-use async_trait::async_trait;
-use bytes::Buf;
-use reqwest::header::HeaderMap;
-use std::collections::HashMap;
-use std::mem;
-
+use crate::impl_has_s3fields;
+use crate::s3::response::a_response_traits::HasS3Fields;
 use crate::s3::{
     error::Error,
     types::{FromS3Response, ListEntry, S3Request},
@@ -26,6 +22,11 @@ use crate::s3::{
         xml::{Element, MergeXmlElements},
     },
 };
+use async_trait::async_trait;
+use bytes::{Buf, Bytes};
+use reqwest::header::HeaderMap;
+use std::collections::HashMap;
+use std::mem;
 
 fn url_decode(
     encoding_type: &Option<String>,
@@ -188,8 +189,10 @@ fn parse_list_objects_common_prefixes(
 /// Response of [list_objects_v1()](crate::s3::client::Client::list_objects_v1) S3 API
 #[derive(Clone, Debug)]
 pub struct ListObjectsV1Response {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
+
     pub name: String,
     pub encoding_type: Option<String>,
     pub prefix: Option<String>,
@@ -201,18 +204,20 @@ pub struct ListObjectsV1Response {
     pub next_marker: Option<String>,
 }
 
+impl_has_s3fields!(ListObjectsV1Response);
+
 #[async_trait]
 impl FromS3Response for ListObjectsV1Response {
     async fn from_s3response(
-        _req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let mut resp = resp?;
+        let mut resp = response?;
         let headers: HeaderMap = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
-        let xmltree_root = xmltree::Element::parse(body.reader())?;
-        let root = Element::from(&xmltree_root);
 
+        let xmltree_root = xmltree::Element::parse(body.clone().reader())?;
+        let root = Element::from(&xmltree_root);
         let (name, encoding_type, prefix, delimiter, is_truncated, max_keys) =
             parse_common_list_objects_response(&root)?;
         let marker = url_decode(&encoding_type, root.get_child_text("Marker"))?;
@@ -224,8 +229,11 @@ impl FromS3Response for ListObjectsV1Response {
         }
         parse_list_objects_common_prefixes(&mut contents, &root, &encoding_type)?;
 
-        Ok(ListObjectsV1Response {
+        Ok(Self {
+            request,
             headers,
+            body,
+
             name,
             encoding_type,
             prefix,
@@ -242,8 +250,10 @@ impl FromS3Response for ListObjectsV1Response {
 /// Response of [list_objects_v2()](crate::s3::client::Client::list_objects_v2) S3 API
 #[derive(Clone, Debug)]
 pub struct ListObjectsV2Response {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
+
     pub name: String,
     pub encoding_type: Option<String>,
     pub prefix: Option<String>,
@@ -257,19 +267,20 @@ pub struct ListObjectsV2Response {
     pub next_continuation_token: Option<String>,
 }
 
+impl_has_s3fields!(ListObjectsV2Response);
+
 #[async_trait]
 impl FromS3Response for ListObjectsV2Response {
     async fn from_s3response(
-        _req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let mut resp = resp?;
+        let mut resp = response?;
         let headers: HeaderMap = mem::take(resp.headers_mut());
-
         let body = resp.bytes().await?;
-        let xmltree_root = xmltree::Element::parse(body.reader())?;
-        let root = Element::from(&xmltree_root);
 
+        let xmltree_root = xmltree::Element::parse(body.clone().reader())?;
+        let root = Element::from(&xmltree_root);
         let (name, encoding_type, prefix, delimiter, is_truncated, max_keys) =
             parse_common_list_objects_response(&root)?;
         let key_count = root
@@ -283,8 +294,11 @@ impl FromS3Response for ListObjectsV2Response {
         parse_list_objects_contents(&mut contents, &root, "Contents", &encoding_type, false)?;
         parse_list_objects_common_prefixes(&mut contents, &root, &encoding_type)?;
 
-        Ok(ListObjectsV2Response {
+        Ok(Self {
+            request,
             headers,
+            body,
+
             name,
             encoding_type,
             prefix,
@@ -303,8 +317,10 @@ impl FromS3Response for ListObjectsV2Response {
 /// Response of [list_object_versions()](crate::s3::client::Client::list_object_versions) S3 API
 #[derive(Clone, Debug)]
 pub struct ListObjectVersionsResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
+
     pub name: String,
     pub encoding_type: Option<String>,
     pub prefix: Option<String>,
@@ -318,18 +334,20 @@ pub struct ListObjectVersionsResponse {
     pub next_version_id_marker: Option<String>,
 }
 
+impl_has_s3fields!(ListObjectVersionsResponse);
+
 #[async_trait]
 impl FromS3Response for ListObjectVersionsResponse {
     async fn from_s3response(
-        _req: S3Request,
-        resp: Result<reqwest::Response, Error>,
+        request: S3Request,
+        response: Result<reqwest::Response, Error>,
     ) -> Result<Self, Error> {
-        let resp = resp?;
-        let headers = resp.headers().clone();
+        let mut resp = response?;
+        let headers: HeaderMap = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
-        let xmltree_root = xmltree::Element::parse(body.reader())?;
-        let root = Element::from(&xmltree_root);
 
+        let xmltree_root = xmltree::Element::parse(body.clone().reader())?;
+        let root = Element::from(&xmltree_root);
         let (name, encoding_type, prefix, delimiter, is_truncated, max_keys) =
             parse_common_list_objects_response(&root)?;
         let key_marker = url_decode(&encoding_type, root.get_child_text("KeyMarker"))?;
@@ -340,8 +358,11 @@ impl FromS3Response for ListObjectVersionsResponse {
         parse_list_objects_contents(&mut contents, &root, "Version", &encoding_type, true)?;
         parse_list_objects_common_prefixes(&mut contents, &root, &encoding_type)?;
 
-        Ok(ListObjectVersionsResponse {
+        Ok(Self {
+            request,
             headers,
+            body,
+
             name,
             encoding_type,
             prefix,
@@ -360,8 +381,10 @@ impl FromS3Response for ListObjectVersionsResponse {
 /// Response of [list_objects()](crate::s3::client::Client::list_objects) API
 #[derive(Clone, Debug, Default)]
 pub struct ListObjectsResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
+
     pub name: String,
     pub encoding_type: Option<String>,
     pub prefix: Option<String>,
@@ -387,10 +410,15 @@ pub struct ListObjectsResponse {
     pub next_version_id_marker: Option<String>,
 }
 
+impl_has_s3fields!(ListObjectsResponse);
+
 impl From<ListObjectVersionsResponse> for ListObjectsResponse {
     fn from(value: ListObjectVersionsResponse) -> Self {
-        ListObjectsResponse {
+        Self {
+            request: value.request,
             headers: value.headers,
+            body: value.body,
+
             name: value.name,
             encoding_type: value.encoding_type,
             prefix: value.prefix,
@@ -409,8 +437,11 @@ impl From<ListObjectVersionsResponse> for ListObjectsResponse {
 
 impl From<ListObjectsV2Response> for ListObjectsResponse {
     fn from(value: ListObjectsV2Response) -> Self {
-        ListObjectsResponse {
+        Self {
+            request: value.request,
             headers: value.headers,
+            body: value.body,
+
             name: value.name,
             encoding_type: value.encoding_type,
             prefix: value.prefix,
@@ -430,7 +461,10 @@ impl From<ListObjectsV2Response> for ListObjectsResponse {
 impl From<ListObjectsV1Response> for ListObjectsResponse {
     fn from(value: ListObjectsV1Response) -> Self {
         Self {
+            request: value.request,
             headers: value.headers,
+            body: value.body,
+
             name: value.name,
             encoding_type: value.encoding_type,
             prefix: value.prefix,

@@ -16,6 +16,7 @@
 use minio::s3::builders::VersioningStatus;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::error::{Error, ErrorCode};
+use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
 use minio::s3::response::{
     DeleteBucketReplicationResponse, GetBucketReplicationResponse, GetBucketVersioningResponse,
     PutBucketPolicyResponse, PutBucketReplicationResponse, PutBucketVersioningResponse,
@@ -46,8 +47,8 @@ async fn bucket_replication_s3() {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.region, DEFAULT_REGION);
+        assert_eq!(resp.bucket(), bucket_name);
+        assert_eq!(resp.region(), DEFAULT_REGION);
 
         let resp: PutBucketVersioningResponse = ctx
             .client
@@ -56,8 +57,8 @@ async fn bucket_replication_s3() {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket, bucket_name2);
-        assert_eq!(resp.region, DEFAULT_REGION);
+        assert_eq!(resp.bucket(), bucket_name2);
+        assert_eq!(resp.region(), DEFAULT_REGION);
 
         let resp: GetBucketVersioningResponse = ctx
             .client
@@ -65,9 +66,9 @@ async fn bucket_replication_s3() {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.status, Some(VersioningStatus::Enabled));
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.region, DEFAULT_REGION);
+        assert_eq!(resp.status().unwrap(), Some(VersioningStatus::Enabled));
+        assert_eq!(resp.bucket(), bucket_name);
+        assert_eq!(resp.region(), DEFAULT_REGION);
 
         if false {
             //TODO: to allow replication policy needs to be applied, but this fails
@@ -103,8 +104,8 @@ async fn bucket_replication_s3() {
             .await
             .unwrap();
         //println!("response of setting replication: resp={:?}", resp);
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.region, DEFAULT_REGION);
+        assert_eq!(resp.bucket(), bucket_name);
+        assert_eq!(resp.region(), DEFAULT_REGION);
 
         let resp: GetBucketReplicationResponse = ctx
             .client
@@ -113,8 +114,8 @@ async fn bucket_replication_s3() {
             .await
             .unwrap();
         //assert_eq!(resp.config, config); //TODO
-        assert_eq!(resp.bucket, bucket_name);
-        assert_eq!(resp.region, DEFAULT_REGION);
+        assert_eq!(resp.bucket(), bucket_name);
+        assert_eq!(resp.region(), DEFAULT_REGION);
 
         // TODO called `Result::unwrap()` on an `Err` value: S3Error(ErrorResponse { code: "XMinioAdminRemoteTargetNotFoundError", message: "The remote target does not exist",
         let resp: DeleteBucketReplicationResponse = ctx

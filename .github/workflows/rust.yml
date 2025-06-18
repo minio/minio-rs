@@ -7,6 +7,7 @@ on:
     branches: [ "master" ]
 
 env:
+  RUST_LOG: debug
   CARGO_TERM_COLOR: always
 
 jobs:

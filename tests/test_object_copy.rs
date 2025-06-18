@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use minio::s3::builders::{CopySource, ObjectContent};
+use minio::s3::response::a_response_traits::{HasBucket, HasObject};
 use minio::s3::response::{CopyObjectResponse, PutObjectContentResponse, StatObjectResponse};
 use minio::s3::types::S3Api;
 use minio_common::rand_src::RandSrc;
@@ -41,7 +42,8 @@ async fn copy_object() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name_src);
 
     let resp: CopyObjectResponse = ctx
         .client
@@ -50,8 +52,8 @@ async fn copy_object() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name_dst);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name_dst);
 
     let resp: StatObjectResponse = ctx
         .client
@@ -59,6 +61,6 @@ async fn copy_object() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.size, size);
-    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.size().unwrap(), size);
+    assert_eq!(resp.bucket(), bucket_name);
 }

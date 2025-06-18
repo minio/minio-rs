@@ -21,16 +21,17 @@ use std::mem;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
+use crate::s3::builders::{BucketExists, ComposeSource};
 use crate::s3::creds::Provider;
 use crate::s3::error::{Error, ErrorCode, ErrorResponse};
 use crate::s3::http::BaseUrl;
+use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::response::a_response_traits::{HasEtagFromHeaders, HasS3Fields};
 use crate::s3::response::*;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::signer::sign_v4_s3;
 use crate::s3::utils::{EMPTY_SHA256, sha256_hash_sb, to_amz_date, utc_now};
 
-use crate::s3::builders::{BucketExists, ComposeSource};
-use crate::s3::multimap::{Multimap, MultimapExt};
-use crate::s3::segmented_bytes::SegmentedBytes;
 use bytes::Bytes;
 use dashmap::DashMap;
 use http::HeaderMap;
@@ -280,7 +281,7 @@ impl Client {
 
             let express = match BucketExists::new(self.clone(), bucket_name).send().await {
                 Ok(v) => {
-                    if let Some(server) = v.headers.get("server") {
+                    if let Some(server) = v.headers().get("server") {
                         if let Ok(s) = server.to_str() {
                             s.eq_ignore_ascii_case("MinIO Enterprise/S3Express")
                         } else {
@@ -300,7 +301,6 @@ impl Client {
             express
         }
     }
-
     /// Add a bucket-region pair to the region cache if it does not exist.
     pub(crate) fn add_bucket_region(&mut self, bucket: &str, region: impl Into<String>) {
         self.shared
@@ -360,9 +360,9 @@ impl Client {
                 .send()
                 .await?;
 
-            source.build_headers(stat_resp.size, stat_resp.etag)?;
+            let mut size = stat_resp.size()?;
+            source.build_headers(size, stat_resp.etag()?)?;
 
-            let mut size = stat_resp.size;
             if let Some(l) = source.length {
                 size = l;
             } else if let Some(o) = source.offset {
@@ -493,15 +493,12 @@ impl Client {
             // Sort headers alphabetically by name
             header_strings.sort();
 
-            let body_str: String =
-                String::from_utf8(body.unwrap_or(&SegmentedBytes::new()).to_bytes().to_vec())?;
-
             println!(
                 "S3 request: {} url={:?}; headers={:?}; body={}\n",
                 method,
                 url.path,
                 header_strings.join("; "),
-                body_str
+                body.unwrap()
             );
         }
 

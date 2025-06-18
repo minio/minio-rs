@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use bytes::Bytes;
+use minio::s3::response::a_response_traits::{HasBucket, HasObject};
 use minio::s3::response::{GetObjectResponse, PutObjectContentResponse};
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
@@ -32,9 +33,9 @@ async fn get_object() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, data.len() as u64);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size(), data.len() as u64);
 
     let resp: GetObjectResponse = ctx
         .client
@@ -42,10 +43,16 @@ async fn get_object() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, data.len() as u64);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size().unwrap(), data.len() as u64);
 
-    let got = resp.content.to_segmented_bytes().await.unwrap().to_bytes();
+    let got = resp
+        .content()
+        .unwrap()
+        .to_segmented_bytes()
+        .await
+        .unwrap()
+        .to_bytes();
     assert_eq!(got, data);
 }

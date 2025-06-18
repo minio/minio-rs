@@ -31,12 +31,13 @@ impl Client {
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketReplicationResponse;
     /// use minio::s3::types::{S3Api, AndOperator, Destination, Filter, ReplicationConfig, ReplicationRule};
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// use std::collections::HashMap;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// let client: Client = Default::default(); // configure your client here
+    ///     let client: Client = Default::default(); // configure your client here
     ///     
     ///     let mut tags: HashMap<String, String> = HashMap::new();  
     ///     tags.insert(String::from("key1"), String::from("value1"));
@@ -75,7 +76,7 @@ impl Client {
     ///         .put_bucket_replication("bucket-name")
     ///         .replication_config(ReplicationConfig {role: None, rules})
     ///         .send().await.unwrap();
-    ///     println!("enabled versioning on bucket '{}'", resp.bucket);
+    ///     println!("enabled versioning on bucket '{}'", resp.bucket());
     /// }
     /// ```
     pub fn put_bucket_replication<S: Into<String>>(&self, bucket: S) -> PutBucketReplication {

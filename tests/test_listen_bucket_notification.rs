@@ -17,6 +17,7 @@ use async_std::stream::StreamExt;
 use async_std::task;
 use minio::s3::builders::ObjectContent;
 use minio::s3::response::PutObjectContentResponse;
+use minio::s3::response::a_response_traits::{HasBucket, HasObject};
 use minio::s3::types::{NotificationRecord, NotificationRecords, S3Api};
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
@@ -85,7 +86,8 @@ async fn listen_bucket_notification() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
 
     spawned_listen_task.await;
 

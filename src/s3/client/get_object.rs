@@ -38,7 +38,7 @@ impl Client {
     ///     let resp: GetObjectResponse = client
     ///         .get_object("bucket-name", "object-name")
     ///         .send().await.unwrap();
-    ///     let content_bytes = resp.content.to_segmented_bytes().await.unwrap().to_bytes();
+    ///     let content_bytes = resp.content().unwrap().to_segmented_bytes().await.unwrap().to_bytes();
     ///     let content_str = String::from_utf8(content_bytes.to_vec()).unwrap();
     ///     println!("retrieved content '{content_str}'");
     /// }

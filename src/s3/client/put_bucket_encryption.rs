@@ -31,6 +31,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::PutBucketEncryptionResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -40,7 +41,7 @@ impl Client {
     ///         .put_bucket_encryption("bucket-name")
     ///         .sse_config(config)
     ///         .send().await.unwrap();
-    ///     println!("set encryption on bucket '{}'", resp.bucket);
+    ///     println!("set encryption on bucket '{}'", resp.bucket());
     /// }
     /// ```
     pub fn put_bucket_encryption<S: Into<String>>(&self, bucket: S) -> PutBucketEncryption {

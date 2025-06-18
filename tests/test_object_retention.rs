@@ -15,6 +15,7 @@
 
 use minio::s3::builders::ObjectContent;
 use minio::s3::client::DEFAULT_REGION;
+use minio::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasVersion};
 use minio::s3::response::{
     CreateBucketResponse, GetObjectRetentionResponse, PutObjectContentResponse,
     PutObjectRetentionResponse,
@@ -43,7 +44,7 @@ async fn object_retention() {
         .await
         .unwrap();
     let _cleanup = CleanupGuard::new(ctx.client.clone(), &bucket_name);
-    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.bucket(), bucket_name);
     let object_name = rand_object_name();
 
     let size = 16_u64;
@@ -58,11 +59,11 @@ async fn object_retention() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.object_size, size);
-    assert_ne!(resp.version_id, None);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object_size(), size);
+    assert_ne!(resp.version_id(), None);
+    assert_eq!(resp.region(), DEFAULT_REGION);
     //assert_eq!(resp.etag, "");
 
     let retain_until_date = utc_now() + chrono::Duration::days(1);
@@ -74,10 +75,10 @@ async fn object_retention() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.version_id, None);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.version_id(), None);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetObjectRetentionResponse = ctx
         .client
@@ -85,9 +86,12 @@ async fn object_retention() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.retention_mode.unwrap(), RetentionMode::GOVERNANCE);
     assert_eq!(
-        to_iso8601utc(resp.retain_until_date.unwrap()),
+        resp.retention_mode().unwrap().unwrap(),
+        RetentionMode::GOVERNANCE
+    );
+    assert_eq!(
+        to_iso8601utc(resp.retain_until_date().unwrap().unwrap()),
         to_iso8601utc(retain_until_date)
     );
 
@@ -98,10 +102,10 @@ async fn object_retention() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.version_id, None);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.version_id(), None);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 
     let resp: GetObjectRetentionResponse = ctx
         .client
@@ -109,10 +113,10 @@ async fn object_retention() {
         .send()
         .await
         .unwrap();
-    assert!(resp.retention_mode.is_none());
-    assert!(resp.retain_until_date.is_none());
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.version_id, None);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert!(resp.retention_mode().unwrap().is_none());
+    assert!(resp.retain_until_date().unwrap().is_none());
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.version_id(), None);
+    assert_eq!(resp.region(), DEFAULT_REGION);
 }

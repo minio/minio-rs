@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use bytes::{Bytes, BytesMut};
+use std::fmt;
 
 /// An aggregated collection of `Bytes` objects.
 #[derive(Debug, Clone)]
@@ -73,6 +74,15 @@ impl SegmentedBytes {
             }
         }
         buf.freeze()
+    }
+}
+
+impl fmt::Display for SegmentedBytes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match std::str::from_utf8(self.to_bytes().as_ref()) {
+            Ok(s) => write!(f, "{}", s),
+            Err(_) => Ok(()), // or: write!(f, "<invalid utf8>")
+        }
     }
 }
 

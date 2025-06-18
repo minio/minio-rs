@@ -30,6 +30,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetObjectLegalHoldResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::{HasBucket, HasObject};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -37,7 +38,7 @@ impl Client {
     ///     let resp: GetObjectLegalHoldResponse = client
     ///         .get_object_legal_hold("bucket-name", "object-name")
     ///         .send().await.unwrap();
-    ///     println!("legal hold of object '{}' in bucket '{}' is enabled: {}", resp.object, resp.bucket, resp.enabled);
+    ///     println!("legal hold of object '{}' in bucket '{}' is enabled: {:?}", resp.object(), resp.bucket(), resp.enabled());
     /// }
     /// ```
     pub fn get_object_legal_hold<S1: Into<String>, S2: Into<String>>(

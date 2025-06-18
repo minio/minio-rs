@@ -13,58 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_trait::async_trait;
-use bytes::Buf;
+use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::{
+    HasBucket, HasIsDeleteMarker, HasRegion, HasS3Fields, HasVersion,
+};
+use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::{get_default_text, get_option_text, get_text};
+use crate::{impl_from_s3response, impl_has_s3fields};
+use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-use crate::s3::{
-    error::Error,
-    types::{FromS3Response, S3Request},
-    utils::{get_default_text, get_option_text, get_text},
-};
-
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct DeleteObjectResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// Value of the `x-amz-delete-marker` header.
-    /// Indicates whether the specified object version that was permanently deleted was (true) or
-    /// was not (false) a delete marker before deletion. In a simple DELETE, this header indicates
-    /// whether (true) or not (false) the current version of the object is a delete marker.
-    pub is_delete_marker: bool,
-
-    /// Value of the `x-amz-version-id` header.
-    /// If a delete marker was created, this field will contain the version_id of the delete marker.
-    pub version_id: Option<String>,
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
 }
 
-#[async_trait]
-impl FromS3Response for DeleteObjectResponse {
-    async fn from_s3response(
-        _req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        let mut resp = resp?;
-        let headers: HeaderMap = mem::take(resp.headers_mut());
-        let is_delete_marker = headers
-            .get("x-amz-delete-marker")
-            .map(|v| v == "true")
-            .unwrap_or(false);
+impl_from_s3response!(DeleteObjectResponse);
+impl_has_s3fields!(DeleteObjectResponse);
 
-        let version_id: Option<String> = headers
-            .get("x-amz-version-id")
-            .and_then(|v| v.to_str().ok().map(String::from));
-
-        Ok(DeleteObjectResponse {
-            headers,
-            is_delete_marker,
-            version_id,
-        })
-    }
-}
+impl HasBucket for DeleteObjectResponse {}
+impl HasRegion for DeleteObjectResponse {}
+impl HasVersion for DeleteObjectResponse {}
+impl HasIsDeleteMarker for DeleteObjectResponse {}
 
 /// Error info returned by the S3 API when an object could not be deleted.
 #[derive(Clone, Debug)]
@@ -82,18 +56,6 @@ pub struct DeletedObject {
     pub version_id: Option<String>,
     pub delete_marker: bool,
     pub delete_marker_version_id: Option<String>,
-}
-
-/// Response of
-/// [delete_objects()](crate::s3::client::Client::delete_objects)
-/// S3 API. It is also returned by the
-/// [remove_objects()](crate::s3::client::Client::delete_objects_streaming) API in the
-/// form of a stream.
-#[derive(Clone, Debug)]
-pub struct DeleteObjectsResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-    pub result: Vec<DeleteResult>,
 }
 
 /// Result of deleting an object.
@@ -116,24 +78,30 @@ impl DeleteResult {
     pub fn is_deleted(&self) -> bool {
         matches!(self, DeleteResult::Deleted(_))
     }
-
     pub fn is_error(&self) -> bool {
         matches!(self, DeleteResult::Error(_))
     }
 }
 
-#[async_trait]
-impl FromS3Response for DeleteObjectsResponse {
-    async fn from_s3response(
-        _req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        let resp = resp?;
-        let headers = resp.headers().clone();
+/// Response of
+/// [delete_objects()](crate::s3::client::Client::delete_objects)
+/// S3 API. It is also returned by the
+/// [remove_objects()](crate::s3::client::Client::delete_objects_streaming) API in the
+/// form of a stream.
+#[derive(Clone, Debug)]
+pub struct DeleteObjectsResponse {
+    request: S3Request,
+    pub(crate) headers: HeaderMap,
+    body: Bytes,
+}
 
-        let body = resp.bytes().await?;
+impl_from_s3response!(DeleteObjectsResponse);
+impl_has_s3fields!(DeleteObjectsResponse);
 
-        let root = Element::parse(body.reader())?;
+impl DeleteObjectsResponse {
+    /// Returns the bucket name for which the delete operation was performed.
+    pub fn result(&self) -> Result<Vec<DeleteResult>, Error> {
+        let root = Element::parse(self.body.clone().reader())?;
         let result = root
             .children
             .iter()
@@ -158,7 +126,6 @@ impl FromS3Response for DeleteObjectsResponse {
                 }
             })
             .collect::<Result<Vec<DeleteResult>, Error>>()?;
-
-        Ok(Self { headers, result })
+        Ok(result)
     }
 }

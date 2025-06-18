@@ -1,5 +1,5 @@
 // MinIO Rust Library for Amazon S3 Compatible Cloud Storage
-// Copyright 2023 MinIO, Inc.
+// Copyright 2025 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,126 +13,112 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_trait::async_trait;
-use bytes::Buf;
+use crate::s3::error::Error;
+use crate::s3::response::a_response_traits::{
+    HasBucket, HasEtagFromHeaders, HasObject, HasRegion, HasS3Fields, HasVersion,
+};
+use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::utils::get_text;
+use crate::{impl_from_s3response, impl_from_s3response_with_size, impl_has_s3fields};
+use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-use crate::s3::utils::{take_bucket, take_object};
-use crate::s3::{
-    error::Error,
-    types::{FromS3Response, S3Request},
-    utils::get_text,
-};
+// region
+
+/// Base response struct that contains common functionality for S3 operations
+#[derive(Clone, Debug)]
+pub struct S3Response1 {
+    pub(crate) request: S3Request,
+    pub(crate) headers: HeaderMap,
+    pub(crate) body: Bytes,
+}
+
+impl_from_s3response!(S3Response1);
+impl_has_s3fields!(S3Response1);
+
+impl HasBucket for S3Response1 {}
+impl HasObject for S3Response1 {}
+impl HasRegion for S3Response1 {}
+impl HasVersion for S3Response1 {}
+impl HasEtagFromHeaders for S3Response1 {}
+
+/// Extended response struct for operations that need additional data like object size
+#[derive(Clone, Debug)]
+pub struct S3Response1WithSize {
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
+
+    /// Additional object size information
+    pub(crate) object_size: u64,
+}
+
+impl_from_s3response_with_size!(S3Response1WithSize);
+impl_has_s3fields!(S3Response1WithSize);
+
+impl HasBucket for S3Response1WithSize {}
+impl HasObject for S3Response1WithSize {}
+impl HasRegion for S3Response1WithSize {}
+impl HasVersion for S3Response1WithSize {}
+impl HasEtagFromHeaders for S3Response1WithSize {}
+
+impl S3Response1WithSize {
+    pub fn new(response: S3Response1, object_size: u64) -> Self {
+        Self {
+            request: response.request,
+            headers: response.headers,
+            body: response.body,
+            object_size,
+        }
+    }
+
+    /// Returns the object size for the response
+    pub fn object_size(&self) -> u64 {
+        self.object_size
+    }
+}
+
+/// Extended response struct for multipart operations that need upload_id
+#[derive(Clone, Debug)]
+pub struct S3MultipartResponse {
+    request: S3Request,
+    headers: HeaderMap,
+    body: Bytes,
+}
+
+impl_from_s3response!(S3MultipartResponse);
+impl_has_s3fields!(S3MultipartResponse);
+
+impl HasBucket for S3MultipartResponse {}
+impl HasObject for S3MultipartResponse {}
+impl HasRegion for S3MultipartResponse {}
+impl HasVersion for S3MultipartResponse {}
+impl HasEtagFromHeaders for S3MultipartResponse {}
+
+impl S3MultipartResponse {
+    /// Returns the upload ID for the multipart upload, while consuming the response.
+    pub async fn upload_id(&self) -> Result<String, Error> {
+        let root = Element::parse(self.body.clone().reader())?;
+        get_text(&root, "UploadId").map_err(|e| Error::InvalidUploadId(e.to_string()))
+    }
+}
 
 /// Response of [put_object_api()](crate::s3::client::Client::put_object) API
-#[derive(Debug, Clone)]
-pub struct PutObjectResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-    pub bucket: String,
-    pub object: String,
-    pub region: String,
-    pub etag: String,
-    pub version_id: Option<String>,
-}
-
-#[async_trait]
-impl FromS3Response for PutObjectResponse {
-    async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        let mut resp = resp?;
-
-        let headers: HeaderMap = mem::take(resp.headers_mut());
-
-        let etag: String = headers
-            .get("etag")
-            .and_then(|v| v.to_str().ok()) // Convert to &str safely
-            .map(|s| s.trim_matches('"').to_string()) // Trim and convert to String
-            .unwrap_or_default();
-
-        let version_id: Option<String> = headers
-            .get("x-amz-version-id")
-            .and_then(|v| v.to_str().ok().map(String::from));
-
-        Ok(Self {
-            headers,
-            bucket: take_bucket(req.bucket)?,
-            object: take_object(req.object)?,
-            region: req.inner_region,
-            etag,
-            version_id,
-        })
-    }
-}
+pub type PutObjectResponse = S3Response1;
 
 /// Response of [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload) API
-#[derive(Debug, Clone)]
-pub struct CreateMultipartUploadResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-    pub region: String,
-    pub bucket: String,
-    pub object: String,
-    pub upload_id: String,
-}
-
-#[async_trait]
-impl FromS3Response for CreateMultipartUploadResponse {
-    async fn from_s3response(
-        req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
-        let mut resp = resp?;
-
-        let headers: HeaderMap = mem::take(resp.headers_mut());
-        let body = resp.bytes().await?;
-        let root = Element::parse(body.reader())?;
-        let upload_id: String =
-            get_text(&root, "UploadId").map_err(|e| Error::InvalidUploadId(e.to_string()))?;
-
-        Ok(Self {
-            headers,
-            region: req.inner_region,
-            bucket: take_bucket(req.bucket)?,
-            object: take_object(req.object)?,
-            upload_id,
-        })
-    }
-}
+pub type CreateMultipartUploadResponse = S3MultipartResponse;
 
 /// Response of [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload) API
-pub type AbortMultipartUploadResponse = CreateMultipartUploadResponse;
+pub type AbortMultipartUploadResponse = S3MultipartResponse;
 
 /// Response of [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload) API
-pub type CompleteMultipartUploadResponse = PutObjectResponse;
+pub type CompleteMultipartUploadResponse = S3Response1;
 
 /// Response of [upload_part()](crate::s3::client::Client::upload_part) API
-pub type UploadPartResponse = PutObjectResponse;
+pub type UploadPartResponse = S3Response1;
 
-#[derive(Debug, Clone)]
-pub struct PutObjectContentResponse {
-    /// HTTP headers returned by the server, containing metadata such as `Content-Type`, `ETag`, etc.
-    pub headers: HeaderMap,
-
-    /// The AWS region where the bucket resides.
-    pub region: String,
-
-    /// Name of the bucket containing the object.
-    pub bucket: String,
-
-    /// Key (path) identifying the object within the bucket.
-    pub object: String,
-
-    /// Size of the object in bytes.
-    pub object_size: u64,
-
-    /// Entity tag representing a specific version of the object.
-    pub etag: String,
-
-    /// Version ID of the object, if versioning is enabled. Value of the `x-amz-version-id` header.
-    pub version_id: Option<String>,
-}
+/// Response for put_object operations that include object size information
+pub type PutObjectContentResponse = S3Response1WithSize;

@@ -28,13 +28,14 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::StatObjectResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {    
     ///     let client: Client = Default::default(); // configure your client here
     ///     let resp: StatObjectResponse =
     ///         client.stat_object("bucket-name", "object-name").send().await.unwrap();
-    ///     println!("stat of object '{}' are {:#?}", resp.object, resp);
+    ///     println!("stat of object '{}' are {:#?}", resp.object(), resp);
     /// }
     /// ```
     pub fn stat_object<S1: Into<String>, S2: Into<String>>(

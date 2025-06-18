@@ -28,6 +28,7 @@ impl Client {
     /// use minio::s3::Client;
     /// use minio::s3::response::GetBucketLifecycleResponse;
     /// use minio::s3::types::S3Api;
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -35,7 +36,7 @@ impl Client {
     ///     let resp: GetBucketLifecycleResponse = client
     ///         .get_bucket_lifecycle("bucket-name")
     ///         .send().await.unwrap();
-    ///     println!("retrieved bucket lifecycle config '{:?}' from bucket '{}'", resp.config, resp.bucket);
+    ///     println!("retrieved bucket lifecycle config '{:?}' from bucket '{}'", resp.config(), resp.bucket());
     /// }
     /// ```
     pub fn get_bucket_lifecycle<S: Into<String>>(&self, bucket: S) -> GetBucketLifecycle {

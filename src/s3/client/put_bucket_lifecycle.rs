@@ -31,11 +31,11 @@ impl Client {
     /// use minio::s3::response::PutBucketLifecycleResponse;
     /// use minio::s3::types::{Filter, S3Api};
     /// use minio::s3::lifecycle_config::{LifecycleRule, LifecycleConfig};
+    /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// let client: Client = Default::default(); // configure your client here
-    ///
+    ///     let client: Client = Default::default(); // configure your client here
     ///     let rules: Vec<LifecycleRule> = vec![LifecycleRule {
     ///         id: String::from("rule1"),
     ///         filter: Filter {and_operator: None, prefix: Some(String::from("logs/")), tag: None},
@@ -48,7 +48,7 @@ impl Client {
     ///         .put_bucket_lifecycle("bucket-name")
     ///         .life_cycle_config(LifecycleConfig { rules })
     ///         .send().await.unwrap();
-    ///     println!("set bucket replication policy on bucket '{}'", resp.bucket);
+    ///     println!("set bucket replication policy on bucket '{}'", resp.bucket());
     /// }
     /// ```
     pub fn put_bucket_lifecycle<S: Into<String>>(&self, bucket: S) -> PutBucketLifecycle {

@@ -36,7 +36,7 @@ impl Client {
     ///     let resp: GetObjectPromptResponse = client
     ///         .get_object_prompt("bucket-name", "object-name", "What is it about?")
     ///         .send().await.unwrap();
-    ///     println!("the prompt response is: '{}'", resp.prompt_response);
+    ///     println!("the prompt response is: '{:?}'", resp.prompt_response());
     /// }
     /// ```
     pub fn get_object_prompt<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
