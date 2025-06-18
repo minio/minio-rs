@@ -15,14 +15,6 @@
 
 //! Builders for RemoveObject APIs.
 
-use async_trait::async_trait;
-use bytes::Bytes;
-use futures_util::{Stream, StreamExt, stream as futures_stream};
-use http::Method;
-use std::pin::Pin;
-
-use tokio_stream::iter as stream_iter;
-
 use crate::s3::client::MAX_MULTIPART_COUNT;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::DeleteError;
@@ -35,6 +27,12 @@ use crate::s3::{
     types::{S3Api, S3Request, ToS3Request, ToStream},
     utils::{check_bucket_name, md5sum_hash},
 };
+use async_trait::async_trait;
+use bytes::Bytes;
+use futures_util::stream::iter;
+use futures_util::{Stream, StreamExt, stream as futures_stream};
+use http::Method;
+use std::pin::Pin;
 
 // region: object-to-delete
 
@@ -260,7 +258,7 @@ impl ToS3Request for DeleteObjects {
             data.push_str("</Object>");
         }
         data.push_str("</Delete>");
-        let data: Bytes = data.into();
+        let bytes: Bytes = data.into();
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         {
@@ -268,7 +266,7 @@ impl ToS3Request for DeleteObjects {
                 headers.add("x-amz-bypass-governance-retention", "true");
             }
             headers.add("Content-Type", "application/xml");
-            headers.add("Content-MD5", md5sum_hash(data.as_ref()));
+            headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
         }
 
         Ok(S3Request::new(self.client, Method::POST)
@@ -276,7 +274,7 @@ impl ToS3Request for DeleteObjects {
             .bucket(Some(self.bucket))
             .query_params(insert(self.extra_query_params, "delete"))
             .headers(headers)
-            .body(Some(data.into())))
+            .body(Some(bytes.into())))
     }
 }
 
@@ -296,7 +294,7 @@ impl ObjectsStream {
 
 impl From<ObjectToDelete> for ObjectsStream {
     fn from(delete_object: ObjectToDelete) -> Self {
-        Self::from_stream(stream_iter(std::iter::once(delete_object)))
+        Self::from_stream(iter(std::iter::once(delete_object)))
     }
 }
 
@@ -305,7 +303,7 @@ where
     I: Iterator<Item = ObjectToDelete> + Send + Sync + 'static,
 {
     fn from(keys: I) -> Self {
-        Self::from_stream(stream_iter(keys))
+        Self::from_stream(iter(keys))
     }
 }
 

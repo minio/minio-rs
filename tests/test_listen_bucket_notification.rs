@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_std::stream::StreamExt;
 use async_std::task;
 use minio::s3::builders::ObjectContent;
 use minio::s3::response::PutObjectContentResponse;
@@ -21,9 +22,8 @@ use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use tokio::sync::mpsc;
-use tokio_stream::StreamExt;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn listen_bucket_notification() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;

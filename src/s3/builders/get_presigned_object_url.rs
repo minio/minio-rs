@@ -72,7 +72,10 @@ impl GetPresignedObjectUrl {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
 
-        let region: String = self.client.get_region_cached(&self.bucket, &self.region)?;
+        let region: String = self
+            .client
+            .get_region_cached(&self.bucket, &self.region)
+            .await?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.add_version(self.version_id.clone());

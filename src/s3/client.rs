@@ -36,9 +36,7 @@ use dashmap::DashMap;
 use http::HeaderMap;
 use hyper::http::Method;
 use rand::Rng;
-use rand::distributions::Alphanumeric;
 use reqwest::Body;
-use tokio::task;
 
 mod append_object;
 mod bucket_exists;
@@ -257,7 +255,7 @@ impl Client {
             .build()
     }
 
-    /// Returns whether is client uses an AWS host.
+    /// Returns whether this client uses an AWS host.
     pub fn is_aws_host(&self) -> bool {
         self.shared.base_url.is_aws_host()
     }
@@ -268,44 +266,38 @@ impl Client {
     }
 
     /// Returns whether this client is configured to use the express endpoint and is minio enterprise.
-    pub fn is_minio_express(&self) -> bool {
-        if self.shared.express.get().is_some() {
-            *self.shared.express.get().unwrap()
+    pub async fn is_minio_express(&self) -> bool {
+        if let Some(val) = self.shared.express.get() {
+            *val
         } else {
-            task::block_in_place(|| match tokio::runtime::Runtime::new() {
-                Ok(rt) => {
-                    // create a random bucket name, and check if it exists,
-                    // we are not interested in the result, just the headers
-                    // which will contain the server type
+            // Create a random bucket name
+            let bucket_name: String = rand::thread_rng()
+                .sample_iter(&rand::distributions::Alphanumeric)
+                .take(20)
+                .map(char::from)
+                .collect::<String>()
+                .to_lowercase();
 
-                    let bucket_name: String = rand::thread_rng()
-                        .sample_iter(&Alphanumeric)
-                        .take(20)
-                        .map(char::from)
-                        .collect::<String>()
-                        .to_lowercase();
-
-                    let express: bool = rt.block_on(async {
-                        match BucketExists::new(self.clone(), bucket_name).send().await {
-                            Ok(v) => {
-                                if let Some(server) = v.headers.get("server") {
-                                    if let Ok(s) = server.to_str() {
-                                        return s
-                                            .eq_ignore_ascii_case("MinIO Enterprise/S3Express");
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                println!("is_express_internal: error: {e}\nassume false");
-                            }
+            let express = match BucketExists::new(self.clone(), bucket_name).send().await {
+                Ok(v) => {
+                    if let Some(server) = v.headers.get("server") {
+                        if let Ok(s) = server.to_str() {
+                            s.eq_ignore_ascii_case("MinIO Enterprise/S3Express")
+                        } else {
+                            false
                         }
+                    } else {
                         false
-                    });
-                    self.shared.express.set(express).unwrap_or_default();
-                    express
+                    }
                 }
-                Err(_) => false,
-            })
+                Err(e) => {
+                    log::warn!("is_express_internal: error: {e}, assume false");
+                    false
+                }
+            };
+
+            self.shared.express.set(express).unwrap_or_default();
+            express
         }
     }
 

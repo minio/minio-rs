@@ -13,13 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_std::stream::Stream;
 use async_std::task;
 use bytes::Bytes;
-use rand::SeedableRng;
+use futures::io::AsyncRead;
 use rand::prelude::SmallRng;
+use rand::{RngCore, SeedableRng};
 use std::io;
-use tokio::io::AsyncRead;
-use tokio_stream::Stream;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 pub struct RandSrc {
     size: u64,
@@ -64,26 +66,21 @@ impl Stream for RandSrc {
 
 impl AsyncRead for RandSrc {
     fn poll_read(
-        self: std::pin::Pin<&mut Self>,
-        _cx: &mut task::Context<'_>,
-        read_buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> task::Poll<io::Result<()>> {
-        let buf = read_buf.initialize_unfilled();
-        let bytes_read = match self.size > (buf.len() as u64) {
-            true => buf.len(),
-            false => self.size as usize,
-        };
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        let this = self.as_mut().get_mut();
 
-        let this = self.get_mut();
-
-        if bytes_read > 0 {
-            let random: &mut dyn rand::RngCore = &mut this.rng;
-            random.fill_bytes(&mut buf[0..bytes_read]);
+        if this.size == 0 {
+            return Poll::Ready(Ok(0)); // EOF
         }
 
-        this.size -= bytes_read as u64;
+        let to_read = std::cmp::min(this.size as usize, buf.len());
 
-        read_buf.advance(bytes_read);
-        task::Poll::Ready(Ok(()))
+        this.rng.fill_bytes(&mut buf[..to_read]);
+        this.size -= to_read as u64;
+
+        Poll::Ready(Ok(to_read))
     }
 }

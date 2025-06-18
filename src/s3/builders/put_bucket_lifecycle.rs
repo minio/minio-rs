@@ -18,7 +18,6 @@ use crate::s3::error::Error;
 use crate::s3::lifecycle_config::LifecycleConfig;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::PutBucketLifecycleResponse;
-use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert, md5sum_hash};
 use bytes::Bytes;
@@ -81,14 +80,13 @@ impl ToS3Request for PutBucketLifecycle {
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
 
         let bytes: Bytes = self.config.to_xml().into();
-        headers.add("Content-MD5", md5sum_hash(&bytes));
-        let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
+        headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
 
         Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)
             .bucket(Some(self.bucket))
             .query_params(insert(self.extra_query_params, "lifecycle"))
             .headers(headers)
-            .body(body))
+            .body(Some(bytes.into())))
     }
 }

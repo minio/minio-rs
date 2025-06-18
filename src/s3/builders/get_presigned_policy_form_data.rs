@@ -35,10 +35,10 @@ impl GetPresignedPolicyFormData {
     }
 
     pub async fn send(self) -> Result<HashMap<String, String>, Error> {
-        // NOTE: this send function is async to be comparable with other functions...
         let region: String = self
             .client
-            .get_region_cached(&self.policy.bucket, &self.policy.region)?;
+            .get_region_cached(&self.policy.bucket, &self.policy.region)
+            .await?;
 
         let creds: Credentials = self.client.shared.provider.as_ref().unwrap().fetch();
         self.policy.form_data(

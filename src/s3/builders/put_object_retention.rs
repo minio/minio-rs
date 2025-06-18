@@ -17,7 +17,6 @@ use crate::s3::Client;
 use crate::s3::error::Error;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::PutObjectRetentionResponse;
-use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{RetentionMode, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{
     UtcTime, check_bucket_name, check_object_name, insert, md5sum_hash, to_iso8601utc,
@@ -108,7 +107,7 @@ impl ToS3Request for PutObjectRetention {
             }
         }
 
-        let data: String = {
+        let bytes: Bytes = {
             let mut data: String = "<Retention>".into();
             if let Some(v) = &self.retention_mode {
                 data.push_str("<Mode>");
@@ -121,14 +120,14 @@ impl ToS3Request for PutObjectRetention {
                 data.push_str("</RetainUntilDate>");
             }
             data.push_str("</Retention>");
-            data
+            Bytes::from(data)
         };
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         if self.bypass_governance_mode {
             headers.add("x-amz-bypass-governance-retention", "true");
         }
-        headers.add("Content-MD5", md5sum_hash(data.as_ref()));
+        headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
 
         let mut query_params: Multimap = insert(self.extra_query_params, "retention");
         query_params.add_version(self.version_id);
@@ -139,6 +138,6 @@ impl ToS3Request for PutObjectRetention {
             .query_params(query_params)
             .headers(headers)
             .object(Some(self.object))
-            .body(Some(SegmentedBytes::from(Bytes::from(data)))))
+            .body(Some(bytes.into())))
     }
 }

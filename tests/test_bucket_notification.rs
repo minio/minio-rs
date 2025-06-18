@@ -23,9 +23,14 @@ use minio_common::test_context::TestContext;
 
 const SQS_ARN: &str = "arn:minio:sqs::miniojavatest:webhook";
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_bucket_notification() {
     let ctx = TestContext::new_from_env();
+    if ctx.client.is_minio_express().await {
+        println!("Skipping test because it is running in MinIO Express mode");
+        return;
+    }
+
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
     let config: NotificationConfig = create_bucket_notification_config_example();

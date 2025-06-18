@@ -25,10 +25,10 @@ use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::test_context::TestContext;
 use minio_common::utils::{rand_bucket_name, rand_object_name};
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn object_legal_hold_s3() {
     let ctx = TestContext::new_from_env();
-    if ctx.client.is_minio_express() {
+    if ctx.client.is_minio_express().await {
         println!("Skipping test because it is running in MinIO Express mode");
         return;
     }

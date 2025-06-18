@@ -90,12 +90,12 @@ async fn upload_download_object(size: u64) {
     fs::remove_file(&filename).unwrap();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn upload_download_object_1() {
     upload_download_object(16).await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn upload_download_object_2() {
     upload_download_object(16 + 5 * 1024 * 1024).await;
 }

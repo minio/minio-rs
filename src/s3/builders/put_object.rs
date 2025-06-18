@@ -283,9 +283,9 @@ impl ToS3Request for CompleteMultipartUpload {
             }
         }
 
-        // Set capacity of the byte-buffer based on the part count - attempting
+        // Set the capacity of the byte-buffer based on the part count - attempting
         // to avoid extra allocations when building the XML payload.
-        let data: Bytes = {
+        let bytes: Bytes = {
             let mut data = BytesMut::with_capacity(100 * self.parts.len() + 100);
             data.extend_from_slice(b"<CompleteMultipartUpload>");
             for part in self.parts.iter() {
@@ -302,7 +302,7 @@ impl ToS3Request for CompleteMultipartUpload {
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         {
             headers.add("Content-Type", "application/xml");
-            headers.add("Content-MD5", md5sum_hash(data.as_ref()));
+            headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
         }
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.add("uploadId", self.upload_id);
@@ -313,7 +313,7 @@ impl ToS3Request for CompleteMultipartUpload {
             .object(Some(self.object))
             .query_params(query_params)
             .headers(headers)
-            .body(Some(data.into())))
+            .body(Some(bytes.into())))
     }
 }
 // endregion: complete-multipart-upload

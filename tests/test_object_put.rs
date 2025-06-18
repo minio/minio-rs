@@ -22,7 +22,7 @@ use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use tokio::sync::mpsc;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_object() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
@@ -53,7 +53,7 @@ async fn put_object() {
     assert_eq!(resp.size, size);
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_object_multipart() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
@@ -81,7 +81,7 @@ async fn put_object_multipart() {
     assert_eq!(resp.size as u64, size);
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_object_content() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
@@ -146,7 +146,7 @@ async fn put_object_content() {
 }
 
 /// Test sending ObjectContent across async tasks.
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_object_content_2() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;

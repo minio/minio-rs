@@ -19,8 +19,8 @@ use criterion::Criterion;
 use minio::s3::builders::{GetObjectLegalHold, PutObjectLegalHold};
 use minio::s3::types::S3Api;
 
-pub(crate) fn bench_put_object_legal_hold(criterion: &mut Criterion) {
-    if skip_express_mode("bench_put_object_legal_hold") {
+pub(crate) async fn bench_put_object_legal_hold(criterion: &mut Criterion) {
+    if skip_express_mode("bench_put_object_legal_hold").await {
         return;
     }
     benchmark_s3_api(
@@ -33,8 +33,8 @@ pub(crate) fn bench_put_object_legal_hold(criterion: &mut Criterion) {
         },
     )
 }
-pub(crate) fn bench_get_object_legal_hold(criterion: &mut Criterion) {
-    if skip_express_mode("bench_get_object_legal_hold") {
+pub(crate) async fn bench_get_object_legal_hold(criterion: &mut Criterion) {
+    if skip_express_mode("bench_get_object_legal_hold").await {
         return;
     }
     benchmark_s3_api(

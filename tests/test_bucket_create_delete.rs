@@ -20,7 +20,7 @@ use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_bucket_name;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn bucket_create() {
     let ctx = TestContext::new_from_env();
     let bucket_name = rand_bucket_name();
@@ -48,7 +48,7 @@ async fn bucket_create() {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn bucket_delete() {
     let ctx = TestContext::new_from_env();
     let bucket_name = rand_bucket_name();

@@ -19,8 +19,6 @@ use crate::s3::error::Error;
 use crate::s3::response::GetRegionResponse;
 use crate::s3::types::S3Api;
 
-use tokio::task;
-
 impl Client {
     /// Creates a [`GetRegion`] request builder.
     ///
@@ -50,7 +48,7 @@ impl Client {
     /// Retrieves the region for the specified bucket name from the cache.
     /// If the region is not found in the cache, it is fetched via a call to S3 or MinIO
     /// and then stored in the cache for future lookups.
-    pub async fn get_region_cached_async<S: Into<String>>(
+    pub async fn get_region_cached<S: Into<String>>(
         &self,
         bucket: S,
         region: &Option<String>, // the region as provided by the S3Request
@@ -97,18 +95,5 @@ impl Client {
             .region_map
             .insert(bucket, resolved_region.clone());
         Ok(resolved_region)
-    }
-
-    /// Retrieves the region for the specified bucket name from the cache.
-    /// If the region is not found in the cache, it is fetched via a call to S3 or MinIO
-    /// and then stored in the cache for future lookups.
-    pub fn get_region_cached(
-        &self,
-        bucket: &str,
-        region: &Option<String>,
-    ) -> Result<String, Error> {
-        task::block_in_place(|| {
-            tokio::runtime::Runtime::new()?.block_on(self.get_region_cached_async(bucket, region))
-        })
     }
 }

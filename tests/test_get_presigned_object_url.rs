@@ -19,7 +19,7 @@ use minio::s3::response::GetPresignedObjectUrlResponse;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_presigned_object_url() {
     let ctx = TestContext::new_from_env();
     let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;

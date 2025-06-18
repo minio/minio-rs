@@ -87,16 +87,16 @@ impl S3Request {
         self
     }
 
-    fn compute_inner_region(&self) -> Result<String, Error> {
+    async fn compute_inner_region(&self) -> Result<String, Error> {
         Ok(match &self.bucket {
-            Some(b) => self.client.get_region_cached(b, &self.region)?,
+            Some(b) => self.client.get_region_cached(b, &self.region).await?,
             None => DEFAULT_REGION.to_string(),
         })
     }
 
     /// Execute the request, returning the response. Only used in [`S3Api::send()`]
     pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
-        self.inner_region = self.compute_inner_region()?;
+        self.inner_region = self.compute_inner_region().await?;
         self.client
             .execute(
                 self.method.clone(),
@@ -222,7 +222,7 @@ pub trait S3Api: ToS3Request {
     ///   or an error if the request failed at any stage.    
     ///
     async fn send(self) -> Result<Self::S3Response, Error> {
-        let mut req = self.to_s3request()?;
+        let mut req: S3Request = self.to_s3request()?;
         let resp: Result<reqwest::Response, Error> = req.execute().await;
         Self::S3Response::from_s3response(req, resp).await
     }

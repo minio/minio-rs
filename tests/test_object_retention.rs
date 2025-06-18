@@ -26,10 +26,10 @@ use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::{rand_bucket_name, rand_object_name};
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn object_retention() {
     let ctx = TestContext::new_from_env();
-    if ctx.client.is_minio_express() {
+    if ctx.client.is_minio_express().await {
         println!("Skipping test because it is running in MinIO Express mode");
         return;
     }
@@ -66,7 +66,7 @@ async fn object_retention() {
     //assert_eq!(resp.etag, "");
 
     let retain_until_date = utc_now() + chrono::Duration::days(1);
-    let obj_resp: PutObjectRetentionResponse = ctx
+    let resp: PutObjectRetentionResponse = ctx
         .client
         .put_object_retention(&bucket_name, &object_name)
         .retention_mode(Some(RetentionMode::GOVERNANCE))
@@ -74,10 +74,10 @@ async fn object_retention() {
         .send()
         .await
         .unwrap();
-    assert_eq!(obj_resp.bucket, bucket_name);
-    assert_eq!(obj_resp.object, object_name);
-    assert_eq!(obj_resp.version_id, None);
-    assert_eq!(obj_resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket, bucket_name);
+    assert_eq!(resp.object, object_name);
+    assert_eq!(resp.version_id, None);
+    assert_eq!(resp.region, DEFAULT_REGION);
 
     let resp: GetObjectRetentionResponse = ctx
         .client

@@ -20,10 +20,10 @@ use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread")]
 async fn copy_object() {
     let ctx = TestContext::new_from_env();
-    if ctx.client.is_minio_express() {
+    if ctx.client.is_minio_express().await {
         println!("Skipping test because it is running in MinIO Express mode");
         return;
     }
