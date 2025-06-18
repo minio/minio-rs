@@ -26,10 +26,8 @@ use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use tokio::sync::mpsc;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn put_object() {
-    let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+#[minio_macros::test]
+async fn put_object(ctx: TestContext, bucket_name: String) {
     let object_name: String = rand_object_name();
 
     let size = 16_u64;
@@ -81,11 +79,9 @@ async fn put_object() {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn put_object_multipart() {
-    let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
-    let object_name = rand_object_name();
+#[minio_macros::test]
+async fn put_object_multipart(ctx: TestContext, bucket_name: String) {
+    let object_name: String = rand_object_name();
 
     let size: u64 = 16 + MIN_PART_SIZE;
 
@@ -122,10 +118,8 @@ async fn put_object_multipart() {
     assert_eq!(resp.version_id(), None);
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn put_object_content_1() {
-    let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+#[minio_macros::test]
+async fn put_object_content_1(ctx: TestContext, bucket_name: String) {
     let object_name = rand_object_name();
     let sizes = [16_u64, MIN_PART_SIZE, 16 + MIN_PART_SIZE];
 
@@ -168,10 +162,8 @@ async fn put_object_content_1() {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn put_object_content_2() {
-    let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+#[minio_macros::test]
+async fn put_object_content_2(ctx: TestContext, bucket_name: String) {
     let object_name = rand_object_name();
     let sizes = [16_u64, MIN_PART_SIZE, 16 + MIN_PART_SIZE];
 
@@ -213,9 +205,7 @@ async fn put_object_content_2() {
 
 /// Test sending PutObject across async tasks.
 #[tokio::test(flavor = "multi_thread")]
-async fn put_object_content_3() {
-    let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+async fn put_object_content_3(ctx: TestContext, bucket_name: String) {
     let object_name = rand_object_name();
     let sizes = vec![16_u64, MIN_PART_SIZE, 16 + MIN_PART_SIZE];
 

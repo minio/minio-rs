@@ -18,30 +18,14 @@ use bytes::Bytes;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasVersion};
 use minio::s3::response::{
-    CreateBucketResponse, GetObjectLegalHoldResponse, PutObjectContentResponse,
-    PutObjectLegalHoldResponse,
+    GetObjectLegalHoldResponse, PutObjectContentResponse, PutObjectLegalHoldResponse,
 };
 use minio::s3::types::S3Api;
-use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::test_context::TestContext;
-use minio_common::utils::{rand_bucket_name, rand_object_name};
+use minio_common::utils::rand_object_name;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn object_legal_hold_s3() {
-    let ctx = TestContext::new_from_env();
-    if ctx.client.is_minio_express().await {
-        println!("Skipping test because it is running in MinIO Express mode");
-        return;
-    }
-    let bucket_name: String = rand_bucket_name();
-    let _resp: CreateBucketResponse = ctx
-        .client
-        .create_bucket(&bucket_name)
-        .object_lock(true)
-        .send()
-        .await
-        .unwrap();
-    let _cleanup = CleanupGuard::new(ctx.client.clone(), &bucket_name);
+#[minio_macros::test(skip_if_express)]
+async fn object_legal_hold_s3(ctx: TestContext, bucket_name: String) {
     let object_name = rand_object_name();
 
     let data = Bytes::from("hello, world".to_string().into_bytes());
