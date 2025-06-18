@@ -24,7 +24,7 @@ use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use tokio::sync::mpsc;
 
-#[minio_macros::test]
+#[minio_macros::test(flavor = "multi_thread", worker_threads = 10)]
 async fn listen_bucket_notification(ctx: TestContext, bucket_name: String) {
     let object_name = rand_object_name();
 

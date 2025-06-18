@@ -21,7 +21,7 @@ use minio::s3::response::{
 use minio::s3::types::{ObjectLockConfig, RetentionMode, S3Api};
 use minio_common::test_context::TestContext;
 
-#[minio_macros::test(skip_if_express)]
+#[minio_macros::test(skip_if_express, object_lock)]
 async fn object_lock_config(ctx: TestContext, bucket_name: String) {
     const DURATION_DAYS: i32 = 7;
     let config =

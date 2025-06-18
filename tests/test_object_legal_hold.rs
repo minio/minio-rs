@@ -24,7 +24,7 @@ use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 
-#[minio_macros::test(skip_if_express)]
+#[minio_macros::test(skip_if_express, object_lock)]
 async fn object_legal_hold_s3(ctx: TestContext, bucket_name: String) {
     let object_name = rand_object_name();
 

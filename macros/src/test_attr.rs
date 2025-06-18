@@ -15,6 +15,7 @@ pub(crate) struct MacroArgs {
     skip_if_express: darling::util::Flag,
     skip_if_not_express: darling::util::Flag,
     no_bucket: darling::util::Flag,
+    object_lock: darling::util::Flag,
 }
 
 impl MacroArgs {
@@ -218,14 +219,20 @@ fn generate_with_bucket_body(
             let random_name = format!("test-bucket-{}", Uuid::new_v4());
             proc_macro2::Literal::string(&random_name).into_token_stream()
         });
-
+    let maybe_lock = if args.object_lock.is_present() {
+        quote! {
+            .object_lock(true)
+        }
+    } else {
+        TokenStream::new()
+    };
     quote_spanned!(span=> {
         #prelude
         #maybe_skip_if_express
 
         let client_clone = ctx.client.clone();
         let bucket_name = #bucket_name;
-        let resp = ctx.client.create_bucket(bucket_name).send().await.expect("Failed to create bucket");
+        let resp = ctx.client.create_bucket(bucket_name)#maybe_lock.send().await.expect("Failed to create bucket");
         assert_eq!(resp.bucket, bucket_name);
         let res = AssertUnwindSafe(#inner_fn_name(ctx, resp.bucket.clone())).catch_unwind().await;
         ::minio_common::cleanup_guard::cleanup(client_clone, resp.bucket.as_str()).await;
