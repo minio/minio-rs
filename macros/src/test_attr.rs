@@ -111,6 +111,7 @@ pub(crate) fn expand_test_macro(
             use ::futures::FutureExt;
             use ::std::panic::AssertUnwindSafe;
             use ::minio::s3::types::S3Api;
+            use ::minio::s3::response::a_response_traits::HasBucket;
 
             let ctx = ::minio_common::test_context::TestContext::new_from_env();
     );
@@ -233,9 +234,9 @@ fn generate_with_bucket_body(
         let client_clone = ctx.client.clone();
         let bucket_name = #bucket_name;
         let resp = ctx.client.create_bucket(bucket_name)#maybe_lock.send().await.expect("Failed to create bucket");
-        assert_eq!(resp.bucket, bucket_name);
-        let res = AssertUnwindSafe(#inner_fn_name(ctx, resp.bucket.clone())).catch_unwind().await;
-        ::minio_common::cleanup_guard::cleanup(client_clone, resp.bucket.as_str()).await;
+        assert_eq!(resp.bucket(), bucket_name);
+        let res = AssertUnwindSafe(#inner_fn_name(ctx, resp.bucket().to_string())).catch_unwind().await;
+        ::minio_common::cleanup_guard::cleanup(client_clone, resp.bucket()).await;
         if let Err(e) = res {
             ::std::panic::resume_unwind(e);
         }

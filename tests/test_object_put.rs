@@ -204,7 +204,7 @@ async fn put_object_content_2(ctx: TestContext, bucket_name: String) {
 }
 
 /// Test sending PutObject across async tasks.
-#[tokio::test(flavor = "multi_thread")]
+#[minio_macros::test]
 async fn put_object_content_3(ctx: TestContext, bucket_name: String) {
     let object_name = rand_object_name();
     let sizes = vec![16_u64, MIN_PART_SIZE, 16 + MIN_PART_SIZE];
