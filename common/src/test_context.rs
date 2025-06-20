@@ -42,7 +42,7 @@ impl TestContext {
             let access_key = std::env::var("ACCESS_KEY").unwrap();
             let secret_key = std::env::var("SECRET_KEY").unwrap();
             let secure = std::env::var("ENABLE_HTTPS").is_ok();
-            let value = std::env::var("SSL_CERT_FILE").unwrap();
+            let value = std::env::var("MINIO_SSL_CERT_FILE").unwrap();
             let mut ssl_cert_file = None;
             if !value.is_empty() {
                 ssl_cert_file = Some(Path::new(&value));
@@ -97,8 +97,8 @@ impl TestContext {
                 .unwrap_or(false);
             log::debug!("ENABLE_HTTPS={}", secure);
             let ssl_cert: String =
-                std::env::var("SSL_CERT_FILE").unwrap_or(DEFAULT_SSL_CERT_FILE.to_string());
-            log::debug!("SSL_CERT_FILE={}", ssl_cert);
+                std::env::var("MINIO_SSL_CERT_FILE").unwrap_or(DEFAULT_SSL_CERT_FILE.to_string());
+            log::debug!("MINIO_SSL_CERT_FILE={}", ssl_cert);
             let ssl_cert_file: PathBuf = ssl_cert.into();
             let ignore_cert_check: bool = std::env::var("IGNORE_CERT_CHECK")
                 .unwrap_or(DEFAULT_IGNORE_CERT_CHECK.to_string())

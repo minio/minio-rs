@@ -21,11 +21,8 @@ use minio::s3::response::{
 use minio::s3::types::{S3Api, SseConfig};
 use minio_common::test_context::TestContext;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn bucket_encryption() {
-    let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
-
+#[minio_macros::test]
+async fn bucket_encryption(ctx: TestContext, bucket_name: String) {
     let config = SseConfig::default();
 
     if false {

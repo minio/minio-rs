@@ -22,11 +22,8 @@ use minio::s3::types::S3Api;
 use minio_common::example::create_bucket_policy_config_example;
 use minio_common::test_context::TestContext;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn bucket_policy() {
-    let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
-
+#[minio_macros::test]
+async fn bucket_policy(ctx: TestContext, bucket_name: String) {
     let config: String = create_bucket_policy_config_example(&bucket_name);
 
     let resp: PutBucketPolicyResponse = ctx

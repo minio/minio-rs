@@ -24,10 +24,8 @@ use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use tokio::sync::mpsc;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn listen_bucket_notification() {
-    let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+#[minio_macros::test(flavor = "multi_thread", worker_threads = 10)]
+async fn listen_bucket_notification(ctx: TestContext, bucket_name: String) {
     let object_name = rand_object_name();
 
     type MessageType = u32;
@@ -57,7 +55,7 @@ async fn listen_bucket_notification() {
 
             if let Some(record) = record {
                 let key: &str = &record.s3.object.key;
-                if key == &object_name2 {
+                if key == object_name2 {
                     // Do something with the record, check if you received an event triggered
                     // by the put_object that will happen in a few ms.
                     assert_eq!(record.event_name, "s3:ObjectCreated:Put");

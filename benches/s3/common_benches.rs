@@ -40,7 +40,7 @@ impl Ctx2 {
     /// Create a new context with a bucket
     pub async fn new() -> Self {
         unsafe {
-            env::set_var("SSL_CERT_FILE", "./tests/public.crt");
+            env::set_var("MINIO_SSL_CERT_FILE", "./tests/public.crt");
         }
         let ctx = TestContext::new_from_env();
         let (bucket_name, cleanup) = ctx.create_bucket_helper().await;
@@ -57,7 +57,7 @@ impl Ctx2 {
     /// Create a new context with a bucket and an object
     pub async fn new_with_object(object_lock: bool) -> Self {
         unsafe {
-            env::set_var("SSL_CERT_FILE", "./tests/public.crt");
+            env::set_var("MINIO_SSL_CERT_FILE", "./tests/public.crt");
         }
         let ctx = TestContext::new_from_env();
         let bucket_name: String = rand_bucket_name();

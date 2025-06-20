@@ -18,10 +18,9 @@ use minio::s3::types::S3Api;
 use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::test_context::TestContext;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn list_buckets() {
+#[minio_macros::test(no_bucket)]
+async fn list_buckets(ctx: TestContext) {
     const N_BUCKETS: usize = 3;
-    let ctx = TestContext::new_from_env();
 
     let mut names: Vec<String> = Vec::new();
     let mut guards: Vec<CleanupGuard> = Vec::new();
@@ -48,4 +47,7 @@ async fn list_buckets() {
     }
     assert_eq!(guards.len(), N_BUCKETS);
     assert_eq!(count, N_BUCKETS);
+    for guard in guards {
+        guard.cleanup().await;
+    }
 }

@@ -19,10 +19,8 @@ use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use std::collections::HashMap;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn get_presigned_post_form_data() {
-    let ctx = TestContext::new_from_env();
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+#[minio_macros::test]
+async fn get_presigned_post_form_data(ctx: TestContext, bucket_name: String) {
     let object_name = rand_object_name();
 
     let policy: PostPolicy = create_post_policy_example(&bucket_name, &object_name);

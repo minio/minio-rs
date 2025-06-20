@@ -17,34 +17,16 @@ use minio::s3::builders::ObjectContent;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasVersion};
 use minio::s3::response::{
-    CreateBucketResponse, GetObjectRetentionResponse, PutObjectContentResponse,
-    PutObjectRetentionResponse,
+    GetObjectRetentionResponse, PutObjectContentResponse, PutObjectRetentionResponse,
 };
 use minio::s3::types::{RetentionMode, S3Api};
 use minio::s3::utils::{to_iso8601utc, utc_now};
-use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
-use minio_common::utils::{rand_bucket_name, rand_object_name};
+use minio_common::utils::rand_object_name;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn object_retention() {
-    let ctx = TestContext::new_from_env();
-    if ctx.client.is_minio_express().await {
-        println!("Skipping test because it is running in MinIO Express mode");
-        return;
-    }
-
-    let bucket_name: String = rand_bucket_name();
-    let resp: CreateBucketResponse = ctx
-        .client
-        .create_bucket(&bucket_name)
-        .object_lock(true)
-        .send()
-        .await
-        .unwrap();
-    let _cleanup = CleanupGuard::new(ctx.client.clone(), &bucket_name);
-    assert_eq!(resp.bucket(), bucket_name);
+#[minio_macros::test(skip_if_express, object_lock)]
+async fn object_retention(ctx: TestContext, bucket_name: String) {
     let object_name = rand_object_name();
 
     let size = 16_u64;

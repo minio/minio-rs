@@ -3,7 +3,7 @@ $Env:SERVER_ENDPOINT = "http://localhost:9000/"
 $Env:ACCESS_KEY = "minioadmin"
 $Env:SECRET_KEY = "minioadmin"
 $Env:ENABLE_HTTPS = "false"
-$Env:SSL_CERT_FILE = "./tests/public.crt"
+$Env:MINIO_SSL_CERT_FILE = "./tests/public.crt"
 $Env:IGNORE_CERT_CHECK = "false"
 $Env:SERVER_REGION = ""
 

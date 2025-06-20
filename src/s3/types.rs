@@ -27,7 +27,7 @@ use http::Method;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
-
+use std::sync::Arc;
 use xmltree::Element;
 
 #[derive(Clone, Default, Debug)]
@@ -41,7 +41,7 @@ pub struct S3Request {
     pub(crate) object: Option<String>,
     pub(crate) query_params: Multimap,
     headers: Multimap,
-    body: Option<SegmentedBytes>,
+    body: Option<Arc<SegmentedBytes>>,
 
     /// region computed by [`S3Request::execute`]
     pub(crate) inner_region: String,
@@ -83,7 +83,7 @@ impl S3Request {
     }
 
     pub fn body(mut self, body: Option<SegmentedBytes>) -> Self {
-        self.body = body;
+        self.body = body.map(Arc::new);
         self
     }
 
@@ -105,7 +105,7 @@ impl S3Request {
                 &self.query_params,
                 &self.bucket.as_deref(),
                 &self.object.as_deref(),
-                self.body.as_ref(),
+                self.body.as_ref().map(Arc::clone),
             )
             .await
     }
