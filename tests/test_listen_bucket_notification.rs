@@ -55,7 +55,7 @@ async fn listen_bucket_notification(ctx: TestContext, bucket_name: String) {
 
             if let Some(record) = record {
                 let key: &str = &record.s3.object.key;
-                if key == &object_name2 {
+                if key == object_name2 {
                     // Do something with the record, check if you received an event triggered
                     // by the put_object that will happen in a few ms.
                     assert_eq!(record.event_name, "s3:ObjectCreated:Put");

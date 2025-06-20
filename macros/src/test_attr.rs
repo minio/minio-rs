@@ -16,7 +16,7 @@
 use darling::FromMeta;
 use darling_core::Error;
 use proc_macro2::TokenStream;
-use quote::{quote, quote_spanned, ToTokens};
+use quote::{ToTokens, quote, quote_spanned};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::{FnArg, ItemFn, ReturnType};
@@ -166,7 +166,11 @@ pub(crate) fn expand_test_macro(
 }
 
 fn generate_tokio_test_header(args: &MacroArgs, sig: TokenStream) -> TokenStream {
-    let flavor = args.flavor.as_ref().map(ToString::to_string).or(std::env::var("MINIO_TEST_TOKIO_RUNTIME_FLAVOR").ok());
+    let flavor = args
+        .flavor
+        .as_ref()
+        .map(ToString::to_string)
+        .or(std::env::var("MINIO_TEST_TOKIO_RUNTIME_FLAVOR").ok());
     match (flavor, args.worker_threads) {
         (Some(flavor), None) => {
             quote!(#[::tokio::test(flavor = #flavor)]

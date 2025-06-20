@@ -26,8 +26,6 @@ use minio_common::utils::rand_object_name;
 use ring::digest::{Context, SHA256};
 #[cfg(not(feature = "ring"))]
 use sha2::{Digest, Sha256};
-#[cfg(feature = "ring")]
-use std::io::Read;
 use std::path::PathBuf;
 
 async fn get_hash(filename: &String) -> String {
