@@ -166,7 +166,8 @@ pub(crate) fn expand_test_macro(
 }
 
 fn generate_tokio_test_header(args: &MacroArgs, sig: TokenStream) -> TokenStream {
-    match (args.flavor.as_ref(), args.worker_threads) {
+    let flavor = args.flavor.as_ref().map(ToString::to_string).or(std::env::var("MINIO_TEST_TOKIO_RUNTIME_FLAVOR").ok());
+    match (flavor, args.worker_threads) {
         (Some(flavor), None) => {
             quote!(#[::tokio::test(flavor = #flavor)]
             #sig
