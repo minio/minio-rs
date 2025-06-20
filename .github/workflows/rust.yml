@@ -36,7 +36,7 @@ jobs:
           export ACCESS_KEY=minioadmin
           export SECRET_KEY=minioadmin
           export ENABLE_HTTPS=1
-          export SSL_CERT_FILE=./tests/public.crt
+          export MINIO_SSL_CERT_FILE=./tests/public.crt
           MINIO_TEST_TOKIO_RUNTIME_FLAVOR="multi_thread" cargo test -- --nocapture
   test-current-thread:
     runs-on: ubuntu-latest
@@ -49,7 +49,7 @@ jobs:
           export ACCESS_KEY=minioadmin
           export SECRET_KEY=minioadmin
           export ENABLE_HTTPS=1
-          export SSL_CERT_FILE=./tests/public.crt
+          export MINIO_SSL_CERT_FILE=./tests/public.crt
           MINIO_TEST_TOKIO_RUNTIME_FLAVOR="current_thread" cargo test -- --nocapture
 
   build:
