@@ -30,7 +30,7 @@ use minio_common::test_context::TestContext;
 #[minio_macros::test(skip_if_express)]
 async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
     let ctx2 = TestContext::new_from_env();
-    let (bucket_name2, _cleanup2) = ctx2.create_bucket_helper().await;
+    let (bucket_name2, cleanup2) = ctx2.create_bucket_helper().await;
 
     {
         let resp: PutBucketVersioningResponse = ctx
@@ -125,6 +125,7 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
         .send()
         .await
         .unwrap();
+    cleanup2.cleanup().await;
     //println!("response of getting replication: resp={:?}", resp);
 }
 
