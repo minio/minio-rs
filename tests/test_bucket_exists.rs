@@ -19,7 +19,7 @@ use minio::s3::response::{BucketExistsResponse, DeleteBucketResponse};
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
 
-#[minio_macros::test]
+#[minio_macros::test(no_cleanup)]
 async fn bucket_exists(ctx: TestContext, bucket_name: String) {
     let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
     assert!(resp.exists());

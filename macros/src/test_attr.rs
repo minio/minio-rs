@@ -1,3 +1,18 @@
+// MinIO Rust Library for Amazon S3 Compatible Cloud Storage
+// Copyright 2025 MinIO, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use darling::FromMeta;
 use darling_core::Error;
 use proc_macro2::TokenStream;
@@ -16,6 +31,7 @@ pub(crate) struct MacroArgs {
     skip_if_not_express: darling::util::Flag,
     no_bucket: darling::util::Flag,
     object_lock: darling::util::Flag,
+    no_cleanup: darling::util::Flag,
 }
 
 impl MacroArgs {
@@ -227,16 +243,23 @@ fn generate_with_bucket_body(
     } else {
         TokenStream::new()
     };
+    let maybe_cleanup = if args.no_cleanup.is_present() {
+        quote! {}
+    } else {
+        quote! {
+            ::minio_common::cleanup_guard::cleanup(client_clone, resp.bucket()).await;
+        }
+    };
     quote_spanned!(span=> {
         #prelude
         #maybe_skip_if_express
 
         let client_clone = ctx.client.clone();
         let bucket_name = #bucket_name;
-        let resp = ctx.client.create_bucket(bucket_name)#maybe_lock.send().await.expect("Failed to create bucket");
+        let resp = client_clone.create_bucket(bucket_name)#maybe_lock.send().await.expect("Failed to create bucket");
         assert_eq!(resp.bucket(), bucket_name);
         let res = AssertUnwindSafe(#inner_fn_name(ctx, resp.bucket().to_string())).catch_unwind().await;
-        ::minio_common::cleanup_guard::cleanup(client_clone, resp.bucket()).await;
+        #maybe_cleanup
         if let Err(e) = res {
             ::std::panic::resume_unwind(e);
         }

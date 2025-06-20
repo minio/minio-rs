@@ -62,7 +62,7 @@ async fn put_object(ctx: TestContext, bucket_name: String) {
         .send()
         .await
         .unwrap();
-    assert!(!resp.version_id().is_some());
+    assert!(resp.version_id().is_none());
 
     // Validate delete succeeded.
     let resp: Result<StatObjectResponse, Error> = ctx

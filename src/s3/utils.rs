@@ -33,6 +33,7 @@ use ring::digest::{Context, SHA256};
 #[cfg(not(feature = "ring"))]
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::sync::Arc;
 pub use urlencoding::decode as urldecode;
 pub use urlencoding::encode as urlencode;
 use xmltree::Element;
@@ -71,7 +72,7 @@ pub fn sha256_hash(data: &[u8]) -> String {
     }
 }
 
-pub fn sha256_hash_sb(sb: &SegmentedBytes) -> String {
+pub fn sha256_hash_sb(sb: Arc<SegmentedBytes>) -> String {
     #[cfg(feature = "ring")]
     {
         let mut context = Context::new(&SHA256);
@@ -96,10 +97,14 @@ pub fn sha256_hash_sb(sb: &SegmentedBytes) -> String {
 mod tests {
     use crate::s3::utils::SegmentedBytes;
     use crate::s3::utils::sha256_hash_sb;
+    use std::sync::Arc;
 
     #[test]
     fn test_empty_sha256_segmented_bytes() {
-        assert_eq!(super::EMPTY_SHA256, sha256_hash_sb(&SegmentedBytes::new()));
+        assert_eq!(
+            super::EMPTY_SHA256,
+            sha256_hash_sb(Arc::new(SegmentedBytes::new()))
+        );
     }
 }
 
