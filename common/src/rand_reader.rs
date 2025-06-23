@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use futures::AsyncRead;
 use std::io;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 pub struct RandReader {
     size: u64,
@@ -28,10 +31,7 @@ impl RandReader {
 
 impl io::Read for RandReader {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
-        let bytes_read: usize = match (self.size as usize) > buf.len() {
-            true => buf.len(),
-            false => self.size as usize,
-        };
+        let bytes_read = buf.len().min(self.size as usize);
 
         if bytes_read > 0 {
             let random: &mut dyn rand::RngCore = &mut rand::thread_rng();
@@ -41,5 +41,24 @@ impl io::Read for RandReader {
         self.size -= bytes_read as u64;
 
         Ok(bytes_read)
+    }
+}
+
+impl AsyncRead for RandReader {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        let bytes_read = buf.len().min(self.size as usize);
+
+        if bytes_read > 0 {
+            let random: &mut dyn rand::RngCore = &mut rand::thread_rng();
+            random.fill_bytes(&mut buf[0..bytes_read]);
+        }
+
+        self.get_mut().size -= bytes_read as u64;
+
+        Poll::Ready(Ok(bytes_read))
     }
 }

@@ -424,7 +424,7 @@ impl Client {
         query_params: &Multimap,
         bucket_name: Option<&str>,
         object_name: Option<&str>,
-        body: Option<&SegmentedBytes>,
+        body: Option<Arc<SegmentedBytes>>,
         retry: bool,
     ) -> Result<reqwest::Response, Error> {
         let url = self.shared.base_url.build_url(
@@ -437,7 +437,6 @@ impl Client {
 
         {
             headers.add("Host", url.host_header_value());
-
             let sha256: String = match *method {
                 Method::PUT | Method::POST => {
                     if !headers.contains_key("Content-Type") {
@@ -445,10 +444,12 @@ impl Client {
                     }
                     let len: usize = body.as_ref().map_or(0, |b| b.len());
                     headers.add("Content-Length", len.to_string());
-
                     match body {
                         None => EMPTY_SHA256.into(),
-                        Some(v) => sha256_hash_sb(v),
+                        Some(ref v) => {
+                            let clone = v.clone();
+                            async_std::task::spawn_blocking(move || sha256_hash_sb(clone)).await
+                        }
                     }
                 }
                 _ => EMPTY_SHA256.into(),
@@ -457,7 +458,6 @@ impl Client {
 
             let date = utc_now();
             headers.add("x-amz-date", to_amz_date(date));
-
             if let Some(p) = &self.shared.provider {
                 let creds = p.fetch();
                 if creds.session_token.is_some() {
@@ -498,14 +498,14 @@ impl Client {
                 method,
                 url.path,
                 header_strings.join("; "),
-                body.unwrap()
+                body.as_ref().unwrap()
             );
         }
 
         if (*method == Method::PUT) || (*method == Method::POST) {
             //TODO: why-oh-why first collect into a vector and then iterate to a stream?
             let bytes_vec: Vec<Bytes> = match body {
-                Some(v) => v.into_iter().collect(),
+                Some(v) => v.iter().collect(),
                 None => Vec::new(),
             };
             let stream = futures_util::stream::iter(
@@ -557,7 +557,7 @@ impl Client {
         query_params: &Multimap,
         bucket_name: &Option<&str>,
         object_name: &Option<&str>,
-        data: Option<&SegmentedBytes>,
+        data: Option<Arc<SegmentedBytes>>,
     ) -> Result<reqwest::Response, Error> {
         let resp: Result<reqwest::Response, Error> = self
             .execute_internal(
@@ -567,7 +567,7 @@ impl Client {
                 query_params,
                 bucket_name.as_deref(),
                 object_name.as_deref(),
-                data,
+                data.as_ref().map(Arc::clone),
                 true,
             )
             .await;

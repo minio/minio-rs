@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_std::future::timeout;
 use minio::s3::Client;
-
-use std::thread;
 
 /// Cleanup guard that removes the bucket when it is dropped
 pub struct CleanupGuard {
@@ -32,41 +29,26 @@ impl CleanupGuard {
             bucket_name: bucket_name.into(),
         }
     }
+
+    pub async fn cleanup(&self) {
+        cleanup(self.client.clone(), &self.bucket_name).await;
+    }
 }
 
-impl Drop for CleanupGuard {
-    fn drop(&mut self) {
-        let client = self.client.clone();
-        let bucket_name = self.bucket_name.clone();
-        //println!("Going to remove bucket {}", bucket_name);
-
-        // Spawn the cleanup task in a way that detaches it from the current runtime
-        thread::spawn(move || {
-            // Create a new runtime for this thread
-            let rt = tokio::runtime::Runtime::new().unwrap();
-
-            // Execute the async cleanup in this new runtime
-            rt.block_on(async {
-                // do the actual removal of the bucket
-                match timeout(
-                    std::time::Duration::from_secs(60),
-                    client.delete_and_purge_bucket(&bucket_name),
-                )
-                .await
-                {
-                    Ok(result) => match result {
+pub async fn cleanup(client: Client, bucket_name: &str) {
+    tokio::select!(
+                _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
+                    eprintln!("Cleanup timeout after 60s while removing bucket {}", bucket_name);
+                },
+                outcome = client.delete_and_purge_bucket(bucket_name) => {
+                    match outcome {
                         Ok(_) => {
-                            //println!("Bucket {} removed successfully", bucket_name),
+                            eprintln!("Bucket {} removed successfully", bucket_name);
                         }
-                        Err(_e) => {
-                            //println!("Error removing bucket {}: {:?}", bucket_name, e)
+                        Err(e) => {
+                            eprintln!("Error removing bucket {}: {:?}", bucket_name, e);
                         }
-                    },
-                    Err(_) => println!("Timeout after 60s while removing bucket {}", bucket_name),
+                    }
                 }
-            });
-        })
-        .join()
-        .unwrap(); // This blocks the current thread until cleanup is done
-    }
+    );
 }

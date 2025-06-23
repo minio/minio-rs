@@ -21,9 +21,8 @@ use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_bucket_name;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn bucket_create() {
-    let ctx = TestContext::new_from_env();
+#[minio_macros::test(no_bucket)]
+async fn bucket_create(ctx: TestContext) {
     let bucket_name = rand_bucket_name();
 
     // try to create a bucket that does not exist
@@ -49,9 +48,8 @@ async fn bucket_create() {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn bucket_delete() {
-    let ctx = TestContext::new_from_env();
+#[minio_macros::test(no_bucket)]
+async fn bucket_delete(ctx: TestContext) {
     let bucket_name = rand_bucket_name();
 
     // try to remove a bucket that does not exist

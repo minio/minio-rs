@@ -21,15 +21,8 @@ use minio::s3::response::{GetBucketVersioningResponse, PutBucketVersioningRespon
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn bucket_versioning_s3() {
-    let ctx = TestContext::new_from_env();
-    if ctx.client.is_minio_express().await {
-        println!("Skipping test because it is running in MinIO Express mode");
-        return;
-    }
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
-
+#[minio_macros::test(skip_if_express)]
+async fn bucket_versioning_s3(ctx: TestContext, bucket_name: String) {
     let resp: PutBucketVersioningResponse = ctx
         .client
         .put_bucket_versioning(&bucket_name)
@@ -71,15 +64,8 @@ async fn bucket_versioning_s3() {
     assert_eq!(resp.region(), DEFAULT_REGION);
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn bucket_versioning_s3express() {
-    let ctx = TestContext::new_from_env();
-    if !ctx.client.is_minio_express().await {
-        println!("Skipping test because it is NOT running in MinIO Express mode");
-        return;
-    }
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
-
+#[minio_macros::test(skip_if_not_express)]
+async fn bucket_versioning_s3express(ctx: TestContext, bucket_name: String) {
     let resp: Result<PutBucketVersioningResponse, Error> = ctx
         .client
         .put_bucket_versioning(&bucket_name)

@@ -19,27 +19,10 @@ use minio::s3::response::{
     DeleteObjectLockConfigResponse, GetObjectLockConfigResponse, PutObjectLockConfigResponse,
 };
 use minio::s3::types::{ObjectLockConfig, RetentionMode, S3Api};
-use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::test_context::TestContext;
-use minio_common::utils::rand_bucket_name;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn object_lock_config() {
-    let ctx = TestContext::new_from_env();
-    if ctx.client.is_minio_express().await {
-        println!("Skipping test because it is running in MinIO Express mode");
-        return;
-    }
-
-    let bucket_name: String = rand_bucket_name();
-    ctx.client
-        .create_bucket(&bucket_name)
-        .object_lock(true)
-        .send()
-        .await
-        .unwrap();
-    let _cleanup = CleanupGuard::new(ctx.client.clone(), &bucket_name);
-
+#[minio_macros::test(skip_if_express, object_lock)]
+async fn object_lock_config(ctx: TestContext, bucket_name: String) {
     const DURATION_DAYS: i32 = 7;
     let config =
         ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();

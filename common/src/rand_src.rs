@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use async_std::stream::Stream;
-use async_std::task;
 use bytes::Bytes;
 use futures::io::AsyncRead;
 use rand::prelude::SmallRng;
@@ -41,26 +40,21 @@ impl Stream for RandSrc {
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,
-        _cx: &mut task::Context<'_>,
-    ) -> task::Poll<Option<Self::Item>> {
+        _cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         if self.size == 0 {
-            return task::Poll::Ready(None);
+            return Poll::Ready(None);
         }
-
-        let bytes_read = match self.size > 64 * 1024 {
-            true => 64 * 1024,
-            false => self.size as usize,
-        };
+        // Limit to 8 KiB per read
+        let bytes_read = self.size.min(8 * 1024) as usize;
 
         let this = self.get_mut();
 
         let mut buf = vec![0; bytes_read];
         let random: &mut dyn rand::RngCore = &mut this.rng;
         random.fill_bytes(&mut buf);
-
         this.size -= bytes_read as u64;
-
-        task::Poll::Ready(Some(Ok(Bytes::from(buf))))
+        Poll::Ready(Some(Ok(Bytes::from(buf))))
     }
 }
 

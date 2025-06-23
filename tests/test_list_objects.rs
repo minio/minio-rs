@@ -27,6 +27,8 @@ async fn list_objects(
     express: bool,
     n_prefixes: usize,
     n_objects: usize,
+    ctx: TestContext,
+    bucket_name: String,
 ) {
     if express {
         if use_api_v1 {
@@ -36,7 +38,6 @@ async fn list_objects(
             panic!("S3-Express does not support versioning");
         }
     }
-    let ctx = TestContext::new_from_env();
 
     let is_express = ctx.client.is_minio_express().await;
     if is_express && !express {
@@ -46,8 +47,6 @@ async fn list_objects(
         println!("Skipping test because it is NOT running in MinIO Express mode");
         return;
     }
-
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
 
     let mut names_set_before: HashSet<String> = HashSet::new();
     let mut names_vec_after: Vec<String> = Vec::with_capacity(n_prefixes * n_objects);
@@ -98,29 +97,29 @@ async fn list_objects(
     assert_eq!(names_set_after, names_set_before);
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn list_objects_v1_no_versions() {
-    list_objects(true, false, false, 5, 5).await;
+#[minio_macros::test]
+async fn list_objects_v1_no_versions(ctx: TestContext, bucket_name: String) {
+    list_objects(true, false, false, 5, 5, ctx, bucket_name).await;
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn list_objects_v1_with_versions() {
-    list_objects(true, true, false, 5, 5).await;
+#[minio_macros::test]
+async fn list_objects_v1_with_versions(ctx: TestContext, bucket_name: String) {
+    list_objects(true, true, false, 5, 5, ctx, bucket_name).await;
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn list_objects_v2_no_versions() {
-    list_objects(false, false, false, 5, 5).await;
+#[minio_macros::test]
+async fn list_objects_v2_no_versions(ctx: TestContext, bucket_name: String) {
+    list_objects(false, false, false, 5, 5, ctx, bucket_name).await;
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn list_objects_v2_with_versions() {
-    list_objects(false, true, false, 5, 5).await;
+#[minio_macros::test]
+async fn list_objects_v2_with_versions(ctx: TestContext, bucket_name: String) {
+    list_objects(false, true, false, 5, 5, ctx, bucket_name).await;
 }
 
 /// Test for S3-Express: List objects with S3-Express are only supported with V2 API, without
 /// versions, and yield unsorted results.
-#[tokio::test(flavor = "multi_thread")]
-async fn list_objects_express() {
-    list_objects(false, false, true, 5, 5).await;
+#[minio_macros::test]
+async fn list_objects_express(ctx: TestContext, bucket_name: String) {
+    list_objects(false, false, true, 5, 5, ctx, bucket_name).await;
 }

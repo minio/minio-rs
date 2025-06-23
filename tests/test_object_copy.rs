@@ -21,15 +21,8 @@ use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn copy_object() {
-    let ctx = TestContext::new_from_env();
-    if ctx.client.is_minio_express().await {
-        println!("Skipping test because it is running in MinIO Express mode");
-        return;
-    }
-
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+#[minio_macros::test(skip_if_express)]
+async fn copy_object(ctx: TestContext, bucket_name: String) {
     let object_name_src: String = rand_object_name();
     let object_name_dst: String = rand_object_name();
 

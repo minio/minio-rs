@@ -42,7 +42,7 @@ pub(crate) fn bench_put_bucket_replication(criterion: &mut Criterion) {
 
             let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .put_bucket_versioning(&ctx.aux_bucket.clone().unwrap())
+                .put_bucket_versioning(ctx.aux_bucket.clone().unwrap())
                 .versioning_status(VersioningStatus::Enabled)
                 .send()
                 .await
@@ -77,7 +77,7 @@ pub(crate) fn bench_get_bucket_replication(criterion: &mut Criterion) {
 
             let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .put_bucket_versioning(&ctx.aux_bucket.clone().unwrap())
+                .put_bucket_versioning(ctx.aux_bucket.clone().unwrap())
                 .versioning_status(VersioningStatus::Enabled)
                 .send()
                 .await
@@ -107,7 +107,7 @@ pub(crate) fn bench_delete_bucket_replication(criterion: &mut Criterion) {
 
             let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .put_bucket_versioning(&ctx.aux_bucket.clone().unwrap())
+                .put_bucket_versioning(ctx.aux_bucket.clone().unwrap())
                 .versioning_status(VersioningStatus::Enabled)
                 .send()
                 .await

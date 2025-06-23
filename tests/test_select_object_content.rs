@@ -21,15 +21,8 @@ use minio_common::example::{create_select_content_data, create_select_content_re
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn select_object_content_s3() {
-    let ctx = TestContext::new_from_env();
-    if ctx.client.is_minio_express().await {
-        println!("Skipping test because it is running in MinIO Express mode");
-        return;
-    }
-
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+#[minio_macros::test(skip_if_express)]
+async fn select_object_content_s3(ctx: TestContext, bucket_name: String) {
     let object_name: String = rand_object_name();
     let (select_body, select_data) = create_select_content_data();
 
@@ -62,15 +55,8 @@ async fn select_object_content_s3() {
     assert_eq!(got, select_data);
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn select_object_content_express() {
-    let ctx = TestContext::new_from_env();
-    if !ctx.client.is_minio_express().await {
-        println!("Skipping test because it is NOT running in MinIO Express mode");
-        return;
-    }
-
-    let (bucket_name, _cleanup) = ctx.create_bucket_helper().await;
+#[minio_macros::test(skip_if_not_express)]
+async fn select_object_content_express(ctx: TestContext, bucket_name: String) {
     let object_name = rand_object_name();
     let (select_body, _) = create_select_content_data();
 
