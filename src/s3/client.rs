@@ -487,6 +487,7 @@ impl MinioClient {
         let date = utc_now();
         headers.add(X_AMZ_DATE, to_amz_date(date));
 
+        let url_before_hook = url.to_string();
         self.run_before_signing_hooks(
             method,
             &mut url,
@@ -500,6 +501,11 @@ impl MinioClient {
         )
         .await?;
 
+        let url_after_hook = url.to_string();
+        if url_before_hook != url_after_hook {
+            headers.add("x-minio-redirect", url_after_hook);
+        }
+        
         if let Some(p) = &self.shared.provider {
             let creds = p.fetch();
             if creds.session_token.is_some() {
