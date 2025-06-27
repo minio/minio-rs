@@ -67,6 +67,7 @@ impl Client {
 
     /// copy object is a higher-level API that calls [stat_object](Client::stat_object) and based on the results calls
     /// [compose_object](Client::compose_object) to copy the object.
+    /// `bucket` and `object` specify the destination of the copy. To set the source, call .source() on the returned [`CopyObject`]
     pub fn copy_object<S1: Into<String>, S2: Into<String>>(
         &self,
         bucket: S1,
