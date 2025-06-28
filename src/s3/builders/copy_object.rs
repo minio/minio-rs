@@ -405,6 +405,8 @@ impl CopyObject {
         self.legal_hold = legal_hold;
         self
     }
+
+    /// Sets the source for the copy operation.
     pub fn source(mut self, source: CopySource) -> Self {
         self.source = source;
         self
@@ -418,6 +420,10 @@ impl CopyObject {
         self
     }
 
+    /// Sends the copy object request.
+    ///
+    /// Functionally related to the [S3Api::send()](crate::s3::types::S3Api::send) method, but
+    /// specifically tailored for the `CopyObject` operation.
     pub async fn send(self) -> Result<CopyObjectResponse, Error> {
         {
             if let Some(v) = &self.sse {
