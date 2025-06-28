@@ -30,7 +30,7 @@ impl Client {
     ///
     /// ```no_run
     /// use minio::s3::Client;
-    /// use minio::s3::response::{UploadPartCopyResponse};
+    /// use minio::s3::response::UploadPartCopyResponse;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::HasObject;
@@ -65,9 +65,43 @@ impl Client {
         CopyObjectInternal::new(self.clone(), bucket.into(), object.into())
     }
 
-    /// copy object is a higher-level API that calls [stat_object](Client::stat_object) and based on the results calls
-    /// [compose_object](Client::compose_object) to copy the object.
-    /// `bucket` and `object` specify the destination of the copy. To set the source, call .source() on the returned [`CopyObject`]
+    /// Create a CopyObject request builder.
+    /// See [CopyObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html) S3 API
+    ///
+    /// To execute the copy operation, call [`CopyObject::send()`](crate::s3::types::S3Api::send),
+    /// which returns a [`Result`] containing a [`CopyObjectResponse`](crate::s3::response::CopyObjectResponse).
+    ///
+    /// The destination of the copy is specified via the `bucket` and `object` parameters of this function.
+    /// To specify the source object to be copied, call `.source(...)` on the returned [`CopyObject`] builder.
+    ///
+    /// Internally, this function first performs a [`stat_object`](Client::stat_object) call
+    /// to retrieve metadata about the source object. It then constructs a
+    /// [`compose_object`](Client::compose_object) request to perform the actual copy.
+    ///
+    /// # Arguments
+    ///
+    /// - `bucket`: The name of the destination bucket.
+    /// - `object`: The key (name) of the destination object.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::Client;
+    /// use minio::s3::response::CopyObjectResponse;
+    /// use minio::s3::builders::CopySource;
+    /// use minio::s3::types::S3Api;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    /// use minio::s3::response::a_response_traits::HasVersion;
+    /// let client: Client = Default::default(); // configure your client here
+    ///     let resp: CopyObjectResponse = client
+    ///         .copy_object("bucket-name-dst", "object-name-dst")
+    ///         .source(CopySource::new("bucket-name-src", "object-name-src").unwrap())
+    ///         .send().await.unwrap();
+    ///     println!("copied the file from src to dst. New version: {:?}", resp.version_id());
+    /// }
+    /// ```
     pub fn copy_object<S1: Into<String>, S2: Into<String>>(
         &self,
         bucket: S1,
