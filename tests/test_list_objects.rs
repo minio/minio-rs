@@ -41,11 +41,9 @@ async fn list_objects(
 
     let is_express = ctx.client.is_minio_express().await;
     if is_express && !express {
-        println!("Skipping test because it is running in MinIO Express mode");
-        return;
+        panic!("Skipping test because it is running in MinIO Express mode");
     } else if !is_express && express {
-        println!("Skipping test because it is NOT running in MinIO Express mode");
-        return;
+        panic!("Skipping test because it is NOT running in MinIO Express mode");
     }
 
     let mut names_set_before: HashSet<String> = HashSet::new();
@@ -97,29 +95,29 @@ async fn list_objects(
     assert_eq!(names_set_after, names_set_before);
 }
 
-#[minio_macros::test]
+#[minio_macros::test(skip_if_express)]
 async fn list_objects_v1_no_versions(ctx: TestContext, bucket_name: String) {
     list_objects(true, false, false, 5, 5, ctx, bucket_name).await;
 }
 
-#[minio_macros::test]
+#[minio_macros::test(skip_if_express)]
 async fn list_objects_v1_with_versions(ctx: TestContext, bucket_name: String) {
     list_objects(true, true, false, 5, 5, ctx, bucket_name).await;
 }
 
-#[minio_macros::test]
+#[minio_macros::test(skip_if_express)]
 async fn list_objects_v2_no_versions(ctx: TestContext, bucket_name: String) {
     list_objects(false, false, false, 5, 5, ctx, bucket_name).await;
 }
 
-#[minio_macros::test]
+#[minio_macros::test(skip_if_express)]
 async fn list_objects_v2_with_versions(ctx: TestContext, bucket_name: String) {
     list_objects(false, true, false, 5, 5, ctx, bucket_name).await;
 }
 
 /// Test for S3-Express: List objects with S3-Express are only supported with V2 API, without
-/// versions, and yield unsorted results.
-#[minio_macros::test]
+/// versions, and yield results that need not be sorted.
+#[minio_macros::test(skip_if_not_express)]
 async fn list_objects_express(ctx: TestContext, bucket_name: String) {
     list_objects(false, false, true, 5, 5, ctx, bucket_name).await;
 }
