@@ -15,11 +15,13 @@
 
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::error::{Error, ErrorCode};
-use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
-use minio::s3::response::{BucketExistsResponse, CreateBucketResponse, DeleteBucketResponse};
+use minio::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion};
+use minio::s3::response::{
+    BucketExistsResponse, CreateBucketResponse, DeleteBucketResponse, PutObjectContentResponse,
+};
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
-use minio_common::utils::rand_bucket_name;
+use minio_common::utils::{rand_bucket_name, rand_object_name};
 
 #[minio_macros::test(no_bucket)]
 async fn bucket_create(ctx: TestContext) {
@@ -84,4 +86,41 @@ async fn bucket_delete(ctx: TestContext) {
     assert!(!resp.exists());
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.region(), "");
+}
+
+#[minio_macros::test(no_bucket)]
+async fn bucket_delete_and_purge_1(ctx: TestContext) {
+    let bucket_name = rand_bucket_name();
+
+    // create a new bucket
+    let resp: CreateBucketResponse = ctx.client.create_bucket(&bucket_name).send().await.unwrap();
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.region(), DEFAULT_REGION);
+
+    // add some objects to the bucket
+    for _ in 0..5 {
+        let object_name = rand_object_name();
+        let resp: PutObjectContentResponse = ctx
+            .client
+            .put_object_content(&bucket_name, &object_name, "Hello, World!")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.bucket(), bucket_name);
+        assert_eq!(resp.object(), object_name);
+    }
+
+    // try to remove the bucket without purging, this should fail because the bucket is not empty
+    let resp: Result<DeleteBucketResponse, Error> =
+        ctx.client.delete_bucket(&bucket_name).send().await;
+
+    assert!(resp.is_err());
+
+    // try to remove the bucket with purging, this should succeed
+    let resp: DeleteBucketResponse = ctx
+        .client
+        .delete_and_purge_bucket(&bucket_name)
+        .await
+        .unwrap();
+    assert_eq!(resp.bucket(), bucket_name);
 }

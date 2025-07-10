@@ -66,7 +66,7 @@ impl Client {
 
     /// Creates a [`DeleteObjectsStreaming`] request builder to delete a stream of objects from an S3 bucket.
     ///
-    /// to execute the request, call [`DeleteObjectsStreaming::to_stream()`](crate::s3::types::S3Api::send),
+    /// To execute the request, call [`DeleteObjectsStreaming::to_stream()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`DeleteObjectsResponse`](crate::s3::response::DeleteObjectsResponse).
     pub fn delete_objects_streaming<S: Into<String>, D: Into<ObjectsStream>>(
         &self,

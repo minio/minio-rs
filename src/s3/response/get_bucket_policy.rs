@@ -48,7 +48,7 @@ impl GetBucketPolicyResponse {
     /// for accessing the bucket and its contents.
     pub fn config(&self) -> Result<&str, Error> {
         std::str::from_utf8(&self.body).map_err(|e| {
-            Error::Utf8Error(format!("Failed to parse bucket policy as UTF-8: {}", e).into())
+            Error::Utf8Error(format!("Failed to parse bucket policy as UTF-8: {e}").into())
         })
     }
 }

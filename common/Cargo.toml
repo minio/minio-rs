@@ -14,6 +14,7 @@ chrono = "0.4.41"
 reqwest = "0.12.20"
 http = "1.3.1"
 futures = "0.3.31"
+uuid = { version = "1.17.0", features = ["v4"] }
 
 [lib]
 name = "minio_common"

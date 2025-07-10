@@ -480,5 +480,5 @@ impl LifecycleRule {
 fn parse_iso8601(date_str: &str) -> Result<chrono::DateTime<chrono::Utc>, Error> {
     chrono::DateTime::parse_from_rfc3339(date_str)
         .map(|dt| dt.with_timezone(&chrono::Utc))
-        .map_err(|_| Error::XmlError(format!("Invalid date format: {}", date_str)))
+        .map_err(|_| Error::XmlError(format!("Invalid date format: {date_str}")))
 }

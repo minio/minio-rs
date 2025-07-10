@@ -15,9 +15,8 @@
 
 use http::header;
 use minio::s3::builders::{MIN_PART_SIZE, ObjectContent};
-use minio::s3::error::{Error, ErrorCode};
 use minio::s3::response::a_response_traits::{
-    HasBucket, HasEtagFromHeaders, HasIsDeleteMarker, HasObject, HasS3Fields, HasVersion,
+    HasBucket, HasEtagFromHeaders, HasIsDeleteMarker, HasObject, HasS3Fields,
 };
 use minio::s3::response::{DeleteObjectResponse, PutObjectContentResponse, StatObjectResponse};
 use minio::s3::types::S3Api;
@@ -26,16 +25,13 @@ use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use tokio::sync::mpsc;
 
-#[minio_macros::test]
-async fn put_object(ctx: TestContext, bucket_name: String) {
-    let object_name: String = rand_object_name();
-
+async fn test_put_object(ctx: &TestContext, bucket_name: &str, object_name: &str) {
     let size = 16_u64;
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(
-            &bucket_name,
-            &object_name,
+            bucket_name,
+            object_name,
             ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
         .send()
@@ -48,35 +44,26 @@ async fn put_object(ctx: TestContext, bucket_name: String) {
 
     let resp: StatObjectResponse = ctx
         .client
-        .stat_object(&bucket_name, &object_name)
+        .stat_object(bucket_name, object_name)
         .send()
         .await
         .unwrap();
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.object(), object_name);
     assert_eq!(resp.size().unwrap(), size);
+}
 
-    let resp: DeleteObjectResponse = ctx
-        .client
-        .delete_object(&bucket_name, &object_name)
-        .send()
-        .await
-        .unwrap();
-    assert!(resp.version_id().is_none());
+/// Test putting an object into a bucket and verifying its existence.
+#[minio_macros::test]
+async fn put_object_1(ctx: TestContext, bucket_name: String) {
+    test_put_object(&ctx, &bucket_name, &rand_object_name()).await;
+}
 
-    // Validate delete succeeded.
-    let resp: Result<StatObjectResponse, Error> = ctx
-        .client
-        .stat_object(&bucket_name, &object_name)
-        .send()
-        .await;
-
-    match resp.err().unwrap() {
-        Error::S3Error(er) => {
-            assert_eq!(er.code, ErrorCode::NoSuchKey)
-        }
-        e => panic!("Unexpected error {:?}", e),
-    }
+/// Test putting an object with a name that contains special characters.
+#[minio_macros::test]
+async fn put_object_2(ctx: TestContext, bucket_name: String) {
+    test_put_object(&ctx, &bucket_name, "name with+spaces").await;
+    test_put_object(&ctx, &bucket_name, "name%20with%2Bspaces").await;
 }
 
 #[minio_macros::test]
@@ -108,14 +95,6 @@ async fn put_object_multipart(ctx: TestContext, bucket_name: String) {
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.object(), object_name);
     assert_eq!(resp.size().unwrap(), size);
-
-    let resp: DeleteObjectResponse = ctx
-        .client
-        .delete_object(&bucket_name, &object_name)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.version_id(), None);
 }
 
 #[minio_macros::test]
@@ -192,14 +171,6 @@ async fn put_object_content_2(ctx: TestContext, bucket_name: String) {
             .unwrap();
         assert_eq!(resp.size().unwrap(), *size);
         assert_eq!(resp.etag().unwrap(), etag);
-
-        let resp: DeleteObjectResponse = ctx
-            .client
-            .delete_object(&bucket_name, &object_name)
-            .send()
-            .await
-            .unwrap();
-        assert_eq!(resp.version_id(), None);
     }
 }
 
@@ -247,11 +218,6 @@ async fn put_object_content_3(ctx: TestContext, bucket_name: String) {
                     .unwrap();
                 assert_eq!(resp.size().unwrap(), sizes[idx]);
                 assert_eq!(resp.etag().unwrap(), etag);
-                client
-                    .delete_object(&test_bucket, &object_name)
-                    .send()
-                    .await
-                    .unwrap();
 
                 idx += 1;
             }

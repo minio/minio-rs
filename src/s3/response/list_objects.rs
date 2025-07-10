@@ -10,18 +10,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Response types for ListObjects APIs
-
 use crate::impl_has_s3fields;
+use crate::s3::error::Error;
 use crate::s3::response::a_response_traits::HasS3Fields;
-use crate::s3::{
-    error::Error,
-    types::{FromS3Response, ListEntry, S3Request},
-    utils::{
-        from_iso8601utc, parse_tags, urldecode,
-        xml::{Element, MergeXmlElements},
-    },
-};
+use crate::s3::types::{FromS3Response, ListEntry, S3Request};
+use crate::s3::utils::xml::{Element, MergeXmlElements};
+use crate::s3::utils::{from_iso8601utc, parse_tags, urldecode};
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
 use reqwest::header::HeaderMap;

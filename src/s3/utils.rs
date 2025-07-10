@@ -255,14 +255,14 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
         ));
     }
     if bucket_name_len < 3 {
-        return Err(Error::InvalidBucketName(
-            "bucket name cannot be less than 3 characters".into(),
-        ));
+        return Err(Error::InvalidBucketName(format!(
+            "bucket name ('{bucket_name}') cannot be less than 3 characters"
+        )));
     }
     if bucket_name_len > 63 {
-        return Err(Error::InvalidBucketName(
-            "Bucket name cannot be greater than 63 characters".into(),
-        ));
+        return Err(Error::InvalidBucketName(format!(
+            "Bucket name ('{bucket_name}') cannot be greater than 63 characters"
+        )));
     }
 
     lazy_static! {
@@ -274,8 +274,8 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
     }
 
     if IPV4_REGEX.is_match(bucket_name) {
-        return Err(Error::InvalidBucketName(String::from(
-            "bucket name cannot be an IP address",
+        return Err(Error::InvalidBucketName(format!(
+            "bucket name ('{bucket_name}') cannot be an IP address"
         )));
     }
 
@@ -288,12 +288,14 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
     if strict {
         if !VALID_BUCKET_NAME_STRICT_REGEX.is_match(bucket_name) {
             return Err(Error::InvalidBucketName(format!(
-                "bucket name ('{bucket_name}') does not follow S3 standards strictly",
+                "bucket name ('{bucket_name}') does not follow S3 standards strictly, according to {}",
+                *VALID_BUCKET_NAME_STRICT_REGEX
             )));
         }
     } else if !VALID_BUCKET_NAME_REGEX.is_match(bucket_name) {
         return Err(Error::InvalidBucketName(format!(
-            "bucket name ('{bucket_name}') does not follow S3 standards"
+            "bucket name ('{bucket_name}') does not follow S3 standards, according to {}",
+            *VALID_BUCKET_NAME_REGEX
         )));
     }
 
@@ -301,13 +303,20 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
 }
 
 pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), Error> {
-    if object_name.as_ref().is_empty() {
-        Err(Error::InvalidObjectName(
+    let object_name: &str = object_name.as_ref();
+    let bucket_name_n_bytes = object_name.len();
+    if bucket_name_n_bytes == 0 {
+        return Err(Error::InvalidObjectName(
             "object name cannot be empty".into(),
-        ))
-    } else {
-        Ok(())
+        ));
     }
+    if bucket_name_n_bytes > 1024 {
+        return Err(Error::InvalidObjectName(format!(
+            "Bucket name ('{object_name}') cannot be greater than 1024 bytes"
+        )));
+    }
+
+    Ok(())
 }
 
 /// Gets text value of given XML element for given tag.

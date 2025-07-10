@@ -61,11 +61,9 @@ impl Client {
             let mut stream = self.list_objects(&bucket).to_stream().await;
 
             while let Some(items) = stream.next().await {
+                let object_names = items?.contents.into_iter().map(ObjectToDelete::from);
                 let mut resp = self
-                    .delete_objects_streaming(
-                        &bucket,
-                        items?.contents.into_iter().map(ObjectToDelete::from),
-                    )
+                    .delete_objects_streaming(&bucket, object_names)
                     .to_stream()
                     .await;
                 while let Some(item) = resp.next().await {
