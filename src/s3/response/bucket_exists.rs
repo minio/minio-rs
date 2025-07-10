@@ -50,7 +50,7 @@ impl FromS3Response for BucketExistsResponse {
                 body: resp.bytes().await?,
                 exists: true,
             }),
-            Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchBucket => Ok(Self {
+            Err(Error::S3Error(e)) if matches!(e.code, ErrorCode::NoSuchBucket) => Ok(Self {
                 request,
                 headers: e.headers,
                 body: Bytes::new(),

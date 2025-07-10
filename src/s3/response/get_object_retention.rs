@@ -83,7 +83,9 @@ impl FromS3Response for GetObjectRetentionResponse {
                 headers: mem::take(resp.headers_mut()),
                 body: resp.bytes().await?,
             }),
-            Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchObjectLockConfiguration => {
+            Err(Error::S3Error(e))
+                if matches!(e.code, ErrorCode::NoSuchObjectLockConfiguration) =>
+            {
                 Ok(Self {
                     request,
                     headers: e.headers,

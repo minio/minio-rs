@@ -304,15 +304,15 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
 
 pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), Error> {
     let object_name: &str = object_name.as_ref();
-    let bucket_name_n_bytes = object_name.len();
-    if bucket_name_n_bytes == 0 {
+    let object_name_n_bytes = object_name.len();
+    if object_name_n_bytes == 0 {
         return Err(Error::InvalidObjectName(
             "object name cannot be empty".into(),
         ));
     }
-    if bucket_name_n_bytes > 1024 {
+    if object_name_n_bytes > 1024 {
         return Err(Error::InvalidObjectName(format!(
-            "Bucket name ('{object_name}') cannot be greater than 1024 bytes"
+            "Object name ('{object_name}') cannot be greater than 1024 bytes"
         )));
     }
 

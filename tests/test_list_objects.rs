@@ -41,9 +41,11 @@ async fn list_objects(
 
     let is_express = ctx.client.is_minio_express().await;
     if is_express && !express {
-        panic!("Skipping test because it is running in MinIO Express mode");
+        eprintln!("Skipping test because it is running in MinIO Express mode");
+        return;
     } else if !is_express && express {
-        panic!("Skipping test because it is NOT running in MinIO Express mode");
+        eprintln!("Skipping test because it is NOT running in MinIO Express mode");
+        return;
     }
 
     let mut names_set_before: HashSet<String> = HashSet::new();

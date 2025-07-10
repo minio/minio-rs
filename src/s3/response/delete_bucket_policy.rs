@@ -48,7 +48,7 @@ impl FromS3Response for DeleteBucketPolicyResponse {
                 headers: mem::take(resp.headers_mut()),
                 body: resp.bytes().await?,
             }),
-            Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchBucketPolicy => Ok(Self {
+            Err(Error::S3Error(e)) if matches!(e.code, ErrorCode::NoSuchBucketPolicy) => Ok(Self {
                 request,
                 headers: e.headers,
                 body: Bytes::new(),

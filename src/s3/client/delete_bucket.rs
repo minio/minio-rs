@@ -119,15 +119,16 @@ impl Client {
         let request: DeleteBucket = self.delete_bucket(&bucket);
         match request.send().await {
             Ok(resp) => Ok(resp),
-            Err(Error::S3Error(e)) => {
-                if e.code == ErrorCode::NoSuchBucket {
+            Err(Error::S3Error(mut e)) => {
+                if matches!(e.code, ErrorCode::NoSuchBucket) {
                     Ok(DeleteBucketResponse {
                         request: Default::default(), //TODO consider how to handle this
                         body: Bytes::new(),
                         headers: e.headers,
                     })
-                } else if e.code == ErrorCode::BucketNotEmpty {
+                } else if let ErrorCode::BucketNotEmpty(reason) = &e.code {
                     // for convenience, add the first 5 documents that were are still in the bucket
+                    // to the error message
                     let mut stream = self
                         .list_objects(&bucket)
                         .include_versions(!is_express)
@@ -136,13 +137,18 @@ impl Client {
                         .await;
 
                     let mut objs = Vec::new();
-                    while let Some(items) = stream.next().await {
-                        objs.append(items?.contents.as_mut());
-                        if objs.len() >= 5 {
-                            break;
+                    while let Some(items_result) = stream.next().await {
+                        if let Ok(items) = items_result {
+                            objs.extend(items.contents);
+                            if objs.len() >= 5 {
+                                break;
+                            }
                         }
+                        // else: silently ignore the error and keep looping
                     }
-                    println!("Bucket '{bucket}' is not empty. The first 5 objects are: {objs:?}");
+
+                    let new_reason = format!("{reason}: found content: {objs:?}");
+                    e.code = ErrorCode::BucketNotEmpty(new_reason);
                     Err(Error::S3Error(e))
                 } else {
                     Err(Error::S3Error(e))

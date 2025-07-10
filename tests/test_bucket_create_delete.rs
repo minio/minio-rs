@@ -43,7 +43,7 @@ async fn bucket_create(ctx: TestContext) {
         ctx.client.create_bucket(&bucket_name).send().await;
     match resp {
         Ok(_) => panic!("Bucket already exists, but was created again"),
-        Err(Error::S3Error(e)) if e.code == ErrorCode::BucketAlreadyOwnedByYou => {
+        Err(Error::S3Error(e)) if matches!(e.code, ErrorCode::BucketAlreadyOwnedByYou) => {
             // this is expected, as the bucket already exists
         }
         Err(e) => panic!("Unexpected error: {:?}", e),
@@ -59,7 +59,7 @@ async fn bucket_delete(ctx: TestContext) {
         ctx.client.delete_bucket(&bucket_name).send().await;
     match resp {
         Ok(_) => panic!("Bucket does not exist, but was removed"),
-        Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchBucket => {
+        Err(Error::S3Error(e)) if matches!(e.code, ErrorCode::NoSuchBucket) => {
             // this is expected, as the bucket does not exist
         }
         Err(e) => panic!("Unexpected error: {:?}", e),

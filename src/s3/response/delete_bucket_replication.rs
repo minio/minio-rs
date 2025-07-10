@@ -49,7 +49,7 @@ impl FromS3Response for DeleteBucketReplicationResponse {
                 body: resp.bytes().await?,
             }),
             Err(Error::S3Error(e))
-                if e.code == ErrorCode::ReplicationConfigurationNotFoundError =>
+                if matches!(e.code, ErrorCode::ReplicationConfigurationNotFoundError) =>
             {
                 Ok(Self {
                     request,

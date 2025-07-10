@@ -85,7 +85,10 @@ impl FromS3Response for GetBucketEncryptionResponse {
                 body: resp.bytes().await?,
             }),
             Err(Error::S3Error(e))
-                if e.code == ErrorCode::ServerSideEncryptionConfigurationNotFoundError =>
+                if matches!(
+                    e.code,
+                    ErrorCode::ServerSideEncryptionConfigurationNotFoundError
+                ) =>
             {
                 Ok(Self {
                     request,

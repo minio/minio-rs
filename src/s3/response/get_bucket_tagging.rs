@@ -54,7 +54,7 @@ impl FromS3Response for GetBucketTaggingResponse {
                 headers: mem::take(resp.headers_mut()),
                 body: resp.bytes().await?,
             }),
-            Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchTagSet => Ok(Self {
+            Err(Error::S3Error(e)) if matches!(e.code, ErrorCode::NoSuchTagSet) => Ok(Self {
                 request,
                 headers: e.headers,
                 body: Bytes::new(),
