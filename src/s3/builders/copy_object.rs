@@ -990,35 +990,35 @@ impl ComposeSource {
     pub fn build_headers(&mut self, object_size: u64, etag: String) -> Result<(), Error> {
         if let Some(v) = self.offset {
             if v >= object_size {
-                return Err(Error::InvalidComposeSourceOffset(
-                    self.bucket.to_string(),
-                    self.object.to_string(),
-                    self.version_id.clone(),
-                    v,
+                return Err(Error::InvalidComposeSourceOffset {
+                    bucket: self.bucket.to_string(),
+                    object: self.object.to_string(),
+                    version: self.version_id.clone(),
+                    offset: v,
                     object_size,
-                ));
+                });
             }
         }
 
         if let Some(v) = self.length {
             if v > object_size {
-                return Err(Error::InvalidComposeSourceLength(
-                    self.bucket.to_string(),
-                    self.object.to_string(),
-                    self.version_id.clone(),
-                    v,
+                return Err(Error::InvalidComposeSourceLength {
+                    bucket: self.bucket.to_string(),
+                    object: self.object.to_string(),
+                    version: self.version_id.clone(),
+                    length: v,
                     object_size,
-                ));
+                });
             }
 
             if (self.offset.unwrap_or_default() + v) > object_size {
-                return Err(Error::InvalidComposeSourceSize(
-                    self.bucket.to_string(),
-                    self.object.to_string(),
-                    self.version_id.clone(),
-                    self.offset.unwrap_or_default() + v,
+                return Err(Error::InvalidComposeSourceSize {
+                    bucket: self.bucket.to_string(),
+                    object: self.object.to_string(),
+                    version: self.version_id.clone(),
+                    compose_size: self.offset.unwrap_or_default() + v,
                     object_size,
-                ));
+                });
             }
         }
 

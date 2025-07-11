@@ -412,7 +412,10 @@ const QUERY_ESCAPE: &AsciiSet = &NON_ALPHANUMERIC
 fn unescape(s: &str) -> Result<String, Error> {
     percent_decode_str(s)
         .decode_utf8()
-        .map_err(|e| Error::TagDecodingError(s.to_string(), e.to_string()))
+        .map_err(|e| Error::TagDecodingError {
+            input: s.to_string(),
+            error_message: e.to_string(),
+        })
         .map(|s| s.to_string())
 }
 
@@ -438,10 +441,10 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
         let k = match kv.next() {
             Some(v) => unescape(v)?,
             None => {
-                return Err(Error::TagDecodingError(
-                    s.into(),
-                    "tag key was empty".into(),
-                ));
+                return Err(Error::TagDecodingError {
+                    input: s.into(),
+                    error_message: "tag key was empty".into(),
+                });
             }
         };
         let v = match kv.next() {
@@ -449,10 +452,10 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
             None => "".to_owned(),
         };
         if kv.next().is_some() {
-            return Err(Error::TagDecodingError(
-                s.into(),
-                "tag had too many values for a key".into(),
-            ));
+            return Err(Error::TagDecodingError {
+                input: s.into(),
+                error_message: "tag had too many values for a key".into(),
+            });
         }
         tags.insert(k, v);
     }

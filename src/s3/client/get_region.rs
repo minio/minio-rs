@@ -58,10 +58,10 @@ impl Client {
             if !self.shared.base_url.region.is_empty()
                 && (self.shared.base_url.region != *requested_region)
             {
-                return Err(Error::RegionMismatch(
-                    self.shared.base_url.region.clone(),
-                    requested_region.clone(),
-                ));
+                return Err(Error::RegionMismatch {
+                    bucket_region: self.shared.base_url.region.clone(),
+                    region: requested_region.clone(),
+                });
             }
             return Ok(requested_region.clone());
         }

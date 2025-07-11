@@ -691,7 +691,7 @@ impl PutObjectContent {
             // Not enough data!
             let expected: u64 = object_size.as_u64().unwrap();
             let got: u64 = seg_bytes.len() as u64;
-            Err(Error::InsufficientData(expected, got))
+            Err(Error::InsufficientData { expected, got })
         } else {
             let bucket: String = self.bucket.clone();
             let object: String = self.object.clone();
@@ -820,7 +820,10 @@ impl PutObjectContent {
         if object_size.is_known() {
             let expected = object_size.as_u64().unwrap();
             if expected != size {
-                return Err(Error::InsufficientData(expected, size));
+                return Err(Error::InsufficientData {
+                    expected,
+                    got: size,
+                });
             }
         }
 
@@ -979,11 +982,11 @@ pub fn calc_part_info(object_size: Size, part_size: Size) -> Result<(u64, Option
         (Size::Known(object_size), Size::Known(part_size)) => {
             let part_count = (object_size as f64 / part_size as f64).ceil() as u16;
             if part_count == 0 || part_count > MAX_MULTIPART_COUNT {
-                return Err(Error::InvalidPartCount(
+                return Err(Error::InvalidPartCount {
                     object_size,
                     part_size,
-                    MAX_MULTIPART_COUNT,
-                ));
+                    part_count: MAX_MULTIPART_COUNT,
+                });
             }
 
             Ok((part_size, Some(part_count)))
@@ -1049,7 +1052,7 @@ mod tests {
                 (Size::Known(object_size), Size::Known(part_size), res) => {
                     if (part_size > object_size) || ((part_size * (MAX_MULTIPART_COUNT as u64)) < object_size) {
                         return match res {
-                            Err(Error::InvalidPartCount(v1, v2, v3)) => {
+                            Err(Error::InvalidPartCount{object_size:v1, part_size:v2, part_count:v3}) => {
                                 (v1 == object_size) && (v2 == part_size) && (v3 == MAX_MULTIPART_COUNT)
                             }
                             _ => false,
