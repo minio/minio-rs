@@ -57,35 +57,33 @@ impl Client {
         bucket: S,
     ) -> Result<DeleteBucketResponse, Error> {
         let bucket: String = bucket.into();
-        if self.is_minio_express().await {
-            let mut stream = self.list_objects(&bucket).to_stream().await;
+        let is_express = self.is_minio_express().await;
 
+        let mut stream = self
+            .list_objects(&bucket)
+            .include_versions(!is_express)
+            .recursive(true)
+            .to_stream()
+            .await;
+
+        if is_express {
             while let Some(items) = stream.next().await {
+                let object_names = items?.contents.into_iter().map(ObjectToDelete::from);
                 let mut resp = self
-                    .delete_objects_streaming(
-                        &bucket,
-                        items?.contents.into_iter().map(ObjectToDelete::from),
-                    )
+                    .delete_objects_streaming(&bucket, object_names)
+                    .bypass_governance_mode(false) // Express does not support governance mode
                     .to_stream()
                     .await;
+
                 while let Some(item) = resp.next().await {
                     let _resp: DeleteObjectsResponse = item?;
                 }
             }
         } else {
-            let mut stream = self
-                .list_objects(&bucket)
-                .include_versions(true)
-                .recursive(true)
-                .to_stream()
-                .await;
-
             while let Some(items) = stream.next().await {
+                let object_names = items?.contents.into_iter().map(ObjectToDelete::from);
                 let mut resp = self
-                    .delete_objects_streaming(
-                        &bucket,
-                        items?.contents.into_iter().map(ObjectToDelete::from),
-                    )
+                    .delete_objects_streaming(&bucket, object_names)
                     .bypass_governance_mode(true)
                     .to_stream()
                     .await;
@@ -117,16 +115,41 @@ impl Client {
                 }
             }
         }
-        let request: DeleteBucket = self.delete_bucket(bucket);
+
+        let request: DeleteBucket = self.delete_bucket(&bucket);
         match request.send().await {
             Ok(resp) => Ok(resp),
-            Err(Error::S3Error(e)) => {
-                if e.code == ErrorCode::NoSuchBucket {
+            Err(Error::S3Error(mut e)) => {
+                if matches!(e.code, ErrorCode::NoSuchBucket) {
                     Ok(DeleteBucketResponse {
                         request: Default::default(), //TODO consider how to handle this
                         body: Bytes::new(),
                         headers: e.headers,
                     })
+                } else if let ErrorCode::BucketNotEmpty(reason) = &e.code {
+                    // for convenience, add the first 5 documents that were are still in the bucket
+                    // to the error message
+                    let mut stream = self
+                        .list_objects(&bucket)
+                        .include_versions(!is_express)
+                        .recursive(true)
+                        .to_stream()
+                        .await;
+
+                    let mut objs = Vec::new();
+                    while let Some(items_result) = stream.next().await {
+                        if let Ok(items) = items_result {
+                            objs.extend(items.contents);
+                            if objs.len() >= 5 {
+                                break;
+                            }
+                        }
+                        // else: silently ignore the error and keep looping
+                    }
+
+                    let new_reason = format!("{reason}: found content: {objs:?}");
+                    e.code = ErrorCode::BucketNotEmpty(new_reason);
+                    Err(Error::S3Error(e))
                 } else {
                     Err(Error::S3Error(e))
                 }

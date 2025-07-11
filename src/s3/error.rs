@@ -44,7 +44,7 @@ pub enum ErrorCode {
     ResourceConflict,
     AccessDenied,
     NotSupported,
-    BucketNotEmpty,
+    BucketNotEmpty(String), // String contains optional reason msg
     BucketAlreadyOwnedByYou,
     InvalidWriteOffset,
 
@@ -75,7 +75,7 @@ impl ErrorCode {
             "resourceconflict" => ErrorCode::ResourceConflict,
             "accessdenied" => ErrorCode::AccessDenied,
             "notsupported" => ErrorCode::NotSupported,
-            "bucketnotempty" => ErrorCode::BucketNotEmpty,
+            "bucketnotempty" => ErrorCode::BucketNotEmpty("".to_string()),
             "bucketalreadyownedbyyou" => ErrorCode::BucketAlreadyOwnedByYou,
             "invalidwriteoffset" => ErrorCode::InvalidWriteOffset,
 

@@ -209,7 +209,7 @@ impl DeleteObjects {
     }
 
     /// Enable verbose mode (defaults to false). If enabled, the response will
-    /// include the keys of objects that were successfully deleted. Otherwise
+    /// include the keys of objects that were successfully deleted. Otherwise,
     /// only objects that encountered an error are returned.
     pub fn verbose_mode(mut self, verbose_mode: bool) -> Self {
         self.verbose_mode = verbose_mode;

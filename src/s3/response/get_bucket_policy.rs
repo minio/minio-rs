@@ -48,7 +48,7 @@ impl GetBucketPolicyResponse {
     /// for accessing the bucket and its contents.
     pub fn config(&self) -> Result<&str, Error> {
         std::str::from_utf8(&self.body).map_err(|e| {
-            Error::Utf8Error(format!("Failed to parse bucket policy as UTF-8: {}", e).into())
+            Error::Utf8Error(format!("Failed to parse bucket policy as UTF-8: {e}").into())
         })
     }
 }
@@ -65,7 +65,7 @@ impl FromS3Response for GetBucketPolicyResponse {
                 headers: mem::take(resp.headers_mut()),
                 body: resp.bytes().await?,
             }),
-            Err(Error::S3Error(e)) if e.code == ErrorCode::NoSuchBucketPolicy => Ok(Self {
+            Err(Error::S3Error(e)) if matches!(e.code, ErrorCode::NoSuchBucketPolicy) => Ok(Self {
                 request,
                 headers: e.headers,
                 body: Bytes::from_static("{}".as_ref()),
