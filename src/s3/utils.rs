@@ -34,12 +34,32 @@ use ring::digest::{Context, SHA256};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
-pub use urlencoding::decode as urldecode;
-pub use urlencoding::encode as urlencode;
 use xmltree::Element;
 
 /// Date and time with UTC timezone
 pub type UtcTime = DateTime<Utc>;
+
+use url::form_urlencoded;
+
+// Great stuff to get confused about.
+// String "a b+c" in Percent-Encoding (RFC 3986) becomes "a%20b%2Bc".
+// S3 sometimes returns Form-Encoding (application/x-www-form-urlencoded) rendering string "a%20b%2Bc" into "a+b%2Bc"
+// If you were to do Percent-Decoding on "a+b%2Bc" you would get "a+b+c", which is wrong.
+// If you use Form-Decoding on "a+b%2Bc" you would get "a b+c", which is correct.
+
+/// Decodes a URL-encoded string in the application/x-www-form-urlencoded syntax into a string.
+/// Note that "+" is decoded to a space character, and "%2B" is decoded to a plus sign.
+pub fn url_decode(s: &str) -> String {
+    form_urlencoded::parse(s.as_bytes())
+        .map(|(k, _)| k)
+        .collect()
+}
+
+/// Encodes a string using URL encoding. Note that a whitespace is encoded as "%20" and plus
+/// sign is encoded as "%2B".
+pub fn url_encode(s: &str) -> String {
+    urlencoding::encode(s).into_owned()
+}
 
 /// Encodes data using base64 algorithm
 pub fn b64encode(input: impl AsRef<[u8]>) -> String {
@@ -245,7 +265,7 @@ pub fn match_region(value: &str) -> bool {
         || value.ends_with('_')
 }
 
-/// Validates given bucket name
+/// Validates given bucket name. TODO S3Express has slightly different rules for bucket names
 pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(), Error> {
     let bucket_name: &str = bucket_name.as_ref().trim();
     let bucket_name_len = bucket_name.len();
@@ -302,6 +322,7 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
     Ok(())
 }
 
+/// Validates given object name. TODO S3Express has slightly different rules for object names
 pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), Error> {
     let object_name: &str = object_name.as_ref();
     let object_name_n_bytes = object_name.len();

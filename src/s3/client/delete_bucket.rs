@@ -16,7 +16,7 @@
 use super::Client;
 use crate::s3::builders::{DeleteBucket, DeleteObject, ObjectToDelete};
 use crate::s3::error::{Error, ErrorCode};
-use crate::s3::response::DeleteResult;
+use crate::s3::response::{BucketExistsResponse, DeleteResult};
 use crate::s3::response::{
     DeleteBucketResponse, DeleteObjectResponse, DeleteObjectsResponse, PutObjectLegalHoldResponse,
 };
@@ -57,6 +57,17 @@ impl Client {
         bucket: S,
     ) -> Result<DeleteBucketResponse, Error> {
         let bucket: String = bucket.into();
+
+        let resp: BucketExistsResponse = self.bucket_exists(&bucket).send().await?;
+        if !resp.exists {
+            // if the bucket does not exist, we can return early
+            return Ok(DeleteBucketResponse {
+                request: Default::default(), //TODO consider how to handle this
+                body: Bytes::new(),
+                headers: Default::default(),
+            });
+        }
+
         let is_express = self.is_minio_express().await;
 
         let mut stream = self
