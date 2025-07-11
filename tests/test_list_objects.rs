@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use async_std::stream::StreamExt;
-use minio::s3::response::PutObjectContentResponse;
 use minio::s3::response::a_response_traits::{HasBucket, HasObject};
+use minio::s3::response::{ListObjectsResponse, PutObjectContentResponse};
 use minio::s3::types::ToStream;
 use minio_common::test_context::TestContext;
-use minio_common::utils::rand_object_name;
+use minio_common::utils::{rand_object_name, rand_object_name_utf8};
 use std::collections::HashSet;
 
-async fn list_objects(
+async fn test_list_objects(
     use_api_v1: bool,
     include_versions: bool,
     express: bool,
@@ -99,27 +99,70 @@ async fn list_objects(
 
 #[minio_macros::test(skip_if_express)]
 async fn list_objects_v1_no_versions(ctx: TestContext, bucket_name: String) {
-    list_objects(true, false, false, 5, 5, ctx, bucket_name).await;
+    test_list_objects(true, false, false, 5, 5, ctx, bucket_name).await;
 }
 
 #[minio_macros::test(skip_if_express)]
 async fn list_objects_v1_with_versions(ctx: TestContext, bucket_name: String) {
-    list_objects(true, true, false, 5, 5, ctx, bucket_name).await;
+    test_list_objects(true, true, false, 5, 5, ctx, bucket_name).await;
 }
 
 #[minio_macros::test(skip_if_express)]
 async fn list_objects_v2_no_versions(ctx: TestContext, bucket_name: String) {
-    list_objects(false, false, false, 5, 5, ctx, bucket_name).await;
+    test_list_objects(false, false, false, 5, 5, ctx, bucket_name).await;
 }
 
 #[minio_macros::test(skip_if_express)]
 async fn list_objects_v2_with_versions(ctx: TestContext, bucket_name: String) {
-    list_objects(false, true, false, 5, 5, ctx, bucket_name).await;
+    test_list_objects(false, true, false, 5, 5, ctx, bucket_name).await;
 }
 
 /// Test for S3-Express: List objects with S3-Express are only supported with V2 API, without
 /// versions, and yield results that need not be sorted.
 #[minio_macros::test(skip_if_not_express)]
 async fn list_objects_express(ctx: TestContext, bucket_name: String) {
-    list_objects(false, false, true, 5, 5, ctx, bucket_name).await;
+    test_list_objects(false, false, true, 5, 5, ctx, bucket_name).await;
+}
+
+async fn test_list_one_object(ctx: &TestContext, bucket_name: &str, object_name: &str) {
+    let resp: PutObjectContentResponse = ctx
+        .client
+        .put_object_content(bucket_name, object_name, "Hello, World!")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.object(), object_name);
+
+    let mut stream = ctx
+        .client
+        .list_objects(bucket_name)
+        .use_api_v1(false) // S3-Express does not support V1 API
+        .include_versions(false) // S3-Express does not support versions
+        .to_stream()
+        .await;
+
+    let mut result: Vec<ListObjectsResponse> = Vec::new();
+    while let Some(items) = stream.next().await {
+        result.push(items.unwrap());
+    }
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].contents[0].name, object_name);
+}
+
+/// Test listing an object with a name that contains utf-8 characters.
+#[minio_macros::test]
+async fn list_object_1(ctx: TestContext, bucket_name: String) {
+    test_list_one_object(&ctx, &bucket_name, &rand_object_name_utf8(20)).await;
+}
+
+/// Test getting an object with a name that contains white space characters.
+///
+/// In percent-encoding, "a b+c" becomes "a%20b%2Bc", but some S3 implementations may do
+/// form-encoding, yielding "a+b2Bc", which will result in "a+b+c" is percent-decoding is
+/// used. This test checks that form-decoding is used to retrieve "a b+c".
+#[minio_macros::test]
+async fn list_object_2(ctx: TestContext, bucket_name: String) {
+    test_list_one_object(&ctx, &bucket_name, "a b+c").await;
 }

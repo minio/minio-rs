@@ -29,7 +29,7 @@ use crate::s3::{
     },
     sse::Sse,
     types::{PartInfo, Retention, S3Api, S3Request, ToS3Request},
-    utils::{check_bucket_name, md5sum_hash, to_iso8601utc, urlencode},
+    utils::{check_bucket_name, md5sum_hash, to_iso8601utc, url_encode},
 };
 use bytes::{Bytes, BytesMut};
 use http::Method;
@@ -201,7 +201,7 @@ impl ToS3Request for AbortMultipartUpload {
 
         let headers: Multimap = self.extra_headers.unwrap_or_default();
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
-        query_params.add("uploadId", urlencode(&self.upload_id).to_string());
+        query_params.add("uploadId", url_encode(&self.upload_id).to_string());
 
         Ok(S3Request::new(self.client, Method::DELETE)
             .region(self.region)
@@ -885,9 +885,9 @@ fn into_headers_put_object(
             if !tagging.is_empty() {
                 tagging.push('&');
             }
-            tagging.push_str(&urlencode(key));
+            tagging.push_str(&url_encode(key));
             tagging.push('=');
-            tagging.push_str(&urlencode(value));
+            tagging.push_str(&url_encode(value));
         }
 
         if !tagging.is_empty() {
