@@ -16,10 +16,11 @@ default-features = false
 features = ["stream"]
 
 [features]
-default = ["default-tls", "dep:hmac", "dep:sha2"]
+default = ["default-tls", "default-crypto"]
 default-tls = ["reqwest/default-tls"]
 native-tls = ["reqwest/native-tls"]
 rustls-tls = ["reqwest/rustls-tls"]
+default-crypto = ["dep:sha2", "dep:hmac"]
 ring = ["dep:ring"]
 
 [dependencies]
