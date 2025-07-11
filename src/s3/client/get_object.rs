@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::GetObject;
+use crate::s3::builders::{GetObject, GetObjectBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`GetObject`] request builder to download an object from a specified S3 bucket.
     /// This allows retrieval of the full content and metadata for the object.    
     ///    
@@ -28,16 +28,16 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::GetObjectResponse;
     /// use minio::s3::types::S3Api;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: GetObjectResponse = client
     ///         .get_object("bucket-name", "object-name")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     let content_bytes = resp.content().unwrap().to_segmented_bytes().await.unwrap().to_bytes();
     ///     let content_str = String::from_utf8(content_bytes.to_vec()).unwrap();
     ///     println!("retrieved content '{content_str}'");
@@ -47,7 +47,10 @@ impl Client {
         &self,
         bucket: S1,
         object: S2,
-    ) -> GetObject {
-        GetObject::new(self.clone(), bucket.into(), object.into())
+    ) -> GetObjectBldr {
+        GetObject::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
     }
 }

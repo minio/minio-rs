@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use http::header;
+use minio::s3::builders::Size::Known;
 use minio::s3::builders::{MIN_PART_SIZE, ObjectContent};
 use minio::s3::response::a_response_traits::{
     HasBucket, HasEtagFromHeaders, HasIsDeleteMarker, HasObject, HasS3Fields,
@@ -34,6 +35,7 @@ async fn test_put_object(ctx: &TestContext, bucket_name: &str, object_name: &str
             object_name,
             ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
+        .build()
         .send()
         .await
         .unwrap();
@@ -45,6 +47,7 @@ async fn test_put_object(ctx: &TestContext, bucket_name: &str, object_name: &str
     let resp: StatObjectResponse = ctx
         .client
         .stat_object(bucket_name, object_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -79,6 +82,7 @@ async fn put_object_multipart(ctx: TestContext, bucket_name: String) {
             &object_name,
             ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
+        .build()
         .send()
         .await
         .unwrap();
@@ -89,6 +93,7 @@ async fn put_object_multipart(ctx: TestContext, bucket_name: String) {
     let resp: StatObjectResponse = ctx
         .client
         .stat_object(&bucket_name, &object_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -111,6 +116,7 @@ async fn put_object_content_1(ctx: TestContext, bucket_name: String) {
                 ObjectContent::new_from_stream(RandSrc::new(*size), Some(*size)),
             )
             .content_type(String::from("image/jpeg"))
+            .build()
             .send()
             .await
             .unwrap();
@@ -120,6 +126,7 @@ async fn put_object_content_1(ctx: TestContext, bucket_name: String) {
         let resp: StatObjectResponse = ctx
             .client
             .stat_object(&bucket_name, &object_name)
+            .build()
             .send()
             .await
             .unwrap();
@@ -133,6 +140,7 @@ async fn put_object_content_1(ctx: TestContext, bucket_name: String) {
         let resp: DeleteObjectResponse = ctx
             .client
             .delete_object(&bucket_name, &object_name)
+            .build()
             .send()
             .await
             .unwrap();
@@ -156,7 +164,8 @@ async fn put_object_content_2(ctx: TestContext, bucket_name: String) {
                 &object_name,
                 ObjectContent::new_from_stream(data_src, None),
             )
-            .part_size(Some(MIN_PART_SIZE))
+            .part_size(Known(MIN_PART_SIZE))
+            .build()
             .send()
             .await
             .unwrap();
@@ -166,6 +175,7 @@ async fn put_object_content_2(ctx: TestContext, bucket_name: String) {
         let resp: StatObjectResponse = ctx
             .client
             .stat_object(&bucket_name, &object_name)
+            .build()
             .send()
             .await
             .unwrap();
@@ -206,6 +216,7 @@ async fn put_object_content_3(ctx: TestContext, bucket_name: String) {
             while let Some(item) = receiver.recv().await {
                 let resp: PutObjectContentResponse = client
                     .put_object_content(&test_bucket, &object_name, item)
+                    .build()
                     .send()
                     .await
                     .unwrap();
@@ -213,6 +224,7 @@ async fn put_object_content_3(ctx: TestContext, bucket_name: String) {
                 let etag = resp.etag().unwrap();
                 let resp: StatObjectResponse = client
                     .stat_object(&test_bucket, &object_name)
+                    .build()
                     .send()
                     .await
                     .unwrap();

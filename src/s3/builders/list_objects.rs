@@ -12,7 +12,7 @@
 
 //! Argument builders for ListObject APIs.
 
-use crate::s3::client::Client;
+use crate::s3::client::MinioClient;
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::ListObjectsResponse;
@@ -24,6 +24,7 @@ use crate::s3::utils::{check_bucket_name, insert};
 use async_trait::async_trait;
 use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
+use typed_builder::TypedBuilder;
 
 fn add_common_list_objects_query_params(
     query_params: &mut Multimap,
@@ -55,10 +56,10 @@ fn delim_helper(delim: Option<String>, recursive: bool) -> Option<String> {
 
 /// Argument builder for the [`ListObjectsV1`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::list_objects`](crate::s3::client::Client::list_objects) method.
-#[derive(Clone, Debug, Default)]
+/// This struct constructs the parameters required for the [`Client::list_objects`](crate::s3::client::MinioClient::list_objects) method.
+#[derive(Clone, Debug)]
 struct ListObjectsV1 {
-    client: Client,
+    client: MinioClient,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -127,11 +128,14 @@ impl ToS3Request for ListObjectsV1 {
             }
         }
 
-        Ok(S3Request::new(self.client, Method::GET)
+        Ok(S3Request::builder()
+            .client(self.client)
+            .method(Method::GET)
             .region(self.region)
-            .bucket(Some(self.bucket))
+            .bucket(self.bucket)
             .query_params(query_params)
-            .headers(self.extra_headers.unwrap_or_default()))
+            .headers(self.extra_headers.unwrap_or_default())
+            .build())
     }
 }
 
@@ -157,10 +161,10 @@ impl From<ListObjects> for ListObjectsV1 {
 
 /// Argument builder for the [`ListObjectsV2`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::list_objects`](crate::s3::client::Client::list_objects) method.
-#[derive(Clone, Debug, Default)]
+/// This struct constructs the parameters required for the [`Client::list_objects`](crate::s3::client::MinioClient::list_objects) method.
+#[derive(Clone, Debug)]
 struct ListObjectsV2 {
-    client: Client,
+    client: MinioClient,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -242,11 +246,14 @@ impl ToS3Request for ListObjectsV2 {
             }
         }
 
-        Ok(S3Request::new(self.client, Method::GET)
+        Ok(S3Request::builder()
+            .client(self.client)
+            .method(Method::GET)
             .region(self.region)
-            .bucket(Some(self.bucket))
+            .bucket(self.bucket)
             .query_params(query_params)
-            .headers(self.extra_headers.unwrap_or_default()))
+            .headers(self.extra_headers.unwrap_or_default())
+            .build())
     }
 }
 
@@ -275,10 +282,10 @@ impl From<ListObjects> for ListObjectsV2 {
 
 /// Argument builder for the [`ListObjectVersions`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectVersions.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::list_objects`](crate::s3::client::Client::list_objects) method.
-#[derive(Clone, Debug, Default)]
+/// This struct constructs the parameters required for the [`Client::list_objects`](crate::s3::client::MinioClient::list_objects) method.
+#[derive(Clone, Debug)]
 struct ListObjectVersions {
-    client: Client,
+    client: MinioClient,
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
@@ -359,11 +366,14 @@ impl ToS3Request for ListObjectVersions {
             }
         }
 
-        Ok(S3Request::new(self.client, Method::GET)
+        Ok(S3Request::builder()
+            .client(self.client)
+            .method(Method::GET)
             .region(self.region)
-            .bucket(Some(self.bucket))
+            .bucket(self.bucket)
             .query_params(query_params)
-            .headers(self.extra_headers.unwrap_or_default()))
+            .headers(self.extra_headers.unwrap_or_default())
+            .build())
     }
 }
 
@@ -391,43 +401,114 @@ impl From<ListObjects> for ListObjectVersions {
 // region: list-objects
 
 /// Argument builder for
-/// [list_objects()](crate::s3::client::Client::list_objects) API.
+/// [list_objects()](crate::s3::client::MinioClient::list_objects) API.
 ///
 /// Use the various builder methods to set parameters on the request. Finally, to
 /// send the request and consume the results. Use the `ToStream` instance to get
 /// a stream of results. Pagination is automatically performed.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, TypedBuilder)]
 pub struct ListObjects {
-    client: Client,
+    #[builder(!default)] // force required
+    client: MinioClient,
 
     // Parameters common to all ListObjects APIs.
+    #[builder(default, setter(into))]
     extra_headers: Option<Multimap>,
+    #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
+    /// Sets the region for the request
+    #[builder(default, setter(into))]
     region: Option<String>,
+    #[builder(setter(into))] // force required + accept Into<String>
     bucket: String,
+
+    /// Delimiter to roll up common prefixes on.
+    #[builder(default, setter(into))]
     delimiter: Option<String>,
+    /// Disable setting the `EncodingType` parameter in the ListObjects request.
+    /// By default, it is set to `url`.
+    #[builder(default)]
     disable_url_encoding: bool,
+    #[builder(default, setter(into))]
     max_keys: Option<u16>,
+    #[builder(default, setter(into))]
     prefix: Option<String>,
 
     // Options specific to ListObjectsV1.
+    /// Used only with ListObjectsV1.
+    #[builder(default, setter(into))]
     marker: Option<String>,
 
     // Options specific to ListObjectsV2.
+    /// Used only with ListObjectsV2
+    #[builder(default, setter(into))]
     start_after: Option<String>,
+
+    /// Used only with ListObjectsV2
+    #[builder(default, setter(into))]
     continuation_token: Option<String>,
+
+    /// Used only with ListObjectsV2
+    #[builder(default)]
     fetch_owner: bool,
+
+    /// Used only with ListObjectsV2. MinIO extension.
+    #[builder(default)]
     include_user_metadata: bool,
 
     // Options specific to ListObjectVersions.
+    /// Used only with GetObjectVersions.
+    #[builder(default, setter(into))]
     key_marker: Option<String>,
+
+    /// Used only with GetObjectVersions.
+    #[builder(default, setter(into))]
     version_id_marker: Option<String>,
 
     // Higher level options.
+    /// This parameter takes effect only when delimiter is None. Enables
+    /// recursive traversal for listing of the bucket and prefix.
+    #[builder(default)]
     recursive: bool,
+
+    /// Set this to use ListObjectsV1. Defaults to false.
+    /// * For general purpose buckets, ListObjectsV2 returns objects in
+    ///   lexicographical order based on their key names.
+    /// * For directory buckets (S3-Express), ListObjectsV2 returns objects
+    ///   in an unspecified order implementation-dependent order.
+    #[builder(default)]
     use_api_v1: bool,
+
+    /// Set this to include versions. Defaults to false. Has no effect when
+    /// `use_api_v1` is set.
+    #[builder(default)]
     include_versions: bool,
 }
+
+/// Builder type alias for [`ListObjects`].
+///
+/// Constructed via [`ListObjects::builder()`](ListObjects::builder) and used to build a [`ListObjects`] instance.
+pub type ListObjectBldr = ListObjectsBuilder<(
+    (MinioClient,),
+    (),
+    (),
+    (),
+    (String,),
+    (),
+    (),
+    (),
+    (),
+    (),
+    (),
+    (),
+    (),
+    (),
+    (),
+    (),
+    (),
+    (),
+    (),
+)>;
 
 #[async_trait]
 impl ToStream for ListObjects {
@@ -444,120 +525,6 @@ impl ToStream for ListObjects {
             let stream = ListObjectsV2::from(self).to_stream().await;
             Box::new(stream.map(|v| v.map(|v| v.into())))
         }
-    }
-}
-
-impl ListObjects {
-    pub fn new(client: Client, bucket: String) -> Self {
-        Self {
-            client,
-            bucket,
-            ..Default::default()
-        }
-    }
-    pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
-        self.extra_headers = extra_headers;
-        self
-    }
-
-    pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
-        self.extra_query_params = extra_query_params;
-        self
-    }
-
-    /// Sets the region for the request
-    pub fn region(mut self, region: Option<String>) -> Self {
-        self.region = region;
-        self
-    }
-
-    /// Delimiter to roll up common prefixes on.
-    pub fn delimiter(mut self, delimiter: Option<String>) -> Self {
-        self.delimiter = delimiter;
-        self
-    }
-
-    /// Disable setting the `EncodingType` parameter in the ListObjects request.
-    /// By default, it is set to `url`.
-    pub fn disable_url_encoding(mut self, disable_url_encoding: bool) -> Self {
-        self.disable_url_encoding = disable_url_encoding;
-        self
-    }
-
-    pub fn max_keys(mut self, max_keys: Option<u16>) -> Self {
-        self.max_keys = max_keys;
-        self
-    }
-
-    pub fn prefix(mut self, prefix: Option<String>) -> Self {
-        self.prefix = prefix;
-        self
-    }
-
-    /// Used only with ListObjectsV1.
-    pub fn marker(mut self, marker: Option<String>) -> Self {
-        self.marker = marker;
-        self
-    }
-
-    /// Used only with ListObjectsV2
-    pub fn start_after(mut self, start_after: Option<String>) -> Self {
-        self.start_after = start_after;
-        self
-    }
-
-    /// Used only with ListObjectsV2
-    pub fn continuation_token(mut self, continuation_token: Option<String>) -> Self {
-        self.continuation_token = continuation_token;
-        self
-    }
-
-    /// Used only with ListObjectsV2
-    pub fn fetch_owner(mut self, fetch_owner: bool) -> Self {
-        self.fetch_owner = fetch_owner;
-        self
-    }
-
-    /// Used only with ListObjectsV2. MinIO extension.
-    pub fn include_user_metadata(mut self, include_user_metadata: bool) -> Self {
-        self.include_user_metadata = include_user_metadata;
-        self
-    }
-
-    /// Used only with GetObjectVersions.
-    pub fn key_marker(mut self, key_marker: Option<String>) -> Self {
-        self.key_marker = key_marker;
-        self
-    }
-
-    /// Used only with GetObjectVersions.
-    pub fn version_id_marker(mut self, version_id_marker: Option<String>) -> Self {
-        self.version_id_marker = version_id_marker;
-        self
-    }
-
-    /// This parameter takes effect only when delimiter is None. Enables
-    /// recursive traversal for listing of the bucket and prefix.
-    pub fn recursive(mut self, recursive: bool) -> Self {
-        self.recursive = recursive;
-        self
-    }
-
-    /// Set this to use ListObjectsV1. Defaults to false.
-    /// * For general purpose buckets, ListObjectsV2 returns objects in
-    ///   lexicographical order based on their key names.
-    /// * For directory buckets (S3-Express), ListObjectsV2 returns objects
-    ///   in an unspecified order implementation-dependent order.
-    pub fn use_api_v1(mut self, use_api_v1: bool) -> Self {
-        self.use_api_v1 = use_api_v1;
-        self
-    }
-
-    /// Set this to include versions. Defaults to false. Has no effect when
-    /// `use_api_v1` is set.
-    pub fn include_versions(mut self, include_versions: bool) -> Self {
-        self.include_versions = include_versions;
-        self
     }
 }
 // endregion: list-objects

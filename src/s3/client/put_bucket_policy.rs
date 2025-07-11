@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::PutBucketPolicy;
+use crate::s3::builders::{PutBucketPolicy, PutBucketPolicyBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`PutBucketPolicy`] request builder.
     ///
     /// To execute the request, call [`SetBucketPolicy::send()`](crate::s3::types::S3Api::send),
@@ -26,7 +26,7 @@ impl Client {
     ///
     /// ```no_run
     /// use std::collections::HashMap;
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketPolicyResponse;
     /// use minio::s3::types::{S3Api, AndOperator, Destination, Filter, ReplicationConfig, ReplicationRule};
@@ -34,7 +34,7 @@ impl Client {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     
     ///     let config = r#"{
     ///         "Version": "2012-10-17",
@@ -63,11 +63,13 @@ impl Client {
     ///     let resp: PutBucketPolicyResponse = client
     ///         .put_bucket_policy("bucket-name")
     ///         .config(config.to_owned())
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("set bucket replication policy on bucket '{}'", resp.bucket());
     /// }
     /// ```
-    pub fn put_bucket_policy<S: Into<String>>(&self, bucket: S) -> PutBucketPolicy {
-        PutBucketPolicy::new(self.clone(), bucket.into())
+    pub fn put_bucket_policy<S: Into<String>>(&self, bucket: S) -> PutBucketPolicyBldr {
+        PutBucketPolicy::builder()
+            .client(self.clone())
+            .bucket(bucket)
     }
 }

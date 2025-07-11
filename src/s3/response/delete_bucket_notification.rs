@@ -21,7 +21,7 @@ use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
-/// Represents the response of the [delete_bucket_notification()](crate::s3::client::Client::delete_bucket_notification) API call.
+/// Represents the response of the [delete_bucket_notification()](crate::s3::client::MinioClient::delete_bucket_notification) API call.
 /// This struct contains metadata and information about the bucket whose notifications were removed.
 #[derive(Clone, Debug)]
 pub struct DeleteBucketNotificationResponse {

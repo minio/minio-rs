@@ -15,8 +15,8 @@
 
 mod common;
 
-use crate::common::{create_bucket_if_not_exists, create_client_on_localhost};
-use minio::s3::Client;
+use crate::common::create_bucket_if_not_exists;
+use minio::s3::MinioClient;
 use minio::s3::response::a_response_traits::HasObjectSize;
 use minio::s3::response::{AppendObjectResponse, StatObjectResponse};
 use minio::s3::segmented_bytes::SegmentedBytes;
@@ -27,7 +27,7 @@ use rand::distr::Alphanumeric;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
-    let client: Client = create_client_on_localhost()?;
+    let client: MinioClient = MinioClient::create_client_on_localhost()?;
 
     if !client.is_minio_express().await {
         println!("Need (MinIO) Express mode to run this example");
@@ -51,6 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
         let resp: AppendObjectResponse = client
             .append_object(bucket_name, object_name, data, offset_bytes)
+            .build()
             .send()
             .await?;
 
@@ -63,7 +64,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
         //println!("Append response: {resp:#?}");
 
-        let resp: StatObjectResponse = client.stat_object(bucket_name, object_name).send().await?;
+        let resp: StatObjectResponse = client
+            .stat_object(bucket_name, object_name)
+            .build()
+            .send()
+            .await?;
         if resp.size()? != offset_bytes {
             panic!(
                 "from the stat_Object: size mismatch: expected {}, got {offset_bytes}",

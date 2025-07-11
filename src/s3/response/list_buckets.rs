@@ -23,7 +23,7 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response of [list_buckets()](crate::s3::client::Client::list_buckets) API
+/// Response of [list_buckets()](crate::s3::client::MinioClient::list_buckets) API
 #[derive(Debug, Clone)]
 pub struct ListBucketsResponse {
     request: S3Request,

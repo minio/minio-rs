@@ -29,6 +29,7 @@ async fn get_presigned_post_form_data(ctx: TestContext, bucket_name: String) {
     let form_data: HashMap<String, String> = ctx
         .client
         .get_presigned_post_form_data(policy)
+        .build()
         .send()
         .await
         .unwrap();

@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::GetBucketNotification;
+use crate::s3::builders::{GetBucketNotification, GetBucketNotificationBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`GetBucketNotification`] request builder.
     ///
     /// To execute the request, call [`GetBucketNotification::send()`](crate::s3::types::S3Api::send),
@@ -25,21 +25,23 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::GetBucketNotificationResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: GetBucketNotificationResponse = client
     ///         .get_bucket_notification("bucket-name")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("retrieved bucket notification config '{:?}' from bucket '{}'", resp.config(), resp.bucket());
     /// }
     /// ```
-    pub fn get_bucket_notification<S: Into<String>>(&self, bucket: S) -> GetBucketNotification {
-        GetBucketNotification::new(self.clone(), bucket.into())
+    pub fn get_bucket_notification<S: Into<String>>(&self, bucket: S) -> GetBucketNotificationBldr {
+        GetBucketNotification::builder()
+            .client(self.clone())
+            .bucket(bucket)
     }
 }

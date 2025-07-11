@@ -40,6 +40,7 @@ async fn object_tags(ctx: TestContext, bucket_name: String) {
             &object_name,
             ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
+        .build()
         .send()
         .await
         .unwrap();
@@ -58,6 +59,7 @@ async fn object_tags(ctx: TestContext, bucket_name: String) {
         .client
         .put_object_tagging(&bucket_name, &object_name)
         .tags(tags.clone())
+        .build()
         .send()
         .await
         .unwrap();
@@ -69,6 +71,7 @@ async fn object_tags(ctx: TestContext, bucket_name: String) {
     let resp: GetObjectTaggingResponse = ctx
         .client
         .get_object_tagging(&bucket_name, &object_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -81,6 +84,7 @@ async fn object_tags(ctx: TestContext, bucket_name: String) {
     let resp: DeleteObjectTaggingResponse = ctx
         .client
         .delete_object_tagging(&bucket_name, &object_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -92,6 +96,7 @@ async fn object_tags(ctx: TestContext, bucket_name: String) {
     let resp: GetObjectTaggingResponse = ctx
         .client
         .get_object_tagging(&bucket_name, &object_name)
+        .build()
         .send()
         .await
         .unwrap();

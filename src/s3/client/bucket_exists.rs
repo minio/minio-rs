@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::BucketExists;
+use crate::s3::builders::{BucketExists, BucketExistsBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`BucketExists`] request builder to check if a bucket exists in S3.
     ///
     /// To execute the request, call [`BucketExists::send()`](crate::s3::types::S3Api::send),
@@ -25,21 +25,21 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::BucketExistsResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: BucketExistsResponse = client
     ///         .bucket_exists("bucket-name")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("bucket '{}' exists: {}", resp.bucket(), resp.exists());
     /// }
     /// ```
-    pub fn bucket_exists<S: Into<String>>(&self, bucket: S) -> BucketExists {
-        BucketExists::new(self.clone(), bucket.into())
+    pub fn bucket_exists<S: Into<String>>(&self, bucket: S) -> BucketExistsBldr {
+        BucketExists::builder().client(self.clone()).bucket(bucket)
     }
 }

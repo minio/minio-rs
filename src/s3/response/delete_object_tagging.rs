@@ -23,7 +23,7 @@ use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
-/// Response from the [`delete_object_tagging`](crate::s3::client::Client::delete_object_tagging) API call,
+/// Response from the [`delete_object_tagging`](crate::s3::client::MinioClient::delete_object_tagging) API call,
 /// indicating that all tags have been successfully removed from a specific object (or object version) in an S3 bucket.
 ///
 /// This operation deletes the entire tag set associated with the specified object. If the bucket is versioning-enabled,

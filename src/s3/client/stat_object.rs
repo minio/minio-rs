@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::StatObject;
+use crate::s3::builders::{StatObject, StatObjectBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`StatObject`] request builder. Given a bucket and object name, return some statistics.
     ///
     /// To execute the request, call [`StatObject::send()`](crate::s3::types::S3Api::send),
@@ -25,16 +25,16 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::StatObjectResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: StatObjectResponse =
-    ///         client.stat_object("bucket-name", "object-name").send().await.unwrap();
+    ///         client.stat_object("bucket-name", "object-name").build().send().await.unwrap();
     ///     println!("stat of object '{}' are {:#?}", resp.object(), resp);
     /// }
     /// ```
@@ -42,7 +42,10 @@ impl Client {
         &self,
         bucket: S1,
         object: S2,
-    ) -> StatObject {
-        StatObject::new(self.clone(), bucket.into(), object.into())
+    ) -> StatObjectBldr {
+        StatObject::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
     }
 }

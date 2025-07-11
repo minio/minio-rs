@@ -15,7 +15,7 @@
 
 use crate::cleanup_guard::CleanupGuard;
 use crate::utils::rand_bucket_name;
-use minio::s3::Client;
+use minio::s3::MinioClient;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::S3Api;
@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Clone)]
 pub struct TestContext {
-    pub client: Client,
+    pub client: MinioClient,
     pub base_url: BaseUrl,
     pub access_key: String,
     pub secret_key: String,
@@ -57,7 +57,7 @@ impl TestContext {
             }
 
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
-            let client = Client::new(
+            let client = MinioClient::new(
                 base_url.clone(),
                 Some(static_provider),
                 ssl_cert_file,
@@ -114,7 +114,7 @@ impl TestContext {
             base_url.region = region;
 
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
-            let client = Client::new(
+            let client = MinioClient::new(
                 base_url.clone(),
                 Some(static_provider),
                 Some(&*ssl_cert_file),
@@ -154,6 +154,7 @@ impl TestContext {
         let _resp = self
             .client
             .create_bucket(&bucket_name)
+            .build()
             .send()
             .await
             .unwrap();

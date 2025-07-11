@@ -19,7 +19,7 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use http::HeaderMap;
 use hyper::http::Method;
-use reqwest::{Body, Response};
+use reqwest::Body;
 use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
@@ -28,7 +28,7 @@ use std::sync::{Arc, OnceLock};
 use uuid::Uuid;
 
 use crate::s3::builders::{BucketExists, ComposeSource};
-use crate::s3::creds::Provider;
+use crate::s3::creds::{Provider, StaticProvider};
 use crate::s3::error::{Error, IoError, NetworkError, S3ServerError, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::http::BaseUrl;
@@ -120,22 +120,32 @@ pub const MAX_OBJECT_SIZE: u64 = 5_497_558_138_880; // 5 TiB
 pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 
 /// Client Builder manufactures a Client using given parameters.
-#[derive(Debug, Default)]
-pub struct ClientBuilder {
+/// Creates a builder given a base URL for the MinIO service or other AWS S3
+/// compatible object storage service.
+#[derive(Debug)]
+pub struct MinioClientBuilder {
+    //#[builder(!default)] // force required
     base_url: BaseUrl,
+    //#[builder(default, setter(into, doc = "Set the credential provider. If not, set anonymous access is used."))]
     provider: Option<Arc<dyn Provider + Send + Sync + 'static>>,
+    //#[builder(default, setter(into, doc = "Set file for loading CAs certs to trust. This is in addition to the system trust store. The file must contain PEM encoded certificates."))]
     ssl_cert_file: Option<PathBuf>,
+    //#[builder(default, setter(into, doc = "Set flag to ignore certificate check. This is insecure and should only be used for testing."))]
     ignore_cert_check: Option<bool>,
+    //#[builder(default, setter(into, doc = "Set the app info as an Option of (app_name, app_version) pair. This will show up in the client's user-agent."))]
     app_info: Option<(String, String)>,
 }
 
-impl ClientBuilder {
+impl MinioClientBuilder {
     /// Creates a builder given a base URL for the MinIO service or other AWS S3
     /// compatible object storage service.
     pub fn new(base_url: BaseUrl) -> Self {
         Self {
             base_url,
-            ..Default::default()
+            provider: None,
+            ssl_cert_file: None,
+            ignore_cert_check: None,
+            app_info: None,
         }
     }
 
@@ -167,7 +177,7 @@ impl ClientBuilder {
     }
 
     /// Build the Client.
-    pub fn build(self) -> Result<Client, Error> {
+    pub fn build(self) -> Result<MinioClient, Error> {
         let mut builder = reqwest::Client::builder().no_gzip();
 
         let mut user_agent = String::from("MinIO (")
@@ -207,12 +217,13 @@ impl ClientBuilder {
             }
         }
 
-        Ok(Client {
+        Ok(MinioClient {
             http_client: builder.build().map_err(ValidationErr::from)?,
             shared: Arc::new(SharedClientItems {
                 base_url: self.base_url,
                 provider: self.provider,
-                ..Default::default()
+                region_map: Default::default(),
+                express: Default::default(),
             }),
         })
     }
@@ -222,19 +233,19 @@ impl ClientBuilder {
 ///
 /// If credential provider is passed, all S3 operation requests are signed using
 /// AWS Signature Version 4; else they are performed anonymously.
-#[derive(Clone, Default, Debug)]
-pub struct Client {
+#[derive(Clone, Debug)]
+pub struct MinioClient {
     http_client: reqwest::Client,
     pub(crate) shared: Arc<SharedClientItems>,
 }
 
-impl Client {
+impl MinioClient {
     /// Returns a S3 client with given base URL.
     ///
     /// # Examples
     ///
     /// ```
-    /// use minio::s3::client::Client;
+    /// use minio::s3::client::MinioClient;
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     ///
@@ -244,7 +255,7 @@ impl Client {
     ///     "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
     ///     None,
     /// );
-    /// let client = Client::new(base_url, Some(static_provider), None, None).unwrap();
+    /// let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     /// ```
     pub fn new<P: Provider + Send + Sync + 'static>(
         base_url: BaseUrl,
@@ -252,7 +263,7 @@ impl Client {
         ssl_cert_file: Option<&Path>,
         ignore_cert_check: Option<bool>,
     ) -> Result<Self, Error> {
-        ClientBuilder::new(base_url)
+        MinioClientBuilder::new(base_url)
             .provider(provider)
             .ssl_cert_file(ssl_cert_file)
             .ignore_cert_check(ignore_cert_check)
@@ -274,10 +285,12 @@ impl Client {
         if let Some(val) = self.shared.express.get() {
             *val
         } else {
-            // Create a random bucket name
-            let bucket_name: String = Uuid::new_v4().to_string();
+            let be = BucketExists::builder()
+                .client(self.clone())
+                .bucket(Uuid::new_v4().to_string())
+                .build();
 
-            let express = match BucketExists::new(self.clone(), bucket_name).send().await {
+            let express = match be.send().await {
                 Ok(v) => {
                     if let Some(server) = v.headers().get("server") {
                         if let Ok(s) = server.to_str() {
@@ -299,6 +312,7 @@ impl Client {
             express
         }
     }
+
     /// Add a bucket-region pair to the region cache if it does not exist.
     pub(crate) fn add_bucket_region(&mut self, bucket: &str, region: impl Into<String>) {
         self.shared
@@ -351,6 +365,7 @@ impl Client {
                 .not_match_etag(source.not_match_etag.clone())
                 .modified_since(source.modified_since)
                 .unmodified_since(source.unmodified_since)
+                .build()
                 .send()
                 .await?;
 
@@ -491,13 +506,17 @@ impl Client {
             // Sort headers alphabetically by name
             header_strings.sort();
 
-            println!(
-                "S3 request: {} url={:?}; headers={:?}; body={}\n",
-                method,
+            let debug_str = format!(
+                "S3 request: {method} url={:?}; headers={:?}; body={body:?}",
                 url.path,
-                header_strings.join("; "),
-                body.as_ref().unwrap()
+                header_strings.join("; ")
             );
+            let truncated = if debug_str.len() > 1000 {
+                format!("{}...", &debug_str[..997])
+            } else {
+                debug_str
+            };
+            println!("{truncated}");
         }
 
         if (*method == Method::PUT) || (*method == Method::POST) {
@@ -512,7 +531,7 @@ impl Client {
             req = req.body(Body::wrap_stream(stream));
         }
 
-        let resp: Response = req.send().await.map_err(ValidationErr::from)?; //TODO request error handled by network error layer
+        let resp: reqwest::Response = req.send().await.map_err(ValidationErr::from)?; //TODO request error handled by network error layer
         if resp.status().is_success() {
             return Ok(resp);
         }
@@ -591,9 +610,23 @@ impl Client {
         )
         .await
     }
+
+    /// create an example client for testing on localhost
+    pub fn create_client_on_localhost()
+    -> Result<MinioClient, Box<dyn std::error::Error + Send + Sync>> {
+        let base_url = "http://localhost:9000/".parse::<BaseUrl>()?;
+        log::info!("Trying to connect to MinIO at: `{base_url:?}`");
+
+        let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+
+        let client = MinioClientBuilder::new(base_url.clone())
+            .provider(Some(static_provider))
+            .build()?;
+        Ok(client)
+    }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(crate) struct SharedClientItems {
     pub(crate) base_url: BaseUrl,
     pub(crate) provider: Option<Arc<dyn Provider + Send + Sync + 'static>>,

@@ -15,10 +15,10 @@
 
 //! MinIO Extension API for S3 Buckets: ListenBucketNotification
 
-use super::Client;
-use crate::s3::builders::ListenBucketNotification;
+use crate::s3::builders::{ListenBucketNotification, ListenBucketNotificationBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`ListenBucketNotification`] request builder.
     ///
     /// To execute the request, call [`ListenBucketNotification::send()`](crate::s3::types::S3Api::send),
@@ -35,16 +35,16 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::types::{NotificationRecord, NotificationRecords, S3Api};
     /// use futures_util::StreamExt;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let (_resp, mut event_stream) = client
     ///         .listen_bucket_notification("bucket-name")
-    ///         .send().await .unwrap();
+    ///         .build().send().await.unwrap();
     ///
     ///     while let Some(event) = event_stream.next().await {
     ///         let event: NotificationRecords = event.unwrap();
@@ -56,7 +56,9 @@ impl Client {
     pub fn listen_bucket_notification<S: Into<String>>(
         &self,
         bucket: S,
-    ) -> ListenBucketNotification {
-        ListenBucketNotification::new(self.clone(), bucket.into())
+    ) -> ListenBucketNotificationBldr {
+        ListenBucketNotification::builder()
+            .client(self.clone())
+            .bucket(bucket)
     }
 }

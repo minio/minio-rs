@@ -16,8 +16,8 @@
 mod common;
 
 use crate::common::create_bucket_if_not_exists;
+use minio::s3::MinioClientBuilder;
 use minio::s3::builders::ObjectContent;
-use minio::s3::client::ClientBuilder;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::response::GetObjectPromptResponse;
@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let static_provider = StaticProvider::new("admin", "admin", None);
 
-    let client = ClientBuilder::new(base_url.clone())
+    let client = MinioClientBuilder::new(base_url.clone())
         .provider(Some(static_provider))
         .ignore_cert_check(Some(true))
         .build()?;
@@ -58,6 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let content = ObjectContent::from(filename);
     client
         .put_object_content(bucket_name, object_name, content)
+        .build()
         .send()
         .await?;
 
@@ -69,6 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let resp: GetObjectPromptResponse = client
         .get_object_prompt(bucket_name, object_name, "what is it about?")
         //.lambda_arn("arn:minio:s3-object-lambda::_:webhook") // this is the default value
+        .build()
         .send()
         .await?;
 

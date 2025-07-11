@@ -13,11 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! HTTP URL definitions
-
 use super::utils::urlencode_object_key;
 use crate::s3::client::DEFAULT_REGION;
-
 use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::utils::match_hostname;
@@ -80,7 +77,7 @@ impl fmt::Display for Url {
         }
 
         if self.port > 0 {
-            f.write_str(format!("{}:{}", self.host, self.port).as_str())?;
+            f.write_str(&format!("{}:{}", self.host, self.port))?;
         } else {
             f.write_str(&self.host)?;
         }

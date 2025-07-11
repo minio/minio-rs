@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::GetObjectLegalHold;
+use crate::s3::builders::{GetObjectLegalHold, GetObjectLegalHoldBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`GetObjectLegalHold`] request builder.
     ///
     /// To execute the request, call [`GetObjectLegalHold::send()`](crate::s3::types::S3Api::send),
@@ -27,17 +27,17 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::GetObjectLegalHoldResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::{HasBucket, HasObject};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: GetObjectLegalHoldResponse = client
     ///         .get_object_legal_hold("bucket-name", "object-name")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("legal hold of object '{}' in bucket '{}' is enabled: {:?}", resp.object(), resp.bucket(), resp.enabled());
     /// }
     /// ```
@@ -45,7 +45,10 @@ impl Client {
         &self,
         bucket: S1,
         object: S2,
-    ) -> GetObjectLegalHold {
-        GetObjectLegalHold::new(self.clone(), bucket.into(), object.into())
+    ) -> GetObjectLegalHoldBldr {
+        GetObjectLegalHold::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
     }
 }

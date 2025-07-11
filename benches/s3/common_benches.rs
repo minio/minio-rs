@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use criterion::Criterion;
-use minio::s3::Client;
+use minio::s3::MinioClient;
 use minio::s3::error::Error;
 use minio::s3::response::{CreateBucketResponse, PutObjectContentResponse};
 use minio::s3::types::{FromS3Response, S3Api, S3Request};
@@ -27,7 +27,7 @@ use std::env;
 use tokio::runtime::Runtime;
 
 pub(crate) struct Ctx2 {
-    pub client: Client,
+    pub client: MinioClient,
     pub bucket: String,
     pub object: String,
     _cleanup: CleanupGuard,
@@ -64,6 +64,7 @@ impl Ctx2 {
             .client
             .create_bucket(&bucket_name)
             .object_lock(object_lock)
+            .build()
             .send()
             .await
             .unwrap();
@@ -73,6 +74,7 @@ impl Ctx2 {
         let _resp: PutObjectContentResponse = ctx
             .client
             .put_object_content(&bucket_name, &object_name, data)
+            .build()
             .send()
             .await
             .unwrap();
@@ -95,6 +97,7 @@ impl Ctx2 {
             .client
             .create_bucket(&bucket_name)
             .object_lock(false)
+            .build()
             .send()
             .await
             .unwrap();

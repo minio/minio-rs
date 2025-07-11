@@ -23,6 +23,6 @@ pub(crate) fn bench_list_buckets(criterion: &mut Criterion) {
         "list_buckets",
         criterion,
         || async { Ctx2::new().await },
-        |ctx| ListBuckets::new(ctx.client.clone()),
+        |ctx| ListBuckets::builder().client(ctx.client.clone()).build(),
     )
 }

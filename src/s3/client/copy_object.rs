@@ -13,13 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
 use crate::s3::builders::{
-    ComposeObject, ComposeObjectInternal, ComposeSource, CopyObject, CopyObjectInternal,
-    UploadPartCopy,
+    ComposeObject, ComposeObjectBldr, ComposeObjectInternal, ComposeObjectInternalBldr,
+    ComposeSource, CopyObject, CopyObjectBldr, CopyObjectInternal, CopyObjectInternalBldr,
+    UploadPartCopy, UploadPartCopyBldr,
 };
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`UploadPartCopy`] request builder.
     /// See [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) S3 API
     ///
@@ -29,7 +30,7 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::UploadPartCopyResponse;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     /// use minio::s3::types::S3Api;
@@ -37,12 +38,12 @@ impl Client {
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let data1: SegmentedBytes = SegmentedBytes::from("aaaa".to_string());
     ///     todo!();
     ///     let resp: UploadPartCopyResponse = client
     ///         .upload_part_copy("bucket-name", "object-name", "TODO")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("uploaded {}", resp.object());
     /// }
     /// ```
@@ -51,8 +52,12 @@ impl Client {
         bucket: S1,
         object: S2,
         upload_id: S3,
-    ) -> UploadPartCopy {
-        UploadPartCopy::new(self.clone(), bucket.into(), object.into(), upload_id.into())
+    ) -> UploadPartCopyBldr {
+        UploadPartCopy::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
+            .upload_id(upload_id)
     }
 
     /// Create a CopyObject request builder. This is a lower-level API that
@@ -61,8 +66,11 @@ impl Client {
         &self,
         bucket: S1,
         object: S2,
-    ) -> CopyObjectInternal {
-        CopyObjectInternal::new(self.clone(), bucket.into(), object.into())
+    ) -> CopyObjectInternalBldr {
+        CopyObjectInternal::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
     }
 
     /// Create a CopyObject request builder.
@@ -74,9 +82,9 @@ impl Client {
     /// The destination of the copy is specified via the `bucket` and `object` parameters of this function.
     /// To specify the source object to be copied, call `.source(...)` on the returned [`CopyObject`] builder.
     ///
-    /// Internally, this function first performs a [`stat_object`](Client::stat_object) call
+    /// Internally, this function first performs a [`stat_object`](MinioClient::stat_object) call
     /// to retrieve metadata about the source object. It then constructs a
-    /// [`compose_object`](Client::compose_object) request to perform the actual copy.
+    /// [`compose_object`](MinioClient::compose_object) request to perform the actual copy.
     ///
     /// # Arguments
     ///
@@ -86,7 +94,7 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::CopyObjectResponse;
     /// use minio::s3::builders::CopySource;
     /// use minio::s3::types::S3Api;
@@ -94,11 +102,11 @@ impl Client {
     /// #[tokio::main]
     /// async fn main() {
     /// use minio::s3::response::a_response_traits::HasVersion;
-    /// let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: CopyObjectResponse = client
     ///         .copy_object("bucket-name-dst", "object-name-dst")
-    ///         .source(CopySource::new("bucket-name-src", "object-name-src").unwrap())
-    ///         .send().await.unwrap();
+    ///         .source(CopySource::builder().bucket("bucket-name-src").object("object-name-src").build())
+    ///         .build().send().await.unwrap();
     ///     println!("copied the file from src to dst. New version: {:?}", resp.version_id());
     /// }
     /// ```
@@ -106,8 +114,11 @@ impl Client {
         &self,
         bucket: S1,
         object: S2,
-    ) -> CopyObject {
-        CopyObject::new(self.clone(), bucket.into(), object.into())
+    ) -> CopyObjectBldr {
+        CopyObject::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
     }
 
     /// Create a ComposeObjectInternal request builder. This is a higher-level API that
@@ -116,18 +127,25 @@ impl Client {
         &self,
         bucket: S1,
         object: S2,
-    ) -> ComposeObjectInternal {
-        ComposeObjectInternal::new(self.clone(), bucket.into(), object.into())
+    ) -> ComposeObjectInternalBldr {
+        ComposeObjectInternal::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
     }
 
     /// compose object is higher-level API that calls an internal compose object, and if that call fails,
-    /// it calls ['abort_multipart_upload`](Client::abort_multipart_upload).
+    /// it calls ['abort_multipart_upload`](MinioClient::abort_multipart_upload).
     pub fn compose_object<S1: Into<String>, S2: Into<String>>(
         &self,
         bucket: S1,
         object: S2,
         sources: Vec<ComposeSource>,
-    ) -> ComposeObject {
-        ComposeObject::new(self.clone(), bucket.into(), object.into()).sources(sources)
+    ) -> ComposeObjectBldr {
+        ComposeObject::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
+            .sources(sources)
     }
 }

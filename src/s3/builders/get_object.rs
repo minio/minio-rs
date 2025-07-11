@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::client::Client;
+use crate::s3::client::MinioClient;
 use crate::s3::error::ValidationErr;
 use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
@@ -24,97 +24,64 @@ use crate::s3::utils::{
     UtcTime, check_bucket_name, check_object_name, check_ssec, to_http_header_value,
 };
 use http::Method;
+use typed_builder::TypedBuilder;
 
 /// Argument builder for the [`GetObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::get_object`](crate::s3::client::Client::get_object) method.
-#[derive(Debug, Clone, Default)]
+/// This struct constructs the parameters required for the [`Client::get_object`](crate::s3::client::MinioClient::get_object) method.
+#[derive(Debug, Clone, TypedBuilder)]
 pub struct GetObject {
-    client: Client,
-
+    #[builder(!default)] // force required
+    client: MinioClient,
+    #[builder(default, setter(into))]
     extra_headers: Option<Multimap>,
+    #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
-    bucket: String,
-    object: String,
-    version_id: Option<String>,
-    offset: Option<u64>,
-    length: Option<u64>,
+    #[builder(default, setter(into))]
     region: Option<String>,
+    #[builder(setter(into))] // force required + accept Into<String>
+    bucket: String,
+    #[builder(setter(into))] // force required + accept Into<String>
+    object: String,
+    #[builder(default, setter(into))]
+    version_id: Option<String>,
+    #[builder(default, setter(into))]
+    offset: Option<u64>,
+    #[builder(default, setter(into))]
+    length: Option<u64>,
+    #[builder(default, setter(into))]
     ssec: Option<SseCustomerKey>,
 
     // Conditionals
+    #[builder(default, setter(into))]
     match_etag: Option<String>,
+    #[builder(default, setter(into))]
     not_match_etag: Option<String>,
+    #[builder(default, setter(into))]
     modified_since: Option<UtcTime>,
+    #[builder(default, setter(into))]
     unmodified_since: Option<UtcTime>,
 }
 
-impl GetObject {
-    pub fn new(client: Client, bucket: String, object: String) -> Self {
-        Self {
-            client,
-            bucket,
-            object,
-            ..Default::default()
-        }
-    }
-
-    pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
-        self.extra_headers = extra_headers;
-        self
-    }
-
-    pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
-        self.extra_query_params = extra_query_params;
-        self
-    }
-
-    pub fn version_id(mut self, version_id: Option<String>) -> Self {
-        self.version_id = version_id;
-        self
-    }
-
-    pub fn offset(mut self, offset: Option<u64>) -> Self {
-        self.offset = offset;
-        self
-    }
-
-    pub fn length(mut self, length: Option<u64>) -> Self {
-        self.length = length;
-        self
-    }
-
-    /// Sets the region for the request
-    pub fn region(mut self, region: Option<String>) -> Self {
-        self.region = region;
-        self
-    }
-
-    pub fn ssec(mut self, ssec: Option<SseCustomerKey>) -> Self {
-        self.ssec = ssec;
-        self
-    }
-
-    pub fn match_etag(mut self, etag: Option<String>) -> Self {
-        self.match_etag = etag;
-        self
-    }
-
-    pub fn not_match_etag(mut self, etag: Option<String>) -> Self {
-        self.not_match_etag = etag;
-        self
-    }
-
-    pub fn modified_since(mut self, time: Option<UtcTime>) -> Self {
-        self.modified_since = time;
-        self
-    }
-
-    pub fn unmodified_since(mut self, time: Option<UtcTime>) -> Self {
-        self.unmodified_since = time;
-        self
-    }
-}
+/// Builder type alias for [`GetObject`].
+///
+/// Constructed via [`GetObject::builder()`](GetObject::builder) and used to build a [`GetObject`] instance.
+pub type GetObjectBldr = GetObjectBuilder<(
+    (MinioClient,),
+    (),
+    (),
+    (),
+    (String,),
+    (String,),
+    (),
+    (),
+    (),
+    (),
+    (),
+    (),
+    (),
+    (),
+)>;
 
 impl S3Api for GetObject {
     type S3Response = GetObjectResponse;
@@ -170,11 +137,14 @@ impl ToS3Request for GetObject {
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.add_version(self.version_id);
 
-        Ok(S3Request::new(self.client, Method::GET)
+        Ok(S3Request::builder()
+            .client(self.client)
+            .method(Method::GET)
             .region(self.region)
-            .bucket(Some(self.bucket))
-            .object(Some(self.object))
+            .bucket(self.bucket)
+            .object(self.object)
             .query_params(query_params)
-            .headers(headers))
+            .headers(headers)
+            .build())
     }
 }

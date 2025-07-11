@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::Client;
-use crate::s3::builders::GetPresignedObjectUrl;
+use crate::s3::builders::{GetPresignedObjectUrl, GetPresignedObjectUrlBldr};
+use crate::s3::client::MinioClient;
 use http::Method;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`GetPresignedObjectUrl`] request builder.
     ///
     /// To execute the request, call [`GetPresignedObjectUrl::send()`](crate::s3::types::S3Api::send),
@@ -27,16 +27,16 @@ impl Client {
     ///
     /// ```no_run
     /// use http::Method;
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::GetPresignedObjectUrlResponse;
     /// use minio::s3::types::S3Api;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: GetPresignedObjectUrlResponse = client
     ///         .get_presigned_object_url("bucket-name", "object-name", Method::GET)
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("the presigned url: '{:?}'", resp.url);
     /// }
     /// ```
@@ -45,7 +45,11 @@ impl Client {
         bucket: S1,
         object: S2,
         method: Method,
-    ) -> GetPresignedObjectUrl {
-        GetPresignedObjectUrl::new(self.clone(), bucket.into(), object.into(), method)
+    ) -> GetPresignedObjectUrlBldr {
+        GetPresignedObjectUrl::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
+            .method(method)
     }
 }

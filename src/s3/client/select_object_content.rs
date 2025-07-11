@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::SelectObjectContent;
+use crate::s3::builders::{SelectObjectContent, SelectObjectContentBldr};
+use crate::s3::client::MinioClient;
 use crate::s3::types::SelectRequest;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`SelectObjectContent`] request builder.
     ///
     /// To execute the request, call [`SelectObjectContent::send()`](crate::s3::types::S3Api::send),
@@ -28,15 +28,14 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::SelectObjectContentResponse;
     /// use minio::s3::types::S3Api;
-    ///
     /// use minio::s3::types::{SelectRequest, CsvInputSerialization, CsvOutputSerialization, FileHeaderInfo, QuoteFields};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let request = SelectRequest::new_csv_input_output(
     ///         "select * from S3Object",
     ///         CsvInputSerialization {
@@ -60,7 +59,7 @@ impl Client {
     ///
     ///     let resp: SelectObjectContentResponse = client
     ///         .select_object_content("bucket-name", "object-name", request)
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("the progress: '{:?}'", resp.progress);
     /// }
     /// ```
@@ -69,7 +68,11 @@ impl Client {
         bucket: S1,
         object: S2,
         request: SelectRequest,
-    ) -> SelectObjectContent {
-        SelectObjectContent::new(self.clone(), bucket.into(), object.into()).request(request)
+    ) -> SelectObjectContentBldr {
+        SelectObjectContent::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
+            .request(request)
     }
 }

@@ -13,23 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
+use crate::s3::client::MinioClient;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::{
     builders::{
-        AbortMultipartUpload, CompleteMultipartUpload, CreateMultipartUpload, ObjectContent,
-        PutObject, PutObjectContent, UploadPart,
+        AbortMultipartUpload, AbortMultipartUploadBldr, CompleteMultipartUpload,
+        CompleteMultipartUploadBldr, CreateMultipartUpload, CreateMultipartUploadBldr,
+        ObjectContent, PutObject, PutObjectBldr, PutObjectContent, PutObjectContentBldr,
+        UploadPart, UploadPartBldr,
     },
     types::PartInfo,
 };
+use std::sync::Arc;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`PutObject`] request builder to upload an object to a specified bucket in S3-compatible storage.
     /// This method performs a simple, non-multipart upload of the provided content as an object.
-    ///
-    /// For handling large files requiring multipart upload, see [`create_multipart_upload`](#method.create_multipart_upload).
-    ///
-    /// For handling large files requiring multipart upload, see [`create_multipart_upload`](#method.create_multipart_upload).
     ///
     /// For handling large files requiring multipart upload, see [`create_multipart_upload`](#method.create_multipart_upload).
     ///
@@ -41,7 +40,7 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::PutObjectResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
@@ -49,10 +48,11 @@ impl Client {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let data = SegmentedBytes::from("Hello world".to_string());
-    ///     let resp: PutObjectResponse =
-    ///         client.put_object("bucket-name", "object-name", data).send().await.unwrap();
+    ///     let resp: PutObjectResponse = client
+    ///         .put_object("bucket-name", "object-name", data)
+    ///         .build().send().await.unwrap();
     ///     println!("successfully put object '{}'", resp.object());
     /// }
     /// ```
@@ -61,8 +61,14 @@ impl Client {
         bucket: S1,
         object: S2,
         data: SegmentedBytes,
-    ) -> PutObject {
-        PutObject::new(self.clone(), bucket.into(), object.into(), data)
+    ) -> PutObjectBldr {
+        let inner = UploadPart::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
+            .data(Arc::new(data))
+            .build();
+        PutObject::builder().inner(inner)
     }
 
     /// Creates a [`CreateMultipartUpload`] request builder to initiate a new multipart upload for a specified object in a bucket.
@@ -75,16 +81,16 @@ impl Client {
     ///
     /// # Example
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::CreateMultipartUploadResponse;
     /// use minio::s3::types::S3Api;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default();
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: CreateMultipartUploadResponse = client
     ///         .create_multipart_upload("bucket-name", "large-object")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("Initiated multipart upload with UploadId '{:?}'", resp.upload_id().await);
     /// }
     /// ```
@@ -92,8 +98,11 @@ impl Client {
         &self,
         bucket: S1,
         object: S2,
-    ) -> CreateMultipartUpload {
-        CreateMultipartUpload::new(self.clone(), bucket.into(), object.into())
+    ) -> CreateMultipartUploadBldr {
+        CreateMultipartUpload::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
     }
 
     /// Creates an [`AbortMultipartUpload`] request builder to abort an ongoing multipart upload for an object.
@@ -106,16 +115,16 @@ impl Client {
     ///
     /// # Example
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::AbortMultipartUploadResponse;
     /// use minio::s3::types::S3Api;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default();
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: AbortMultipartUploadResponse = client
     ///         .abort_multipart_upload("bucket-name", "object-name", "upload-id-123")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("Aborted multipart upload for '{}', upload id '{}'", "object-name", "upload-id-123");
     /// }
     /// ```
@@ -124,8 +133,12 @@ impl Client {
         bucket: S1,
         object: S2,
         upload_id: S3,
-    ) -> AbortMultipartUpload {
-        AbortMultipartUpload::new(self.clone(), bucket.into(), object.into(), upload_id.into())
+    ) -> AbortMultipartUploadBldr {
+        AbortMultipartUpload::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
+            .upload_id(upload_id)
     }
 
     /// Creates a [`CompleteMultipartUpload`] request builder to complete a multipart upload by assembling previously uploaded parts into a single object.
@@ -138,18 +151,18 @@ impl Client {
     ///
     /// # Example
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::CompleteMultipartUploadResponse;
     /// use minio::s3::types::{S3Api, PartInfo};
     /// use minio::s3::response::a_response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default();
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let parts: Vec<PartInfo> = vec![]; // fill with your uploaded part info
     ///     let resp: CompleteMultipartUploadResponse = client
     ///         .complete_multipart_upload("bucket-name", "object-name", "upload-id-123", parts)
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("Completed multipart upload for '{}'", resp.object());
     /// }
     /// ```
@@ -159,14 +172,13 @@ impl Client {
         object: S2,
         upload_id: S3,
         parts: Vec<PartInfo>,
-    ) -> CompleteMultipartUpload {
-        CompleteMultipartUpload::new(
-            self.clone(),
-            bucket.into(),
-            object.into(),
-            upload_id.into(),
-            parts,
-        )
+    ) -> CompleteMultipartUploadBldr {
+        CompleteMultipartUpload::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
+            .upload_id(upload_id)
+            .parts(parts)
     }
 
     /// Creates an [`UploadPart`] request builder to upload a single part as part of a multipart upload.
@@ -179,7 +191,7 @@ impl Client {
     ///
     /// # Example
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::UploadPartResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
@@ -187,11 +199,11 @@ impl Client {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default();
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let data = SegmentedBytes::from("Some part data".to_string());
     ///     let resp: UploadPartResponse = client
     ///         .upload_part("bucket-name", "object-name", "upload-id", 1, data)
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("Uploaded object: {}", resp.object());
     /// }
     /// ```
@@ -202,15 +214,14 @@ impl Client {
         upload_id: S3,
         part_number: u16,
         data: SegmentedBytes,
-    ) -> UploadPart {
-        UploadPart::new(
-            self.clone(),
-            bucket.into(),
-            object.into(),
-            upload_id.into(),
-            part_number,
-            data,
-        )
+    ) -> UploadPartBldr {
+        UploadPart::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
+            .upload_id(upload_id.into())
+            .part_number(part_number)
+            .data(Arc::new(data))
     }
 
     /// Creates a [`PutObjectContent`] request builder to upload data to MinIO/S3, automatically handling multipart uploads for large content.
@@ -223,18 +234,18 @@ impl Client {
     ///
     /// # Example
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::PutObjectContentResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::{HasObject, HasEtagFromHeaders};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default();
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let content = "Hello, world!".to_string();
     ///     let resp: PutObjectContentResponse = client
     ///         .put_object_content("bucket", "object", content)
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("Uploaded object '{}' with ETag '{:?}'", resp.object(), resp.etag());
     /// }
     /// ```
@@ -243,7 +254,11 @@ impl Client {
         bucket: S1,
         object: S2,
         content: C,
-    ) -> PutObjectContent {
-        PutObjectContent::new(self.clone(), bucket.into(), object.into(), content)
+    ) -> PutObjectContentBldr {
+        PutObjectContent::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
+            .input_content(content)
     }
 }

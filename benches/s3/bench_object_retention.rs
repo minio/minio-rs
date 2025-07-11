@@ -30,9 +30,13 @@ pub(crate) async fn bench_put_object_retention(criterion: &mut Criterion) {
         criterion,
         || async { Ctx2::new_with_object(true).await },
         |ctx| {
-            PutObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
+            PutObjectRetention::builder()
+                .client(ctx.client.clone())
+                .bucket(ctx.bucket.clone())
+                .object(ctx.object.clone())
                 .retention_mode(Some(RetentionMode::GOVERNANCE))
                 .retain_until_date(Some(utc_now() + chrono::Duration::days(1)))
+                .build()
         },
     )
 }
@@ -45,15 +49,24 @@ pub(crate) async fn bench_get_object_retention(criterion: &mut Criterion) {
         criterion,
         || async {
             let ctx = Ctx2::new_with_object(true).await;
-            let _resp: PutObjectRetentionResponse =
-                PutObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
-                    .retention_mode(Some(RetentionMode::GOVERNANCE))
-                    .retain_until_date(Some(utc_now() + chrono::Duration::days(1)))
-                    .send()
-                    .await
-                    .unwrap();
+            let _resp: PutObjectRetentionResponse = PutObjectRetention::builder()
+                .client(ctx.client.clone())
+                .bucket(ctx.bucket.clone())
+                .object(ctx.object.clone())
+                .retention_mode(Some(RetentionMode::GOVERNANCE))
+                .retain_until_date(Some(utc_now() + chrono::Duration::days(1)))
+                .build()
+                .send()
+                .await
+                .unwrap();
             ctx
         },
-        |ctx| GetObjectRetention::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone()),
+        |ctx| {
+            GetObjectRetention::builder()
+                .client(ctx.client.clone())
+                .bucket(ctx.bucket.clone())
+                .object(ctx.object.clone())
+                .build()
+        },
     )
 }

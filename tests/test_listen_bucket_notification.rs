@@ -45,6 +45,7 @@ async fn listen_bucket_notification(ctx: TestContext, bucket_name: String) {
         let (_resp, mut event_stream) = ctx2
             .client
             .listen_bucket_notification(&bucket_name2)
+            .build()
             .send()
             .await
             .unwrap();
@@ -81,6 +82,7 @@ async fn listen_bucket_notification(ctx: TestContext, bucket_name: String) {
             &object_name,
             ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
+        .build()
         .send()
         .await
         .unwrap();

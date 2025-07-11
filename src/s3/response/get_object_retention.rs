@@ -27,7 +27,7 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response of [get_object_retention()](crate::s3::client::Client::get_object_retention) API
+/// Response of [get_object_retention()](crate::s3::client::MinioClient::get_object_retention) API
 #[derive(Clone, Debug)]
 pub struct GetObjectRetentionResponse {
     request: S3Request,

@@ -21,16 +21,34 @@ use minio_common::test_context::TestContext;
 
 #[minio_macros::test(no_cleanup)]
 async fn bucket_exists(ctx: TestContext, bucket_name: String) {
-    let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
+    let resp: BucketExistsResponse = ctx
+        .client
+        .bucket_exists(&bucket_name)
+        .build()
+        .send()
+        .await
+        .unwrap();
     assert!(resp.exists());
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.region(), DEFAULT_REGION);
 
-    let resp: DeleteBucketResponse = ctx.client.delete_bucket(&bucket_name).send().await.unwrap();
+    let resp: DeleteBucketResponse = ctx
+        .client
+        .delete_bucket(&bucket_name)
+        .build()
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.region(), DEFAULT_REGION);
 
-    let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
+    let resp: BucketExistsResponse = ctx
+        .client
+        .bucket_exists(&bucket_name)
+        .build()
+        .send()
+        .await
+        .unwrap();
     assert!(!resp.exists());
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.region(), "");

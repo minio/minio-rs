@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::builders::GetObjectPrompt;
+use crate::s3::builders::{GetObjectPrompt, GetObjectPromptBldr};
 
-use super::Client;
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`GetObjectPrompt`] request builder. Prompt an object using natural language.
     ///
     /// To execute the request, call [`GetObjectPrompt::send()`](crate::s3::types::S3Api::send),
@@ -26,16 +26,16 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::GetObjectPromptResponse;
     /// use minio::s3::types::S3Api;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: GetObjectPromptResponse = client
     ///         .get_object_prompt("bucket-name", "object-name", "What is it about?")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("the prompt response is: '{:?}'", resp.prompt_response());
     /// }
     /// ```
@@ -44,7 +44,11 @@ impl Client {
         bucket: S1,
         object: S2,
         prompt: S3,
-    ) -> GetObjectPrompt {
-        GetObjectPrompt::new(self.clone(), bucket.into(), object.into(), prompt.into())
+    ) -> GetObjectPromptBldr {
+        GetObjectPrompt::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
+            .prompt(prompt)
     }
 }

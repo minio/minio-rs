@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::client::Client;
+use crate::s3::client::MinioClient;
 use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::GetObjectPromptResponse;
@@ -24,68 +24,48 @@ use crate::s3::utils::{check_bucket_name, check_object_name, check_ssec};
 use bytes::Bytes;
 use http::Method;
 use serde_json::json;
+use std::sync::Arc;
+use typed_builder::TypedBuilder;
 
 /// Argument builder for the `GetObjectPrompt` operation.
 ///
-/// This struct constructs the parameters required for the [`Client::get_object_prompt`](crate::s3::client::Client::get_object_prompt) method.
-#[derive(Debug, Clone, Default)]
+/// This struct constructs the parameters required for the [`Client::get_object_prompt`](crate::s3::client::MinioClient::get_object_prompt) method.
+#[derive(Debug, Clone, TypedBuilder)]
 pub struct GetObjectPrompt {
-    client: Client,
-    bucket: String,
-    object: String,
-    prompt: String,
-    lambda_arn: Option<String>,
-
-    version_id: Option<String>,
-    region: Option<String>,
-    ssec: Option<SseCustomerKey>,
+    #[builder(!default)] // force required
+    client: MinioClient,
+    #[builder(default, setter(into))]
     extra_headers: Option<Multimap>,
+    #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
+    #[builder(default, setter(into))]
+    region: Option<String>,
+    #[builder(setter(into))] // force required + accept Into<String>
+    bucket: String,
+    #[builder(setter(into))] // force required + accept Into<String>
+    object: String,
+    #[builder(setter(into))] // force required + accept Into<String>
+    prompt: String,
+    #[builder(default, setter(into))]
+    lambda_arn: Option<String>,
+    #[builder(default, setter(into))]
+    version_id: Option<String>,
+    #[builder(default, setter(into))]
+    ssec: Option<SseCustomerKey>,
 }
 
-// builder interface
-impl GetObjectPrompt {
-    pub fn new(client: Client, bucket: String, object: String, prompt: String) -> Self {
-        GetObjectPrompt {
-            client,
-            bucket,
-            object,
-            prompt,
-            ..Default::default()
-        }
-    }
-
-    pub fn lambda_arn(mut self, lambda_arn: &str) -> Self {
-        self.lambda_arn = Some(lambda_arn.to_string());
-        self
-    }
-
-    pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
-        self.extra_headers = extra_headers;
-        self
-    }
-
-    pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
-        self.extra_query_params = extra_query_params;
-        self
-    }
-
-    pub fn version_id(mut self, version_id: Option<String>) -> Self {
-        self.version_id = version_id;
-        self
-    }
-
-    /// Sets the region for the request
-    pub fn region(mut self, region: Option<String>) -> Self {
-        self.region = region;
-        self
-    }
-
-    pub fn ssec(mut self, ssec: Option<SseCustomerKey>) -> Self {
-        self.ssec = ssec;
-        self
-    }
-}
+pub type GetObjectPromptBldr = GetObjectPromptBuilder<(
+    (MinioClient,),
+    (),
+    (),
+    (),
+    (String,),
+    (String,),
+    (String,),
+    (),
+    (),
+    (),
+)>;
 
 impl S3Api for GetObjectPrompt {
     type S3Response = GetObjectPromptResponse;
@@ -113,14 +93,17 @@ impl ToS3Request for GetObjectPrompt {
         );
 
         let prompt_body = json!({ "prompt": self.prompt });
-        let body: SegmentedBytes = SegmentedBytes::from(Bytes::from(prompt_body.to_string()));
+        let body = Arc::new(SegmentedBytes::from(Bytes::from(prompt_body.to_string())));
 
-        Ok(S3Request::new(self.client, Method::POST)
+        Ok(S3Request::builder()
+            .client(self.client)
+            .method(Method::POST)
             .region(self.region)
-            .bucket(Some(self.bucket))
-            .object(Some(self.object))
+            .bucket(self.bucket)
+            .object(self.object)
             .query_params(query_params)
             .headers(self.extra_headers.unwrap_or_default())
-            .body(Some(body)))
+            .body(body)
+            .build())
     }
 }

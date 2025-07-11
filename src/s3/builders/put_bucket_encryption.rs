@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::Client;
+use crate::s3::client::MinioClient;
 use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::response::PutBucketEncryptionResponse;
@@ -22,53 +22,33 @@ use crate::s3::types::{S3Api, S3Request, SseConfig, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use bytes::Bytes;
 use http::Method;
+use std::sync::Arc;
+use typed_builder::TypedBuilder;
 
 /// Argument builder for the [`PutBucketEncryption`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketEncryption.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::put_bucket_encryption`](crate::s3::client::Client::put_bucket_encryption) method.
-#[derive(Clone, Debug, Default)]
+/// This struct constructs the parameters required for the [`Client::put_bucket_encryption`](crate::s3::client::MinioClient::put_bucket_encryption) method.
+#[derive(Clone, Debug, TypedBuilder)]
 pub struct PutBucketEncryption {
-    client: Client,
-
+    #[builder(!default)] // force required
+    client: MinioClient,
+    #[builder(default, setter(into))]
     extra_headers: Option<Multimap>,
+    #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
+    #[builder(default, setter(into))]
     region: Option<String>,
+    #[builder(!default, setter(into))] // force required + accept Into<String>
     bucket: String,
-
-    config: SseConfig,
+    #[builder(default)]
+    sse_config: SseConfig,
 }
 
-impl PutBucketEncryption {
-    pub fn new(client: Client, bucket: String) -> Self {
-        Self {
-            client,
-            bucket,
-            ..Default::default()
-        }
-    }
-
-    pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
-        self.extra_headers = extra_headers;
-        self
-    }
-
-    pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
-        self.extra_query_params = extra_query_params;
-        self
-    }
-
-    /// Sets the region for the request
-    pub fn region(mut self, region: Option<String>) -> Self {
-        self.region = region;
-        self
-    }
-
-    /// Sets the server-side encryption configuration for the bucket.
-    pub fn sse_config(mut self, config: SseConfig) -> Self {
-        self.config = config;
-        self
-    }
-}
+/// Builder type alias for [`PutBucketEncryption`].
+///
+/// Constructed via [`PutBucketEncryption::builder()`](PutBucketEncryption::builder) and used to build a [`PutBucketEncryption`] instance.
+pub type PutBucketEncryptionBldr =
+    PutBucketEncryptionBuilder<((MinioClient,), (), (), (), (String,), ())>;
 
 impl S3Api for PutBucketEncryption {
     type S3Response = PutBucketEncryptionResponse;
@@ -78,14 +58,17 @@ impl ToS3Request for PutBucketEncryption {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
-        let bytes: Bytes = self.config.to_xml().into();
-        let body: Option<SegmentedBytes> = Some(SegmentedBytes::from(bytes));
+        let bytes: Bytes = self.sse_config.to_xml().into();
+        let body = Arc::new(SegmentedBytes::from(bytes));
 
-        Ok(S3Request::new(self.client, Method::GET)
+        Ok(S3Request::builder()
+            .client(self.client)
+            .method(Method::GET)
             .region(self.region)
-            .bucket(Some(self.bucket))
+            .bucket(self.bucket)
             .query_params(insert(self.extra_query_params, "encryption"))
             .headers(self.extra_headers.unwrap_or_default())
-            .body(body))
+            .body(body)
+            .build())
     }
 }

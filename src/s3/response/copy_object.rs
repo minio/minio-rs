@@ -47,10 +47,10 @@ pub type UploadPartCopyResponse = S3Response2;
 /// Internal response type for copy operations
 pub type CopyObjectInternalResponse = S3Response2;
 
-/// Represents the response of the [copy_object()](crate::s3::client::Client::copy_object) API call.
+/// Represents the response of the [copy_object()](crate::s3::client::MinioClient::copy_object) API call.
 /// This struct contains metadata and information about the object being copied.
 pub type CopyObjectResponse = S3Response2;
 
-/// Represents the response of the [compose_object()](crate::s3::client::Client::compose_object) API call.
+/// Represents the response of the [compose_object()](crate::s3::client::MinioClient::compose_object) API call.
 /// This struct contains metadata and information about the composed object.
 pub type ComposeObjectResponse = S3Response2;

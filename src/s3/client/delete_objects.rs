@@ -13,14 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::{
-    builders::{
-        DeleteObject, DeleteObjects, DeleteObjectsStreaming, ObjectToDelete, ObjectsStream,
-    },
-    client::Client,
+use crate::s3::builders::{
+    DeleteObject, DeleteObjectBldr, DeleteObjects, DeleteObjectsBldr, DeleteObjectsStreaming,
+    ObjectToDelete, ObjectsStream,
 };
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`DeleteObject`] request builder to delete a single object from an S3 bucket.
     ///
     /// To execute the request, call [`DeleteObject::send()`](crate::s3::types::S3Api::send),
@@ -29,7 +28,7 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::DeleteObjectResponse;
     /// use minio::s3::builders::ObjectToDelete;
     /// use minio::s3::types::S3Api;
@@ -37,10 +36,10 @@ impl Client {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: DeleteObjectResponse = client
     ///         .delete_object("bucket-name", ObjectToDelete::from("object-name"))
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("the object is deleted. The delete marker has version '{:?}'", resp.version_id());
     /// }
     /// ```
@@ -48,20 +47,26 @@ impl Client {
         &self,
         bucket: S,
         object: D,
-    ) -> DeleteObject {
-        DeleteObject::new(self.clone(), bucket.into(), object)
+    ) -> DeleteObjectBldr {
+        DeleteObject::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
     }
 
     /// Creates a [`DeleteObjects`] request builder to delete multiple objects from an S3 bucket.
     ///
     /// To execute the request, call [`DeleteObjects::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`DeleteObjectsResponse`](crate::s3::response::DeleteObjectsResponse).
-    pub fn delete_objects<S: Into<String>, D: Into<ObjectToDelete>>(
+    pub fn delete_objects<S: Into<String>>(
         &self,
         bucket: S,
-        object: Vec<ObjectToDelete>,
-    ) -> DeleteObjects {
-        DeleteObjects::new(self.clone(), bucket.into(), object)
+        objects: Vec<ObjectToDelete>,
+    ) -> DeleteObjectsBldr {
+        DeleteObjects::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .objects(objects)
     }
 
     /// Creates a [`DeleteObjectsStreaming`] request builder to delete a stream of objects from an S3 bucket.

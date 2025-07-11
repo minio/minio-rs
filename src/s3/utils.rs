@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::Client;
+use crate::s3::MinioClient;
 use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
@@ -407,7 +407,7 @@ pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), ValidationE
 }
 
 /// Validates SSE (Server-Side Encryption) settings.
-pub fn check_sse(sse: &Option<Arc<dyn Sse>>, client: &Client) -> Result<(), ValidationErr> {
+pub fn check_sse(sse: &Option<Arc<dyn Sse>>, client: &MinioClient) -> Result<(), ValidationErr> {
     if let Some(v) = &sse
         && v.tls_required()
         && !client.is_secure()
@@ -418,7 +418,10 @@ pub fn check_sse(sse: &Option<Arc<dyn Sse>>, client: &Client) -> Result<(), Vali
 }
 
 /// Validates SSE-C (Server-Side Encryption with Customer-Provided Keys) settings.
-pub fn check_ssec(ssec: &Option<SseCustomerKey>, client: &Client) -> Result<(), ValidationErr> {
+pub fn check_ssec(
+    ssec: &Option<SseCustomerKey>,
+    client: &MinioClient,
+) -> Result<(), ValidationErr> {
     if ssec.is_some() && !client.is_secure() {
         return Err(ValidationErr::SseTlsRequired(None));
     }
@@ -428,7 +431,7 @@ pub fn check_ssec(ssec: &Option<SseCustomerKey>, client: &Client) -> Result<(), 
 /// Validates SSE-C (Server-Side Encryption with Customer-Provided Keys) settings and logs an error
 pub fn check_ssec_with_log(
     ssec: &Option<SseCustomerKey>,
-    client: &Client,
+    client: &MinioClient,
     bucket: &str,
     object: &str,
     version: &Option<String>,
