@@ -17,7 +17,7 @@ use crate::s3::Client;
 use crate::s3::client::MAX_MULTIPART_COUNT;
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
-use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::{DeleteError, DeleteObjectResponse, DeleteObjectsResponse};
 use crate::s3::types::{ListEntry, S3Api, S3Request, ToS3Request, ToStream};
 use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};

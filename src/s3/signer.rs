@@ -16,9 +16,8 @@
 //! Signature V4 for S3 API
 
 use crate::s3::header_constants::*;
-use crate::s3::multimap::{Multimap, MultimapExt};
-use crate::s3::utils::{UtcTime, sha256_hash, to_amz_date, to_signer_date};
-use hex::encode as hexencode;
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
+use crate::s3::utils::{UtcTime, hex_encode, sha256_hash, to_amz_date, to_signer_date};
 #[cfg(not(feature = "ring"))]
 use hmac::{Hmac, Mac};
 use hyper::http::Method;
@@ -45,16 +44,14 @@ fn hmac_hash(key: &[u8], data: &[u8]) -> Vec<u8> {
 
 /// Returns hex encoded HMAC hash for given key and data
 fn hmac_hash_hex(key: &[u8], data: &[u8]) -> String {
-    hexencode(hmac_hash(key, data))
+    hex_encode(hmac_hash(key, data).as_slice())
 }
 
 /// Returns scope value of given date, region and service name
 fn get_scope(date: UtcTime, region: &str, service_name: &str) -> String {
     format!(
-        "{}/{}/{}/aws4_request",
-        to_signer_date(date),
-        region,
-        service_name
+        "{}/{region}/{service_name}/aws4_request",
+        to_signer_date(date)
     )
 }
 
@@ -76,10 +73,8 @@ fn get_canonical_request_hash(
 /// Returns string-to-sign value of given date, scope and canonical request hash
 fn get_string_to_sign(date: UtcTime, scope: &str, canonical_request_hash: &str) -> String {
     format!(
-        "AWS4-HMAC-SHA256\n{}\n{}\n{}",
-        to_amz_date(date),
-        scope,
-        canonical_request_hash
+        "AWS4-HMAC-SHA256\n{}\n{scope}\n{canonical_request_hash}",
+        to_amz_date(date)
     )
 }
 

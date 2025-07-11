@@ -17,7 +17,7 @@ use crate::s3::Client;
 use crate::s3::creds::Credentials;
 use crate::s3::error::Error;
 use crate::s3::header_constants::*;
-use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::GetPresignedObjectUrlResponse;
 use crate::s3::signer::presign_v4;
 use crate::s3::utils::{UtcTime, check_bucket_name, check_object_name, utc_now};

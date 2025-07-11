@@ -15,8 +15,9 @@
 
 use http::{Response as HttpResponse, StatusCode};
 use minio::s3::error::Error;
-use rand::distributions::Standard;
-use rand::{Rng, thread_rng};
+
+use rand::Rng;
+use rand::distr::StandardUniform;
 use uuid::Uuid;
 
 pub fn rand_bucket_name() -> String {
@@ -28,9 +29,9 @@ pub fn rand_object_name() -> String {
 }
 
 pub fn rand_object_name_utf8(len: usize) -> String {
-    let rng = thread_rng();
-    rng.sample_iter::<char, _>(Standard)
-        .filter(|c| !c.is_control())
+    let rng = rand::rng();
+    rng.sample_iter(StandardUniform)
+        .filter(|c: &char| !c.is_control())
         .take(len)
         .collect()
 }
@@ -39,9 +40,9 @@ pub async fn get_bytes_from_response(v: Result<reqwest::Response, Error>) -> byt
     match v {
         Ok(r) => match r.bytes().await {
             Ok(b) => b,
-            Err(e) => panic!("{:?}", e),
+            Err(e) => panic!("{e:?}"),
         },
-        Err(e) => panic!("{:?}", e),
+        Err(e) => panic!("{e:?}"),
     }
 }
 
@@ -52,5 +53,5 @@ pub fn get_response_from_bytes(bytes: bytes::Bytes) -> reqwest::Response {
         .body(bytes)
         .expect("Failed to build HTTP response");
 
-    reqwest::Response::try_from(http_response).expect("Failed to convert to reqwest::Response")
+    reqwest::Response::from(http_response)
 }

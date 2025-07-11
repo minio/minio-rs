@@ -15,7 +15,7 @@
 
 use async_std::stream::Stream;
 use bytes::Bytes;
-use futures::io::AsyncRead;
+use futures_io::AsyncRead;
 use rand::prelude::SmallRng;
 use rand::{RngCore, SeedableRng};
 use std::io;
@@ -30,7 +30,7 @@ pub struct RandSrc {
 impl RandSrc {
     #[allow(dead_code)]
     pub fn new(size: u64) -> RandSrc {
-        let rng = SmallRng::from_entropy();
+        let rng: SmallRng = SmallRng::from_os_rng();
         RandSrc { size, rng }
     }
 }

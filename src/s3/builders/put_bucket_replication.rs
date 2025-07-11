@@ -15,7 +15,7 @@
 
 use crate::s3::Client;
 use crate::s3::error::ValidationErr;
-use crate::s3::multimap::Multimap;
+use crate::s3::multimap_ext::Multimap;
 use crate::s3::response::PutBucketReplicationResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{ReplicationConfig, S3Api, S3Request, ToS3Request};

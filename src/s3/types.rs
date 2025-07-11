@@ -18,7 +18,7 @@
 use super::client::{Client, DEFAULT_REGION};
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
-use crate::s3::multimap::Multimap;
+use crate::s3::multimap_ext::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::utils::{UtcTime, get_text_option, get_text_result};
 use async_trait::async_trait;
