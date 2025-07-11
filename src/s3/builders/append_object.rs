@@ -261,7 +261,7 @@ impl AppendObjectContent {
             // Not enough data!
             let expected = object_size.as_u64().unwrap();
             let got = seg_bytes.len() as u64;
-            Err(Error::InsufficientData(expected, got))
+            Err(Error::InsufficientData { expected, got })
         } else {
             // Otherwise, we start a multipart append.
             self.send_mpa(part_size, current_file_size, seg_bytes).await

@@ -37,7 +37,7 @@ use dashmap::DashMap;
 use http::HeaderMap;
 use hyper::http::Method;
 use rand::Rng;
-use reqwest::Body;
+use reqwest::{Body, Response};
 
 mod append_object;
 mod bucket_exists;
@@ -370,13 +370,13 @@ impl Client {
             }
 
             if (size < MIN_PART_SIZE) && (sources_len != 1) && (i != sources_len) {
-                return Err(Error::InvalidComposeSourcePartSize(
-                    source.bucket.clone(),
-                    source.object.clone(),
-                    source.version_id.clone(),
+                return Err(Error::InvalidComposeSourcePartSize {
+                    bucket: source.bucket.clone(),
+                    object: source.object.clone(),
+                    version: source.version_id.clone(),
                     size,
-                    MIN_PART_SIZE,
-                ));
+                    expected_size: MIN_PART_SIZE,
+                });
             }
 
             object_size += size;
@@ -394,13 +394,13 @@ impl Client {
                 }
 
                 if last_part_size < MIN_PART_SIZE && sources_len != 1 && i != sources_len {
-                    return Err(Error::InvalidComposeSourceMultipart(
-                        source.bucket.to_string(),
-                        source.object.to_string(),
-                        source.version_id.clone(),
+                    return Err(Error::InvalidComposeSourceMultipart {
+                        bucket: source.bucket.to_string(),
+                        object: source.object.to_string(),
+                        version: source.version_id.clone(),
                         size,
-                        MIN_PART_SIZE,
-                    ));
+                        expected_size: MIN_PART_SIZE,
+                    });
                 }
 
                 part_count += count as u16;
@@ -409,7 +409,7 @@ impl Client {
             }
 
             if part_count > MAX_MULTIPART_COUNT {
-                return Err(Error::InvalidMultipartCount(MAX_MULTIPART_COUNT));
+                return Err(Error::InvalidMultipartCount(MAX_MULTIPART_COUNT as u64));
             }
         }
 
@@ -516,8 +516,7 @@ impl Client {
             req = req.body(Body::wrap_stream(stream));
         }
 
-        let resp: reqwest::Response = req.send().await?;
-
+        let resp: Response = req.send().await?;
         if resp.status().is_success() {
             return Ok(resp);
         }
@@ -663,11 +662,17 @@ impl SharedClientItems {
                             Ok(v) => Error::S3Error(v),
                             Err(e) => e,
                         },
-                        false => Error::InvalidResponse(http_status_code, s.to_string()),
+                        false => Error::InvalidResponse {
+                            status_code: http_status_code,
+                            content_type: s.to_string(),
+                        },
                     },
-                    Err(e) => return Error::StrError(e),
+                    Err(e) => return Error::StrError(e.to_string()),
                 },
-                _ => Error::InvalidResponse(http_status_code, String::new()),
+                _ => Error::InvalidResponse {
+                    status_code: http_status_code,
+                    content_type: String::new(),
+                },
             };
         }
 
@@ -714,7 +719,7 @@ impl SharedClientItems {
         let request_id: String = match headers.get("x-amz-request-id") {
             Some(v) => match v.to_str() {
                 Ok(s) => s.to_string(),
-                Err(e) => return Error::StrError(e),
+                Err(e) => return Error::StrError(e.to_string()),
             },
             _ => String::new(),
         };
@@ -722,7 +727,7 @@ impl SharedClientItems {
         let host_id: String = match headers.get("x-amz-id-2") {
             Some(v) => match v.to_str() {
                 Ok(s) => s.to_string(),
-                Err(e) => return Error::StrError(e),
+                Err(e) => return Error::StrError(e.to_string()),
             },
             _ => String::new(),
         };

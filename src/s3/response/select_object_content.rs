@@ -85,10 +85,10 @@ impl SelectObjectContentResponse {
 
         self.prelude_read = true;
         for i in 0..8 {
-            self.prelude[i] = self
-                .buf
-                .pop_front()
-                .ok_or(Error::InsufficientData(8, i as u64))?;
+            self.prelude[i] = self.buf.pop_front().ok_or(Error::InsufficientData {
+                expected: 8,
+                got: i as u64,
+            })?;
         }
 
         Ok(true)
@@ -101,10 +101,10 @@ impl SelectObjectContentResponse {
 
         self.prelude_crc_read = true;
         for i in 0..4 {
-            self.prelude_crc[i] = self
-                .buf
-                .pop_front()
-                .ok_or(Error::InsufficientData(4, i as u64))?;
+            self.prelude_crc[i] = self.buf.pop_front().ok_or(Error::InsufficientData {
+                expected: 4,
+                got: i as u64,
+            })?;
         }
 
         Ok(true)
@@ -120,11 +120,11 @@ impl SelectObjectContentResponse {
 
         self.data_read = true;
         for i in 0..data_length {
-            self.data.push(
-                self.buf
-                    .pop_front()
-                    .ok_or(Error::InsufficientData(data_length as u64, i as u64))?,
-            );
+            self.data
+                .push(self.buf.pop_front().ok_or(Error::InsufficientData {
+                    expected: data_length as u64,
+                    got: i as u64,
+                })?);
         }
 
         Ok(true)
@@ -137,10 +137,10 @@ impl SelectObjectContentResponse {
 
         self.message_crc_read = true;
         for i in 0..4 {
-            self.message_crc[i] = self
-                .buf
-                .pop_front()
-                .ok_or(Error::InsufficientData(4, i as u64))?;
+            self.message_crc[i] = self.buf.pop_front().ok_or(Error::InsufficientData {
+                expected: 4,
+                got: i as u64,
+            })?;
         }
 
         Ok(true)
@@ -156,7 +156,7 @@ impl SelectObjectContentResponse {
                 break;
             }
 
-            let name = String::from_utf8(self.data[offset..offset + length].to_vec())?;
+            let name: &str = std::str::from_utf8(&self.data[offset..offset + length])?;
             offset += length;
             if self.data[offset] != 7 {
                 return Err(Error::InvalidHeaderValueType(self.data[offset]));
@@ -169,10 +169,10 @@ impl SelectObjectContentResponse {
             offset += 1;
             length = ((b0 << 8) | b1) as usize;
 
-            let value = String::from_utf8(self.data[offset..offset + length].to_vec())?;
+            let value = std::str::from_utf8(&self.data[offset..offset + length])?;
             offset += length;
 
-            headers.insert(name, value);
+            headers.insert(name.to_string(), value.to_string());
         }
 
         Ok(headers)
@@ -204,7 +204,11 @@ impl SelectObjectContentResponse {
                 let expected = uint32(&self.prelude_crc)?;
                 if got != expected {
                     self.done = true;
-                    return Err(Error::CrcMismatch("prelude".into(), expected, got));
+                    return Err(Error::CrcMismatch {
+                        crc_type: "prelude".into(),
+                        expected,
+                        got,
+                    });
                 }
 
                 self.total_length = uint32(&self.prelude[0..4])? as usize;
@@ -228,7 +232,11 @@ impl SelectObjectContentResponse {
                 let expected = uint32(&self.message_crc)?;
                 if got != expected {
                     self.done = true;
-                    return Err(Error::CrcMismatch("message".into(), expected, got));
+                    return Err(Error::CrcMismatch {
+                        crc_type: "message".into(),
+                        expected,
+                        got,
+                    });
                 }
             }
 
@@ -240,16 +248,16 @@ impl SelectObjectContentResponse {
             };
             if value == "error" {
                 self.done = true;
-                return Err(Error::SelectError(
-                    match headers.get(":error-code") {
+                return Err(Error::SelectError {
+                    error_code: match headers.get(":error-code") {
                         Some(v) => v.clone(),
                         None => String::new(),
                     },
-                    match headers.get(":error-message") {
+                    error_message: match headers.get(":error-message") {
                         Some(v) => v.clone(),
                         None => String::new(),
                     },
-                ));
+                });
             }
 
             let event_type = match headers.get(":event-type") {

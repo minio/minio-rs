@@ -13,13 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Error definitions for S3 operations
-
 extern crate alloc;
 use crate::s3::utils::get_default_text;
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
-use std::fmt;
+use thiserror::Error;
 use xmltree::Element;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -98,12 +96,27 @@ pub struct ErrorResponse {
     pub object_name: String,
 }
 
+impl std::fmt::Display for ErrorResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "s3 operation failed; code: {:?}, message: {}, resource: {}, request_id: {}, host_id: {}, bucket_name: {}, object_name: {}",
+            self.code,
+            self.message,
+            self.resource,
+            self.request_id,
+            self.host_id,
+            self.bucket_name,
+            self.object_name,
+        )
+    }
+}
+
+impl std::error::Error for ErrorResponse {}
+
 impl ErrorResponse {
     pub fn parse(body: Bytes, headers: HeaderMap) -> Result<Self, Error> {
-        let root = match Element::parse(body.reader()) {
-            Ok(v) => v,
-            Err(e) => return Err(Error::XmlParseError(e)),
-        };
+        let root = Element::parse(body.reader()).map_err(Error::XmlParseError)?;
 
         Ok(Self {
             headers,
@@ -119,296 +132,357 @@ impl ErrorResponse {
 }
 
 /// Error definitions
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
-    TimeParseError(chrono::ParseError),
-    InvalidUrl(http::uri::InvalidUri),
-    IOError(std::io::Error),
-    XmlParseError(xmltree::ParseError),
-    HttpError(reqwest::Error),
-    StrError(reqwest::header::ToStrError),
-    IntError(std::num::ParseIntError),
-    BoolError(std::str::ParseBoolError),
-    Utf8Error(Box<dyn std::error::Error + Send + Sync + 'static>),
-    JsonError(serde_json::Error),
+    #[error("Time parse error: {0}")]
+    TimeParseError(#[from] chrono::ParseError),
+
+    #[error("Invalid URL: {0}")]
+    InvalidUrl(#[from] http::uri::InvalidUri),
+
+    #[error("IO error: {0}")]
+    IOError(#[from] std::io::Error),
+
+    #[error("XML parse error: {0}")]
+    XmlParseError(#[from] xmltree::ParseError),
+
+    #[error("HTTP error: {0}")]
+    HttpError(#[from] reqwest::Error),
+
+    #[error("String error: {0}")]
+    StrError(String),
+
+    #[error("Integer parsing error: {0}")]
+    IntError(#[from] std::num::ParseIntError),
+
+    #[error("Boolean parsing error: {0}")]
+    BoolError(#[from] std::str::ParseBoolError),
+
+    #[error("Failed to parse as UTF-8: {source}")]
+    Utf8Error {
+        #[from]
+        source: std::str::Utf8Error,
+    },
+
+    #[error("JSON error: {0}")]
+    JsonError(#[from] serde_json::Error),
+
+    #[error("XML error: {0}")]
     XmlError(String),
-    InvalidBaseUrl(String),
+
+    #[error("Invalid bucket name: {0}")]
     InvalidBucketName(String),
-    UrlBuildError(String),
-    RegionMismatch(String, String),
-    S3Error(ErrorResponse),
-    InvalidResponse(u16, String),
-    ServerError(u16),
+
+    #[error("Invalid object name: {0}")]
     InvalidObjectName(String),
+
+    #[error("Invalid upload ID: {0}")]
     InvalidUploadId(String),
+
+    #[error("Invalid part number: {0}")]
     InvalidPartNumber(String),
+
+    #[error("Invalid user metadata: {0}")]
     InvalidUserMetadata(String),
+
+    #[error("Empty parts: {0}")]
     EmptyParts(String),
+
+    #[error("Invalid retention mode: {0}")]
     InvalidRetentionMode(String),
+
+    #[error("Invalid retention configuration: {0}")]
     InvalidRetentionConfig(String),
+
+    #[error("Part size {0} is not supported; minimum allowed 5MiB")]
     InvalidMinPartSize(u64),
+
+    #[error("Part size {0} is not supported; maximum allowed 5GiB")]
     InvalidMaxPartSize(u64),
+
+    #[error("Object size {0} is not supported; maximum allowed 5TiB")]
     InvalidObjectSize(u64),
+
+    #[error("Valid part size must be provided when object size is unknown")]
     MissingPartSize,
-    InvalidPartCount(u64, u64, u16),
+
+    #[error(
+        "Object size {object_size} and part size {part_size} make more than {part_count} parts for upload"
+    )]
+    InvalidPartCount {
+        object_size: u64,
+        part_size: u64,
+        part_count: u16,
+    },
+
+    #[error("Too many parts for upload")]
     TooManyParts,
+
+    #[error("{}", sse_tls_required_message(.0))]
     SseTlsRequired(Option<String>),
+
+    #[error("Too much data in the stream - exceeds {0} bytes")]
     TooMuchData(u64),
-    InsufficientData(u64, u64),
+
+    #[error("Not enough data in the stream; expected: {expected}, got: {got} bytes")]
+    InsufficientData { expected: u64, got: u64 },
+
+    #[error("Invalid legal hold: {0}")]
     InvalidLegalHold(String),
+
+    #[error("Invalid select expression: {0}")]
     InvalidSelectExpression(String),
+
+    #[error("Invalid header value type: {0}")]
     InvalidHeaderValueType(u8),
-    CrcMismatch(String, u32, u32),
+
+    #[error("Invalid base URL: {0}")]
+    InvalidBaseUrl(String),
+
+    #[error("URL build error: {0}")]
+    UrlBuildError(String),
+
+    #[error("Region must be {bucket_region}, but passed {region}")]
+    RegionMismatch {
+        bucket_region: String,
+        region: String,
+    },
+
+    #[error("S3 error: {0}")]
+    S3Error(#[from] ErrorResponse),
+
+    #[error("Invalid response received; status code: {status_code}; content-type: {content_type}")]
+    InvalidResponse {
+        status_code: u16,
+        content_type: String,
+    },
+
+    #[error("Server failed with HTTP status code {0}")]
+    ServerError(u16),
+
+    #[error("{crc_type} CRC mismatch; expected: {expected}, got: {got}")]
+    CrcMismatch {
+        crc_type: String,
+        expected: u32,
+        got: u32,
+    },
+
+    #[error("Unknown event type: {0}")]
     UnknownEventType(String),
-    SelectError(String, String),
+
+    #[error("Error code: {error_code}, error message: {error_message}")]
+    SelectError {
+        error_code: String,
+        error_message: String,
+    },
+
+    #[error("{0} API is not supported in Amazon AWS S3")]
     UnsupportedApi(String),
+
+    #[error("Invalid compose source: {0}")]
     InvalidComposeSource(String),
-    InvalidComposeSourceOffset(String, String, Option<String>, u64, u64),
-    InvalidComposeSourceLength(String, String, Option<String>, u64, u64),
-    InvalidComposeSourceSize(String, String, Option<String>, u64, u64),
-    InvalidComposeSourcePartSize(String, String, Option<String>, u64, u64),
-    InvalidComposeSourceMultipart(String, String, Option<String>, u64, u64),
+
+    #[error("{}", invalid_compose_source_offset_message(.bucket, .object, .version, *.offset, *.object_size))]
+    InvalidComposeSourceOffset {
+        bucket: String,
+        object: String,
+        version: Option<String>,
+        offset: u64,
+        object_size: u64,
+    },
+
+    #[error("{}", invalid_compose_source_length_message(.bucket, .object, .version, *.length, *.object_size))]
+    InvalidComposeSourceLength {
+        bucket: String,
+        object: String,
+        version: Option<String>,
+        length: u64,
+        object_size: u64,
+    },
+
+    #[error("{}", invalid_compose_source_size_message(.bucket, .object, .version, *.compose_size, *.object_size))]
+    InvalidComposeSourceSize {
+        bucket: String,
+        object: String,
+        version: Option<String>,
+        compose_size: u64,
+        object_size: u64,
+    },
+
+    #[error("Invalid directive: {0}")]
     InvalidDirective(String),
+
+    #[error("Invalid copy directive: {0}")]
     InvalidCopyDirective(String),
-    InvalidMultipartCount(u16),
+
+    #[error("{}", invalid_compose_source_part_size_message(.bucket, .object, .version, *.size, *.expected_size))]
+    InvalidComposeSourcePartSize {
+        bucket: String,
+        object: String,
+        version: Option<String>,
+        size: u64,
+        expected_size: u64,
+    },
+
+    #[error("{}", invalid_compose_source_multipart_message(.bucket, .object, .version, *.size, *.expected_size))]
+    InvalidComposeSourceMultipart {
+        bucket: String,
+        object: String,
+        version: Option<String>,
+        size: u64,
+        expected_size: u64,
+    },
+
+    #[error("Compose sources create more than allowed multipart count {0}")]
+    InvalidMultipartCount(u64),
+
+    #[error(
+        "At least one of action (AbortIncompleteMultipartUpload, Expiration, NoncurrentVersionExpiration, NoncurrentVersionTransition or Transition) must be specified in a rule"
+    )]
     MissingLifecycleAction,
+
+    #[error("ExpiredObjectDeleteMarker must not be provided along with Date and Days")]
     InvalidExpiredObjectDeleteMarker,
+
+    #[error("Only one of date or days of {0} must be set")]
     InvalidDateAndDays(String),
+
+    #[error("ID must not exceed 255 characters")]
     InvalidLifecycleRuleId,
+
+    #[error("Only one of And, Prefix or Tag must be provided")]
     InvalidFilter,
+
+    #[error("Invalid versioning status: {0}")]
     InvalidVersioningStatus(String),
+
+    #[error("Post policy error: {0}")]
     PostPolicyError(String),
+
+    #[error("Invalid object lock config: {0}")]
     InvalidObjectLockConfig(String),
+
+    #[error("No client provided")]
     NoClientProvided,
-    TagDecodingError(String, String),
+
+    #[error("Tag decoding failed: {error_message} on input '{input}'")]
+    TagDecodingError {
+        input: String,
+        error_message: String,
+    },
+
+    #[error("Content length is unknown")]
     ContentLengthUnknown,
 }
 
-impl std::error::Error for Error {}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::TimeParseError(e) => write!(f, "{e}"),
-            Error::InvalidUrl(e) => write!(f, "{e}"),
-            Error::IOError(e) => write!(f, "{e}"),
-            Error::XmlParseError(e) => write!(f, "{e}"),
-            Error::HttpError(e) => write!(f, "{e}"),
-            Error::StrError(e) => write!(f, "{e}"),
-            Error::IntError(e) => write!(f, "{e}"),
-            Error::BoolError(e) => write!(f, "{e}"),
-            Error::Utf8Error(e) => write!(f, "{e}"),
-            Error::JsonError(e) => write!(f, "{e}"),
-            Error::XmlError(m) => write!(f, "{m}"),
-            Error::InvalidBucketName(m) => write!(f, "{m}"),
-            Error::InvalidObjectName(m) => write!(f, "{m}"),
-            Error::InvalidUploadId(m) => write!(f, "{m}"),
-            Error::InvalidPartNumber(m) => write!(f, "{m}"),
-            Error::InvalidUserMetadata(m) => write!(f, "{m}"),
-            Error::EmptyParts(m) => write!(f, "{m}"),
-            Error::InvalidRetentionMode(m) => write!(f, "invalid retention mode {m}"),
-            Error::InvalidRetentionConfig(m) => write!(f, "invalid retention configuration; {m}"),
-            Error::InvalidMinPartSize(s) => {
-                write!(f, "part size {s} is not supported; minimum allowed 5MiB")
-            }
-            Error::InvalidMaxPartSize(s) => {
-                write!(f, "part size {s} is not supported; maximum allowed 5GiB")
-            }
-            Error::InvalidObjectSize(s) => {
-                write!(f, "object size {s} is not supported; maximum allowed 5TiB",)
-            }
-            Error::MissingPartSize => write!(
-                f,
-                "valid part size must be provided when object size is unknown"
-            ),
-            Error::InvalidPartCount(os, ps, pc) => write!(
-                f,
-                "object size {os} and part size {ps} make more than {pc} parts for upload"
-            ),
-            Error::TooManyParts => write!(f, "too many parts for upload"),
-            Error::SseTlsRequired(m) => write!(
-                f,
-                "{}SSE operation must be performed over a secure connection",
-                m.as_ref().map_or(String::new(), |v| v.clone())
-            ),
-            Error::TooMuchData(s) => write!(f, "too much data in the stream - exceeds {s} bytes"),
-            Error::InsufficientData(expected, got) => write!(
-                f,
-                "not enough data in the stream; expected: {expected}, got: {got} bytes",
-            ),
-            Error::InvalidBaseUrl(m) => write!(f, "{m}"),
-            Error::UrlBuildError(m) => write!(f, "{m}"),
-            Error::InvalidLegalHold(s) => write!(f, "invalid legal hold {s}"),
-            Error::RegionMismatch(br, r) => write!(f, "region must be {br}, but passed {r}"),
-            Error::S3Error(er) => write!(
-                f,
-                "s3 operation failed; code: {:?}, message: {}, resource: {}, request_id: {}, host_id: {}, bucket_name: {}, object_name: {}",
-                er.code,
-                er.message,
-                er.resource,
-                er.request_id,
-                er.host_id,
-                er.bucket_name,
-                er.object_name,
-            ),
-            Error::InvalidResponse(sc, ct) => write!(
-                f,
-                "invalid response received; status code: {sc}; content-type: {ct}"
-            ),
-            Error::ServerError(sc) => write!(f, "server failed with HTTP status code {sc}"),
-            Error::InvalidSelectExpression(m) => write!(f, "{m}"),
-            Error::InvalidHeaderValueType(v) => write!(f, "invalid header value type {v}"),
-            Error::CrcMismatch(t, e, g) => {
-                write!(f, "{t} CRC mismatch; expected: {e}, got: {g}")
-            }
-            Error::UnknownEventType(et) => write!(f, "unknown event type {et}"),
-            Error::SelectError(ec, em) => write!(f, "error code: {ec}, error message: {em}"),
-            Error::UnsupportedApi(a) => write!(f, "{a} API is not supported in Amazon AWS S3"),
-            Error::InvalidComposeSource(m) => write!(f, "{m}"),
-            Error::InvalidComposeSourceOffset(b, o, v, of, os) => write!(
-                f,
-                "source {}/{}{}: offset {} is beyond object size {}",
-                b,
-                o,
-                v.as_ref()
-                    .map_or(String::new(), |v| String::from("?versionId=") + v),
-                of,
-                os
-            ),
-            Error::InvalidComposeSourceLength(b, o, v, l, os) => write!(
-                f,
-                "source {}/{}{}: length {} is beyond object size {}",
-                b,
-                o,
-                v.as_ref()
-                    .map_or(String::new(), |v| String::from("?versionId=") + v),
-                l,
-                os
-            ),
-            Error::InvalidComposeSourceSize(b, o, v, cs, os) => write!(
-                f,
-                "source {}/{}{}: compose size {} is beyond object size {}",
-                b,
-                o,
-                v.as_ref()
-                    .map_or(String::new(), |v| String::from("?versionId=") + v),
-                cs,
-                os
-            ),
-            Error::InvalidDirective(m) => write!(f, "{m}"),
-            Error::InvalidCopyDirective(m) => write!(f, "{m}"),
-            Error::InvalidComposeSourcePartSize(b, o, v, s, es) => write!(
-                f,
-                "source {}/{}{}: size {} must be greater than {}",
-                b,
-                o,
-                v.as_ref()
-                    .map_or(String::new(), |v| String::from("?versionId=") + v),
-                s,
-                es
-            ),
-            Error::InvalidComposeSourceMultipart(b, o, v, s, es) => write!(
-                f,
-                "source {}/{}{}: size {} for multipart split upload of {}, last part size is less than {}",
-                b,
-                o,
-                v.as_ref()
-                    .map_or(String::new(), |v| String::from("?versionId=") + v),
-                s,
-                s,
-                es
-            ),
-            Error::InvalidMultipartCount(c) => write!(
-                f,
-                "Compose sources create more than allowed multipart count {c}",
-            ),
-            Error::MissingLifecycleAction => write!(
-                f,
-                "at least one of action (AbortIncompleteMultipartUpload, Expiration, NoncurrentVersionExpiration, NoncurrentVersionTransition or Transition) must be specified in a rule"
-            ),
-            Error::InvalidExpiredObjectDeleteMarker => write!(
-                f,
-                "ExpiredObjectDeleteMarker must not be provided along with Date and Days"
-            ),
-            Error::InvalidDateAndDays(m) => {
-                write!(f, "Only one of date or days of {m} must be set")
-            }
-            Error::InvalidLifecycleRuleId => write!(f, "id must be exceed 255 characters"),
-            Error::InvalidFilter => write!(f, "only one of And, Prefix or Tag must be provided"),
-            Error::InvalidVersioningStatus(m) => write!(f, "{m}"),
-            Error::PostPolicyError(m) => write!(f, "{m}"),
-            Error::InvalidObjectLockConfig(m) => write!(f, "{m}"),
-            Error::NoClientProvided => write!(f, "no client provided"),
-            Error::TagDecodingError(input, error_message) => {
-                write!(f, "tag decoding failed: {error_message} on input '{input}'")
-            }
-            Error::ContentLengthUnknown => write!(f, "content length is unknown"),
-        }
-    }
-}
-
-impl From<chrono::ParseError> for Error {
-    fn from(err: chrono::ParseError) -> Self {
-        Error::TimeParseError(err)
-    }
-}
-
-impl From<http::uri::InvalidUri> for Error {
-    fn from(err: http::uri::InvalidUri) -> Self {
-        Error::InvalidUrl(err)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Error::IOError(err)
-    }
-}
-
-impl From<xmltree::ParseError> for Error {
-    fn from(err: xmltree::ParseError) -> Self {
-        Error::XmlParseError(err)
-    }
-}
-
-impl From<reqwest::Error> for Error {
-    fn from(err: reqwest::Error) -> Self {
-        Error::HttpError(err)
-    }
-}
-
+// Keep this manual implementation
 impl From<reqwest::header::ToStrError> for Error {
     fn from(err: reqwest::header::ToStrError) -> Self {
-        Error::StrError(err)
+        Error::StrError(err.to_string())
     }
 }
 
-impl From<std::num::ParseIntError> for Error {
-    fn from(err: std::num::ParseIntError) -> Self {
-        Error::IntError(err)
+// Helper functions for formatting error messages with Option<String>
+fn sse_tls_required_message(prefix: &Option<String>) -> String {
+    match prefix {
+        Some(p) => format!("{p} SSE operation must be performed over a secure connection",),
+        None => "SSE operation must be performed over a secure connection".to_string(),
     }
 }
 
-impl From<std::str::ParseBoolError> for Error {
-    fn from(err: std::str::ParseBoolError) -> Self {
-        Error::BoolError(err)
+fn format_version(version: &Option<String>) -> String {
+    match version {
+        Some(v) => format!("?versionId={v}"),
+        None => String::new(),
     }
 }
 
-impl From<alloc::string::FromUtf8Error> for Error {
-    fn from(err: alloc::string::FromUtf8Error) -> Self {
-        Error::Utf8Error(err.into())
-    }
+// region message helpers
+
+fn invalid_compose_source_offset_message(
+    bucket: &str,
+    object: &str,
+    version: &Option<String>,
+    offset: u64,
+    object_size: u64,
+) -> String {
+    format!(
+        "source {}/{}{}: offset {} is beyond object size {}",
+        bucket,
+        object,
+        format_version(version),
+        offset,
+        object_size
+    )
 }
 
-impl From<std::str::Utf8Error> for Error {
-    fn from(err: std::str::Utf8Error) -> Self {
-        Error::Utf8Error(err.into())
-    }
+fn invalid_compose_source_length_message(
+    bucket: &str,
+    object: &str,
+    version: &Option<String>,
+    length: u64,
+    object_size: u64,
+) -> String {
+    format!(
+        "source {}/{}{}: length {} is beyond object size {}",
+        bucket,
+        object,
+        format_version(version),
+        length,
+        object_size
+    )
 }
 
-impl From<serde_json::Error> for Error {
-    fn from(err: serde_json::Error) -> Self {
-        Error::JsonError(err)
-    }
+fn invalid_compose_source_size_message(
+    bucket: &str,
+    object: &str,
+    version: &Option<String>,
+    compose_size: u64,
+    object_size: u64,
+) -> String {
+    format!(
+        "source {}/{}{}: compose size {} is beyond object size {}",
+        bucket,
+        object,
+        format_version(version),
+        compose_size,
+        object_size
+    )
 }
+
+fn invalid_compose_source_part_size_message(
+    bucket: &str,
+    object: &str,
+    version: &Option<String>,
+    size: u64,
+    expected_size: u64,
+) -> String {
+    format!(
+        "source {}/{}{}: size {} must be greater than {}",
+        bucket,
+        object,
+        format_version(version),
+        size,
+        expected_size
+    )
+}
+
+fn invalid_compose_source_multipart_message(
+    bucket: &str,
+    object: &str,
+    version: &Option<String>,
+    size: u64,
+    expected_size: u64,
+) -> String {
+    format!(
+        "source {}/{}{}: size {} for multipart split upload of {}, last part size is less than {}",
+        bucket,
+        object,
+        format_version(version),
+        size,
+        size,
+        expected_size
+    )
+}
+
+// endregion message helpers

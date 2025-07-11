@@ -86,7 +86,10 @@ impl ToS3Request for CreateBucket {
             (None, Some(v)) => v.to_string(),
             (Some(r1), Some(r2)) if r1 == r2 => self.region.unwrap(), // Both are Some and equal
             (Some(r1), Some(r2)) => {
-                return Err(Error::RegionMismatch(r1.to_string(), r2.to_string()));
+                return Err(Error::RegionMismatch {
+                    bucket_region: r1.to_string(),
+                    region: r2.to_string(),
+                });
             }
         };
 
