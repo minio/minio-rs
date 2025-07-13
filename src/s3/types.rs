@@ -17,7 +17,7 @@
 
 use super::client::{Client, DEFAULT_REGION};
 use crate::s3::error::{MinioError, Result};
-use crate::s3::utils::{UtcTime, get_option_text, get_text};
+use crate::s3::utils::{UtcTime, get_text_option, get_text_result};
 
 use crate::s3::multimap::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
@@ -961,7 +961,10 @@ impl Filter {
                             let tag = xml_node.as_element().ok_or(MinioError::XmlError(
                                 "<Tag> element not found".to_string(),
                             ))?;
-                            map.insert(get_text(tag, "Key")?, get_text(tag, "Value")?);
+                            map.insert(
+                                get_text_result(tag, "Key")?,
+                                get_text_result(tag, "Value")?,
+                            );
                         }
                         Some(map)
                     }
@@ -984,8 +987,8 @@ impl Filter {
 
         let tag = match element.get_child("Tag") {
             Some(v) => Some(Tag {
-                key: get_text(v, "Key")?,
-                value: get_text(v, "Value")?,
+                key: get_text_result(v, "Key")?,
+                value: get_text_result(v, "Value")?,
             }),
             None => None,
         };
@@ -1068,7 +1071,7 @@ fn parse_common_notification_config(
         );
     }
 
-    let id = get_option_text(element, "Id");
+    let id = get_text_option(element, "Id");
 
     let (prefix_filter_rule, suffix_filter_rule) = match element.get_child("Filter") {
         Some(filter) => {
@@ -1081,8 +1084,8 @@ fn parse_common_notification_config(
                 let v = rule.as_element().ok_or(MinioError::XmlError(
                     "<FilterRule> tag not found".to_string(),
                 ))?;
-                let name = get_text(v, "Name")?;
-                let value = get_text(v, "Value")?;
+                let name = get_text_result(v, "Name")?;
+                let value = get_text_result(v, "Value")?;
                 if PrefixFilterRule::NAME == name {
                     prefix = Some(PrefixFilterRule { value });
                 } else {
@@ -1179,7 +1182,7 @@ impl CloudFuncConfig {
             id,
             prefix_filter_rule,
             suffix_filter_rule,
-            cloud_func: get_text(element, "CloudFunction")?,
+            cloud_func: get_text_result(element, "CloudFunction")?,
         })
     }
 
@@ -1230,7 +1233,7 @@ impl QueueConfig {
             id,
             prefix_filter_rule,
             suffix_filter_rule,
-            queue: get_text(element, "Queue")?,
+            queue: get_text_result(element, "Queue")?,
         })
     }
 
@@ -1281,7 +1284,7 @@ impl TopicConfig {
             id,
             prefix_filter_rule,
             suffix_filter_rule,
-            topic: get_text(element, "Topic")?,
+            topic: get_text_result(element, "Topic")?,
         })
     }
 
@@ -1477,22 +1480,22 @@ pub struct Destination {
 impl Destination {
     pub fn from_xml(element: &Element) -> Result<Destination> {
         Ok(Destination {
-            bucket_arn: get_text(element, "Bucket")?,
+            bucket_arn: get_text_result(element, "Bucket")?,
             access_control_translation: match element.get_child("AccessControlTranslation") {
                 Some(v) => Some(AccessControlTranslation {
-                    owner: get_text(v, "Owner")?,
+                    owner: get_text_result(v, "Owner")?,
                 }),
                 _ => None,
             },
-            account: get_option_text(element, "Account"),
+            account: get_text_option(element, "Account"),
             encryption_config: element.get_child("EncryptionConfiguration").map(|v| {
                 EncryptionConfig {
-                    replica_kms_key_id: get_option_text(v, "ReplicaKmsKeyID"),
+                    replica_kms_key_id: get_text_option(v, "ReplicaKmsKeyID"),
                 }
             }),
             metrics: match element.get_child("Metrics") {
                 Some(v) => Some(Metrics {
-                    event_threshold_minutes: match get_option_text(
+                    event_threshold_minutes: match get_text_option(
                         v.get_child("EventThreshold")
                             .ok_or(MinioError::XmlError("<Metrics> tag not found".to_string()))?,
                         "Minutes",
@@ -1500,21 +1503,21 @@ impl Destination {
                         Some(v) => Some(v.parse::<i32>()?),
                         _ => None,
                     },
-                    status: get_text(v, "Status")? == "Enabled",
+                    status: get_text_result(v, "Status")? == "Enabled",
                 }),
                 _ => None,
             },
             replication_time: match element.get_child("ReplicationTime") {
                 Some(v) => Some(ReplicationTime {
-                    time_minutes: match get_option_text(v, "Time") {
+                    time_minutes: match get_text_option(v, "Time") {
                         Some(v) => Some(v.parse::<i32>()?),
                         _ => None,
                     },
-                    status: get_text(v, "Status")? == "Enabled",
+                    status: get_text_result(v, "Status")? == "Enabled",
                 }),
                 _ => None,
             },
-            storage_class: get_option_text(element, "StorageClass"),
+            storage_class: get_text_option(element, "StorageClass"),
         })
     }
 
@@ -1625,28 +1628,30 @@ impl ReplicationRule {
                 MinioError::XmlError("<Destination> tag not found".to_string()),
             )?)?,
             delete_marker_replication_status: match element.get_child("DeleteMarkerReplication") {
-                Some(v) => Some(get_text(v, "Status")? == "Enabled"),
+                Some(v) => Some(get_text_result(v, "Status")? == "Enabled"),
                 _ => None,
             },
             existing_object_replication_status: match element.get_child("ExistingObjectReplication")
             {
-                Some(v) => Some(get_text(v, "Status")? == "Enabled"),
+                Some(v) => Some(get_text_result(v, "Status")? == "Enabled"),
                 _ => None,
             },
             filter: match element.get_child("Filter") {
                 Some(v) => Some(Filter::from_xml(v)?),
                 _ => None,
             },
-            id: get_option_text(element, "ID"),
-            prefix: get_option_text(element, "Prefix"),
-            priority: match get_option_text(element, "Priority") {
+            id: get_text_option(element, "ID"),
+            prefix: get_text_option(element, "Prefix"),
+            priority: match get_text_option(element, "Priority") {
                 Some(v) => Some(v.parse::<i32>()?),
                 _ => None,
             },
             source_selection_criteria: match element.get_child("SourceSelectionCriteria") {
                 Some(v) => match v.get_child("SseKmsEncryptedObjects") {
                     Some(v) => Some(SourceSelectionCriteria {
-                        sse_kms_encrypted_objects_status: Some(get_text(v, "Status")? == "Enabled"),
+                        sse_kms_encrypted_objects_status: Some(
+                            get_text_result(v, "Status")? == "Enabled",
+                        ),
                     }),
                     _ => Some(SourceSelectionCriteria {
                         sse_kms_encrypted_objects_status: None,
@@ -1655,10 +1660,10 @@ impl ReplicationRule {
                 _ => None,
             },
             delete_replication_status: match element.get_child("DeleteReplication") {
-                Some(v) => Some(get_text(v, "Status")? == "Enabled"),
+                Some(v) => Some(get_text_result(v, "Status")? == "Enabled"),
                 _ => None,
             },
-            status: get_text(element, "Status")? == "Enabled",
+            status: get_text_result(element, "Status")? == "Enabled",
         })
     }
 
@@ -1756,7 +1761,7 @@ pub struct ReplicationConfig {
 impl ReplicationConfig {
     pub fn from_xml(root: &Element) -> Result<ReplicationConfig> {
         let mut config = ReplicationConfig {
-            role: get_option_text(root, "Role"),
+            role: get_text_option(root, "Role"),
             rules: Vec::new(),
         };
 
@@ -1825,14 +1830,16 @@ impl ObjectLockConfig {
             let default_retention = r.get_child("DefaultRetention").ok_or(MinioError::XmlError(
                 "<DefaultRetention> tag not found".to_string(),
             ))?;
-            config.retention_mode =
-                Some(RetentionMode::parse(&get_text(default_retention, "Mode")?)?);
+            config.retention_mode = Some(RetentionMode::parse(&get_text_result(
+                default_retention,
+                "Mode",
+            )?)?);
 
-            if let Some(v) = get_option_text(default_retention, "Days") {
+            if let Some(v) = get_text_option(default_retention, "Days") {
                 config.retention_duration_days = Some(v.parse::<i32>()?);
             }
 
-            if let Some(v) = get_option_text(default_retention, "Years") {
+            if let Some(v) = get_text_option(default_retention, "Years") {
                 config.retention_duration_years = Some(v.parse::<i32>()?);
             }
         }

@@ -15,10 +15,11 @@
 
 extern crate alloc;
 
-use crate::s3::utils::get_default_text;
+use crate::s3::utils::{get_text_default, get_text_option};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::str::FromStr;
+use std::string::ToString;
 use thiserror::Error;
 use xmltree::Element;
 
@@ -29,7 +30,7 @@ pub type Result<T> = std::result::Result<T, MinioError>;
 pub enum MinioErrorCode {
     #[default]
     NoError,
-    InvalidMinioErrorCode(String), // This is a catch-all for any error code not explicitly defined
+    InvalidMinioErrorCode,
 
     PermanentRedirect,
     Redirect,
@@ -48,18 +49,47 @@ pub enum MinioErrorCode {
     ResourceConflict,
     AccessDenied,
     NotSupported,
-    BucketNotEmpty(String), // String contains optional reason msg
+    BucketNotEmpty,
     BucketAlreadyOwnedByYou,
     InvalidWriteOffset,
 
-    OtherError(String),
+    OtherError(String), // This is a catch-all for any error code not explicitly defined
 }
+
+#[allow(dead_code)]
+const ALL_MINIO_ERROR_CODE: &[MinioErrorCode] = &[
+    MinioErrorCode::NoError,
+    MinioErrorCode::InvalidMinioErrorCode,
+    MinioErrorCode::PermanentRedirect,
+    MinioErrorCode::Redirect,
+    MinioErrorCode::BadRequest,
+    MinioErrorCode::RetryHead,
+    MinioErrorCode::NoSuchBucket,
+    MinioErrorCode::NoSuchBucketPolicy,
+    MinioErrorCode::ReplicationConfigurationNotFoundError,
+    MinioErrorCode::ServerSideEncryptionConfigurationNotFoundError,
+    MinioErrorCode::NoSuchTagSet,
+    MinioErrorCode::NoSuchObjectLockConfiguration,
+    MinioErrorCode::NoSuchLifecycleConfiguration,
+    MinioErrorCode::NoSuchKey,
+    MinioErrorCode::ResourceNotFound,
+    MinioErrorCode::MethodNotAllowed,
+    MinioErrorCode::ResourceConflict,
+    MinioErrorCode::AccessDenied,
+    MinioErrorCode::NotSupported,
+    MinioErrorCode::BucketNotEmpty,
+    MinioErrorCode::BucketAlreadyOwnedByYou,
+    MinioErrorCode::InvalidWriteOffset,
+    //MinioErrorCode::OtherError("".to_string()),
+];
 
 impl FromStr for MinioErrorCode {
     type Err = MinioError;
 
     fn from_str(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
+            "noerror" => Ok(MinioErrorCode::NoError),
+            "invalidminioerrorcode" => Ok(MinioErrorCode::InvalidMinioErrorCode),
             "permanentredirect" => Ok(MinioErrorCode::PermanentRedirect),
             "redirect" => Ok(MinioErrorCode::Redirect),
             "badrequest" => Ok(MinioErrorCode::BadRequest),
@@ -81,7 +111,7 @@ impl FromStr for MinioErrorCode {
             "resourceconflict" => Ok(MinioErrorCode::ResourceConflict),
             "accessdenied" => Ok(MinioErrorCode::AccessDenied),
             "notsupported" => Ok(MinioErrorCode::NotSupported),
-            "bucketnotempty" => Ok(MinioErrorCode::BucketNotEmpty("".to_string())),
+            "bucketnotempty" => Ok(MinioErrorCode::BucketNotEmpty),
             "bucketalreadyownedbyyou" => Ok(MinioErrorCode::BucketAlreadyOwnedByYou),
             "invalidwriteoffset" => Ok(MinioErrorCode::InvalidWriteOffset),
 
@@ -94,6 +124,8 @@ impl std::fmt::Display for MinioErrorCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MinioErrorCode::NoError => write!(f, "NoError"),
+            MinioErrorCode::InvalidMinioErrorCode => write!(f, "InvalidMinioErrorCode"),
+
             MinioErrorCode::PermanentRedirect => write!(f, "PermanentRedirect"),
             MinioErrorCode::Redirect => write!(f, "Redirect"),
             MinioErrorCode::BadRequest => write!(f, "BadRequest"),
@@ -119,19 +151,10 @@ impl std::fmt::Display for MinioErrorCode {
             MinioErrorCode::ResourceConflict => write!(f, "ResourceConflict"),
             MinioErrorCode::AccessDenied => write!(f, "AccessDenied"),
             MinioErrorCode::NotSupported => write!(f, "NotSupported"),
-            MinioErrorCode::BucketNotEmpty(reason) => {
-                let msg = if reason.is_empty() {
-                    "".to_string()
-                } else {
-                    format!(": {reason}")
-                };
-                write!(f, "BucketNotEmpty{msg}")
-            }
+            MinioErrorCode::BucketNotEmpty => write!(f, "BucketNotEmpty"),
             MinioErrorCode::BucketAlreadyOwnedByYou => write!(f, "BucketAlreadyOwnedByYou"),
             MinioErrorCode::InvalidWriteOffset => write!(f, "InvalidWriteOffset"),
-
             MinioErrorCode::OtherError(msg) => write!(f, "{msg}"),
-            MinioErrorCode::InvalidMinioErrorCode(msg) => write!(f, "InvalidMinioErrorCode: {msg}"),
         }
     }
 }
@@ -139,12 +162,21 @@ impl std::fmt::Display for MinioErrorCode {
 #[cfg(test)]
 mod test_error_code {
     use super::*;
+    use ALL_MINIO_ERROR_CODE;
 
     #[test]
-    fn test_error_code() {
-        println!("test1: {}", MinioErrorCode::ResourceNotFound.to_string());
-
-        let error_code: MinioErrorCode = "retryhead".parse().unwrap();
+    fn test_minio_error_code_roundtrip() {
+        for code in ALL_MINIO_ERROR_CODE {
+            let str = code.to_string();
+            let code_obs1: MinioErrorCode = str.parse().unwrap();
+            let code_obs2 = MinioErrorCode::from_str(&str).unwrap();
+            assert_eq!(code_obs1, code_obs2);
+            assert_eq!(
+                code_obs1, *code,
+                "Failed MinioErrorCode round-trip: code {} -> str '{}' -> code {}",
+                code, str, code_obs1
+            );
+        }
     }
 }
 
@@ -154,19 +186,19 @@ pub struct MinioErrorResponse {
     /// Headers as returned by the server.
     pub(crate) headers: HeaderMap,
     pub code: MinioErrorCode,
-    pub message: String,
+    pub message: Option<String>,
     pub resource: String,
     pub request_id: String,
     pub host_id: String,
-    pub bucket_name: String,
-    pub object_name: String,
+    pub bucket_name: Option<String>,
+    pub object_name: Option<String>,
 }
 
 impl std::fmt::Display for MinioErrorResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "s3 operation failed; code: {:?}, message: {}, resource: {}, request_id: {}, host_id: {}, bucket_name: {}, object_name: {}",
+            "S3 operation failed: \n\tcode: {:?}\n\tmessage: {:?}\n\tresource: {}\n\trequest_id: {}\n\thost_id: {}\n\tbucket_name: {:?}\n\tobject_name: {:?}",
             self.code,
             self.message,
             self.resource,
@@ -183,16 +215,15 @@ impl std::error::Error for MinioErrorResponse {}
 impl MinioErrorResponse {
     pub fn from_str(body: Bytes, headers: HeaderMap) -> Result<Self> {
         let root = Element::parse(body.reader()).map_err(MinioError::XmlParseError)?;
-
         Ok(Self {
             headers,
-            code: MinioErrorCode::from_str(&get_default_text(&root, "Code"))?,
-            message: get_default_text(&root, "Message"),
-            resource: get_default_text(&root, "Resource"),
-            request_id: get_default_text(&root, "RequestId"),
-            host_id: get_default_text(&root, "HostId"),
-            bucket_name: get_default_text(&root, "BucketName"),
-            object_name: get_default_text(&root, "Key"),
+            code: MinioErrorCode::from_str(&get_text_default(&root, "Code"))?,
+            message: get_text_option(&root, "Message"),
+            resource: get_text_default(&root, "Resource"),
+            request_id: get_text_default(&root, "RequestId"),
+            host_id: get_text_default(&root, "HostId"),
+            bucket_name: get_text_option(&root, "BucketName"),
+            object_name: get_text_option(&root, "Key"),
         })
     }
 }
@@ -553,12 +584,6 @@ mod test_error {
         assert_eq!(
             MinioErrorCode::from_str("NOSUCHBUCKET").unwrap(),
             MinioErrorCode::NoSuchBucket
-        );
-
-        // Special cases
-        assert_eq!(
-            MinioErrorCode::from_str("BucketNotEmpty").unwrap(),
-            MinioErrorCode::BucketNotEmpty(String::new())
         );
     }
 

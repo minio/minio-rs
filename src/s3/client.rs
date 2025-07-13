@@ -735,12 +735,12 @@ impl SharedClientItems {
         MinioError::S3Error(MinioErrorResponse {
             headers,
             code,
-            message,
+            message: (!message.is_empty()).then_some(message),
             resource: resource.to_string(),
             request_id,
             host_id,
-            bucket_name: bucket_name.unwrap_or_default().to_string(),
-            object_name: object_name.unwrap_or_default().to_string(),
+            bucket_name: bucket_name.map(String::from),
+            object_name: object_name.map(String::from),
         })
     }
 }
