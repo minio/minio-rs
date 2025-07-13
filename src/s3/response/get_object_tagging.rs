@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::Result;
 use crate::s3::response::a_response_traits::{
     HasBucket, HasObject, HasRegion, HasS3Fields, HasTagging, HasVersion,
 };

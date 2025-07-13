@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::Result;
 use crate::s3::response::a_response_traits::{
     HasBucket, HasObject, HasRegion, HasS3Fields, HasVersion,
 };
@@ -47,7 +47,7 @@ impl GetObjectLegalHoldResponse {
     /// Returns the legal hold status of the object.
     ///
     /// This method retrieves whether the legal hold is enabled for the specified object.
-    pub fn enabled(&self) -> Result<bool, Error> {
+    pub fn enabled(&self) -> Result<bool> {
         if self.body.is_empty() {
             return Ok(false); // No legal hold configuration present due to NoSuchObjectLockConfiguration
         }

@@ -15,18 +15,13 @@
 
 //! Builders for RemoveObject APIs.
 
+use crate::s3::Client;
 use crate::s3::client::MAX_MULTIPART_COUNT;
+use crate::s3::error::Result;
 use crate::s3::multimap::{Multimap, MultimapExt};
-use crate::s3::response::DeleteError;
-use crate::s3::types::ListEntry;
-use crate::s3::utils::{check_object_name, insert};
-use crate::s3::{
-    Client,
-    error::Error,
-    response::{DeleteObjectResponse, DeleteObjectsResponse},
-    types::{S3Api, S3Request, ToS3Request, ToStream},
-    utils::{check_bucket_name, md5sum_hash},
-};
+use crate::s3::response::{DeleteError, DeleteObjectResponse, DeleteObjectsResponse};
+use crate::s3::types::{ListEntry, S3Api, S3Request, ToS3Request, ToStream};
+use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::stream::iter;
@@ -154,7 +149,7 @@ impl S3Api for DeleteObject {
 }
 
 impl ToS3Request for DeleteObject {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object.key)?;
 
@@ -238,7 +233,7 @@ impl S3Api for DeleteObjects {
 }
 
 impl ToS3Request for DeleteObjects {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         check_bucket_name(&self.bucket, true)?;
 
         let mut data: String = String::from("<Delete>");
@@ -374,7 +369,7 @@ impl DeleteObjectsStreaming {
         self
     }
 
-    async fn next_request(&mut self) -> Result<Option<DeleteObjects>, Error> {
+    async fn next_request(&mut self) -> Result<Option<DeleteObjects>> {
         let mut objects = Vec::new();
         while let Some(object) = self.objects.items.next().await {
             objects.push(object);
@@ -401,9 +396,7 @@ impl DeleteObjectsStreaming {
 impl ToStream for DeleteObjectsStreaming {
     type Item = DeleteObjectsResponse;
 
-    async fn to_stream(
-        mut self,
-    ) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
+    async fn to_stream(mut self) -> Box<dyn Stream<Item = Result<Self::Item>> + Unpin + Send> {
         Box::new(Box::pin(futures_stream::unfold(
             self,
             move |mut this| async move {

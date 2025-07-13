@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::{Error, ErrorCode};
+use crate::s3::error::{MinioError, MinioErrorCode, Result};
 use crate::s3::response::a_response_traits::{
     HasBucket, HasObject, HasRegion, HasS3Fields, HasVersion,
 };
@@ -45,7 +45,7 @@ impl GetObjectRetentionResponse {
     /// Returns the retention mode of the object.
     ///
     /// This method retrieves the retention mode, which can be either `Governance` or `Compliance`.
-    pub fn retention_mode(&self) -> Result<Option<RetentionMode>, Error> {
+    pub fn retention_mode(&self) -> Result<Option<RetentionMode>> {
         if self.body.is_empty() {
             return Ok(None);
         }
@@ -59,7 +59,7 @@ impl GetObjectRetentionResponse {
     /// Returns the date until which the object is retained.
     ///
     /// This method retrieves the retention date, which indicates when the object will no longer be retained.
-    pub fn retain_until_date(&self) -> Result<Option<UtcTime>, Error> {
+    pub fn retain_until_date(&self) -> Result<Option<UtcTime>> {
         if self.body.is_empty() {
             return Ok(None);
         }
@@ -75,16 +75,16 @@ impl GetObjectRetentionResponse {
 impl FromS3Response for GetObjectRetentionResponse {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
+        response: Result<reqwest::Response>,
+    ) -> Result<Self> {
         match response {
             Ok(mut resp) => Ok(Self {
                 request,
                 headers: mem::take(resp.headers_mut()),
                 body: resp.bytes().await?,
             }),
-            Err(Error::S3Error(e))
-                if matches!(e.code, ErrorCode::NoSuchObjectLockConfiguration) =>
+            Err(MinioError::S3Error(e))
+                if matches!(e.code, MinioErrorCode::NoSuchObjectLockConfiguration) =>
             {
                 Ok(Self {
                     request,

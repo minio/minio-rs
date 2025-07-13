@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::{Error, ErrorCode};
+use crate::s3::error::{MinioError, MinioErrorCode, Result};
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
@@ -46,7 +46,7 @@ impl GetBucketPolicyResponse {
     ///
     /// This method retrieves the policy associated with the bucket, which defines permissions
     /// for accessing the bucket and its contents.
-    pub fn config(&self) -> Result<&str, Error> {
+    pub fn config(&self) -> Result<&str> {
         Ok(std::str::from_utf8(&self.body)?)
     }
 }
@@ -55,19 +55,21 @@ impl GetBucketPolicyResponse {
 impl FromS3Response for GetBucketPolicyResponse {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
+        response: Result<reqwest::Response>,
+    ) -> Result<Self> {
         match response {
             Ok(mut resp) => Ok(Self {
                 request,
                 headers: mem::take(resp.headers_mut()),
                 body: resp.bytes().await?,
             }),
-            Err(Error::S3Error(e)) if matches!(e.code, ErrorCode::NoSuchBucketPolicy) => Ok(Self {
-                request,
-                headers: e.headers,
-                body: Bytes::from_static("{}".as_ref()),
-            }),
+            Err(MinioError::S3Error(e)) if matches!(e.code, MinioErrorCode::NoSuchBucketPolicy) => {
+                Ok(Self {
+                    request,
+                    headers: e.headers,
+                    body: Bytes::from_static("{}".as_ref()),
+                })
+            }
             Err(e) => Err(e),
         }
     }

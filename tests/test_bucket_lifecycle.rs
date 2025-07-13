@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use minio::s3::client::DEFAULT_REGION;
-use minio::s3::error::{Error, ErrorCode};
+use minio::s3::error::{MinioError, MinioErrorCode, Result};
 use minio::s3::lifecycle_config::LifecycleConfig;
 use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
 use minio::s3::response::{
@@ -71,10 +71,12 @@ async fn bucket_lifecycle(ctx: TestContext, bucket_name: String) {
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.region(), DEFAULT_REGION);
 
-    let resp: Result<GetBucketLifecycleResponse, Error> =
+    let resp: Result<GetBucketLifecycleResponse> =
         ctx.client.get_bucket_lifecycle(&bucket_name).send().await;
     match resp {
-        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NoSuchLifecycleConfiguration),
+        Err(MinioError::S3Error(e)) => {
+            assert_eq!(e.code, MinioErrorCode::NoSuchLifecycleConfiguration)
+        }
         v => panic!(
             "Expected error S3Error(NoSuchLifecycleConfiguration): but got {:?}",
             v

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request, SseConfig};
 use crate::s3::utils::{get_option_text, get_text};
@@ -41,16 +41,16 @@ impl HasRegion for PutBucketEncryptionResponse {}
 
 impl PutBucketEncryptionResponse {
     /// Returns the server-side encryption configuration.
-    pub fn config(&self) -> Result<SseConfig, Error> {
+    pub fn config(&self) -> Result<SseConfig> {
         let mut root = Element::parse(self.body().clone().reader())?;
 
         let rule = root
             .get_mut_child("Rule")
-            .ok_or(Error::XmlError(String::from("<Rule> tag not found")))?;
+            .ok_or(MinioError::XmlError(String::from("<Rule> tag not found")))?;
 
         let sse_by_default = rule
             .get_mut_child("ApplyServerSideEncryptionByDefault")
-            .ok_or(Error::XmlError(String::from(
+            .ok_or(MinioError::XmlError(String::from(
                 "<ApplyServerSideEncryptionByDefault> tag not found",
             )))?;
 

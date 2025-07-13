@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::Result;
 use crate::s3::response::a_response_traits::{
     HasBucket, HasIsDeleteMarker, HasRegion, HasS3Fields, HasVersion,
 };
@@ -65,7 +65,7 @@ pub enum DeleteResult {
     Error(DeleteError),
 }
 
-impl From<DeleteResult> for Result<DeletedObject, DeleteError> {
+impl From<DeleteResult> for std::result::Result<DeletedObject, DeleteError> {
     fn from(result: DeleteResult) -> Self {
         match result {
             DeleteResult::Deleted(obj) => Ok(obj),
@@ -100,7 +100,7 @@ impl_has_s3fields!(DeleteObjectsResponse);
 
 impl DeleteObjectsResponse {
     /// Returns the bucket name for which the delete operation was performed.
-    pub fn result(&self) -> Result<Vec<DeleteResult>, Error> {
+    pub fn result(&self) -> Result<Vec<DeleteResult>> {
         let root = Element::parse(self.body.clone().reader())?;
         let result = root
             .children
@@ -125,7 +125,7 @@ impl DeleteObjectsResponse {
                     }))
                 }
             })
-            .collect::<Result<Vec<DeleteResult>, Error>>()?;
+            .collect::<Result<Vec<DeleteResult>>>()?;
         Ok(result)
     }
 }

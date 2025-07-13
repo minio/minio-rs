@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::Result;
 use crate::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, ObjectLockConfig, S3Request};
 use crate::{impl_from_s3response, impl_has_s3fields};
@@ -46,7 +46,7 @@ impl GetObjectLockConfigResponse {
     ///
     /// This method retrieves the Object Lock settings, which include retention mode and period,
     /// as well as legal hold status for the bucket.
-    pub fn config(&self) -> Result<ObjectLockConfig, Error> {
+    pub fn config(&self) -> Result<ObjectLockConfig> {
         ObjectLockConfig::from_xml(&Element::parse(self.body.clone().reader())?)
     }
 }

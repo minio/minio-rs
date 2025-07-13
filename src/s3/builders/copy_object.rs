@@ -15,7 +15,7 @@
 
 use crate::s3::Client;
 use crate::s3::client::{MAX_MULTIPART_COUNT, MAX_PART_SIZE};
-use crate::s3::error::Error;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::HasEtagFromBody;
 use crate::s3::response::{
@@ -94,15 +94,17 @@ impl S3Api for UploadPartCopy {
 }
 
 impl ToS3Request for UploadPartCopy {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
             if self.upload_id.is_empty() {
-                return Err(Error::InvalidUploadId("upload ID cannot be empty".into()));
+                return Err(MinioError::InvalidUploadId(
+                    "upload ID cannot be empty".into(),
+                ));
             }
             if !(1..=MAX_MULTIPART_COUNT).contains(&self.part_number) {
-                return Err(Error::InvalidPartNumber(format!(
+                return Err(MinioError::InvalidPartNumber(format!(
                     "part number must be between 1 and {MAX_MULTIPART_COUNT}"
                 )));
             }
@@ -225,15 +227,15 @@ impl S3Api for CopyObjectInternal {
 }
 
 impl ToS3Request for CopyObjectInternal {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         {
             if let Some(v) = &self.sse {
                 if v.tls_required() && !self.client.is_secure() {
-                    return Err(Error::SseTlsRequired(None));
+                    return Err(MinioError::SseTlsRequired(None));
                 }
             }
             if self.source.ssec.is_some() && !self.client.is_secure() {
-                return Err(Error::SseTlsRequired(None));
+                return Err(MinioError::SseTlsRequired(None));
             }
         }
 
@@ -424,15 +426,15 @@ impl CopyObject {
     ///
     /// Functionally related to the [S3Api::send()](crate::s3::types::S3Api::send) method, but
     /// specifically tailored for the `CopyObject` operation.
-    pub async fn send(self) -> Result<CopyObjectResponse, Error> {
+    pub async fn send(self) -> Result<CopyObjectResponse> {
         {
             if let Some(v) = &self.sse {
                 if v.tls_required() && !self.client.is_secure() {
-                    return Err(Error::SseTlsRequired(None));
+                    return Err(MinioError::SseTlsRequired(None));
                 }
             }
             if self.source.ssec.is_some() && !self.client.is_secure() {
-                return Err(Error::SseTlsRequired(None));
+                return Err(MinioError::SseTlsRequired(None));
             }
         }
         let source = self.source.clone();
@@ -458,7 +460,7 @@ impl CopyObject {
             if let Some(v) = &self.metadata_directive {
                 match v {
                     Directive::Copy => {
-                        return Err(Error::InvalidCopyDirective(
+                        return Err(MinioError::InvalidCopyDirective(
                             "COPY metadata directive is not applicable to source object size greater than 5 GiB".into()
                         ));
                     }
@@ -468,7 +470,7 @@ impl CopyObject {
             if let Some(v) = &self.tagging_directive {
                 match v {
                     Directive::Copy => {
-                        return Err(Error::InvalidCopyDirective(
+                        return Err(MinioError::InvalidCopyDirective(
                             "COPY tagging directive is not applicable to source object size greater than 5 GiB".into()
                         ));
                     }
@@ -615,7 +617,7 @@ impl ComposeObjectInternal {
     }
 
     #[async_recursion]
-    pub async fn send(self) -> (Result<ComposeObjectResponse, Error>, String) {
+    pub async fn send(self) -> (Result<ComposeObjectResponse>, String) {
         let mut upload_id = String::new();
 
         let mut sources = self.sources;
@@ -787,7 +789,7 @@ impl ComposeObjectInternal {
                 }
             }
 
-            let resp: Result<CompleteMultipartUploadResponse, Error> = self
+            let resp: Result<CompleteMultipartUploadResponse> = self
                 .client
                 .complete_multipart_upload(&self.bucket, &self.object, &upload_id, parts)
                 .region(self.region)
@@ -893,18 +895,18 @@ impl ComposeObject {
         self
     }
 
-    pub async fn send(self) -> Result<ComposeObjectResponse, Error> {
+    pub async fn send(self) -> Result<ComposeObjectResponse> {
         {
             if let Some(v) = &self.sse {
                 if v.tls_required() && !self.client.is_secure() {
-                    return Err(Error::SseTlsRequired(None));
+                    return Err(MinioError::SseTlsRequired(None));
                 }
             }
         }
         let object: String = self.object.clone();
         let bucket: String = self.bucket.clone();
 
-        let (res, upload_id): (Result<ComposeObjectResponse, Error>, String) = self
+        let (res, upload_id): (Result<ComposeObjectResponse>, String) = self
             .client
             .compose_object_internal(&self.bucket, &self.object)
             .extra_headers(self.extra_headers)
@@ -968,7 +970,7 @@ impl ComposeSource {
     /// use minio::s3::builders::ComposeSource;
     /// let src = ComposeSource::new("my-src-bucket", "my-src-object").unwrap();
     /// ```
-    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self, Error> {
+    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self> {
         check_bucket_name(bucket_name, true)?;
         check_object_name(object_name)?;
 
@@ -987,10 +989,10 @@ impl ComposeSource {
         self.headers.as_ref().expect("B: ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This should not happen.").clone()
     }
 
-    pub fn build_headers(&mut self, object_size: u64, etag: String) -> Result<(), Error> {
+    pub fn build_headers(&mut self, object_size: u64, etag: String) -> Result<()> {
         if let Some(v) = self.offset {
             if v >= object_size {
-                return Err(Error::InvalidComposeSourceOffset {
+                return Err(MinioError::InvalidComposeSourceOffset {
                     bucket: self.bucket.to_string(),
                     object: self.object.to_string(),
                     version: self.version_id.clone(),
@@ -1002,7 +1004,7 @@ impl ComposeSource {
 
         if let Some(v) = self.length {
             if v > object_size {
-                return Err(Error::InvalidComposeSourceLength {
+                return Err(MinioError::InvalidComposeSourceLength {
                     bucket: self.bucket.to_string(),
                     object: self.object.to_string(),
                     version: self.version_id.clone(),
@@ -1012,7 +1014,7 @@ impl ComposeSource {
             }
 
             if (self.offset.unwrap_or_default() + v) > object_size {
-                return Err(Error::InvalidComposeSourceSize {
+                return Err(MinioError::InvalidComposeSourceSize {
                     bucket: self.bucket.to_string(),
                     object: self.object.to_string(),
                     version: self.version_id.clone(),
@@ -1091,7 +1093,7 @@ pub struct CopySource {
 }
 
 impl CopySource {
-    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self, Error> {
+    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self> {
         check_bucket_name(bucket_name, true)?;
         check_object_name(object_name)?;
 

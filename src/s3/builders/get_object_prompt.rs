@@ -13,16 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::s3::client::Client;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::response::GetObjectPromptResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::SseCustomerKey;
+use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, check_object_name};
-use crate::s3::{
-    client::Client,
-    error::Error,
-    response::GetObjectPromptResponse,
-    types::{S3Api, S3Request, ToS3Request},
-};
 use bytes::Bytes;
 use http::Method;
 use serde_json::json;
@@ -94,16 +92,16 @@ impl S3Api for GetObjectPrompt {
 }
 
 impl ToS3Request for GetObjectPrompt {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
 
             if self.client.is_aws_host() {
-                return Err(Error::UnsupportedApi("ObjectPrompt".into()));
+                return Err(MinioError::UnsupportedApi("ObjectPrompt".into()));
             }
             if self.ssec.is_some() && !self.client.is_secure() {
-                return Err(Error::SseTlsRequired(None));
+                return Err(MinioError::SseTlsRequired(None));
             }
         }
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();

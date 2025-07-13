@@ -15,7 +15,7 @@
 
 use super::Client;
 use crate::s3::builders::{DeleteBucket, DeleteObject, ObjectToDelete};
-use crate::s3::error::{Error, ErrorCode};
+use crate::s3::error::{MinioError, MinioErrorCode, Result};
 use crate::s3::response::{BucketExistsResponse, DeleteResult};
 use crate::s3::response::{
     DeleteBucketResponse, DeleteObjectResponse, DeleteObjectsResponse, PutObjectLegalHoldResponse,
@@ -55,7 +55,7 @@ impl Client {
     pub async fn delete_and_purge_bucket<S: Into<String>>(
         &self,
         bucket: S,
-    ) -> Result<DeleteBucketResponse, Error> {
+    ) -> Result<DeleteBucketResponse> {
         let bucket: String = bucket.into();
 
         let resp: BucketExistsResponse = self.bucket_exists(&bucket).send().await?;
@@ -130,14 +130,14 @@ impl Client {
         let request: DeleteBucket = self.delete_bucket(&bucket);
         match request.send().await {
             Ok(resp) => Ok(resp),
-            Err(Error::S3Error(mut e)) => {
-                if matches!(e.code, ErrorCode::NoSuchBucket) {
+            Err(MinioError::S3Error(mut e)) => {
+                if matches!(e.code, MinioErrorCode::NoSuchBucket) {
                     Ok(DeleteBucketResponse {
                         request: Default::default(), //TODO consider how to handle this
                         body: Bytes::new(),
                         headers: e.headers,
                     })
-                } else if let ErrorCode::BucketNotEmpty(reason) = &e.code {
+                } else if let MinioErrorCode::BucketNotEmpty(reason) = &e.code {
                     // for convenience, add the first 5 documents that were are still in the bucket
                     // to the error message
                     let mut stream = self
@@ -159,10 +159,10 @@ impl Client {
                     }
 
                     let new_reason = format!("{reason}: found content: {objs:?}");
-                    e.code = ErrorCode::BucketNotEmpty(new_reason);
-                    Err(Error::S3Error(e))
+                    e.code = MinioErrorCode::BucketNotEmpty(new_reason);
+                    Err(MinioError::S3Error(e))
                 } else {
-                    Err(Error::S3Error(e))
+                    Err(MinioError::S3Error(e))
                 }
             }
             Err(e) => Err(e),

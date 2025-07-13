@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::response::a_response_traits::HasS3Fields;
 use crate::s3::types::{Bucket, FromS3Response, S3Request};
 use crate::s3::utils::{from_iso8601utc, get_text};
@@ -36,11 +36,11 @@ impl_has_s3fields!(ListBucketsResponse);
 
 impl ListBucketsResponse {
     /// Returns the list of buckets in the account.
-    pub fn buckets(&self) -> Result<Vec<Bucket>, Error> {
+    pub fn buckets(&self) -> Result<Vec<Bucket>> {
         let mut root = Element::parse(self.body().clone().reader())?;
         let buckets_xml = root
             .get_mut_child("Buckets")
-            .ok_or(Error::XmlError("<Buckets> tag not found".into()))?;
+            .ok_or(MinioError::XmlError("<Buckets> tag not found".into()))?;
 
         let mut buckets: Vec<Bucket> = Vec::new();
         while let Some(b) = buckets_xml.take_child("Bucket") {

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Error;
+use crate::s3::error::Result;
 use crate::s3::multimap::Multimap;
 use crate::s3::response::PutBucketTaggingResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
@@ -75,7 +75,7 @@ impl S3Api for PutBucketTagging {
 }
 
 impl ToS3Request for PutBucketTagging {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         check_bucket_name(&self.bucket, true)?;
 
         let data: String = {

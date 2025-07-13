@@ -13,19 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_trait::async_trait;
-use http::Method;
-
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::StatObjectResponse;
 use crate::s3::utils::check_object_name;
 use crate::s3::{
     client::Client,
-    error::Error,
+    error::{MinioError, Result},
     sse::{Sse, SseCustomerKey},
     types::{S3Api, S3Request, ToS3Request},
     utils::{UtcTime, check_bucket_name, to_http_header_value},
 };
+use async_trait::async_trait;
+use http::Method;
 
 /// Argument builder for the [`StatObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObjectAttributes.html) S3 API operation.
 /// Retrieves all of the metadata from an object without returning the object itself.
@@ -125,12 +124,12 @@ impl S3Api for StatObject {
 
 #[async_trait]
 impl ToS3Request for StatObject {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
             if self.ssec.is_some() && !self.client.is_secure() {
-                return Err(Error::SseTlsRequired(None));
+                return Err(MinioError::SseTlsRequired(None));
             }
         }
 

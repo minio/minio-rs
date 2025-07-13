@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Error;
+use crate::s3::error::Result;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::GetObjectLegalHoldResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
@@ -68,7 +68,7 @@ impl S3Api for GetObjectLegalHold {
 }
 
 impl ToS3Request for GetObjectLegalHold {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
 

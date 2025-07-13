@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::builders::BucketCommon;
-use crate::s3::error::Error;
+use crate::s3::error::Result;
 use crate::s3::response::DeleteObjectLockConfigResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{ObjectLockConfig, S3Api, S3Request, ToS3Request};
@@ -34,7 +34,7 @@ impl S3Api for DeleteObjectLockConfig {
 }
 
 impl ToS3Request for DeleteObjectLockConfig {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         check_bucket_name(&self.bucket, true)?;
 
         let config = ObjectLockConfig {
