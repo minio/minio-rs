@@ -18,7 +18,7 @@ use crate::s3::response::a_response_traits::{
     HasBucket, HasObject, HasRegion, HasS3Fields, HasVersion,
 };
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::get_default_text;
+use crate::s3::utils::get_text_default;
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -52,6 +52,6 @@ impl GetObjectLegalHoldResponse {
             return Ok(false); // No legal hold configuration present due to NoSuchObjectLockConfiguration
         }
         let root = Element::parse(self.body.clone().reader())?;
-        Ok(get_default_text(&root, "Status") == "ON")
+        Ok(get_text_default(&root, "Status") == "ON")
     }
 }

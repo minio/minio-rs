@@ -1,6 +1,6 @@
 use crate::s3::error::{MinioError, Result};
 use crate::s3::types::S3Request;
-use crate::s3::utils::{get_text, trim_quotes};
+use crate::s3::utils::{get_text_result, trim_quotes};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::collections::HashMap;
@@ -151,7 +151,7 @@ pub trait HasEtagFromBody: HasS3Fields {
     fn etag(&self) -> Result<String> {
         // Retrieve the ETag from the response body.
         let root = xmltree::Element::parse(self.body().clone().reader())?;
-        let etag: String = get_text(&root, "ETag")?;
+        let etag: String = get_text_result(&root, "ETag")?;
         Ok(trim_quotes(etag))
     }
 }
@@ -212,7 +212,7 @@ pub trait HasTagging: HasS3Fields {
             .get_mut_child("TagSet")
             .ok_or(MinioError::XmlError("<TagSet> tag not found".to_string()))?;
         while let Some(v) = element.take_child("Tag") {
-            tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
+            tags.insert(get_text_result(&v, "Key")?, get_text_result(&v, "Value")?);
         }
         Ok(tags)
     }

@@ -17,7 +17,7 @@ use crate::impl_has_s3fields;
 use crate::s3::error::{MinioError, Result};
 use crate::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request, SelectProgress};
-use crate::s3::utils::{copy_slice, crc32, get_text, uint32};
+use crate::s3::utils::{copy_slice, crc32, get_text_result, uint32};
 use async_trait::async_trait;
 use bytes::Bytes;
 use http::HeaderMap;
@@ -281,9 +281,9 @@ impl SelectObjectContentResponse {
                 let root = Element::parse(&mut BufReader::new(payload))?;
                 self.reset();
                 self.progress = SelectProgress {
-                    bytes_scanned: get_text(&root, "BytesScanned")?.parse::<usize>()?,
-                    bytes_progressed: get_text(&root, "BytesProcessed")?.parse::<usize>()?,
-                    bytes_returned: get_text(&root, "BytesReturned")?.parse::<usize>()?,
+                    bytes_scanned: get_text_result(&root, "BytesScanned")?.parse::<usize>()?,
+                    bytes_progressed: get_text_result(&root, "BytesProcessed")?.parse::<usize>()?,
+                    bytes_returned: get_text_result(&root, "BytesReturned")?.parse::<usize>()?,
                 };
                 continue;
             }

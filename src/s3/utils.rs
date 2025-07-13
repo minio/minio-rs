@@ -340,8 +340,15 @@ pub fn check_object_name(object_name: impl AsRef<str>) -> Result<()> {
     Ok(())
 }
 
+/// Gets default text value of given XML element for given tag.
+pub fn get_text_default(element: &Element, tag: &str) -> String {
+    element.get_child(tag).map_or(String::new(), |v| {
+        v.get_text().unwrap_or_default().to_string()
+    })
+}
+
 /// Gets text value of given XML element for given tag.
-pub fn get_text(element: &Element, tag: &str) -> Result<String> {
+pub fn get_text_result(element: &Element, tag: &str) -> Result<String> {
     Ok(element
         .get_child(tag)
         .ok_or(MinioError::XmlError(format!("<{tag}> tag not found")))?
@@ -353,12 +360,10 @@ pub fn get_text(element: &Element, tag: &str) -> Result<String> {
 }
 
 /// Gets optional text value of given XML element for given tag.
-pub fn get_option_text(element: &Element, tag: &str) -> Option<String> {
-    if let Some(v) = element.get_child(tag) {
-        return Some(v.get_text().unwrap_or_default().to_string());
-    }
-
-    None
+pub fn get_text_option(element: &Element, tag: &str) -> Option<String> {
+    element
+        .get_child(tag)
+        .and_then(|v| v.get_text().map(|s| s.to_string()))
 }
 
 /// Trim leading and trailing quotes from a string. It consumes the
@@ -368,13 +373,6 @@ pub fn trim_quotes(mut s: String) -> String {
         s.pop(); // remove the trailing quote
     }
     s
-}
-
-/// Gets default text value of given XML element for given tag.
-pub fn get_default_text(element: &Element, tag: &str) -> String {
-    element.get_child(tag).map_or(String::new(), |v| {
-        v.get_text().unwrap_or_default().to_string()
-    })
 }
 
 /// Copies source byte slice into destination byte slice

@@ -17,7 +17,7 @@ use crate::s3::builders::VersioningStatus;
 use crate::s3::error::Result;
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::get_option_text;
+use crate::s3::utils::get_text_option;
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -53,7 +53,7 @@ impl GetBucketVersioningResponse {
     /// - `None` if versioning has never been configured for this bucket.
     pub fn status(&self) -> Result<Option<VersioningStatus>> {
         let root = Element::parse(self.body.clone().reader())?;
-        Ok(get_option_text(&root, "Status").map(|v| match v.as_str() {
+        Ok(get_text_option(&root, "Status").map(|v| match v.as_str() {
             "Enabled" => VersioningStatus::Enabled,
             _ => VersioningStatus::Suspended, // Default case
         }))
@@ -67,6 +67,6 @@ impl GetBucketVersioningResponse {
     /// - `None` if MFA delete has never been configured for this bucket.
     pub fn mfa_delete(&self) -> Result<Option<bool>> {
         let root = Element::parse(self.body.clone().reader())?;
-        Ok(get_option_text(&root, "MFADelete").map(|v| v.eq_ignore_ascii_case("Enabled")))
+        Ok(get_text_option(&root, "MFADelete").map(|v| v.eq_ignore_ascii_case("Enabled")))
     }
 }

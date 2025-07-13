@@ -18,7 +18,7 @@ use crate::s3::response::a_response_traits::{
     HasBucket, HasEtagFromHeaders, HasObject, HasRegion, HasS3Fields, HasVersion,
 };
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::get_text;
+use crate::s3::utils::get_text_result;
 use crate::{impl_from_s3response, impl_from_s3response_with_size, impl_has_s3fields};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -101,7 +101,7 @@ impl S3MultipartResponse {
     /// Returns the upload ID for the multipart upload, while consuming the response.
     pub async fn upload_id(&self) -> Result<String> {
         let root = Element::parse(self.body.clone().reader())?;
-        get_text(&root, "UploadId").map_err(|e| MinioError::InvalidUploadId(e.to_string()))
+        get_text_result(&root, "UploadId").map_err(|e| MinioError::InvalidUploadId(e.to_string()))
     }
 }
 

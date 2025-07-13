@@ -16,7 +16,7 @@
 use crate::s3::error::{MinioError, Result};
 use crate::s3::response::a_response_traits::HasS3Fields;
 use crate::s3::types::{Bucket, FromS3Response, S3Request};
-use crate::s3::utils::{from_iso8601utc, get_text};
+use crate::s3::utils::{from_iso8601utc, get_text_result};
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -46,8 +46,8 @@ impl ListBucketsResponse {
         while let Some(b) = buckets_xml.take_child("Bucket") {
             let bucket = b;
             buckets.push(Bucket {
-                name: get_text(&bucket, "Name")?,
-                creation_date: from_iso8601utc(&get_text(&bucket, "CreationDate")?)?,
+                name: get_text_result(&bucket, "Name")?,
+                creation_date: from_iso8601utc(&get_text_result(&bucket, "CreationDate")?)?,
             })
         }
         Ok(buckets)

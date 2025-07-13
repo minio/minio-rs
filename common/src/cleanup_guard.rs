@@ -46,7 +46,7 @@ pub async fn cleanup(client: Client, bucket_name: &str) {
                     //eprintln!("Bucket {} removed successfully", bucket_name);
                 }
                 Err(e) => {
-                    eprintln!("Error removing bucket {}: {:?}", bucket_name, e);
+                    eprintln!("Error removing bucket '{}':\n{}", bucket_name, e);
                 }
             }
         }

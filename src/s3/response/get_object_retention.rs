@@ -19,7 +19,7 @@ use crate::s3::response::a_response_traits::{
     HasBucket, HasObject, HasRegion, HasS3Fields, HasVersion,
 };
 use crate::s3::types::{FromS3Response, RetentionMode, S3Request};
-use crate::s3::utils::{UtcTime, from_iso8601utc, get_option_text};
+use crate::s3::utils::{UtcTime, from_iso8601utc, get_text_option};
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -50,7 +50,7 @@ impl GetObjectRetentionResponse {
             return Ok(None);
         }
         let root = Element::parse(self.body.clone().reader())?;
-        Ok(match get_option_text(&root, "Mode") {
+        Ok(match get_text_option(&root, "Mode") {
             Some(v) => Some(RetentionMode::parse(&v)?),
             _ => None,
         })
@@ -64,7 +64,7 @@ impl GetObjectRetentionResponse {
             return Ok(None);
         }
         let root = Element::parse(self.body.clone().reader())?;
-        Ok(match get_option_text(&root, "RetainUntilDate") {
+        Ok(match get_text_option(&root, "RetainUntilDate") {
             Some(v) => Some(from_iso8601utc(&v)?),
             _ => None,
         })
