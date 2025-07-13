@@ -13,15 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use http::Method;
-
+use crate::s3::Client;
+use crate::s3::error::Result;
 use crate::s3::multimap::Multimap;
 use crate::s3::response::ListBucketsResponse;
-use crate::s3::{
-    Client,
-    error::Error,
-    types::{S3Api, S3Request, ToS3Request},
-};
+use crate::s3::types::{S3Api, S3Request, ToS3Request};
+use http::Method;
 
 /// Argument builder for the [`ListBuckets`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html) S3 API operation.
 ///
@@ -58,7 +55,7 @@ impl S3Api for ListBuckets {
 }
 
 impl ToS3Request for ListBuckets {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         Ok(S3Request::new(self.client, Method::GET)
             .query_params(self.extra_query_params.unwrap_or_default())
             .headers(self.extra_headers.unwrap_or_default()))

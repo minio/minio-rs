@@ -19,7 +19,7 @@ use crate::s3::response::a_response_traits::{
 };
 use crate::s3::{
     builders::ObjectContent,
-    error::Error,
+    error::{MinioError, Result},
     types::{FromS3Response, S3Request},
 };
 use async_trait::async_trait;
@@ -45,17 +45,17 @@ impl HasEtagFromHeaders for GetObjectResponse {}
 
 impl GetObjectResponse {
     /// Returns the content of the object as a (streaming) byte buffer. Note: consumes the response.
-    pub fn content(self) -> Result<ObjectContent, Error> {
+    pub fn content(self) -> Result<ObjectContent> {
         let content_length: u64 = self.object_size()?;
         let body = self.resp.bytes_stream().map_err(std::io::Error::other);
         Ok(ObjectContent::new_from_stream(body, Some(content_length)))
     }
 
     /// Returns the content size (in Bytes) of the object.
-    pub fn object_size(&self) -> Result<u64, Error> {
+    pub fn object_size(&self) -> Result<u64> {
         self.resp
             .content_length()
-            .ok_or(Error::ContentLengthUnknown)
+            .ok_or(MinioError::ContentLengthUnknown)
     }
 }
 
@@ -63,8 +63,8 @@ impl GetObjectResponse {
 impl FromS3Response for GetObjectResponse {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
+        response: Result<reqwest::Response>,
+    ) -> Result<Self> {
         let mut resp = response?;
         Ok(Self {
             request,

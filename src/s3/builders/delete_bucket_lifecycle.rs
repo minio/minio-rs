@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::builders::BucketCommon;
-use crate::s3::error::Error;
+use crate::s3::error::Result;
 use crate::s3::response::DeleteBucketLifecycleResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
@@ -34,7 +34,7 @@ impl S3Api for DeleteBucketLifecycle {
 }
 
 impl ToS3Request for DeleteBucketLifecycle {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         check_bucket_name(&self.bucket, true)?;
 
         Ok(S3Request::new(self.client, Method::DELETE)

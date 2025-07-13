@@ -15,7 +15,7 @@
 
 //! Various utility and helper functions
 
-use crate::s3::error::Error;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::multimap::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use base64::engine::Engine as _;
@@ -73,7 +73,7 @@ pub fn crc32(data: &[u8]) -> u32 {
 }
 
 /// Converts data array into 32 bit unsigned int
-pub fn uint32(mut data: &[u8]) -> Result<u32, std::io::Error> {
+pub fn uint32(mut data: &[u8]) -> std::result::Result<u32, std::io::Error> {
     data.read_u32::<BigEndian>()
 }
 
@@ -179,7 +179,7 @@ pub fn to_iso8601utc(time: UtcTime) -> String {
 }
 
 /// Parses ISO8601 UTC formatted value to time
-pub fn from_iso8601utc(s: &str) -> Result<UtcTime, ParseError> {
+pub fn from_iso8601utc(s: &str) -> std::result::Result<UtcTime, ParseError> {
     Ok(DateTime::<Utc>::from_naive_utc_and_offset(
         match NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S.%3fZ") {
             Ok(d) => d,
@@ -221,7 +221,7 @@ pub mod aws_date_format {
 }
 
 /// Parses HTTP header value to time
-pub fn from_http_header_value(s: &str) -> Result<UtcTime, ParseError> {
+pub fn from_http_header_value(s: &str) -> std::result::Result<UtcTime, ParseError> {
     Ok(DateTime::<Utc>::from_naive_utc_and_offset(
         NaiveDateTime::parse_from_str(s, "%a, %d %b %Y %H:%M:%S GMT")?,
         Utc,
@@ -266,21 +266,21 @@ pub fn match_region(value: &str) -> bool {
 }
 
 /// Validates given bucket name. TODO S3Express has slightly different rules for bucket names
-pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(), Error> {
+pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<()> {
     let bucket_name: &str = bucket_name.as_ref().trim();
     let bucket_name_len = bucket_name.len();
     if bucket_name_len == 0 {
-        return Err(Error::InvalidBucketName(
+        return Err(MinioError::InvalidBucketName(
             "bucket name cannot be empty".into(),
         ));
     }
     if bucket_name_len < 3 {
-        return Err(Error::InvalidBucketName(format!(
+        return Err(MinioError::InvalidBucketName(format!(
             "bucket name ('{bucket_name}') cannot be less than 3 characters"
         )));
     }
     if bucket_name_len > 63 {
-        return Err(Error::InvalidBucketName(format!(
+        return Err(MinioError::InvalidBucketName(format!(
             "Bucket name ('{bucket_name}') cannot be greater than 63 characters"
         )));
     }
@@ -294,26 +294,26 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
     }
 
     if IPV4_REGEX.is_match(bucket_name) {
-        return Err(Error::InvalidBucketName(format!(
+        return Err(MinioError::InvalidBucketName(format!(
             "bucket name ('{bucket_name}') cannot be an IP address"
         )));
     }
 
     if bucket_name.contains("..") || bucket_name.contains(".-") || bucket_name.contains("-.") {
-        return Err(Error::InvalidBucketName(format!(
+        return Err(MinioError::InvalidBucketName(format!(
             "bucket name ('{bucket_name}') contains invalid successive characters '..', '.-' or '-.'",
         )));
     }
 
     if strict {
         if !VALID_BUCKET_NAME_STRICT_REGEX.is_match(bucket_name) {
-            return Err(Error::InvalidBucketName(format!(
+            return Err(MinioError::InvalidBucketName(format!(
                 "bucket name ('{bucket_name}') does not follow S3 standards strictly, according to {}",
                 *VALID_BUCKET_NAME_STRICT_REGEX
             )));
         }
     } else if !VALID_BUCKET_NAME_REGEX.is_match(bucket_name) {
-        return Err(Error::InvalidBucketName(format!(
+        return Err(MinioError::InvalidBucketName(format!(
             "bucket name ('{bucket_name}') does not follow S3 standards, according to {}",
             *VALID_BUCKET_NAME_REGEX
         )));
@@ -323,16 +323,16 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
 }
 
 /// Validates given object name. TODO S3Express has slightly different rules for object names
-pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), Error> {
+pub fn check_object_name(object_name: impl AsRef<str>) -> Result<()> {
     let object_name: &str = object_name.as_ref();
     let object_name_n_bytes = object_name.len();
     if object_name_n_bytes == 0 {
-        return Err(Error::InvalidObjectName(
+        return Err(MinioError::InvalidObjectName(
             "object name cannot be empty".into(),
         ));
     }
     if object_name_n_bytes > 1024 {
-        return Err(Error::InvalidObjectName(format!(
+        return Err(MinioError::InvalidObjectName(format!(
             "Object name ('{object_name}') cannot be greater than 1024 bytes"
         )));
     }
@@ -341,12 +341,14 @@ pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), Error> {
 }
 
 /// Gets text value of given XML element for given tag.
-pub fn get_text(element: &Element, tag: &str) -> Result<String, Error> {
+pub fn get_text(element: &Element, tag: &str) -> Result<String> {
     Ok(element
         .get_child(tag)
-        .ok_or(Error::XmlError(format!("<{tag}> tag not found")))?
+        .ok_or(MinioError::XmlError(format!("<{tag}> tag not found")))?
         .get_text()
-        .ok_or(Error::XmlError(format!("text of <{tag}> tag not found")))?
+        .ok_or(MinioError::XmlError(format!(
+            "text of <{tag}> tag not found"
+        )))?
         .to_string())
 }
 
@@ -409,10 +411,10 @@ const QUERY_ESCAPE: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'.')
     .remove(b'~');
 
-fn unescape(s: &str) -> Result<String, Error> {
+fn unescape(s: &str) -> Result<String> {
     percent_decode_str(s)
         .decode_utf8()
-        .map_err(|e| Error::TagDecodingError {
+        .map_err(|e| MinioError::TagDecodingError {
             input: s.to_string(),
             error_message: e.to_string(),
         })
@@ -434,14 +436,14 @@ pub fn encode_tags(h: &HashMap<String, String>) -> String {
     tags.join("&")
 }
 
-pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
+pub fn parse_tags(s: &str) -> Result<HashMap<String, String>> {
     let mut tags = HashMap::new();
     for tag in s.split('&') {
         let mut kv = tag.split('=');
         let k = match kv.next() {
             Some(v) => unescape(v)?,
             None => {
-                return Err(Error::TagDecodingError {
+                return Err(MinioError::TagDecodingError {
                     input: s.into(),
                     error_message: "tag key was empty".into(),
                 });
@@ -452,7 +454,7 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
             None => "".to_owned(),
         };
         if kv.next().is_some() {
-            return Err(Error::TagDecodingError {
+            return Err(MinioError::TagDecodingError {
                 input: s.into(),
                 error_message: "tag had too many values for a key".into(),
             });
@@ -473,7 +475,7 @@ pub fn insert(data: Option<Multimap>, key: impl Into<String>) -> Multimap {
 pub mod xml {
     use std::collections::HashMap;
 
-    use crate::s3::error::Error;
+    use crate::s3::error::{MinioError, Result};
 
     #[derive(Debug, Clone)]
     struct XmlElementIndex {
@@ -540,17 +542,19 @@ pub mod xml {
                 .map(|v| v.to_string())
         }
 
-        pub fn get_child_text_or_error(&self, tag: &str) -> Result<String, Error> {
+        pub fn get_child_text_or_error(&self, tag: &str) -> Result<String> {
             let i = self
                 .child_element_index
                 .get_first(tag)
-                .ok_or(Error::XmlError(format!("<{tag}> tag not found")))?;
+                .ok_or(MinioError::XmlError(format!("<{tag}> tag not found")))?;
             self.inner.children[i]
                 .as_element()
                 .unwrap()
                 .get_text()
                 .map(|x| x.to_string())
-                .ok_or(Error::XmlError(format!("text of <{tag}> tag not found")))
+                .ok_or(MinioError::XmlError(format!(
+                    "text of <{tag}> tag not found"
+                )))
         }
 
         // Returns all children with given tag along with their index.

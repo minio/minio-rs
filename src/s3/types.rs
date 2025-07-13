@@ -16,7 +16,7 @@
 //! Various types for S3 API requests and responses
 
 use super::client::{Client, DEFAULT_REGION};
-use crate::s3::error::Error;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::utils::{UtcTime, get_option_text, get_text};
 
 use crate::s3::multimap::Multimap;
@@ -87,7 +87,7 @@ impl S3Request {
         self
     }
 
-    async fn compute_inner_region(&self) -> Result<String, Error> {
+    async fn compute_inner_region(&self) -> Result<String> {
         Ok(match &self.bucket {
             Some(b) => self.client.get_region_cached(b, &self.region).await?,
             None => DEFAULT_REGION.to_string(),
@@ -95,7 +95,7 @@ impl S3Request {
     }
 
     /// Execute the request, returning the response. Only used in [`S3Api::send()`]
-    pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
+    pub async fn execute(&mut self) -> Result<reqwest::Response> {
         self.inner_region = self.compute_inner_region().await?;
         self.client
             .execute(
@@ -144,7 +144,7 @@ pub trait ToS3Request: Sized {
     /// * `Result<S3Request, Error>` - The executable S3 request on success,
     ///   or an error if the request cannot be built correctly.
     ///
-    fn to_s3request(self) -> Result<S3Request, Error>;
+    fn to_s3request(self) -> Result<S3Request>;
 }
 
 /// Trait for converting HTTP responses into strongly-typed S3 response objects.
@@ -182,10 +182,8 @@ pub trait FromS3Response: Sized {
     /// * `Result<Self, Error>` - The typed response object on success, or an error
     ///   if the response cannot be parsed or represents an S3 service error
     ///
-    async fn from_s3response(
-        s3req: S3Request,
-        resp: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error>;
+    async fn from_s3response(s3req: S3Request, response: Result<reqwest::Response>)
+    -> Result<Self>;
 }
 
 /// Trait that defines a common interface for all S3 API request builders.
@@ -221,9 +219,9 @@ pub trait S3Api: ToS3Request {
     /// * `Result<Self::S3Response, Error>` - The typed S3 response on success,
     ///   or an error if the request failed at any stage.    
     ///
-    async fn send(self) -> Result<Self::S3Response, Error> {
+    async fn send(self) -> Result<Self::S3Response> {
         let mut req: S3Request = self.to_s3request()?;
-        let resp: Result<reqwest::Response, Error> = req.execute().await;
+        let resp: Result<reqwest::Response> = req.execute().await;
         Self::S3Response::from_s3response(req, resp).await
     }
 }
@@ -231,7 +229,7 @@ pub trait S3Api: ToS3Request {
 #[async_trait]
 pub trait ToStream: Sized {
     type Item;
-    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send>;
+    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item>> + Unpin + Send>;
 }
 
 #[derive(Clone, Debug, Default)]
@@ -283,11 +281,11 @@ pub enum RetentionMode {
 }
 
 impl RetentionMode {
-    pub fn parse(s: &str) -> Result<RetentionMode, Error> {
+    pub fn parse(s: &str) -> Result<RetentionMode> {
         match s.to_uppercase().as_str() {
             "GOVERNANCE" => Ok(RetentionMode::GOVERNANCE),
             "COMPLIANCE" => Ok(RetentionMode::COMPLIANCE),
-            _ => Err(Error::InvalidRetentionMode(s.to_string())),
+            _ => Err(MinioError::InvalidRetentionMode(s.to_string())),
         }
     }
 }
@@ -309,11 +307,11 @@ pub struct Retention {
 }
 
 /// Parses legal hold string value
-pub fn parse_legal_hold(s: &str) -> Result<bool, Error> {
+pub fn parse_legal_hold(s: &str) -> Result<bool> {
     match s.to_uppercase().as_str() {
         "ON" => Ok(true),
         "OFF" => Ok(false),
-        _ => Err(Error::InvalidLegalHold(s.to_string())),
+        _ => Err(MinioError::InvalidLegalHold(s.to_string())),
     }
 }
 
@@ -444,9 +442,9 @@ impl SelectRequest {
         expr: &str,
         csv_input: CsvInputSerialization,
         csv_output: CsvOutputSerialization,
-    ) -> Result<SelectRequest, Error> {
+    ) -> Result<SelectRequest> {
         if expr.is_empty() {
-            return Err(Error::InvalidSelectExpression(String::from(
+            return Err(MinioError::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
             )));
         }
@@ -468,9 +466,9 @@ impl SelectRequest {
         expr: String,
         csv_input: CsvInputSerialization,
         json_output: JsonOutputSerialization,
-    ) -> Result<SelectRequest, Error> {
+    ) -> Result<SelectRequest> {
         if expr.is_empty() {
-            return Err(Error::InvalidSelectExpression(String::from(
+            return Err(MinioError::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
             )));
         }
@@ -492,9 +490,9 @@ impl SelectRequest {
         expr: String,
         json_input: JsonInputSerialization,
         json_output: JsonOutputSerialization,
-    ) -> Result<SelectRequest, Error> {
+    ) -> Result<SelectRequest> {
         if expr.is_empty() {
-            return Err(Error::InvalidSelectExpression(String::from(
+            return Err(MinioError::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
             )));
         }
@@ -516,9 +514,9 @@ impl SelectRequest {
         expr: String,
         parquet_input: ParquetInputSerialization,
         csv_output: CsvOutputSerialization,
-    ) -> Result<SelectRequest, Error> {
+    ) -> Result<SelectRequest> {
         if expr.is_empty() {
-            return Err(Error::InvalidSelectExpression(String::from(
+            return Err(MinioError::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
             )));
         }
@@ -540,9 +538,9 @@ impl SelectRequest {
         expr: String,
         parquet_input: ParquetInputSerialization,
         json_output: JsonOutputSerialization,
-    ) -> Result<SelectRequest, Error> {
+    ) -> Result<SelectRequest> {
         if expr.is_empty() {
-            return Err(Error::InvalidSelectExpression(String::from(
+            return Err(MinioError::InvalidSelectExpression(String::from(
                 "select expression cannot be empty",
             )));
         }
@@ -860,11 +858,11 @@ pub enum Directive {
 }
 
 impl Directive {
-    pub fn parse(s: &str) -> Result<Directive, Error> {
+    pub fn parse(s: &str) -> Result<Directive> {
         match s {
             "COPY" => Ok(Directive::Copy),
             "REPLACE" => Ok(Directive::Replace),
-            _ => Err(Error::InvalidDirective(s.to_string())),
+            _ => Err(MinioError::InvalidDirective(s.to_string())),
         }
     }
 }
@@ -943,13 +941,13 @@ pub struct Filter {
 }
 
 impl Filter {
-    pub fn from_xml(element: &Element) -> Result<Filter, Error> {
+    pub fn from_xml(element: &Element) -> Result<Filter> {
         let and_operator = match element.get_child("And") {
             Some(v) => Some(AndOperator {
                 prefix: match v.get_child("Prefix") {
                     Some(p) => Some(
                         p.get_text()
-                            .ok_or(Error::XmlError(
+                            .ok_or(MinioError::XmlError(
                                 "text of <Prefix> tag not found".to_string(),
                             ))?
                             .to_string(),
@@ -960,9 +958,9 @@ impl Filter {
                     Some(tags) => {
                         let mut map: HashMap<String, String> = HashMap::new();
                         for xml_node in &tags.children {
-                            let tag = xml_node
-                                .as_element()
-                                .ok_or(Error::XmlError("<Tag> element not found".to_string()))?;
+                            let tag = xml_node.as_element().ok_or(MinioError::XmlError(
+                                "<Tag> element not found".to_string(),
+                            ))?;
                             map.insert(get_text(tag, "Key")?, get_text(tag, "Value")?);
                         }
                         Some(map)
@@ -976,7 +974,7 @@ impl Filter {
         let prefix = match element.get_child("Prefix") {
             Some(v) => Some(
                 v.get_text()
-                    .ok_or(Error::XmlError(
+                    .ok_or(MinioError::XmlError(
                         "text of <Prefix> tag not found".to_string(),
                     ))?
                     .to_string(),
@@ -999,11 +997,11 @@ impl Filter {
         })
     }
 
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         if self.and_operator.is_some() ^ self.prefix.is_some() ^ self.tag.is_some() {
             return Ok(());
         }
-        Err(Error::InvalidFilter)
+        Err(MinioError::InvalidFilter)
     }
 
     pub fn to_xml(&self) -> String {
@@ -1053,20 +1051,19 @@ impl Filter {
 #[allow(clippy::type_complexity)]
 fn parse_common_notification_config(
     element: &mut Element,
-) -> Result<
-    (
-        Vec<String>,
-        Option<String>,
-        Option<PrefixFilterRule>,
-        Option<SuffixFilterRule>,
-    ),
-    Error,
-> {
+) -> Result<(
+    Vec<String>,
+    Option<String>,
+    Option<PrefixFilterRule>,
+    Option<SuffixFilterRule>,
+)> {
     let mut events = Vec::new();
     while let Some(v) = element.take_child("Event") {
         events.push(
             v.get_text()
-                .ok_or(Error::XmlError("text of <Event> tag not found".to_string()))?
+                .ok_or(MinioError::XmlError(
+                    "text of <Event> tag not found".to_string(),
+                ))?
                 .to_string(),
         );
     }
@@ -1079,11 +1076,11 @@ fn parse_common_notification_config(
             let mut suffix = None;
             let rules = filter
                 .get_child("S3Key")
-                .ok_or(Error::XmlError("<S3Key> tag not found".to_string()))?;
+                .ok_or(MinioError::XmlError("<S3Key> tag not found".to_string()))?;
             for rule in &rules.children {
-                let v = rule
-                    .as_element()
-                    .ok_or(Error::XmlError("<FilterRule> tag not found".to_string()))?;
+                let v = rule.as_element().ok_or(MinioError::XmlError(
+                    "<FilterRule> tag not found".to_string(),
+                ))?;
                 let name = get_text(v, "Name")?;
                 let value = get_text(v, "Value")?;
                 if PrefixFilterRule::NAME == name {
@@ -1174,7 +1171,7 @@ pub struct CloudFuncConfig {
 }
 
 impl CloudFuncConfig {
-    pub fn from_xml(element: &mut Element) -> Result<CloudFuncConfig, Error> {
+    pub fn from_xml(element: &mut Element) -> Result<CloudFuncConfig> {
         let (events, id, prefix_filter_rule, suffix_filter_rule) =
             parse_common_notification_config(element)?;
         Ok(CloudFuncConfig {
@@ -1186,12 +1183,12 @@ impl CloudFuncConfig {
         })
     }
 
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         if !self.events.is_empty() && !self.cloud_func.is_empty() {
             return Ok(());
         }
 
-        Err(Error::InvalidFilter)
+        Err(MinioError::InvalidFilter)
     }
 
     pub fn to_xml(&self) -> String {
@@ -1225,7 +1222,7 @@ pub struct QueueConfig {
 }
 
 impl QueueConfig {
-    pub fn from_xml(element: &mut Element) -> Result<QueueConfig, Error> {
+    pub fn from_xml(element: &mut Element) -> Result<QueueConfig> {
         let (events, id, prefix_filter_rule, suffix_filter_rule) =
             parse_common_notification_config(element)?;
         Ok(QueueConfig {
@@ -1237,12 +1234,12 @@ impl QueueConfig {
         })
     }
 
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         if !self.events.is_empty() && !self.queue.is_empty() {
             return Ok(());
         }
 
-        Err(Error::InvalidFilter)
+        Err(MinioError::InvalidFilter)
     }
 
     pub fn to_xml(&self) -> String {
@@ -1276,7 +1273,7 @@ pub struct TopicConfig {
 }
 
 impl TopicConfig {
-    pub fn from_xml(element: &mut Element) -> Result<TopicConfig, Error> {
+    pub fn from_xml(element: &mut Element) -> Result<TopicConfig> {
         let (events, id, prefix_filter_rule, suffix_filter_rule) =
             parse_common_notification_config(element)?;
         Ok(TopicConfig {
@@ -1288,12 +1285,12 @@ impl TopicConfig {
         })
     }
 
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         if !self.events.is_empty() && !self.topic.is_empty() {
             return Ok(());
         }
 
-        Err(Error::InvalidFilter)
+        Err(MinioError::InvalidFilter)
     }
 
     pub fn to_xml(&self) -> String {
@@ -1325,7 +1322,7 @@ pub struct NotificationConfig {
 }
 
 impl NotificationConfig {
-    pub fn from_xml(root: &mut Element) -> Result<NotificationConfig, Error> {
+    pub fn from_xml(root: &mut Element) -> Result<NotificationConfig> {
         let mut config = NotificationConfig {
             cloud_func_config_list: None,
             queue_config_list: None,
@@ -1359,7 +1356,7 @@ impl NotificationConfig {
         Ok(config)
     }
 
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         if let Some(v) = &self.cloud_func_config_list {
             for rule in v {
                 rule.validate()?;
@@ -1478,7 +1475,7 @@ pub struct Destination {
 }
 
 impl Destination {
-    pub fn from_xml(element: &Element) -> Result<Destination, Error> {
+    pub fn from_xml(element: &Element) -> Result<Destination> {
         Ok(Destination {
             bucket_arn: get_text(element, "Bucket")?,
             access_control_translation: match element.get_child("AccessControlTranslation") {
@@ -1497,7 +1494,7 @@ impl Destination {
                 Some(v) => Some(Metrics {
                     event_threshold_minutes: match get_option_text(
                         v.get_child("EventThreshold")
-                            .ok_or(Error::XmlError("<Metrics> tag not found".to_string()))?,
+                            .ok_or(MinioError::XmlError("<Metrics> tag not found".to_string()))?,
                         "Minutes",
                     ) {
                         Some(v) => Some(v.parse::<i32>()?),
@@ -1622,13 +1619,11 @@ pub struct ReplicationRule {
 }
 
 impl ReplicationRule {
-    pub fn from_xml(element: &Element) -> Result<ReplicationRule, Error> {
+    pub fn from_xml(element: &Element) -> Result<ReplicationRule> {
         Ok(ReplicationRule {
-            destination: Destination::from_xml(
-                element
-                    .get_child("Destination")
-                    .ok_or(Error::XmlError("<Destination> tag not found".to_string()))?,
-            )?,
+            destination: Destination::from_xml(element.get_child("Destination").ok_or(
+                MinioError::XmlError("<Destination> tag not found".to_string()),
+            )?)?,
             delete_marker_replication_status: match element.get_child("DeleteMarkerReplication") {
                 Some(v) => Some(get_text(v, "Status")? == "Enabled"),
                 _ => None,
@@ -1759,7 +1754,7 @@ pub struct ReplicationConfig {
 }
 
 impl ReplicationConfig {
-    pub fn from_xml(root: &Element) -> Result<ReplicationConfig, Error> {
+    pub fn from_xml(root: &Element) -> Result<ReplicationConfig> {
         let mut config = ReplicationConfig {
             role: get_option_text(root, "Role"),
             rules: Vec::new(),
@@ -1770,7 +1765,7 @@ impl ReplicationConfig {
                 config
                     .rules
                     .push(ReplicationRule::from_xml(rule.as_element().ok_or(
-                        Error::XmlError("<Rule> tag not found".to_string()),
+                        MinioError::XmlError("<Rule> tag not found".to_string()),
                     )?)?);
             }
         }
@@ -1805,7 +1800,7 @@ pub struct ObjectLockConfig {
 }
 
 impl ObjectLockConfig {
-    pub fn new(mode: RetentionMode, days: Option<i32>, years: Option<i32>) -> Result<Self, Error> {
+    pub fn new(mode: RetentionMode, days: Option<i32>, years: Option<i32>) -> Result<Self> {
         if days.is_some() ^ years.is_some() {
             return Ok(Self {
                 retention_mode: Some(mode),
@@ -1814,12 +1809,12 @@ impl ObjectLockConfig {
             });
         }
 
-        Err(Error::InvalidObjectLockConfig(
+        Err(MinioError::InvalidObjectLockConfig(
             "only one days or years must be set".to_string(),
         ))
     }
 
-    pub fn from_xml(root: &Element) -> Result<ObjectLockConfig, Error> {
+    pub fn from_xml(root: &Element) -> Result<ObjectLockConfig> {
         let mut config = ObjectLockConfig {
             retention_mode: None,
             retention_duration_days: None,
@@ -1827,7 +1822,7 @@ impl ObjectLockConfig {
         };
 
         if let Some(r) = root.get_child("Rule") {
-            let default_retention = r.get_child("DefaultRetention").ok_or(Error::XmlError(
+            let default_retention = r.get_child("DefaultRetention").ok_or(MinioError::XmlError(
                 "<DefaultRetention> tag not found".to_string(),
             ))?;
             config.retention_mode =

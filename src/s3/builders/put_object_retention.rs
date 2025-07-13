@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Error;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::PutObjectRetentionResponse;
 use crate::s3::types::{RetentionMode, S3Api, S3Request, ToS3Request};
@@ -95,13 +95,13 @@ impl S3Api for PutObjectRetention {
 }
 
 impl ToS3Request for PutObjectRetention {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
 
             if self.retention_mode.is_some() ^ self.retain_until_date.is_some() {
-                return Err(Error::InvalidRetentionConfig(String::from(
+                return Err(MinioError::InvalidRetentionConfig(String::from(
                     "both mode and retain_until_date must be set or unset",
                 )));
             }

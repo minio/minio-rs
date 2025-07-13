@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::{Error, ErrorCode};
+use crate::s3::error::{MinioError, MinioErrorCode, Result};
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields, HasTagging};
 use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
@@ -46,19 +46,21 @@ impl HasTagging for GetBucketTaggingResponse {}
 impl FromS3Response for GetBucketTaggingResponse {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
+        response: Result<reqwest::Response>,
+    ) -> Result<Self> {
         match response {
             Ok(mut resp) => Ok(Self {
                 request,
                 headers: mem::take(resp.headers_mut()),
                 body: resp.bytes().await?,
             }),
-            Err(Error::S3Error(e)) if matches!(e.code, ErrorCode::NoSuchTagSet) => Ok(Self {
-                request,
-                headers: e.headers,
-                body: Bytes::new(),
-            }),
+            Err(MinioError::S3Error(e)) if matches!(e.code, MinioErrorCode::NoSuchTagSet) => {
+                Ok(Self {
+                    request,
+                    headers: e.headers,
+                    body: Bytes::new(),
+                })
+            }
             Err(e) => Err(e),
         }
     }

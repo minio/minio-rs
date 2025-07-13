@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::{Error, ErrorCode};
+use crate::s3::error::{MinioError, MinioErrorCode, Result};
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request, SseConfig};
 use crate::s3::utils::{get_option_text, get_text};
@@ -49,7 +49,7 @@ impl GetBucketEncryptionResponse {
     ///
     /// This includes the encryption algorithm and, if applicable, the AWS KMS key ID used for encrypting objects.
     /// If the bucket has no default encryption configuration, this method returns a default `SseConfig` with empty fields.
-    pub fn config(&self) -> Result<SseConfig, Error> {
+    pub fn config(&self) -> Result<SseConfig> {
         if self.body.is_empty() {
             return Ok(SseConfig::default());
         }
@@ -57,11 +57,11 @@ impl GetBucketEncryptionResponse {
 
         let rule = root
             .get_mut_child("Rule")
-            .ok_or(Error::XmlError("<Rule> tag not found".into()))?;
+            .ok_or(MinioError::XmlError("<Rule> tag not found".into()))?;
 
         let sse_by_default = rule
             .get_mut_child("ApplyServerSideEncryptionByDefault")
-            .ok_or(Error::XmlError(
+            .ok_or(MinioError::XmlError(
                 "<ApplyServerSideEncryptionByDefault> tag not found".into(),
             ))?;
 
@@ -76,18 +76,18 @@ impl GetBucketEncryptionResponse {
 impl FromS3Response for GetBucketEncryptionResponse {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
+        response: Result<reqwest::Response>,
+    ) -> Result<Self> {
         match response {
             Ok(mut resp) => Ok(Self {
                 request,
                 headers: mem::take(resp.headers_mut()),
                 body: resp.bytes().await?,
             }),
-            Err(Error::S3Error(e))
+            Err(MinioError::S3Error(e))
                 if matches!(
                     e.code,
-                    ErrorCode::ServerSideEncryptionConfigurationNotFoundError
+                    MinioErrorCode::ServerSideEncryptionConfigurationNotFoundError
                 ) =>
             {
                 Ok(Self {

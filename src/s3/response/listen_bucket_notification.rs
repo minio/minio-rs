@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::Error;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, NotificationRecords, S3Request};
 use async_std::stream::Stream;
@@ -42,13 +42,13 @@ impl HasRegion for ListenBucketNotificationResponse {}
 impl FromS3Response
     for (
         ListenBucketNotificationResponse,
-        Box<dyn Stream<Item = Result<NotificationRecords, Error>> + Unpin + Send>,
+        Box<dyn Stream<Item = Result<NotificationRecords>> + Unpin + Send>,
     )
 {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
+        response: Result<reqwest::Response>,
+    ) -> Result<Self> {
         let mut resp = response?;
 
         let headers: HeaderMap = mem::take(resp.headers_mut());
@@ -58,7 +58,7 @@ impl FromS3Response
             let mut buf = Vec::new();
             let mut cursor = 0;
 
-            let mut stream = byte_stream.map_err(Error::from).boxed();
+            let mut stream = byte_stream.map_err(MinioError::from).boxed();
 
             while let Some(chunk) = stream.next().await {
                 let chunk = chunk?;

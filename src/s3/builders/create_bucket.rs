@@ -15,7 +15,7 @@
 
 use crate::s3::Client;
 use crate::s3::client::DEFAULT_REGION;
-use crate::s3::error::Error;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::CreateBucketResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
@@ -74,7 +74,7 @@ impl S3Api for CreateBucket {
 }
 
 impl ToS3Request for CreateBucket {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         check_bucket_name(&self.bucket, true)?;
 
         let region1: Option<&str> = self.region.as_deref();
@@ -86,7 +86,7 @@ impl ToS3Request for CreateBucket {
             (None, Some(v)) => v.to_string(),
             (Some(r1), Some(r2)) if r1 == r2 => self.region.unwrap(), // Both are Some and equal
             (Some(r1), Some(r2)) => {
-                return Err(Error::RegionMismatch {
+                return Err(MinioError::RegionMismatch {
                     bucket_region: r1.to_string(),
                     region: r2.to_string(),
                 });

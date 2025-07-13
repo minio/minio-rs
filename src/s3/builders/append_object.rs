@@ -17,7 +17,7 @@ use crate::s3::Client;
 use crate::s3::builders::{
     ContentStream, MAX_MULTIPART_COUNT, ObjectContent, Size, calc_part_info,
 };
-use crate::s3::error::Error;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::HasObjectSize;
 use crate::s3::response::{AppendObjectResponse, StatObjectResponse};
@@ -83,14 +83,14 @@ impl S3Api for AppendObject {
 }
 
 impl ToS3Request for AppendObject {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
 
             if let Some(v) = &self.sse {
                 if v.tls_required() && !self.client.is_secure() {
-                    return Err(Error::SseTlsRequired(None));
+                    return Err(MinioError::SseTlsRequired(None));
                 }
             }
         }
@@ -190,13 +190,13 @@ impl AppendObjectContent {
         self
     }
 
-    pub async fn send(mut self) -> Result<AppendObjectResponse, Error> {
+    pub async fn send(mut self) -> Result<AppendObjectResponse> {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
             if let Some(v) = &self.sse {
                 if v.tls_required() && !self.client.is_secure() {
-                    return Err(Error::SseTlsRequired(None));
+                    return Err(MinioError::SseTlsRequired(None));
                 }
             }
         }
@@ -213,7 +213,7 @@ impl AppendObjectContent {
         self.content_stream = std::mem::take(&mut self.input_content)
             .to_content_stream()
             .await
-            .map_err(Error::IOError)?;
+            .map_err(MinioError::IOError)?;
 
         // object_size may be Size::Unknown.
         let object_size = self.content_stream.get_size();
@@ -261,7 +261,7 @@ impl AppendObjectContent {
             // Not enough data!
             let expected = object_size.as_u64().unwrap();
             let got = seg_bytes.len() as u64;
-            Err(Error::InsufficientData { expected, got })
+            Err(MinioError::InsufficientData { expected, got })
         } else {
             // Otherwise, we start a multipart append.
             self.send_mpa(part_size, current_file_size, seg_bytes).await
@@ -274,7 +274,7 @@ impl AppendObjectContent {
         part_size: u64,
         object_size: u64,
         first_part: SegmentedBytes,
-    ) -> Result<AppendObjectResponse, Error> {
+    ) -> Result<AppendObjectResponse> {
         let mut done = false;
         let mut part_number = 0;
 
@@ -304,7 +304,7 @@ impl AppendObjectContent {
 
             // Check if we have too many parts to upload.
             if self.part_count.is_none() && part_number > MAX_MULTIPART_COUNT {
-                return Err(Error::TooManyParts);
+                return Err(MinioError::TooManyParts);
             }
 
             // Append the part now.

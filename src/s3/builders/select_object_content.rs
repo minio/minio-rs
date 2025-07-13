@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Error;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::SelectObjectContentResponse;
 use crate::s3::sse::SseCustomerKey;
@@ -90,13 +90,13 @@ impl S3Api for SelectObjectContent {
 
 #[async_trait]
 impl ToS3Request for SelectObjectContent {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
 
             if self.ssec.is_some() && !self.client.is_secure() {
-                return Err(Error::SseTlsRequired(None));
+                return Err(MinioError::SseTlsRequired(None));
             }
         }
         let bytes: Bytes = self.request.to_xml().into();

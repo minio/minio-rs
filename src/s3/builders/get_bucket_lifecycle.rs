@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Error;
+use crate::s3::error::Result;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::GetBucketLifecycleResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
@@ -66,7 +66,7 @@ impl S3Api for GetBucketLifecycle {
 }
 
 impl ToS3Request for GetBucketLifecycle {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request> {
         check_bucket_name(&self.bucket, true)?;
 
         let mut query_params: Multimap = insert(self.extra_query_params, "lifecycle");

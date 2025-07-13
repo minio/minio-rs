@@ -1,4 +1,4 @@
-use crate::s3::error::Error;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::types::S3Request;
 use crate::s3::utils::{get_text, trim_quotes};
 use bytes::{Buf, Bytes};
@@ -15,8 +15,8 @@ macro_rules! impl_from_s3response {
             impl FromS3Response for $ty {
                 async fn from_s3response(
                     request: S3Request,
-                    response: Result<reqwest::Response, Error>,
-                ) -> Result<Self, Error> {
+                    response: Result<reqwest::Response>,
+                ) -> Result<Self> {
                     let mut resp: reqwest::Response = response?;
                     Ok(Self {
                         request,
@@ -38,8 +38,8 @@ macro_rules! impl_from_s3response_with_size {
             impl FromS3Response for $ty {
                 async fn from_s3response(
                     request: S3Request,
-                    response: Result<reqwest::Response, Error>,
-                ) -> Result<Self, Error> {
+                    response: Result<reqwest::Response>,
+                ) -> Result<Self> {
                     let mut resp: reqwest::Response = response?;
                     Ok(Self {
                         request,
@@ -128,7 +128,7 @@ pub trait HasEtagFromHeaders: HasS3Fields {
     /// Returns the value of the `ETag` header from response headers (for operations that return ETag in headers).
     /// The ETag is typically a hash of the object content, but it may vary based on the storage backend.
     #[inline]
-    fn etag(&self) -> Result<String, Error> {
+    fn etag(&self) -> Result<String> {
         // Retrieve the ETag from the response headers.
         let etag = self
             .headers()
@@ -148,7 +148,7 @@ pub trait HasEtagFromBody: HasS3Fields {
     /// Returns the value of the `ETag` from the response body, which is a unique identifier for
     /// the object version. The ETag is typically a hash of the object content, but it may vary
     /// based on the storage backend.
-    fn etag(&self) -> Result<String, Error> {
+    fn etag(&self) -> Result<String> {
         // Retrieve the ETag from the response body.
         let root = xmltree::Element::parse(self.body().clone().reader())?;
         let etag: String = get_text(&root, "ETag")?;
@@ -181,7 +181,7 @@ pub trait HasIsDeleteMarker: HasS3Fields {
     /// was not (false) a delete marker before deletion. In a simple DELETE, this header indicates
     /// whether (true) or not (false) the current version of the object is a delete marker.
     #[inline]
-    fn is_delete_marker(&self) -> Result<Option<bool>, Error> {
+    fn is_delete_marker(&self) -> Result<Option<bool>> {
         Ok(Some(
             self.headers()
                 .get("x-amz-delete-marker")
@@ -201,7 +201,7 @@ pub trait HasTagging: HasS3Fields {
     ///
     /// If the bucket has no tags, this will return an empty `HashMap`.
     #[inline]
-    fn tags(&self) -> Result<HashMap<String, String>, Error> {
+    fn tags(&self) -> Result<HashMap<String, String>> {
         let mut tags = HashMap::new();
         if self.body().is_empty() {
             // Note: body is empty when server responses with NoSuchTagSet
@@ -210,7 +210,7 @@ pub trait HasTagging: HasS3Fields {
         let mut root = Element::parse(self.body().clone().reader())?;
         let element = root
             .get_mut_child("TagSet")
-            .ok_or(Error::XmlError("<TagSet> tag not found".to_string()))?;
+            .ok_or(MinioError::XmlError("<TagSet> tag not found".to_string()))?;
         while let Some(v) = element.take_child("Tag") {
             tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
         }

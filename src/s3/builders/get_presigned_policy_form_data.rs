@@ -15,7 +15,8 @@
 
 use crate::s3::Client;
 use crate::s3::creds::Credentials;
-use crate::s3::error::Error;
+use crate::s3::error::MinioError;
+use crate::s3::error::Result;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::utils::{
     UtcTime, b64encode, check_bucket_name, to_amz_date, to_iso8601utc, to_signer_date, utc_now,
@@ -34,7 +35,7 @@ impl GetPresignedPolicyFormData {
         Self { client, policy }
     }
 
-    pub async fn send(self) -> Result<HashMap<String, String>, Error> {
+    pub async fn send(self) -> Result<HashMap<String, String>> {
         let region: String = self
             .client
             .get_region_cached(&self.policy.bucket, &self.policy.region)
@@ -82,7 +83,7 @@ impl PostPolicy {
     /// let expiration = utc_now() + Duration::days(7);
     /// let policy = PostPolicy::new("bucket-name", expiration).unwrap();
     /// ```
-    pub fn new(bucket_name: &str, expiration: UtcTime) -> Result<Self, Error> {
+    pub fn new(bucket_name: &str, expiration: UtcTime) -> Result<Self> {
         check_bucket_name(bucket_name, true)?;
 
         Ok(Self {
@@ -131,9 +132,9 @@ impl PostPolicy {
     /// // Add condition that 'key' (object name) equals to 'bucket-name'
     /// policy.add_equals_condition("key", "bucket-name").unwrap();
     /// ```
-    pub fn add_equals_condition(&mut self, element: &str, value: &str) -> Result<(), Error> {
+    pub fn add_equals_condition(&mut self, element: &str, value: &str) -> Result<()> {
         if element.is_empty() {
-            return Err(Error::PostPolicyError(
+            return Err(MinioError::PostPolicyError(
                 "condition element cannot be empty".to_string(),
             ));
         }
@@ -143,13 +144,13 @@ impl PostPolicy {
             || v.eq_ignore_ascii_case("redirect")
             || v.eq_ignore_ascii_case("content-length-range")
         {
-            return Err(Error::PostPolicyError(format!(
+            return Err(MinioError::PostPolicyError(format!(
                 "{element} is unsupported for equals condition",
             )));
         }
 
         if PostPolicy::is_reserved_element(v.as_str()) {
-            return Err(Error::PostPolicyError(format!("{element} cannot set")));
+            return Err(MinioError::PostPolicyError(format!("{element} cannot set")));
         }
 
         self.eq_conditions.insert(v, value.to_string());
@@ -186,9 +187,9 @@ impl PostPolicy {
     /// // Add condition that 'Content-Type' starts with 'image/'
     /// policy.add_starts_with_condition("Content-Type", "image/").unwrap();
     /// ```
-    pub fn add_starts_with_condition(&mut self, element: &str, value: &str) -> Result<(), Error> {
+    pub fn add_starts_with_condition(&mut self, element: &str, value: &str) -> Result<()> {
         if element.is_empty() {
-            return Err(Error::PostPolicyError(
+            return Err(MinioError::PostPolicyError(
                 "condition element cannot be empty".to_string(),
             ));
         }
@@ -198,13 +199,13 @@ impl PostPolicy {
             || v.eq_ignore_ascii_case("content-length-range")
             || (v.starts_with("x-amz-") && v.starts_with("x-amz-meta-"))
         {
-            return Err(Error::PostPolicyError(format!(
+            return Err(MinioError::PostPolicyError(format!(
                 "{element} is unsupported for starts-with condition",
             )));
         }
 
         if PostPolicy::is_reserved_element(v.as_str()) {
-            return Err(Error::PostPolicyError(format!("{element} cannot set")));
+            return Err(MinioError::PostPolicyError(format!("{element} cannot set")));
         }
 
         self.starts_with_conditions.insert(v, value.to_string());
@@ -246,9 +247,9 @@ impl PostPolicy {
         &mut self,
         lower_limit: usize,
         upper_limit: usize,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         if lower_limit > upper_limit {
-            return Err(Error::PostPolicyError(
+            return Err(MinioError::PostPolicyError(
                 "lower limit cannot be greater than upper limit".to_string(),
             ));
         }
@@ -272,15 +273,17 @@ impl PostPolicy {
         secret_key: String,
         session_token: Option<String>,
         region: String,
-    ) -> Result<HashMap<String, String>, Error> {
+    ) -> Result<HashMap<String, String>> {
         if region.is_empty() {
-            return Err(Error::PostPolicyError("region cannot be empty".to_string()));
+            return Err(MinioError::PostPolicyError(
+                "region cannot be empty".to_string(),
+            ));
         }
 
         if !self.eq_conditions.contains_key("key")
             && !self.starts_with_conditions.contains_key("key")
         {
-            return Err(Error::PostPolicyError(
+            return Err(MinioError::PostPolicyError(
                 "key condition must be set".to_string(),
             ));
         }

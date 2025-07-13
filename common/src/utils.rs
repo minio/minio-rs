@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use http::{Response as HttpResponse, StatusCode};
-use minio::s3::error::Error;
+use minio::s3::error::Result;
 use rand::distributions::Standard;
 use rand::{Rng, thread_rng};
 use uuid::Uuid;
@@ -35,7 +35,7 @@ pub fn rand_object_name_utf8(len: usize) -> String {
         .collect()
 }
 
-pub async fn get_bytes_from_response(v: Result<reqwest::Response, Error>) -> bytes::Bytes {
+pub async fn get_bytes_from_response(v: Result<reqwest::Response>) -> bytes::Bytes {
     match v {
         Ok(r) => match r.bytes().await {
             Ok(b) => b,

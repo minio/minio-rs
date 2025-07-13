@@ -11,7 +11,7 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::Error;
+use crate::s3::error::{MinioError, Result};
 use crate::s3::response::a_response_traits::HasS3Fields;
 use crate::s3::types::{FromS3Response, ListEntry, S3Request};
 use crate::s3::utils::xml::{Element, MergeXmlElements};
@@ -22,10 +22,7 @@ use reqwest::header::HeaderMap;
 use std::collections::HashMap;
 use std::mem;
 
-fn url_decode_w_enc(
-    encoding_type: &Option<String>,
-    s: Option<String>,
-) -> Result<Option<String>, Error> {
+fn url_decode_w_enc(encoding_type: &Option<String>, s: Option<String>) -> Result<Option<String>> {
     if let Some(v) = encoding_type.as_ref() {
         if v == "url" {
             if let Some(raw) = s {
@@ -44,7 +41,7 @@ fn url_decode_w_enc(
 #[allow(clippy::type_complexity)]
 fn parse_common_list_objects_response(
     root: &Element,
-) -> Result<
+) -> std::result::Result<
     (
         String,
         Option<String>,
@@ -53,7 +50,7 @@ fn parse_common_list_objects_response(
         bool,
         Option<u16>,
     ),
-    Error,
+    MinioError,
 > {
     let encoding_type = root.get_child_text("EncodingType");
     let prefix = url_decode_w_enc(
@@ -80,7 +77,7 @@ fn parse_list_objects_contents(
     main_tag: &str,
     encoding_type: &Option<String>,
     with_delete_marker: bool,
-) -> Result<(), Error> {
+) -> Result<()> {
     let children1 = root.get_matching_children(main_tag);
     let children2 = if with_delete_marker {
         root.get_matching_children("DeleteMarker")
@@ -153,7 +150,7 @@ fn parse_list_objects_common_prefixes(
     contents: &mut Vec<ListEntry>,
     root: &Element,
     encoding_type: &Option<String>,
-) -> Result<(), Error> {
+) -> Result<()> {
     for (_, common_prefix) in root.get_matching_children("CommonPrefixes") {
         contents.push(ListEntry {
             name: url_decode_w_enc(
@@ -204,8 +201,8 @@ impl_has_s3fields!(ListObjectsV1Response);
 impl FromS3Response for ListObjectsV1Response {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
+        response: Result<reqwest::Response>,
+    ) -> Result<Self> {
         let mut resp = response?;
         let headers: HeaderMap = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
@@ -267,8 +264,8 @@ impl_has_s3fields!(ListObjectsV2Response);
 impl FromS3Response for ListObjectsV2Response {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
+        response: Result<reqwest::Response>,
+    ) -> Result<Self> {
         let mut resp = response?;
         let headers: HeaderMap = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;
@@ -334,8 +331,8 @@ impl_has_s3fields!(ListObjectVersionsResponse);
 impl FromS3Response for ListObjectVersionsResponse {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response, Error>,
-    ) -> Result<Self, Error> {
+        response: Result<reqwest::Response>,
+    ) -> Result<Self> {
         let mut resp = response?;
         let headers: HeaderMap = mem::take(resp.headers_mut());
         let body = resp.bytes().await?;

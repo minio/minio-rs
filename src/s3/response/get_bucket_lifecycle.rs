@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::Result;
 use crate::s3::lifecycle_config::LifecycleConfig;
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
@@ -49,7 +49,7 @@ impl GetBucketLifecycleResponse {
     ///
     /// This configuration includes rules for managing the lifecycle of objects in the bucket,
     /// such as transitioning them to different storage classes or expiring them after a specified period.
-    pub fn config(&self) -> Result<LifecycleConfig, Error> {
+    pub fn config(&self) -> Result<LifecycleConfig> {
         LifecycleConfig::from_xml(&Element::parse(self.body.clone().reader())?)
     }
 
