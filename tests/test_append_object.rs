@@ -193,7 +193,7 @@ async fn append_object_2(ctx: TestContext, bucket_name: String) {
     match resp {
         Ok(v) => panic!("append object should have failed; got value: {:?}", v),
         Err(MinioError::S3Error(e)) => {
-            assert_eq!(e.code, MinioErrorCode::InvalidWriteOffset);
+            assert_eq!(e.code(), MinioErrorCode::InvalidWriteOffset);
         }
         Err(e) => panic!("append object should have failed; got error: {:?}", e),
     }
@@ -222,7 +222,7 @@ async fn append_object_3(ctx: TestContext, bucket_name: String) {
     match resp {
         Ok(v) => panic!("append object should have failed; got value: {:?}", v),
         Err(MinioError::S3Error(e)) => {
-            assert_eq!(e.code, MinioErrorCode::InvalidWriteOffset);
+            assert_eq!(e.code(), MinioErrorCode::InvalidWriteOffset);
         }
         Err(e) => panic!("append object should have failed; got error: {:?}", e),
     }
@@ -291,7 +291,7 @@ async fn append_object_5(ctx: TestContext, bucket_name: String) {
     match resp {
         Ok(v) => panic!("append object should have failed; got value: {:?}", v),
         Err(MinioError::S3Error(e)) => {
-            assert_eq!(e.code, MinioErrorCode::NoSuchKey);
+            assert_eq!(e.code(), MinioErrorCode::NoSuchKey);
         }
         Err(e) => panic!("append object should have failed; got error: {:?}", e),
     }

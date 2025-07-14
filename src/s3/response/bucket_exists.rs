@@ -50,10 +50,10 @@ impl FromS3Response for BucketExistsResponse {
                 body: resp.bytes().await?,
                 exists: true,
             }),
-            Err(MinioError::S3Error(e)) if matches!(e.code, MinioErrorCode::NoSuchBucket) => {
+            Err(MinioError::S3Error(mut e)) if matches!(e.code(), MinioErrorCode::NoSuchBucket) => {
                 Ok(Self {
                     request,
-                    headers: e.headers,
+                    headers: e.take_headers(),
                     body: Bytes::new(),
                     exists: false,
                 })

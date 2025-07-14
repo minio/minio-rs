@@ -140,14 +140,14 @@ async fn bucket_replication_s3express(ctx: TestContext, bucket_name: String) {
         .send()
         .await;
     match resp {
-        Err(MinioError::S3Error(e)) => assert_eq!(e.code, MinioErrorCode::NotSupported),
+        Err(MinioError::S3Error(e)) => assert_eq!(e.code(), MinioErrorCode::NotSupported),
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 
     let resp: Result<GetBucketReplicationResponse> =
         ctx.client.get_bucket_replication(&bucket_name).send().await;
     match resp {
-        Err(MinioError::S3Error(e)) => assert_eq!(e.code, MinioErrorCode::NotSupported),
+        Err(MinioError::S3Error(e)) => assert_eq!(e.code(), MinioErrorCode::NotSupported),
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 
@@ -157,7 +157,7 @@ async fn bucket_replication_s3express(ctx: TestContext, bucket_name: String) {
         .send()
         .await;
     match resp {
-        Err(MinioError::S3Error(e)) => assert_eq!(e.code, MinioErrorCode::NotSupported),
+        Err(MinioError::S3Error(e)) => assert_eq!(e.code(), MinioErrorCode::NotSupported),
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 }

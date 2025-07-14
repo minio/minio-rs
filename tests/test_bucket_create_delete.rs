@@ -43,7 +43,7 @@ async fn bucket_create(ctx: TestContext) {
     match resp {
         Ok(_) => panic!("Bucket already exists, but was created again"),
         Err(MinioError::S3Error(e))
-            if matches!(e.code, MinioErrorCode::BucketAlreadyOwnedByYou) =>
+            if matches!(e.code(), MinioErrorCode::BucketAlreadyOwnedByYou) =>
         {
             // this is expected, as the bucket already exists
         }
@@ -59,7 +59,7 @@ async fn bucket_delete(ctx: TestContext) {
     let resp: Result<DeleteBucketResponse> = ctx.client.delete_bucket(&bucket_name).send().await;
     match resp {
         Ok(_) => panic!("Bucket does not exist, but was removed"),
-        Err(MinioError::S3Error(e)) if matches!(e.code, MinioErrorCode::NoSuchBucket) => {
+        Err(MinioError::S3Error(e)) if matches!(e.code(), MinioErrorCode::NoSuchBucket) => {
             // this is expected, as the bucket does not exist
         }
         Err(e) => panic!("Unexpected error: {:?}", e),

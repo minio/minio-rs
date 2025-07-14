@@ -162,19 +162,17 @@ impl std::fmt::Display for MinioErrorCode {
 #[cfg(test)]
 mod test_error_code {
     use super::*;
-    use ALL_MINIO_ERROR_CODE;
 
+    /// Test that all MinioErrorCode values can be converted to and from strings
     #[test]
     fn test_minio_error_code_roundtrip() {
         for code in ALL_MINIO_ERROR_CODE {
             let str = code.to_string();
-            let code_obs1: MinioErrorCode = str.parse().unwrap();
-            let code_obs2 = MinioErrorCode::from_str(&str).unwrap();
-            assert_eq!(code_obs1, code_obs2);
+            let code_obs: MinioErrorCode = str.parse().unwrap();
             assert_eq!(
-                code_obs1, *code,
+                code_obs, *code,
                 "Failed MinioErrorCode round-trip: code {} -> str '{}' -> code {}",
-                code, str, code_obs1
+                code, str, code_obs
             );
         }
     }
@@ -184,14 +182,83 @@ mod test_error_code {
 /// Error response for S3 operations
 pub struct MinioErrorResponse {
     /// Headers as returned by the server.
-    pub(crate) headers: HeaderMap,
-    pub code: MinioErrorCode,
-    pub message: Option<String>,
-    pub resource: String,
-    pub request_id: String,
-    pub host_id: String,
-    pub bucket_name: Option<String>,
-    pub object_name: Option<String>,
+    headers: HeaderMap,
+    code: MinioErrorCode,
+    message: Option<String>, //TODO make private
+    resource: String,
+    request_id: String,
+    host_id: String,
+    bucket_name: Option<String>,
+    object_name: Option<String>,
+}
+
+impl MinioErrorResponse {
+    pub fn new(
+        headers: HeaderMap,
+        code: MinioErrorCode,
+        message: Option<String>,
+        resource: String,
+        request_id: String,
+        host_id: String,
+        bucket_name: Option<String>,
+        object_name: Option<String>,
+    ) -> Self {
+        Self {
+            headers,
+            code,
+            message,
+            resource,
+            request_id,
+            host_id,
+            bucket_name,
+            object_name,
+        }
+    }
+
+    pub fn new_from_body(body: Bytes, headers: HeaderMap) -> Result<Self> {
+        let root = Element::parse(body.reader()).map_err(MinioError::XmlParseError)?;
+        Ok(Self {
+            headers,
+            code: MinioErrorCode::from_str(&get_text_default(&root, "Code"))?,
+            message: get_text_option(&root, "Message"),
+            resource: get_text_default(&root, "Resource"),
+            request_id: get_text_default(&root, "RequestId"),
+            host_id: get_text_default(&root, "HostId"),
+            bucket_name: get_text_option(&root, "BucketName"),
+            object_name: get_text_option(&root, "Key"),
+        })
+    }
+
+    pub fn headers(&self) -> &HeaderMap {
+        &self.headers
+    }
+    pub fn take_headers(&mut self) -> HeaderMap {
+        std::mem::take(&mut self.headers)
+    }
+    pub fn code(&self) -> MinioErrorCode {
+        self.code.clone()
+    }
+    pub fn message(&self) -> &Option<String> {
+        &self.message
+    }
+    pub fn set_message(&mut self, message: String) {
+        self.message = Some(message);
+    }
+    pub fn resource(&self) -> &str {
+        &self.resource
+    }
+    pub fn request_id(&self) -> &str {
+        &self.request_id
+    }
+    pub fn host_id(&self) -> &str {
+        &self.host_id
+    }
+    pub fn bucket_name(&self) -> &Option<String> {
+        &self.bucket_name
+    }
+    pub fn object_name(&self) -> &Option<String> {
+        &self.object_name
+    }
 }
 
 impl std::fmt::Display for MinioErrorResponse {
@@ -211,22 +278,6 @@ impl std::fmt::Display for MinioErrorResponse {
 }
 
 impl std::error::Error for MinioErrorResponse {}
-
-impl MinioErrorResponse {
-    pub fn from_str(body: Bytes, headers: HeaderMap) -> Result<Self> {
-        let root = Element::parse(body.reader()).map_err(MinioError::XmlParseError)?;
-        Ok(Self {
-            headers,
-            code: MinioErrorCode::from_str(&get_text_default(&root, "Code"))?,
-            message: get_text_option(&root, "Message"),
-            resource: get_text_default(&root, "Resource"),
-            request_id: get_text_default(&root, "RequestId"),
-            host_id: get_text_default(&root, "HostId"),
-            bucket_name: get_text_option(&root, "BucketName"),
-            object_name: get_text_option(&root, "Key"),
-        })
-    }
-}
 
 /// Error definitions
 #[derive(Error, Debug)]
@@ -379,7 +430,7 @@ pub enum MinioError {
     #[error("Invalid compose source: {0}")]
     InvalidComposeSource(String),
 
-    #[error("{}", invalid_compose_source_offset_message(.bucket, .object, .version, *.offset, *.object_size))]
+    #[error("{}", format_s3_object_error(.bucket, .object, .version.as_deref(), "InvalidComposeSourceOffset", &format!("offset {offset} is beyond object size {object_size}")))]
     InvalidComposeSourceOffset {
         bucket: String,
         object: String,
@@ -388,7 +439,7 @@ pub enum MinioError {
         object_size: u64,
     },
 
-    #[error("{}", invalid_compose_source_length_message(.bucket, .object, .version, *.length, *.object_size))]
+    #[error("{}", format_s3_object_error(.bucket, .object, .version.as_deref(), "InvalidComposeSourceLength", &format!("length {length} is beyond object size {object_size}")))]
     InvalidComposeSourceLength {
         bucket: String,
         object: String,
@@ -397,7 +448,7 @@ pub enum MinioError {
         object_size: u64,
     },
 
-    #[error("{}", invalid_compose_source_size_message(.bucket, .object, .version, *.compose_size, *.object_size))]
+    #[error("{}", format_s3_object_error(.bucket, .object, .version.as_deref(), "InvalidComposeSourceSize", &format!("compose size {compose_size} is beyond object size {object_size}")))]
     InvalidComposeSourceSize {
         bucket: String,
         object: String,
@@ -412,7 +463,7 @@ pub enum MinioError {
     #[error("Invalid copy directive: {0}")]
     InvalidCopyDirective(String),
 
-    #[error("{}", invalid_compose_source_part_size_message(.bucket, .object, .version, *.size, *.expected_size))]
+    #[error("{}", format_s3_object_error(.bucket, .object, .version.as_deref(), "InvalidComposeSourcePartSize", &format!("compose size {size} must be greater than {expected_size}")))]
     InvalidComposeSourcePartSize {
         bucket: String,
         object: String,
@@ -421,7 +472,7 @@ pub enum MinioError {
         expected_size: u64,
     },
 
-    #[error("{}", invalid_compose_source_multipart_message(.bucket, .object, .version, *.size, *.expected_size))]
+    #[error("{}", format_s3_object_error(.bucket, .object, .version.as_deref(), "InvalidComposeSourceMultipart", &format!("size {size} for multipart split upload of {size}, last part size is less than {expected_size}")))]
     InvalidComposeSourceMultipart {
         bucket: String,
         object: String,
@@ -496,68 +547,16 @@ fn sse_tls_required_message(prefix: &Option<String>) -> String {
     }
 }
 
-fn invalid_compose_source_offset_message(
+fn format_s3_object_error(
     bucket: &str,
     object: &str,
-    version: &Option<String>,
-    offset: u64,
-    object_size: u64,
+    version: Option<&str>,
+    error_type: &str,
+    details: &str,
 ) -> String {
     format!(
-        "source {bucket}/{object}{}: offset {offset} is beyond object size {object_size}",
-        format_version(version),
-    )
-}
-
-fn invalid_compose_source_length_message(
-    bucket: &str,
-    object: &str,
-    version: &Option<String>,
-    length: u64,
-    object_size: u64,
-) -> String {
-    format!(
-        "source {bucket}/{object}{}: length {length} is beyond object size {object_size}",
-        format_version(version),
-    )
-}
-
-fn invalid_compose_source_size_message(
-    bucket: &str,
-    object: &str,
-    version: &Option<String>,
-    compose_size: u64,
-    object_size: u64,
-) -> String {
-    format!(
-        "source {bucket}/{object}{}: compose size {compose_size} is beyond object size {object_size}",
-        format_version(version),
-    )
-}
-
-fn invalid_compose_source_part_size_message(
-    bucket: &str,
-    object: &str,
-    version: &Option<String>,
-    size: u64,
-    expected_size: u64,
-) -> String {
-    format!(
-        "source {bucket}/{object}{}: size {size} must be greater than {expected_size}",
-        format_version(version),
-    )
-}
-
-fn invalid_compose_source_multipart_message(
-    bucket: &str,
-    object: &str,
-    version: &Option<String>,
-    size: u64,
-    expected_size: u64,
-) -> String {
-    format!(
-        "source {bucket}/{object}{}: size {size} for multipart split upload of {size}, last part size is less than {expected_size}",
-        format_version(version),
+        "source {bucket}/{object}{}: {error_type} {details}",
+        format_version(&version.map(String::from))
     )
 }
 

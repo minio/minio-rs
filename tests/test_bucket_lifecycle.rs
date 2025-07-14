@@ -75,7 +75,7 @@ async fn bucket_lifecycle(ctx: TestContext, bucket_name: String) {
         ctx.client.get_bucket_lifecycle(&bucket_name).send().await;
     match resp {
         Err(MinioError::S3Error(e)) => {
-            assert_eq!(e.code, MinioErrorCode::NoSuchLifecycleConfiguration)
+            assert_eq!(e.code(), MinioErrorCode::NoSuchLifecycleConfiguration)
         }
         v => panic!(
             "Expected error S3Error(NoSuchLifecycleConfiguration): but got {:?}",

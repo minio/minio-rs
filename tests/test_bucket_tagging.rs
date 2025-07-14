@@ -78,21 +78,21 @@ async fn bucket_tags_s3express(ctx: TestContext, bucket_name: String) {
         .send()
         .await;
     match resp {
-        Err(MinioError::S3Error(e)) => assert_eq!(e.code, MinioErrorCode::NotSupported),
+        Err(MinioError::S3Error(e)) => assert_eq!(e.code(), MinioErrorCode::NotSupported),
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 
     let resp: Result<GetBucketTaggingResponse> =
         ctx.client.get_bucket_tagging(&bucket_name).send().await;
     match resp {
-        Err(MinioError::S3Error(e)) => assert_eq!(e.code, MinioErrorCode::NotSupported),
+        Err(MinioError::S3Error(e)) => assert_eq!(e.code(), MinioErrorCode::NotSupported),
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 
     let resp: Result<DeleteBucketTaggingResponse> =
         ctx.client.delete_bucket_tagging(&bucket_name).send().await;
     match resp {
-        Err(MinioError::S3Error(e)) => assert_eq!(e.code, MinioErrorCode::NotSupported),
+        Err(MinioError::S3Error(e)) => assert_eq!(e.code(), MinioErrorCode::NotSupported),
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 }
