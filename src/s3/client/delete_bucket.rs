@@ -131,13 +131,13 @@ impl Client {
         match request.send().await {
             Ok(resp) => Ok(resp),
             Err(MinioError::S3Error(mut e)) => {
-                if matches!(e.code, MinioErrorCode::NoSuchBucket) {
+                if matches!(e.code(), MinioErrorCode::NoSuchBucket) {
                     Ok(DeleteBucketResponse {
                         request: Default::default(), //TODO consider how to handle this
                         body: Bytes::new(),
-                        headers: e.headers,
+                        headers: e.take_headers(),
                     })
-                } else if matches!(e.code, MinioErrorCode::BucketNotEmpty) {
+                } else if matches!(e.code(), MinioErrorCode::BucketNotEmpty) {
                     // for convenience, add the first 5 documents that were are still in the bucket
                     // to the error message
                     let mut stream = self
@@ -158,11 +158,11 @@ impl Client {
                         // else: silently ignore the error and keep looping
                     }
 
-                    if e.message.is_none() {
-                        e.message = Some(format!("found content: {objs:?}"));
-                    } else if let Some(msg) = e.message.as_mut() {
-                        msg.push_str(&format!(", found content: {objs:?}"));
-                    }
+                    let new_msg = match e.message() {
+                        None => format!("found content: {objs:?}"),
+                        Some(msg) => format!("{msg}, found content: {objs:?}"),
+                    };
+                    e.set_message(new_msg);
                     Err(MinioError::S3Error(e))
                 } else {
                     Err(MinioError::S3Error(e))

@@ -534,7 +534,8 @@ impl Client {
         );
 
         if let MinioError::S3Error(ref err) = e {
-            if (err.code == MinioErrorCode::NoSuchBucket) || (err.code == MinioErrorCode::RetryHead)
+            if matches!(err.code(), MinioErrorCode::NoSuchBucket)
+                || matches!(err.code(), MinioErrorCode::RetryHead)
             {
                 if let Some(v) = bucket_name {
                     self.shared.region_map.remove(v);
@@ -571,7 +572,7 @@ impl Client {
             Ok(r) => return Ok(r),
             Err(e) => match e {
                 MinioError::S3Error(ref er) => {
-                    if er.code != MinioErrorCode::RetryHead {
+                    if !matches!(er.code(), MinioErrorCode::RetryHead) {
                         return Err(e);
                     }
                 }
@@ -658,7 +659,7 @@ impl SharedClientItems {
             return match headers.get("Content-Type") {
                 Some(v) => match v.to_str() {
                     Ok(s) => match s.to_lowercase().contains("application/xml") {
-                        true => match MinioErrorResponse::from_str(body, headers) {
+                        true => match MinioErrorResponse::new_from_body(body, headers) {
                             Ok(v) => MinioError::S3Error(v),
                             Err(e) => e,
                         },
@@ -732,15 +733,15 @@ impl SharedClientItems {
             _ => String::new(),
         };
 
-        MinioError::S3Error(MinioErrorResponse {
+        MinioError::S3Error(MinioErrorResponse::new(
             headers,
             code,
-            message: (!message.is_empty()).then_some(message),
-            resource: resource.to_string(),
+            (!message.is_empty()).then_some(message),
+            resource.to_string(),
             request_id,
             host_id,
-            bucket_name: bucket_name.map(String::from),
-            object_name: object_name.map(String::from),
-        })
+            bucket_name.map(String::from),
+            object_name.map(String::from),
+        ))
     }
 }

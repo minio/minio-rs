@@ -75,7 +75,7 @@ async fn select_object_content_express(ctx: TestContext, bucket_name: String) {
         .send()
         .await;
     match resp {
-        Err(MinioError::S3Error(e)) => assert_eq!(e.code, MinioErrorCode::NotSupported),
+        Err(MinioError::S3Error(e)) => assert_eq!(e.code(), MinioErrorCode::NotSupported),
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 }

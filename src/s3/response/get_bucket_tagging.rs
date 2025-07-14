@@ -54,10 +54,10 @@ impl FromS3Response for GetBucketTaggingResponse {
                 headers: mem::take(resp.headers_mut()),
                 body: resp.bytes().await?,
             }),
-            Err(MinioError::S3Error(e)) if matches!(e.code, MinioErrorCode::NoSuchTagSet) => {
+            Err(MinioError::S3Error(mut e)) if matches!(e.code(), MinioErrorCode::NoSuchTagSet) => {
                 Ok(Self {
                     request,
-                    headers: e.headers,
+                    headers: e.take_headers(),
                     body: Bytes::new(),
                 })
             }
