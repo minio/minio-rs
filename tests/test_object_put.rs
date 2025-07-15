@@ -137,7 +137,7 @@ async fn put_object_content_1(ctx: TestContext, bucket_name: String) {
             .await
             .unwrap();
 
-        assert!(!resp.is_delete_marker().unwrap().unwrap());
+        assert!(!resp.is_delete_marker().unwrap());
     }
 }
 

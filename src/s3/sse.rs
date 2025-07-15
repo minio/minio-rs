@@ -15,6 +15,7 @@
 
 //! Server side encryption definitions
 
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::utils::{b64encode, md5sum_hash};
 use std::any::Any;
@@ -42,24 +43,24 @@ impl SseCustomerKey {
         let md5key: String = md5sum_hash(key.as_bytes());
 
         let mut headers = Multimap::with_capacity(3);
-        headers.add("X-Amz-Server-Side-Encryption-Customer-Algorithm", "AES256");
-        headers.add("X-Amz-Server-Side-Encryption-Customer-Key", b64key.clone());
+        headers.add(X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM, "AES256");
+        headers.add(X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY, b64key.clone());
         headers.add(
-            "X-Amz-Server-Side-Encryption-Customer-Key-MD5",
+            X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
             md5key.clone(),
         );
 
         let mut copy_headers = Multimap::with_capacity(3);
         copy_headers.add(
-            "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Algorithm",
+            X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
             "AES256",
         );
         copy_headers.add(
-            "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key",
+            X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY,
             b64key,
         );
         copy_headers.add(
-            "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5",
+            X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
             md5key,
         );
 
@@ -98,10 +99,10 @@ impl SseKms {
     pub fn new(key: &str, context: Option<&str>) -> SseKms {
         let mut headers = Multimap::with_capacity(3);
 
-        headers.add("X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id", key);
-        headers.add("X-Amz-Server-Side-Encryption", "aws:kms");
+        headers.add(X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID, key);
+        headers.add(X_AMZ_SERVER_SIDE_ENCRYPTION, "aws:kms");
         if let Some(v) = context {
-            headers.add("X-Amz-Server-Side-Encryption-Context", b64encode(v));
+            headers.add(X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT, b64encode(v));
         }
 
         SseKms { headers }
@@ -135,7 +136,7 @@ pub struct SseS3 {
 impl SseS3 {
     pub fn new() -> Self {
         let mut headers = Multimap::new();
-        headers.add("X-Amz-Server-Side-Encryption", "AES256");
+        headers.add(X_AMZ_SERVER_SIDE_ENCRYPTION, "AES256");
 
         Self { headers }
     }

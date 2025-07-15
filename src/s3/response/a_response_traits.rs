@@ -1,6 +1,7 @@
 use crate::s3::error::{MinioError, Result};
+use crate::s3::header_constants::*;
 use crate::s3::types::S3Request;
-use crate::s3::utils::{get_text_result, trim_quotes};
+use crate::s3::utils::{get_text_result, parse_bool, trim_quotes};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::collections::HashMap;
@@ -117,7 +118,7 @@ pub trait HasVersion: HasS3Fields {
     #[inline]
     fn version_id(&self) -> Option<&str> {
         self.headers()
-            .get("x-amz-version-id")
+            .get(X_AMZ_VERSION_ID)
             .and_then(|v| v.to_str().ok())
     }
 }
@@ -162,7 +163,7 @@ pub trait HasObjectSize: HasS3Fields {
     #[inline]
     fn object_size(&self) -> u64 {
         self.headers()
-            .get("x-amz-object-size")
+            .get(X_AMZ_OBJECT_SIZE)
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(0)
@@ -181,18 +182,10 @@ pub trait HasIsDeleteMarker: HasS3Fields {
     /// was not (false) a delete marker before deletion. In a simple DELETE, this header indicates
     /// whether (true) or not (false) the current version of the object is a delete marker.
     #[inline]
-    fn is_delete_marker(&self) -> Result<Option<bool>> {
-        Ok(Some(
-            self.headers()
-                .get("x-amz-delete-marker")
-                .map(|v| v == "true")
-                .unwrap_or(false),
-        ))
-
-        //Ok(match self.headers().get("x-amz-delete-marker") {
-        //    Some(v) => Some(v.to_str()?.parse::<bool>()?),
-        //    None => None,
-        //})
+    fn is_delete_marker(&self) -> Result<bool> {
+        self.headers()
+            .get(X_AMZ_DELETE_MARKER)
+            .map_or(Ok(false), |v| parse_bool(v.to_str()?))
     }
 }
 
@@ -210,7 +203,7 @@ pub trait HasTagging: HasS3Fields {
         let mut root = Element::parse(self.body().clone().reader())?;
         let element = root
             .get_mut_child("TagSet")
-            .ok_or(MinioError::XmlError("<TagSet> tag not found".to_string()))?;
+            .ok_or(MinioError::xml_error("<TagSet> tag not found"))?;
         while let Some(v) = element.take_child("Tag") {
             tags.insert(get_text_result(&v, "Key")?, get_text_result(&v, "Value")?);
         }

@@ -46,10 +46,10 @@ impl FromS3Response for CreateBucketResponse {
         let mut resp: reqwest::Response = response?;
 
         let mut request = request;
-        let bucket: &str = request
+        let bucket = request
             .bucket
             .as_deref()
-            .ok_or_else(|| MinioError::InvalidBucketName("no bucket specified".into()))?;
+            .ok_or(MinioError::InvalidBucketName("no bucket specified".into()))?;
         let region: &str = &request.inner_region;
         request.client.add_bucket_region(bucket, region);
 

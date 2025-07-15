@@ -279,7 +279,7 @@ impl LifecycleRule {
                 rule.status = status_text == "Enabled";
             }
         } else {
-            return Err(MinioError::XmlError("Missing <Status> element".to_string()));
+            return Err(MinioError::xml_error("Missing <Status> element"));
         }
 
         // Parse Filter
@@ -292,10 +292,13 @@ impl LifecycleRule {
             if let Some(days_elem) = abort_elem.get_child("DaysAfterInitiation") {
                 if let Some(days_text) = days_elem.get_text() {
                     rule.abort_incomplete_multipart_upload_days_after_initiation =
-                        Some(days_text.parse().map_err(|_| {
-                            MinioError::XmlError("Invalid DaysAfterInitiation value".to_string())
-                        })?);
-                }
+                        Some(days_text.parse().map_err(|e| {
+                            MinioError::xml_error_with_source(
+                                "Invalid DaysAfterInitiation value",
+                                e,
+                            )
+                        })?)
+                };
             }
         }
 
@@ -312,8 +315,8 @@ impl LifecycleRule {
             // Days
             if let Some(days_elem) = expiration_elem.get_child("Days") {
                 if let Some(days_text) = days_elem.get_text() {
-                    rule.expiration_days = Some(days_text.parse().map_err(|_| {
-                        MinioError::XmlError("Invalid Expiration Days value".to_string())
+                    rule.expiration_days = Some(days_text.parse().map_err(|e| {
+                        MinioError::xml_error_with_source("Invalid Expiration Days value", e)
                     })?);
                 }
             }
@@ -339,8 +342,11 @@ impl LifecycleRule {
         if let Some(del_marker_elem) = rule_elem.get_child("DelMarkerExpiration") {
             if let Some(days_elem) = del_marker_elem.get_child("Days") {
                 if let Some(days_text) = days_elem.get_text() {
-                    rule.del_marker_expiration_days = Some(days_text.parse().map_err(|_| {
-                        MinioError::XmlError("Invalid DelMarkerExpiration Days value".to_string())
+                    rule.del_marker_expiration_days = Some(days_text.parse().map_err(|e| {
+                        MinioError::xml_error_with_source(
+                            "Invalid DelMarkerExpiration Days value",
+                            e,
+                        )
                     })?);
                 }
             }
@@ -350,8 +356,11 @@ impl LifecycleRule {
         if let Some(all_versions_elem) = rule_elem.get_child("AllVersionsExpiration") {
             if let Some(days_elem) = all_versions_elem.get_child("Days") {
                 if let Some(days_text) = days_elem.get_text() {
-                    rule.all_versions_expiration_days = Some(days_text.parse().map_err(|_| {
-                        MinioError::XmlError("Invalid AllVersionsExpiration Days value".to_string())
+                    rule.all_versions_expiration_days = Some(days_text.parse().map_err(|e| {
+                        MinioError::xml_error_with_source(
+                            "Invalid AllVersionsExpiration Days value",
+                            e,
+                        )
                     })?);
                 }
             }
@@ -368,10 +377,10 @@ impl LifecycleRule {
             if let Some(days_elem) = noncurrent_exp_elem.get_child("NoncurrentDays") {
                 if let Some(days_text) = days_elem.get_text() {
                     rule.noncurrent_version_expiration_noncurrent_days =
-                        Some(days_text.parse().map_err(|_| {
-                            MinioError::XmlError(
-                                "Invalid NoncurrentVersionExpiration NoncurrentDays value"
-                                    .to_string(),
+                        Some(days_text.parse().map_err(|e| {
+                            MinioError::xml_error_with_source(
+                                "Invalid NoncurrentVersionExpiration NoncurrentDays value",
+                                e,
                             )
                         })?);
                 }
@@ -380,9 +389,10 @@ impl LifecycleRule {
             if let Some(versions_elem) = noncurrent_exp_elem.get_child("NewerNoncurrentVersions") {
                 if let Some(versions_text) = versions_elem.get_text() {
                     rule.noncurrent_version_expiration_newer_versions =
-                        Some(versions_text.parse().map_err(|_| {
-                            MinioError::XmlError(
-                                "Invalid NewerNoncurrentVersions value".to_string(),
+                        Some(versions_text.parse().map_err(|e| {
+                            MinioError::xml_error_with_source(
+                                "Invalid NewerNoncurrentVersions value",
+                                e,
                             )
                         })?);
                 }
@@ -394,10 +404,10 @@ impl LifecycleRule {
             if let Some(days_elem) = noncurrent_trans_elem.get_child("NoncurrentDays") {
                 if let Some(days_text) = days_elem.get_text() {
                     rule.noncurrent_version_transition_noncurrent_days =
-                        Some(days_text.parse().map_err(|_| {
-                            MinioError::XmlError(
-                                "Invalid NoncurrentVersionTransition NoncurrentDays value"
-                                    .to_string(),
+                        Some(days_text.parse().map_err(|e| {
+                            MinioError::xml_error_with_source(
+                                "Invalid NoncurrentVersionTransition NoncurrentDays value",
+                                e,
                             )
                         })?);
                 }
@@ -414,9 +424,10 @@ impl LifecycleRule {
             {
                 if let Some(versions_text) = versions_elem.get_text() {
                     rule.noncurrent_version_transition_newer_versions =
-                        Some(versions_text.parse().map_err(|_| {
-                            MinioError::XmlError(
-                                "Invalid NewerNoncurrentVersions value".to_string(),
+                        Some(versions_text.parse().map_err(|e| {
+                            MinioError::xml_error_with_source(
+                                "Invalid NewerNoncurrentVersions value",
+                                e,
                             )
                         })?);
                 }
@@ -435,8 +446,8 @@ impl LifecycleRule {
             // Days
             if let Some(days_elem) = transition_elem.get_child("Days") {
                 if let Some(days_text) = days_elem.get_text() {
-                    rule.transition_days = Some(days_text.parse().map_err(|_| {
-                        MinioError::XmlError("Invalid Transition Days value".to_string())
+                    rule.transition_days = Some(days_text.parse().map_err(|e| {
+                        MinioError::xml_error_with_source("Invalid Transition Days value", e)
                     })?);
                 }
             }
@@ -457,37 +468,37 @@ impl LifecycleRule {
 
         // Ensure ID is present
         if self.id.is_empty() {
-            return Err(MinioError::XmlError("Rule ID cannot be empty".to_string()));
+            return Err(MinioError::xml_error("Rule ID cannot be empty"));
         }
 
         // Validate storage classes in transitions
         if let Some(storage_class) = &self.transition_storage_class {
             if storage_class.is_empty() {
-                return Err(MinioError::XmlError(
-                    "Transition StorageClass cannot be empty".to_string(),
+                return Err(MinioError::xml_error(
+                    "Transition StorageClass cannot be empty",
                 ));
             }
         }
 
         if let Some(storage_class) = &self.noncurrent_version_transition_storage_class {
             if storage_class.is_empty() {
-                return Err(MinioError::XmlError(
-                    "NoncurrentVersionTransition StorageClass cannot be empty".to_string(),
+                return Err(MinioError::xml_error(
+                    "NoncurrentVersionTransition StorageClass cannot be empty",
                 ));
             }
         }
 
         // Check that expiration has either days or date, not both
         if self.expiration_days.is_some() && self.expiration_date.is_some() {
-            return Err(MinioError::XmlError(
-                "Expiration cannot specify both Days and Date".to_string(),
+            return Err(MinioError::xml_error(
+                "Expiration cannot specify both Days and Date",
             ));
         }
 
         // Check that transition has either days or date, not both
         if self.transition_days.is_some() && self.transition_date.is_some() {
-            return Err(MinioError::XmlError(
-                "Transition cannot specify both Days and Date".to_string(),
+            return Err(MinioError::xml_error(
+                "Transition cannot specify both Days and Date",
             ));
         }
 
@@ -499,5 +510,7 @@ impl LifecycleRule {
 fn parse_iso8601(date_str: &str) -> Result<chrono::DateTime<chrono::Utc>> {
     chrono::DateTime::parse_from_rfc3339(date_str)
         .map(|dt| dt.with_timezone(&chrono::Utc))
-        .map_err(|_| MinioError::XmlError(format!("Invalid date format: {date_str}")))
+        .map_err(|e| {
+            MinioError::xml_error_with_source(format!("Invalid date format: {date_str}"), e)
+        })
 }

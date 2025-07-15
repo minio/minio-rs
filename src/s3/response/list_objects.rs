@@ -11,7 +11,7 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::{MinioError, Result};
+use crate::s3::error::Result;
 use crate::s3::response::a_response_traits::HasS3Fields;
 use crate::s3::types::{FromS3Response, ListEntry, S3Request};
 use crate::s3::utils::xml::{Element, MergeXmlElements};
@@ -41,17 +41,14 @@ fn url_decode_w_enc(encoding_type: &Option<String>, s: Option<String>) -> Result
 #[allow(clippy::type_complexity)]
 fn parse_common_list_objects_response(
     root: &Element,
-) -> std::result::Result<
-    (
-        String,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        bool,
-        Option<u16>,
-    ),
-    MinioError,
-> {
+) -> Result<(
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    bool,
+    Option<u16>,
+)> {
     let encoding_type = root.get_child_text("EncodingType");
     let prefix = url_decode_w_enc(
         &encoding_type,

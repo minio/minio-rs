@@ -15,13 +15,14 @@
 
 use crate::impl_has_s3fields;
 use crate::s3::error::{MinioError, Result};
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request, SelectProgress};
 use crate::s3::utils::{copy_slice, crc32, get_text_result, uint32};
 use async_trait::async_trait;
 use bytes::Bytes;
 use http::HeaderMap;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::io::BufReader;
 use std::mem;
 use xmltree::Element;
@@ -146,8 +147,8 @@ impl SelectObjectContentResponse {
         Ok(true)
     }
 
-    fn decode_header(&mut self, header_length: usize) -> Result<HashMap<String, String>> {
-        let mut headers: HashMap<String, String> = HashMap::new();
+    fn decode_header(&mut self, header_length: usize) -> Result<Multimap> {
+        let mut headers = Multimap::new();
         let mut offset = 0_usize;
         while offset < header_length {
             let mut length = self.data[offset] as usize;
@@ -172,7 +173,7 @@ impl SelectObjectContentResponse {
             let value = std::str::from_utf8(&self.data[offset..offset + length])?;
             offset += length;
 
-            headers.insert(name.to_string(), value.to_string());
+            headers.add(name, value);
         }
 
         Ok(headers)

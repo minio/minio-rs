@@ -44,10 +44,10 @@ impl FromS3Response for DeleteBucketResponse {
         let mut resp: reqwest::Response = response?;
 
         let mut request = request;
-        let bucket: &str = request
+        let bucket = request
             .bucket
             .as_deref()
-            .ok_or_else(|| MinioError::InvalidBucketName("no bucket specified".into()))?;
+            .ok_or(MinioError::InvalidBucketName("no bucket specified".into()))?;
 
         request.client.remove_bucket_region(bucket);
         Ok(Self {

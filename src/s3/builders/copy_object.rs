@@ -16,6 +16,7 @@
 use crate::s3::Client;
 use crate::s3::client::{MAX_MULTIPART_COUNT, MAX_PART_SIZE};
 use crate::s3::error::{MinioError, Result};
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::HasEtagFromBody;
 use crate::s3::response::{
@@ -26,7 +27,8 @@ use crate::s3::response::{
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{Directive, PartInfo, Retention, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{
-    UtcTime, check_bucket_name, check_object_name, to_http_header_value, to_iso8601utc, url_encode,
+    UtcTime, check_bucket_name, check_object_name, check_sse, check_ssec, to_http_header_value,
+    to_iso8601utc, url_encode,
 };
 use async_recursion::async_recursion;
 use http::Method;
@@ -228,16 +230,8 @@ impl S3Api for CopyObjectInternal {
 
 impl ToS3Request for CopyObjectInternal {
     fn to_s3request(self) -> Result<S3Request> {
-        {
-            if let Some(v) = &self.sse {
-                if v.tls_required() && !self.client.is_secure() {
-                    return Err(MinioError::SseTlsRequired(None));
-                }
-            }
-            if self.source.ssec.is_some() && !self.client.is_secure() {
-                return Err(MinioError::SseTlsRequired(None));
-            }
-        }
+        check_sse(&self.sse, &self.client)?;
+        check_ssec(&self.source.ssec, &self.client)?;
 
         let mut headers = self.headers;
         {
@@ -261,24 +255,24 @@ impl ToS3Request for CopyObjectInternal {
                     tagging.push_str(&url_encode(value));
                 }
                 if !tagging.is_empty() {
-                    headers.add("x-amz-tagging", tagging);
+                    headers.add(X_AMZ_TAGGING, tagging);
                 }
             }
             if let Some(v) = self.retention {
-                headers.add("x-amz-object-lock-mode", v.mode.to_string());
+                headers.add(X_AMZ_OBJECT_LOCK_MODE, v.mode.to_string());
                 headers.add(
-                    "x-amz-object-lock-retain-until-date",
+                    X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE,
                     to_iso8601utc(v.retain_until_date),
                 );
             }
             if self.legal_hold {
-                headers.add("x-amz-object-lock-legal-hold", "ON");
+                headers.add(X_AMZ_OBJECT_LOCK_LEGAL_HOLD, "ON");
             }
             if let Some(v) = self.metadata_directive {
-                headers.add("x-amz-metadata-directive", v.to_string());
+                headers.add(X_AMZ_METADATA_DIRECTIVE, v.to_string());
             }
             if let Some(v) = self.tagging_directive {
-                headers.add("x-amz-tagging-directive", v.to_string());
+                headers.add(X_AMZ_TAGGING_DIRECTIVE, v.to_string());
             }
 
             let mut copy_source = String::from("/");
@@ -289,31 +283,28 @@ impl ToS3Request for CopyObjectInternal {
                 copy_source.push_str("?versionId=");
                 copy_source.push_str(&url_encode(v));
             }
-            headers.add("x-amz-copy-source", copy_source);
+            headers.add(X_AMZ_COPY_SOURCE, copy_source);
 
             let range = self.source.get_range_value();
             if !range.is_empty() {
-                headers.add("x-amz-copy-source-range", range);
+                headers.add(X_AMZ_COPY_SOURCE_RANGE, range);
             }
 
             if let Some(v) = self.source.match_etag {
-                headers.add("x-amz-copy-source-if-match", v);
+                headers.add(X_AMZ_COPY_SOURCE_IF_MATCH, v);
             }
 
             if let Some(v) = self.source.not_match_etag {
-                headers.add("x-amz-copy-source-if-none-match", v);
+                headers.add(X_AMZ_COPY_SOURCE_IF_NONE_MATCH, v);
             }
 
             if let Some(v) = self.source.modified_since {
-                headers.add(
-                    "x-amz-copy-source-if-modified-since",
-                    to_http_header_value(v),
-                );
+                headers.add(X_AMZ_COPY_SOURCE_IF_MODIFIED_SINCE, to_http_header_value(v));
             }
 
             if let Some(v) = self.source.unmodified_since {
                 headers.add(
-                    "x-amz-copy-source-if-unmodified-since",
+                    X_AMZ_COPY_SOURCE_IF_UNMODIFIED_SINCE,
                     to_http_header_value(v),
                 );
             }
@@ -427,16 +418,9 @@ impl CopyObject {
     /// Functionally related to the [S3Api::send()](crate::s3::types::S3Api::send) method, but
     /// specifically tailored for the `CopyObject` operation.
     pub async fn send(self) -> Result<CopyObjectResponse> {
-        {
-            if let Some(v) = &self.sse {
-                if v.tls_required() && !self.client.is_secure() {
-                    return Err(MinioError::SseTlsRequired(None));
-                }
-            }
-            if self.source.ssec.is_some() && !self.client.is_secure() {
-                return Err(MinioError::SseTlsRequired(None));
-            }
-        }
+        check_sse(&self.sse, &self.client)?;
+        check_ssec(&self.source.ssec, &self.client)?;
+
         let source = self.source.clone();
 
         let stat_resp: StatObjectResponse = self
@@ -710,12 +694,12 @@ impl ComposeObjectInternal {
                     part_number += 1;
                     if let Some(l) = source.length {
                         headers.add(
-                            "x-amz-copy-source-range",
+                            X_AMZ_COPY_SOURCE_RANGE,
                             format!("bytes={}-{}", offset, offset + l - 1),
                         );
                     } else if source.offset.is_some() {
                         headers.add(
-                            "x-amz-copy-source-range",
+                            X_AMZ_COPY_SOURCE_RANGE,
                             format!("bytes={}-{}", offset, offset + size - 1),
                         );
                     }
@@ -755,7 +739,7 @@ impl ComposeObjectInternal {
 
                         let mut headers_copy = headers.clone();
                         headers_copy.add(
-                            "x-amz-copy-source-range",
+                            X_AMZ_COPY_SOURCE_RANGE,
                             format!("bytes={offset}-{end_bytes}"),
                         );
 
@@ -896,13 +880,8 @@ impl ComposeObject {
     }
 
     pub async fn send(self) -> Result<ComposeObjectResponse> {
-        {
-            if let Some(v) = &self.sse {
-                if v.tls_required() && !self.client.is_secure() {
-                    return Err(MinioError::SseTlsRequired(None));
-                }
-            }
-        }
+        check_sse(&self.sse, &self.client)?;
+
         let object: String = self.object.clone();
         let bucket: String = self.bucket.clone();
 
@@ -1036,26 +1015,23 @@ impl ComposeSource {
             copy_source.push_str("?versionId=");
             copy_source.push_str(&url_encode(v));
         }
-        headers.add("x-amz-copy-source", copy_source);
+        headers.add(X_AMZ_COPY_SOURCE, copy_source);
 
         if let Some(v) = &self.match_etag {
-            headers.add("x-amz-copy-source-if-match", v);
+            headers.add(X_AMZ_COPY_SOURCE_IF_MATCH, v);
         }
 
         if let Some(v) = &self.not_match_etag {
-            headers.add("x-amz-copy-source-if-none-match", v);
+            headers.add(X_AMZ_COPY_SOURCE_IF_NONE_MATCH, v);
         }
 
         if let Some(v) = self.modified_since {
-            headers.add(
-                "x-amz-copy-source-if-modified-since",
-                to_http_header_value(v),
-            );
+            headers.add(X_AMZ_COPY_SOURCE_IF_MODIFIED_SINCE, to_http_header_value(v));
         }
 
         if let Some(v) = self.unmodified_since {
             headers.add(
-                "x-amz-copy-source-if-unmodified-since",
+                X_AMZ_COPY_SOURCE_IF_UNMODIFIED_SINCE,
                 to_http_header_value(v),
             );
         }
@@ -1064,8 +1040,8 @@ impl ComposeSource {
             headers.add_multimap(v.copy_headers());
         }
 
-        if !headers.contains_key("x-amz-copy-source-if-match") {
-            headers.add("x-amz-copy-source-if-match", etag);
+        if !headers.contains_key(X_AMZ_COPY_SOURCE_IF_MATCH) {
+            headers.add(X_AMZ_COPY_SOURCE_IF_MATCH, etag);
         }
 
         self.headers = Some(headers);
@@ -1163,20 +1139,20 @@ fn into_headers_copy_object(
         }
 
         if !tagging.is_empty() {
-            map.add("x-amz-tagging", tagging);
+            map.add(X_AMZ_TAGGING, tagging);
         }
     }
 
     if let Some(v) = retention {
-        map.add("x-amz-object-lock-mode", v.mode.to_string());
+        map.add(X_AMZ_OBJECT_LOCK_MODE, v.mode.to_string());
         map.add(
-            "x-amz-object-lock-retain-until-date",
+            X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE,
             to_iso8601utc(v.retain_until_date),
         );
     }
 
     if legal_hold {
-        map.add("x-amz-object-lock-legal-hold", "ON");
+        map.add(X_AMZ_OBJECT_LOCK_LEGAL_HOLD, "ON");
     }
 
     map

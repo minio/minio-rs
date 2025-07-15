@@ -18,13 +18,14 @@ use crate::s3::builders::{
     ContentStream, MAX_MULTIPART_COUNT, ObjectContent, Size, calc_part_info,
 };
 use crate::s3::error::{MinioError, Result};
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::HasObjectSize;
 use crate::s3::response::{AppendObjectResponse, StatObjectResponse};
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::Sse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, check_object_name};
+use crate::s3::utils::{check_bucket_name, check_object_name, check_sse};
 use http::Method;
 use std::sync::Arc;
 // region: append-object
@@ -84,19 +85,12 @@ impl S3Api for AppendObject {
 
 impl ToS3Request for AppendObject {
     fn to_s3request(self) -> Result<S3Request> {
-        {
-            check_bucket_name(&self.bucket, true)?;
-            check_object_name(&self.object)?;
-
-            if let Some(v) = &self.sse {
-                if v.tls_required() && !self.client.is_secure() {
-                    return Err(MinioError::SseTlsRequired(None));
-                }
-            }
-        }
+        check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
+        check_sse(&self.sse, &self.client)?;
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
-        headers.add("x-amz-write-offset-bytes", self.offset_bytes.to_string());
+        headers.add(X_AMZ_WRITE_OFFSET_BYTES, self.offset_bytes.to_string());
 
         Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)
@@ -191,29 +185,22 @@ impl AppendObjectContent {
     }
 
     pub async fn send(mut self) -> Result<AppendObjectResponse> {
-        {
-            check_bucket_name(&self.bucket, true)?;
-            check_object_name(&self.object)?;
-            if let Some(v) = &self.sse {
-                if v.tls_required() && !self.client.is_secure() {
-                    return Err(MinioError::SseTlsRequired(None));
-                }
-            }
-        }
+        check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
+        check_sse(&self.sse, &self.client)?;
 
         {
             let mut headers: Multimap = match self.extra_headers {
                 Some(ref headers) => headers.clone(),
                 None => Multimap::new(),
             };
-            headers.add("x-amz-write-offset-bytes", self.offset_bytes.to_string());
+            headers.add(X_AMZ_WRITE_OFFSET_BYTES, self.offset_bytes.to_string());
             self.extra_query_params = Some(headers);
         }
 
         self.content_stream = std::mem::take(&mut self.input_content)
             .to_content_stream()
-            .await
-            .map_err(MinioError::IOError)?;
+            .await?;
 
         // object_size may be Size::Unknown.
         let object_size = self.content_stream.get_size();
