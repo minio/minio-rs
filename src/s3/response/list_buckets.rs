@@ -40,7 +40,7 @@ impl ListBucketsResponse {
         let mut root = Element::parse(self.body().clone().reader())?;
         let buckets_xml = root
             .get_mut_child("Buckets")
-            .ok_or(MinioError::XmlError("<Buckets> tag not found".into()))?;
+            .ok_or(MinioError::xml_error("<Buckets> tag not found"))?;
 
         let mut buckets: Vec<Bucket> = Vec::new();
         while let Some(b) = buckets_xml.take_child("Bucket") {

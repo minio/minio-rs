@@ -24,13 +24,14 @@ use std::sync::{Arc, OnceLock};
 use crate::s3::builders::{BucketExists, ComposeSource};
 use crate::s3::creds::Provider;
 use crate::s3::error::{MinioError, MinioErrorCode, MinioErrorResponse, Result};
+use crate::s3::header_constants::*;
 use crate::s3::http::BaseUrl;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::{HasEtagFromHeaders, HasS3Fields};
 use crate::s3::response::*;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::signer::sign_v4_s3;
-use crate::s3::utils::{EMPTY_SHA256, sha256_hash_sb, to_amz_date, utc_now};
+use crate::s3::utils::{EMPTY_SHA256, check_ssec_with_log, sha256_hash_sb, to_amz_date, utc_now};
 
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -330,17 +331,13 @@ impl Client {
 
         let sources_len = sources.len();
         for source in sources.iter_mut() {
-            if source.ssec.is_some() && !self.is_secure() {
-                return Err(MinioError::SseTlsRequired(Some(format!(
-                    "source {}/{}{}: ",
-                    source.bucket,
-                    source.object,
-                    source
-                        .version_id
-                        .as_ref()
-                        .map_or(String::new(), |v| String::from("?versionId=") + v)
-                ))));
-            }
+            check_ssec_with_log(
+                &source.ssec,
+                &self,
+                &source.bucket,
+                &source.object,
+                &source.version_id,
+            )?;
 
             i += 1;
 
@@ -435,14 +432,14 @@ impl Client {
         )?;
 
         {
-            headers.add("Host", url.host_header_value());
+            headers.add(HOST, url.host_header_value());
             let sha256: String = match *method {
                 Method::PUT | Method::POST => {
-                    if !headers.contains_key("Content-Type") {
-                        headers.add("Content-Type", "application/octet-stream");
+                    if !headers.contains_key(CONTENT_TYPE) {
+                        headers.add(CONTENT_TYPE, "application/octet-stream");
                     }
                     let len: usize = body.as_ref().map_or(0, |b| b.len());
-                    headers.add("Content-Length", len.to_string());
+                    headers.add(CONTENT_LENGTH, len.to_string());
                     match body {
                         None => EMPTY_SHA256.into(),
                         Some(ref v) => {
@@ -453,14 +450,14 @@ impl Client {
                 }
                 _ => EMPTY_SHA256.into(),
             };
-            headers.add("x-amz-content-sha256", sha256.clone());
+            headers.add(X_AMZ_CONTENT_SHA256, sha256.clone());
 
             let date = utc_now();
-            headers.add("x-amz-date", to_amz_date(date));
+            headers.add(X_AMZ_DATE, to_amz_date(date));
             if let Some(p) = &self.shared.provider {
                 let creds = p.fetch();
                 if creds.session_token.is_some() {
-                    headers.add("X-Amz-Security-Token", creds.session_token.unwrap());
+                    headers.add(X_AMZ_SECURITY_TOKEN, creds.session_token.unwrap());
                 }
                 sign_v4_s3(
                     method,
@@ -533,6 +530,7 @@ impl Client {
             retry,
         );
 
+        // If the error is a NoSuchBucket or RetryHead, remove the bucket from the region map.
         if let MinioError::S3Error(ref err) = e {
             if matches!(err.code(), MinioErrorCode::NoSuchBucket)
                 || matches!(err.code(), MinioErrorCode::RetryHead)
@@ -622,7 +620,7 @@ impl SharedClientItems {
             _ => (MinioErrorCode::NoError, String::new()),
         };
 
-        let region: &str = match header_map.get("x-amz-bucket-region") {
+        let region: &str = match header_map.get(X_AMZ_BUCKET_REGION) {
             Some(v) => v.to_str()?,
             _ => "",
         };
@@ -660,18 +658,18 @@ impl SharedClientItems {
                 Some(v) => match v.to_str() {
                     Ok(s) => match s.to_lowercase().contains("application/xml") {
                         true => match MinioErrorResponse::new_from_body(body, headers) {
-                            Ok(v) => MinioError::S3Error(v),
+                            Ok(minio_error_response) => MinioError::S3Error(minio_error_response),
                             Err(e) => e,
                         },
                         false => MinioError::InvalidResponse {
-                            status_code: http_status_code,
+                            http_status_code,
                             content_type: s.to_string(),
                         },
                     },
                     Err(e) => return MinioError::StrError(e.to_string()),
                 },
                 _ => MinioError::InvalidResponse {
-                    status_code: http_status_code,
+                    http_status_code,
                     content_type: String::new(),
                 },
             };
@@ -717,20 +715,20 @@ impl SharedClientItems {
             _ => return MinioError::ServerError(http_status_code),
         };
 
-        let request_id: String = match headers.get("x-amz-request-id") {
+        let request_id: String = match headers.get(X_AMZ_REQUEST_ID) {
             Some(v) => match v.to_str() {
                 Ok(s) => s.to_string(),
                 Err(e) => return MinioError::StrError(e.to_string()),
             },
-            _ => String::new(),
+            None => String::new(),
         };
 
-        let host_id: String = match headers.get("x-amz-id-2") {
+        let host_id: String = match headers.get(X_AMZ_ID_2) {
             Some(v) => match v.to_str() {
                 Ok(s) => s.to_string(),
                 Err(e) => return MinioError::StrError(e.to_string()),
             },
-            _ => String::new(),
+            None => String::new(),
         };
 
         MinioError::S3Error(MinioErrorResponse::new(

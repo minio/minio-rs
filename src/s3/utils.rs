@@ -21,7 +21,7 @@ use crate::s3::segmented_bytes::SegmentedBytes;
 use base64::engine::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use byteorder::{BigEndian, ReadBytesExt};
-use chrono::{DateTime, Datelike, NaiveDateTime, ParseError, Utc};
+use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
 use crc::{CRC_32_ISO_HDLC, Crc};
 use hex::ToHex;
 use lazy_static::lazy_static;
@@ -39,8 +39,9 @@ use xmltree::Element;
 /// Date and time with UTC timezone
 pub type UtcTime = DateTime<Utc>;
 
+use crate::s3::Client;
+use crate::s3::sse::{Sse, SseCustomerKey};
 use url::form_urlencoded;
-
 // Great stuff to get confused about.
 // String "a b+c" in Percent-Encoding (RFC 3986) becomes "a%20b%2Bc".
 // S3 sometimes returns Form-Encoding (application/x-www-form-urlencoded) rendering string "a%20b%2Bc" into "a+b%2Bc"
@@ -73,8 +74,12 @@ pub fn crc32(data: &[u8]) -> u32 {
 }
 
 /// Converts data array into 32 bit unsigned int
-pub fn uint32(mut data: &[u8]) -> std::result::Result<u32, std::io::Error> {
+pub fn uint32(mut data: &[u8]) -> Result<u32> {
     data.read_u32::<BigEndian>()
+        .map_err(|e| MinioError::RuntimeError {
+            message: "data is not a valid 32-bit unsigned integer".into(),
+            source: Box::new(e),
+        })
 }
 
 /// sha256 hash of empty data
@@ -179,14 +184,10 @@ pub fn to_iso8601utc(time: UtcTime) -> String {
 }
 
 /// Parses ISO8601 UTC formatted value to time
-pub fn from_iso8601utc(s: &str) -> std::result::Result<UtcTime, ParseError> {
-    Ok(DateTime::<Utc>::from_naive_utc_and_offset(
-        match NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S.%3fZ") {
-            Ok(d) => d,
-            _ => NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%SZ")?,
-        },
-        Utc,
-    ))
+pub fn from_iso8601utc(s: &str) -> Result<UtcTime> {
+    let dt = NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S.%3fZ")
+        .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%SZ"))?;
+    Ok(DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
 }
 
 const OBJECT_KEY_ENCODE_SET: &AsciiSet = &NON_ALPHANUMERIC
@@ -220,12 +221,20 @@ pub mod aws_date_format {
     }
 }
 
+pub fn parse_bool(value: &str) -> Result<bool> {
+    if value.eq_ignore_ascii_case("true") {
+        Ok(true)
+    } else if value.eq_ignore_ascii_case("false") {
+        Ok(false)
+    } else {
+        Err(MinioError::InvalidBooleanValue(value.to_string()))
+    }
+}
+
 /// Parses HTTP header value to time
-pub fn from_http_header_value(s: &str) -> std::result::Result<UtcTime, ParseError> {
-    Ok(DateTime::<Utc>::from_naive_utc_and_offset(
-        NaiveDateTime::parse_from_str(s, "%a, %d %b %Y %H:%M:%S GMT")?,
-        Utc,
-    ))
+pub fn from_http_header_value(s: &str) -> Result<UtcTime> {
+    let dt = NaiveDateTime::parse_from_str(s, "%a, %d %b %Y %H:%M:%S GMT")?;
+    Ok(DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
 }
 
 /// Checks if given hostname is valid or not
@@ -324,19 +333,52 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
 
 /// Validates given object name. TODO S3Express has slightly different rules for object names
 pub fn check_object_name(object_name: impl AsRef<str>) -> Result<()> {
-    let object_name: &str = object_name.as_ref();
-    let object_name_n_bytes = object_name.len();
-    if object_name_n_bytes == 0 {
-        return Err(MinioError::InvalidObjectName(
+    let name = object_name.as_ref();
+    match name.len() {
+        0 => Err(MinioError::InvalidObjectName(
             "object name cannot be empty".into(),
-        ));
+        )),
+        n if n > 1024 => Err(MinioError::InvalidObjectName(format!(
+            "Object name ('{name}') cannot be greater than 1024 bytes"
+        ))),
+        _ => Ok(()),
     }
-    if object_name_n_bytes > 1024 {
-        return Err(MinioError::InvalidObjectName(format!(
-            "Object name ('{object_name}') cannot be greater than 1024 bytes"
-        )));
-    }
+}
 
+/// Validates SSE (Server-Side Encryption) settings.
+pub fn check_sse(sse: &Option<Arc<dyn Sse>>, client: &Client) -> Result<()> {
+    if let Some(v) = &sse {
+        if v.tls_required() && !client.is_secure() {
+            return Err(MinioError::SseTlsRequired(None));
+        }
+    }
+    Ok(())
+}
+
+/// Validates SSE-C (Server-Side Encryption with Customer-Provided Keys) settings.
+pub fn check_ssec(ssec: &Option<SseCustomerKey>, client: &Client) -> Result<()> {
+    if ssec.is_some() && !client.is_secure() {
+        return Err(MinioError::SseTlsRequired(None));
+    }
+    Ok(())
+}
+
+/// Validates SSE-C (Server-Side Encryption with Customer-Provided Keys) settings and logs an error
+pub fn check_ssec_with_log(
+    ssec: &Option<SseCustomerKey>,
+    client: &Client,
+    bucket: &str,
+    object: &str,
+    version: &Option<String>,
+) -> Result<()> {
+    if ssec.is_some() && !client.is_secure() {
+        return Err(MinioError::SseTlsRequired(Some(format!(
+            "source {bucket}/{object}{}: ",
+            version
+                .as_ref()
+                .map_or(String::new(), |v| String::from("?versionId=") + v)
+        ))));
+    }
     Ok(())
 }
 
@@ -351,9 +393,9 @@ pub fn get_text_default(element: &Element, tag: &str) -> String {
 pub fn get_text_result(element: &Element, tag: &str) -> Result<String> {
     Ok(element
         .get_child(tag)
-        .ok_or(MinioError::XmlError(format!("<{tag}> tag not found")))?
+        .ok_or(MinioError::xml_error(format!("<{tag}> tag not found")))?
         .get_text()
-        .ok_or(MinioError::XmlError(format!(
+        .ok_or(MinioError::xml_error(format!(
             "text of <{tag}> tag not found"
         )))?
         .to_string())
@@ -544,13 +586,13 @@ pub mod xml {
             let i = self
                 .child_element_index
                 .get_first(tag)
-                .ok_or(MinioError::XmlError(format!("<{tag}> tag not found")))?;
+                .ok_or(MinioError::xml_error(format!("<{tag}> tag not found")))?;
             self.inner.children[i]
                 .as_element()
                 .unwrap()
                 .get_text()
                 .map(|x| x.to_string())
-                .ok_or(MinioError::XmlError(format!(
+                .ok_or(MinioError::xml_error(format!(
                     "text of <{tag}> tag not found"
                 )))
         }

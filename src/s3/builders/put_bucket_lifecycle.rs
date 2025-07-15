@@ -15,6 +15,7 @@
 
 use crate::s3::Client;
 use crate::s3::error::Result;
+use crate::s3::header_constants::*;
 use crate::s3::lifecycle_config::LifecycleConfig;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::PutBucketLifecycleResponse;
@@ -80,7 +81,7 @@ impl ToS3Request for PutBucketLifecycle {
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
 
         let bytes: Bytes = self.config.to_xml().into();
-        headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
+        headers.add(CONTENT_MD5, md5sum_hash(bytes.as_ref()));
 
         Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)

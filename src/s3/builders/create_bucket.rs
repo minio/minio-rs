@@ -16,6 +16,7 @@
 use crate::s3::Client;
 use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::{MinioError, Result};
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::CreateBucketResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
@@ -95,7 +96,7 @@ impl ToS3Request for CreateBucket {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         if self.object_lock {
-            headers.add("x-amz-bucket-object-lock-enabled", "true");
+            headers.add(X_AMZ_BUCKET_OBJECT_LOCK_ENABLED, "true");
         }
 
         let data: String = match region_str.as_str() {

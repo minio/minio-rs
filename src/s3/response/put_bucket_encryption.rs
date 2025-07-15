@@ -46,13 +46,13 @@ impl PutBucketEncryptionResponse {
 
         let rule = root
             .get_mut_child("Rule")
-            .ok_or(MinioError::XmlError(String::from("<Rule> tag not found")))?;
+            .ok_or(MinioError::xml_error("<Rule> tag not found"))?;
 
         let sse_by_default = rule
             .get_mut_child("ApplyServerSideEncryptionByDefault")
-            .ok_or(MinioError::XmlError(String::from(
+            .ok_or(MinioError::xml_error(
                 "<ApplyServerSideEncryptionByDefault> tag not found",
-            )))?;
+            ))?;
 
         Ok(SseConfig {
             sse_algorithm: get_text_result(sse_by_default, "SSEAlgorithm")?,

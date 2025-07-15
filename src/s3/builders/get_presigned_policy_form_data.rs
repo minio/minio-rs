@@ -17,6 +17,7 @@ use crate::s3::Client;
 use crate::s3::creds::Credentials;
 use crate::s3::error::MinioError;
 use crate::s3::error::Result;
+use crate::s3::header_constants::*;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::utils::{
     UtcTime, b64encode, check_bucket_name, to_amz_date, to_iso8601utc, to_signer_date, utc_now,
@@ -103,11 +104,11 @@ impl PostPolicy {
 
     fn is_reserved_element(element: &str) -> bool {
         element.eq_ignore_ascii_case("bucket")
-            || element.eq_ignore_ascii_case("x-amz-algorithm")
-            || element.eq_ignore_ascii_case("x-amz-credential")
-            || element.eq_ignore_ascii_case("x-amz-date")
+            || element.eq_ignore_ascii_case(X_AMZ_ALGORITHM)
+            || element.eq_ignore_ascii_case(X_AMZ_CREDENTIAL)
+            || element.eq_ignore_ascii_case(X_AMZ_DATE)
             || element.eq_ignore_ascii_case("policy")
-            || element.eq_ignore_ascii_case("x-amz-signature")
+            || element.eq_ignore_ascii_case(X_AMZ_SIGNATURE)
     }
 
     fn get_credential_string(access_key: &String, date: &UtcTime, region: &String) -> String {
@@ -135,7 +136,7 @@ impl PostPolicy {
     pub fn add_equals_condition(&mut self, element: &str, value: &str) -> Result<()> {
         if element.is_empty() {
             return Err(MinioError::PostPolicyError(
-                "condition element cannot be empty".to_string(),
+                "condition element cannot be empty".into(),
             ));
         }
 
@@ -190,7 +191,7 @@ impl PostPolicy {
     pub fn add_starts_with_condition(&mut self, element: &str, value: &str) -> Result<()> {
         if element.is_empty() {
             return Err(MinioError::PostPolicyError(
-                "condition element cannot be empty".to_string(),
+                "condition element cannot be empty".into(),
             ));
         }
 
@@ -250,7 +251,7 @@ impl PostPolicy {
     ) -> Result<()> {
         if lower_limit > upper_limit {
             return Err(MinioError::PostPolicyError(
-                "lower limit cannot be greater than upper limit".to_string(),
+                "lower limit cannot be greater than upper limit".into(),
             ));
         }
 
@@ -275,16 +276,14 @@ impl PostPolicy {
         region: String,
     ) -> Result<HashMap<String, String>> {
         if region.is_empty() {
-            return Err(MinioError::PostPolicyError(
-                "region cannot be empty".to_string(),
-            ));
+            return Err(MinioError::PostPolicyError("region cannot be empty".into()));
         }
 
         if !self.eq_conditions.contains_key("key")
             && !self.starts_with_conditions.contains_key("key")
         {
             return Err(MinioError::PostPolicyError(
-                "key condition must be set".to_string(),
+                "key condition must be set".into(),
             ));
         }
 
@@ -331,13 +330,13 @@ impl PostPolicy {
         let signature = post_presign_v4(&encoded_policy, &secret_key, date, &region);
 
         let mut data: HashMap<String, String> = HashMap::new();
-        data.insert("x-amz-algorithm".into(), PostPolicy::ALGORITHM.to_string());
-        data.insert("x-amz-credential".into(), credential);
-        data.insert("x-amz-date".into(), amz_date);
+        data.insert(X_AMZ_ALGORITHM.into(), PostPolicy::ALGORITHM.to_string());
+        data.insert(X_AMZ_CREDENTIAL.into(), credential);
+        data.insert(X_AMZ_DATE.into(), amz_date);
         data.insert("policy".into(), encoded_policy);
-        data.insert("x-amz-signature".into(), signature);
+        data.insert(X_AMZ_SIGNATURE.into(), signature);
         if let Some(v) = session_token {
-            data.insert("x-amz-security-token".into(), v);
+            data.insert(X_AMZ_SECURITY_TOKEN.into(), v);
         }
 
         Ok(data)

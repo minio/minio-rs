@@ -14,10 +14,11 @@
 // limitations under the License.
 
 use super::ObjectContent;
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::HasEtagFromHeaders;
 use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::utils::{check_object_name, insert};
+use crate::s3::utils::{check_object_name, check_sse, insert};
 use crate::s3::{
     builders::{ContentStream, Size},
     client::Client,
@@ -304,8 +305,8 @@ impl ToS3Request for CompleteMultipartUpload {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         {
-            headers.add("Content-Type", "application/xml");
-            headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
+            headers.add(CONTENT_TYPE, "application/xml");
+            headers.add(CONTENT_MD5, md5sum_hash(bytes.as_ref()));
         }
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.add("uploadId", self.upload_id);
@@ -635,12 +636,10 @@ impl PutObjectContent {
     pub async fn send(mut self) -> Result<PutObjectContentResponse> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
+        check_sse(&self.sse, &self.client)?;
 
         let input_content = std::mem::take(&mut self.input_content);
-        self.content_stream = input_content
-            .to_content_stream()
-            .await
-            .map_err(MinioError::IOError)?;
+        self.content_stream = input_content.to_content_stream().await?;
 
         // object_size may be Size::Unknown.
         let object_size = self.content_stream.get_size();
@@ -649,12 +648,6 @@ impl PutObjectContent {
         // Set the chosen part size and part count.
         self.part_size = Size::Known(part_size);
         self.part_count = expected_parts;
-
-        if let Some(v) = &self.sse {
-            if v.tls_required() && !self.client.is_secure() {
-                return Err(MinioError::SseTlsRequired(None));
-            }
-        }
 
         // Read the first part.
         let seg_bytes = self.content_stream.read_upto(part_size as usize).await?;
@@ -898,27 +891,27 @@ fn into_headers_put_object(
         }
 
         if !tagging.is_empty() {
-            map.insert("x-amz-tagging".into(), tagging);
+            map.insert(X_AMZ_TAGGING.into(), tagging);
         }
     }
 
     if let Some(v) = retention {
-        map.insert("x-amz-object-lock-mode".into(), v.mode.to_string());
+        map.insert(X_AMZ_OBJECT_LOCK_MODE.into(), v.mode.to_string());
         map.insert(
-            "x-amz-object-lock-retain-until-date".into(),
+            X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE.into(),
             to_iso8601utc(v.retain_until_date),
         );
     }
 
     if legal_hold {
-        map.insert("x-amz-object-lock-legal-hold".into(), "ON".into());
+        map.insert(X_AMZ_OBJECT_LOCK_LEGAL_HOLD.into(), "ON".into());
     }
 
     // Set the Content-Type header if not already set.
-    if !map.contains_key("Content-Type") {
+    if !map.contains_key(CONTENT_TYPE) {
         map.insert(
-            "Content-Type".into(),
-            content_type.unwrap_or_else(|| "application/octet-stream".into()),
+            CONTENT_TYPE.into(),
+            content_type.unwrap_or("application/octet-stream".into()),
         );
     }
 

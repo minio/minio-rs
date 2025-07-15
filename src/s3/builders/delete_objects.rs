@@ -18,6 +18,7 @@
 use crate::s3::Client;
 use crate::s3::client::MAX_MULTIPART_COUNT;
 use crate::s3::error::Result;
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::{DeleteError, DeleteObjectResponse, DeleteObjectsResponse};
 use crate::s3::types::{ListEntry, S3Api, S3Request, ToS3Request, ToStream};
@@ -28,7 +29,6 @@ use futures_util::stream::iter;
 use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
 use std::pin::Pin;
-
 // region: object-to-delete
 
 pub trait ValidKey: Into<String> {}
@@ -158,7 +158,7 @@ impl ToS3Request for DeleteObject {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         if self.bypass_governance_mode {
-            headers.add("x-amz-bypass-governance-retention", "true");
+            headers.add(X_AMZ_BYPASS_GOVERNANCE_RETENTION, "true");
         }
 
         Ok(S3Request::new(self.client, Method::DELETE)
@@ -258,10 +258,10 @@ impl ToS3Request for DeleteObjects {
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         {
             if self.bypass_governance_mode {
-                headers.add("x-amz-bypass-governance-retention", "true");
+                headers.add(X_AMZ_BYPASS_GOVERNANCE_RETENTION, "true");
             }
-            headers.add("Content-Type", "application/xml");
-            headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
+            headers.add(CONTENT_TYPE, "application/xml");
+            headers.add(CONTENT_MD5, md5sum_hash(bytes.as_ref()));
         }
 
         Ok(S3Request::new(self.client, Method::POST)

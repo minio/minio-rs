@@ -156,18 +156,18 @@ fn get_aws_info(
     }
 
     if !match_aws_s3_endpoint(host) {
-        return Err(MinioError::UrlBuildError(
-            String::from("invalid Amazon AWS host ") + host,
-        ));
+        return Err(MinioError::UrlBuildError(format!(
+            "invalid Amazon AWS host {host}"
+        )));
     }
 
     let matcher = AWS_S3_PREFIX_REGEX.find(host).unwrap();
     let s3_prefix = host.get(..matcher.end()).unwrap();
 
     if s3_prefix.contains("s3-accesspoint") && !https {
-        return Err(MinioError::UrlBuildError(
-            String::from("use HTTPS scheme for host ") + host,
-        ));
+        return Err(MinioError::UrlBuildError(format!(
+            "use HTTPS scheme for host {host}"
+        )));
     }
 
     let mut tokens: Vec<_> = host.get(matcher.len()..).unwrap().split('.').collect();
@@ -195,9 +195,9 @@ fn get_aws_info(
 
     if domain_suffix.ends_with(".cn") && !s3_prefix.ends_with("s3-accelerate.") && region.is_empty()
     {
-        return Err(MinioError::UrlBuildError(
-            String::from("region missing in Amazon S3 China endpoint ") + host,
-        ));
+        return Err(MinioError::UrlBuildError(format!(
+            "region missing in Amazon S3 China endpoint {host}"
+        )));
     }
 
     *region = region_in_host;
@@ -254,9 +254,9 @@ impl FromStr for BaseUrl {
                 "http" => false,
                 "https" => true,
                 _ => {
-                    return Err(MinioError::InvalidBaseUrl(String::from(
-                        "scheme must be http or https",
-                    )));
+                    return Err(MinioError::InvalidBaseUrl(
+                        "scheme must be http or https".into(),
+                    ));
                 }
             },
         };
@@ -264,9 +264,9 @@ impl FromStr for BaseUrl {
         let mut host = match url.host() {
             Some(h) => h,
             _ => {
-                return Err(MinioError::InvalidBaseUrl(String::from(
-                    "valid host must be provided",
-                )));
+                return Err(MinioError::InvalidBaseUrl(
+                    "valid host must be provided".into(),
+                ));
             }
         };
 
@@ -285,15 +285,15 @@ impl FromStr for BaseUrl {
         }
 
         if url.path() != "/" && url.path() != "" {
-            return Err(MinioError::InvalidBaseUrl(String::from(
-                "path must be empty for base URL",
-            )));
+            return Err(MinioError::InvalidBaseUrl(
+                "path must be empty for base URL".into(),
+            ));
         }
 
         if url.query().is_some() {
-            return Err(MinioError::InvalidBaseUrl(String::from(
-                "query must be none for base URL",
-            )));
+            return Err(MinioError::InvalidBaseUrl(
+                "query must be none for base URL".into(),
+            ));
         }
 
         let mut region = String::new();
@@ -349,9 +349,9 @@ impl BaseUrl {
         host = String::from(&self.aws_s3_prefix);
         if self.aws_s3_prefix.contains("s3-accelerate") {
             if bucket_name.contains('.') {
-                return Err(MinioError::UrlBuildError(String::from(
-                    "bucket name with '.' is not allowed for accelerate endpoint",
-                )));
+                return Err(MinioError::UrlBuildError(
+                    "bucket name with '.' is not allowed for accelerate endpoint".into(),
+                ));
             }
 
             if enforce_path_style {

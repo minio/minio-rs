@@ -19,6 +19,7 @@ pub mod builders;
 pub mod client;
 pub mod creds;
 pub mod error;
+pub mod header_constants;
 pub mod http;
 pub mod lifecycle_config;
 pub mod multimap;

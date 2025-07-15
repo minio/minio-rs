@@ -14,12 +14,15 @@
 // limitations under the License.
 
 use crate::s3::client::Client;
-use crate::s3::error::{MinioError, Result};
+use crate::s3::error::Result;
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::GetObjectResponse;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{UtcTime, check_bucket_name, check_object_name, to_http_header_value};
+use crate::s3::utils::{
+    UtcTime, check_bucket_name, check_object_name, check_ssec, to_http_header_value,
+};
 use http::Method;
 
 /// Argument builder for the [`GetObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html) S3 API operation.
@@ -119,13 +122,9 @@ impl S3Api for GetObject {
 
 impl ToS3Request for GetObject {
     fn to_s3request(self) -> Result<S3Request> {
-        {
-            check_bucket_name(&self.bucket, true)?;
-            check_object_name(&self.object)?;
-            if self.ssec.is_some() && !self.client.is_secure() {
-                return Err(MinioError::SseTlsRequired(None));
-            }
-        }
+        check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
+        check_ssec(&self.ssec, &self.client)?;
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         {
@@ -143,24 +142,24 @@ impl ToS3Request for GetObject {
                     if let Some(l) = length {
                         range.push_str(&(o + l - 1).to_string());
                     }
-                    headers.add("Range", range);
+                    headers.add(RANGE, range);
                 }
             }
 
             if let Some(v) = self.match_etag {
-                headers.add("if-match", v);
+                headers.add(IF_MATCH, v);
             }
 
             if let Some(v) = self.not_match_etag {
-                headers.add("if-none-match", v);
+                headers.add(IF_NONE_MATCH, v);
             }
 
             if let Some(v) = self.modified_since {
-                headers.add("if-modified-since", to_http_header_value(v));
+                headers.add(IF_MODIFIED_SINCE, to_http_header_value(v));
             }
 
             if let Some(v) = self.unmodified_since {
-                headers.add("if-unmodified-since", to_http_header_value(v));
+                headers.add(IF_UNMODIFIED_SINCE, to_http_header_value(v));
             }
 
             if let Some(v) = &self.ssec {

@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use minio::s3::builders::PostPolicy;
+use minio::s3::header_constants::*;
 use minio_common::example::create_post_policy_example;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
@@ -32,9 +33,9 @@ async fn get_presigned_post_form_data(ctx: TestContext, bucket_name: String) {
         .await
         .unwrap();
     //println!("form_data={:?}", &form_data);
-    assert!(form_data.contains_key("x-amz-signature"));
-    assert!(form_data.contains_key("policy"));
-    assert!(form_data.contains_key("x-amz-date"));
-    assert!(form_data.contains_key("x-amz-algorithm"));
-    assert!(form_data.contains_key("x-amz-credential"));
+    assert!(form_data.contains_key(X_AMZ_SIGNATURE));
+    assert!(form_data.contains_key(POLICY));
+    assert!(form_data.contains_key(X_AMZ_DATE));
+    assert!(form_data.contains_key(X_AMZ_ALGORITHM));
+    assert!(form_data.contains_key(X_AMZ_CREDENTIAL));
 }
