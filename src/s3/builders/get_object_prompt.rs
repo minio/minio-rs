@@ -98,7 +98,7 @@ impl ToS3Request for GetObjectPrompt {
             check_object_name(&self.object)?;
             check_ssec(&self.ssec, &self.client)?;
             if self.client.is_aws_host() {
-                return Err(MinioError::UnsupportedApi("ObjectPrompt".into()));
+                return Err(MinioError::UnsupportedAwsApi("ObjectPrompt".into()));
             }
         }
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();

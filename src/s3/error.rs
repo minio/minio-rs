@@ -325,51 +325,12 @@ impl std::fmt::Display for MinioErrorResponse {
 impl std::error::Error for MinioErrorResponse {}
 
 /// Error definitions
-#[derive(thiserror::Error, Debug)]
+#[derive(Error, Debug)]
 pub enum MinioError {
-    // region errors codes equal to the minio-go SDK in s3-error.go
-
-    //AccessDenied:                      "Access Denied.",
-    //BadDigest:                         "The Content-Md5 you specified did not match what we received.",
-    //EntityTooSmall:                    "Your proposed upload is smaller than the minimum allowed object size.",
-    //EntityTooLarge:                    "Your proposed upload exceeds the maximum allowed object size.",
-    //IncompleteBody:                    "You did not provide the number of bytes specified by the Content-Length HTTP header.",
-    //InternalError:                     "We encountered an internal error, please try again.",
-    //InvalidAccessKeyID:                "The access key ID you provided does not exist in our records.",
     /// The specified bucket is not valid
     #[error("Invalid bucket name: {0}")]
     InvalidBucketName(String),
-    //InvalidDigest:                     "The Content-Md5 you specified is not valid.",
-    //InvalidRange:                      "The requested range is not satisfiable.",
-    //MalformedXML:                      "The XML you provided was not well-formed or did not validate against our published schema.",
-    //MissingContentLength:              "You must provide the Content-Length HTTP header.",
-    //MissingContentMD5:                 "Missing required header for this request: Content-Md5.",
-    //MissingRequestBodyError:           "Request body is empty.",
-    //NoSuchBucket:                      "The specified bucket does not exist.",
-    //NoSuchBucketPolicy:                "The bucket policy does not exist.",
-    //NoSuchKey:                         "The specified key does not exist.",
-    //NoSuchUpload:                      "The specified multipart upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.",
-    //NotImplemented:                    "A header you provided implies functionality that is not implemented.",
-    //PreconditionFailed:                "At least one of the pre-conditions you specified did not hold.",
-    //RequestTimeTooSkewed:              "The difference between the request time and the server's time is too large.",
-    //SignatureDoesNotMatch:             "The request signature we calculated does not match the signature you provided. Check your key and signing method.",
-    //MethodNotAllowed:                  "The specified method is not allowed against this resource.",
-    //InvalidPart:                       "One or more of the specified parts could not be found.",
-    //InvalidPartOrder:                  "The list of parts was not in ascending order. The parts list must be specified in order by part number.",
-    //InvalidObjectState:                "The operation is not valid for the current state of the object.",
-    //AuthorizationHeaderMalformed:      "The authorization header is malformed; the region is wrong.",
-    //MalformedPOSTRequest:              "The body of your POST request is not well-formed multipart/form-data.",
-    //BucketNotEmpty:                    "The bucket you tried to delete is not empty.",
-    //AllAccessDisabled:                 "All access to this bucket has been disabled.",
-    //MalformedPolicy:                   "Policy has invalid resource.",
-    //MissingFields:                     "Missing fields in request.",
-    //AuthorizationQueryParametersError: "Error parsing the X-Amz-Credential parameter; the Credential is mal-formed; expecting \"<YOUR-AKID>/YYYYMMDD/REGION/SERVICE/aws4_request\".",
-    //MalformedDate:                     "Invalid date format header, expected to be in ISO8601, RFC1123 or RFC1123Z time format.",
-    //BucketAlreadyOwnedByYou:           "Your previous request to create the named bucket succeeded and you already own it.",
-    //InvalidDuration:                   "Duration provided in the request is invalid.",
-    //XAmzContentSHA256Mismatch:         "The provided 'x-amz-content-sha256' header does not match what was computed.",
-    //NoSuchCORSConfiguration:           "The specified bucket does not have a CORS configuration.", //Conflict:                          "Bucket not empty.",
-    // endregion
+
     /// S3 Errors as returned by the S3 server
     #[error("S3 error: {0}")]
     S3Error(#[from] MinioErrorResponse),
@@ -467,8 +428,8 @@ pub enum MinioError {
         part_count: u16,
     },
 
-    #[error("Too many parts for upload")]
-    TooManyParts,
+    #[error("Too many parts for upload: {0} parts; maximum allowed is MAX_MULTIPART_COUNT parts")]
+    TooManyParts(u64),
 
     #[error("{}", sse_tls_required_message(.0))]
     SseTlsRequired(Option<String>),
@@ -501,9 +462,10 @@ pub enum MinioError {
     },
 
     #[error(
-        "Invalid response received; HTTP status code: {http_status_code}; content-type: {content_type}"
+        "Invalid server response received; {message}; HTTP status code: {http_status_code}; content-type: {content_type}"
     )]
-    InvalidResponse {
+    InvalidServerResponse {
+        message: String,
         http_status_code: u16,
         content_type: String,
     },
@@ -521,17 +483,16 @@ pub enum MinioError {
     #[error("Unknown event type: {0}")]
     UnknownEventType(String),
 
+    /// Error returned by the S3 Select API
     #[error("Error code: {error_code}, error message: {error_message}")]
     SelectError {
         error_code: String,
         error_message: String,
     },
 
+    /// Error returned when the S3 API is not supported by AWS S3
     #[error("{0} API is not supported in Amazon AWS S3")]
-    UnsupportedApi(String),
-
-    #[error("Invalid compose source: {0}")]
-    InvalidComposeSource(String),
+    UnsupportedAwsApi(String),
 
     #[error("{}", format_s3_object_error(.bucket, .object, .version.as_deref(), "InvalidComposeSourceOffset", &format!("offset {offset} is beyond object size {object_size}")))]
     InvalidComposeSourceOffset {
@@ -587,26 +548,8 @@ pub enum MinioError {
     #[error("Compose sources create more than allowed multipart count {0}")]
     InvalidMultipartCount(u64),
 
-    #[error(
-        "At least one of action (AbortIncompleteMultipartUpload, Expiration, NoncurrentVersionExpiration, NoncurrentVersionTransition or Transition) must be specified in a rule"
-    )]
-    ///TODO no used!
-    MissingLifecycleAction,
-
-    #[error("ExpiredObjectDeleteMarker must not be provided along with Date and Days")]
-    ///TODO no used!
-    InvalidExpiredObjectDeleteMarker,
-
-    #[error("Only one of date or days of {0} must be set")]
-    ///TODO no used!
-    InvalidDateAndDays(String),
-
-    #[error("ID must not exceed 255 characters")]
-    ///TODO no used!
-    InvalidLifecycleRuleId,
-
-    #[error("Only one of And, Prefix or Tag must be provided")]
-    InvalidFilter,
+    #[error("Only one of And, Prefix or Tag must be provided: {0}")]
+    InvalidFilter(String),
 
     #[error("Invalid versioning status: {0}")]
     InvalidVersioningStatus(String),

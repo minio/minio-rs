@@ -297,7 +297,7 @@ impl SelectObjectContentResponse {
             }
 
             self.done = true;
-            return Err(MinioError::UnknownEventType(event_type.to_string()));
+            return Err(MinioError::UnknownEventType(event_type.into()));
         }
     }
 

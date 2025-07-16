@@ -519,7 +519,7 @@ impl Client {
         let headers: HeaderMap = mem::take(resp.headers_mut());
         let body: Bytes = resp.bytes().await?;
 
-        let e: MinioError = self.shared.get_error_response(
+        let e: MinioErrorResponse = self.shared.create_minio_error_response(
             body,
             status_code,
             headers,
@@ -528,20 +528,18 @@ impl Client {
             bucket_name,
             object_name,
             retry,
-        );
+        )?;
 
         // If the error is a NoSuchBucket or RetryHead, remove the bucket from the region map.
-        if let MinioError::S3Error(ref err) = e {
-            if matches!(err.code(), MinioErrorCode::NoSuchBucket)
-                || matches!(err.code(), MinioErrorCode::RetryHead)
-            {
-                if let Some(v) = bucket_name {
-                    self.shared.region_map.remove(v);
-                }
+        if matches!(e.code(), MinioErrorCode::NoSuchBucket)
+            || matches!(e.code(), MinioErrorCode::RetryHead)
+        {
+            if let Some(v) = bucket_name {
+                self.shared.region_map.remove(v);
             }
         };
 
-        Err(e)
+        Err(e.into())
     }
 
     pub(crate) async fn execute(
@@ -642,7 +640,7 @@ impl SharedClientItems {
         Ok((code, message))
     }
 
-    fn get_error_response(
+    fn create_minio_error_response(
         &self,
         body: Bytes,
         http_status_code: u16,
@@ -652,86 +650,82 @@ impl SharedClientItems {
         bucket_name: Option<&str>,
         object_name: Option<&str>,
         retry: bool,
-    ) -> MinioError {
+    ) -> Result<MinioErrorResponse> {
+        // if body is present, try to parse it as XML error response
         if !body.is_empty() {
-            return match headers.get("Content-Type") {
-                Some(v) => match v.to_str() {
-                    Ok(s) => match s.to_lowercase().contains("application/xml") {
-                        true => match MinioErrorResponse::new_from_body(body, headers) {
-                            Ok(minio_error_response) => MinioError::S3Error(minio_error_response),
-                            Err(e) => e,
-                        },
-                        false => MinioError::InvalidResponse {
-                            http_status_code,
-                            content_type: s.to_string(),
-                        },
-                    },
-                    Err(e) => return MinioError::StrError(e.to_string()),
-                },
-                _ => MinioError::InvalidResponse {
+            let content_type = headers
+                .get(CONTENT_TYPE)
+                .ok_or_else(|| MinioError::InvalidServerResponse {
+                    message: "missing Content-Type header".into(),
                     http_status_code,
                     content_type: String::new(),
-                },
+                })
+                .and_then(|v| v.to_str().map_err(|e| MinioError::StrError(e.to_string())))?;
+
+            return if content_type.to_lowercase().contains("application/xml") {
+                MinioErrorResponse::new_from_body(body, headers)
+            } else {
+                Err(MinioError::InvalidServerResponse {
+                    message: format!(
+                        "expected content-type 'application/xml', but got {content_type}"
+                    ),
+                    http_status_code,
+                    content_type: content_type.into(),
+                })
             };
         }
 
+        // Decide code and message by status
         let (code, message) = match http_status_code {
-            301 | 307 | 400 => match self.handle_redirect_response(
+            301 | 307 | 400 => self.handle_redirect_response(
                 http_status_code,
                 method,
                 &headers,
                 bucket_name,
                 retry,
-            ) {
-                Ok(v) => v,
-                Err(e) => return e,
-            },
+            )?,
             403 => (MinioErrorCode::AccessDenied, "Access denied".into()),
             404 => match object_name {
                 Some(_) => (MinioErrorCode::NoSuchKey, "Object does not exist".into()),
-                _ => match bucket_name {
+                None => match bucket_name {
                     Some(_) => (MinioErrorCode::NoSuchBucket, "Bucket does not exist".into()),
-                    _ => (
+                    None => (
                         MinioErrorCode::ResourceNotFound,
                         "Request resource not found".into(),
                     ),
                 },
             },
-            405 => (
+            405 | 501 => (
                 MinioErrorCode::MethodNotAllowed,
                 "The specified method is not allowed against this resource".into(),
             ),
             409 => match bucket_name {
                 Some(_) => (MinioErrorCode::NoSuchBucket, "Bucket does not exist".into()),
-                _ => (
+                None => (
                     MinioErrorCode::ResourceConflict,
                     "Request resource conflicts".into(),
                 ),
             },
-            501 => (
-                MinioErrorCode::MethodNotAllowed,
-                "The specified method is not allowed against this resource".into(),
-            ),
-            _ => return MinioError::ServerError(http_status_code),
+            _ => return Err(MinioError::ServerError(http_status_code)),
         };
 
-        let request_id: String = match headers.get(X_AMZ_REQUEST_ID) {
-            Some(v) => match v.to_str() {
-                Ok(s) => s.to_string(),
-                Err(e) => return MinioError::StrError(e.to_string()),
-            },
+        let request_id = match headers.get(X_AMZ_REQUEST_ID) {
+            Some(v) => v
+                .to_str()
+                .map_err(|e| MinioError::StrError(format!("invalid X_AMZ_REQUEST_ID header: {e}")))?
+                .to_string(),
             None => String::new(),
         };
 
-        let host_id: String = match headers.get(X_AMZ_ID_2) {
-            Some(v) => match v.to_str() {
-                Ok(s) => s.to_string(),
-                Err(e) => return MinioError::StrError(e.to_string()),
-            },
+        let host_id = match headers.get(X_AMZ_ID_2) {
+            Some(v) => v
+                .to_str()
+                .map_err(|e| MinioError::StrError(format!("invalid X_AMZ_ID_2 header: {e}")))?
+                .to_string(),
             None => String::new(),
         };
 
-        MinioError::S3Error(MinioErrorResponse::new(
+        Ok(MinioErrorResponse::new(
             headers,
             code,
             (!message.is_empty()).then_some(message),
