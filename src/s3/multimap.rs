@@ -15,12 +15,11 @@
 
 use crate::s3::utils::url_encode;
 use lazy_static::lazy_static;
-use multimap::MultiMap;
 use regex::Regex;
 use std::collections::BTreeMap;
 
 /// Multimap for string key and string value
-pub type Multimap = MultiMap<String, String>;
+pub type Multimap = multimap::MultiMap<String, String>;
 
 pub trait MultimapExt {
     /// Adds a key-value pair to the multimap

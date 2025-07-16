@@ -869,7 +869,7 @@ impl Directive {
         } else if s.eq_ignore_ascii_case("REPLACE") {
             Ok(Directive::Replace)
         } else {
-            Err(MinioError::InvalidDirective(s.to_string()))
+            Err(MinioError::InvalidDirective(s.into()))
         }
     }
 }
@@ -1007,7 +1007,7 @@ impl Filter {
         if self.and_operator.is_some() ^ self.prefix.is_some() ^ self.tag.is_some() {
             return Ok(());
         }
-        Err(MinioError::InvalidFilter)
+        Err(MinioError::InvalidFilter(self.to_xml()))
     }
 
     pub fn to_xml(&self) -> String {
@@ -1192,7 +1192,7 @@ impl CloudFuncConfig {
             return Ok(());
         }
 
-        Err(MinioError::InvalidFilter)
+        Err(MinioError::InvalidFilter(self.to_xml()))
     }
 
     pub fn to_xml(&self) -> String {
@@ -1243,7 +1243,7 @@ impl QueueConfig {
             return Ok(());
         }
 
-        Err(MinioError::InvalidFilter) //TODO add context
+        Err(MinioError::InvalidFilter(self.to_xml()))
     }
 
     pub fn to_xml(&self) -> String {
@@ -1297,7 +1297,7 @@ impl TopicConfig {
             return Ok(());
         }
 
-        Err(MinioError::InvalidFilter)
+        Err(MinioError::InvalidFilter(self.to_xml()))
     }
 
     pub fn to_xml(&self) -> String {

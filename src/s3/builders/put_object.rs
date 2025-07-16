@@ -767,7 +767,7 @@ impl PutObjectContent {
 
             // Check if we have too many parts to upload.
             if self.part_count.is_none() && (part_number > MAX_MULTIPART_COUNT) {
-                return Err(MinioError::TooManyParts);
+                return Err(MinioError::TooManyParts(part_number as u64));
             }
 
             if object_size.is_known() {

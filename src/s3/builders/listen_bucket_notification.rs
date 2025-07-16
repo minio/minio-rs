@@ -94,7 +94,7 @@ impl ToS3Request for ListenBucketNotification {
         {
             check_bucket_name(&self.bucket, true)?;
             if self.client.is_aws_host() {
-                return Err(MinioError::UnsupportedApi(
+                return Err(MinioError::UnsupportedAwsApi(
                     "ListenBucketNotification".into(),
                 ));
             }
