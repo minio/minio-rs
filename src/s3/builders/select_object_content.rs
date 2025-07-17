@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Result;
+use crate::s3::error::ValidationErr;
 use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::SelectObjectContentResponse;
@@ -91,7 +91,7 @@ impl S3Api for SelectObjectContent {
 
 #[async_trait]
 impl ToS3Request for SelectObjectContent {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
         check_ssec(&self.ssec, &self.client)?;

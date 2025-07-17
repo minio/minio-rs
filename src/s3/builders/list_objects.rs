@@ -13,7 +13,7 @@
 //! Argument builders for ListObject APIs.
 
 use crate::s3::client::Client;
-use crate::s3::error::Result;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::ListObjectsResponse;
 use crate::s3::response::list_objects::{
@@ -75,7 +75,7 @@ struct ListObjectsV1 {
 impl ToStream for ListObjectsV1 {
     type Item = ListObjectsV1Response;
 
-    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item>> + Unpin + Send> {
+    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
         Box::new(Box::pin(futures_stream::unfold(
             (self, false),
             move |(args, mut is_done)| async move {
@@ -110,7 +110,7 @@ impl S3Api for ListObjectsV1 {
 }
 
 impl ToS3Request for ListObjectsV1 {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
@@ -180,7 +180,7 @@ struct ListObjectsV2 {
 impl ToStream for ListObjectsV2 {
     type Item = ListObjectsV2Response;
 
-    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item>> + Unpin + Send> {
+    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
         Box::new(Box::pin(futures_stream::unfold(
             (self, false),
             move |(args, mut is_done)| async move {
@@ -215,7 +215,7 @@ impl S3Api for ListObjectsV2 {
 }
 
 impl ToS3Request for ListObjectsV2 {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
@@ -297,7 +297,7 @@ struct ListObjectVersions {
 impl ToStream for ListObjectVersions {
     type Item = ListObjectVersionsResponse;
 
-    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item>> + Unpin + Send> {
+    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
         Box::new(Box::pin(futures_stream::unfold(
             (self, false),
             move |(args, mut is_done)| async move {
@@ -336,7 +336,7 @@ impl S3Api for ListObjectVersions {
 }
 
 impl ToS3Request for ListObjectVersions {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
         let mut query_params: Multimap = insert(self.extra_query_params, "versions");
@@ -433,7 +433,7 @@ pub struct ListObjects {
 impl ToStream for ListObjects {
     type Item = ListObjectsResponse;
 
-    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item>> + Unpin + Send> {
+    async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send> {
         if self.use_api_v1 {
             let stream = ListObjectsV1::from(self).to_stream().await;
             Box::new(stream.map(|v| v.map(|v| v.into())))

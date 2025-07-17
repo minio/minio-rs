@@ -1,4 +1,4 @@
-use crate::s3::error::{MinioError, Result};
+use crate::s3::error::ValidationErr;
 use crate::s3::header_constants::*;
 use crate::s3::types::S3Request;
 use crate::s3::utils::{get_text_result, parse_bool, trim_quotes};
@@ -16,13 +16,13 @@ macro_rules! impl_from_s3response {
             impl FromS3Response for $ty {
                 async fn from_s3response(
                     request: S3Request,
-                    response: Result<reqwest::Response>,
-                ) -> Result<Self> {
+                    response: Result<reqwest::Response, Error>,
+                ) -> Result<Self, Error> {
                     let mut resp: reqwest::Response = response?;
                     Ok(Self {
                         request,
                         headers: mem::take(resp.headers_mut()),
-                        body: resp.bytes().await?
+                        body: resp.bytes().await.map_err(ValidationErr::from)?,
                     })
                 }
             }
@@ -39,13 +39,13 @@ macro_rules! impl_from_s3response_with_size {
             impl FromS3Response for $ty {
                 async fn from_s3response(
                     request: S3Request,
-                    response: Result<reqwest::Response>,
-                ) -> Result<Self> {
+                    response: Result<reqwest::Response, Error>,
+                ) -> Result<Self, Error> {
                     let mut resp: reqwest::Response = response?;
                     Ok(Self {
                         request,
                         headers: mem::take(resp.headers_mut()),
-                        body: resp.bytes().await?,
+                        body: resp.bytes().await.map_err(ValidationErr::from)?,
                         object_size: 0, // Default value, can be set later
                     })
                 }
@@ -129,7 +129,7 @@ pub trait HasEtagFromHeaders: HasS3Fields {
     /// Returns the value of the `ETag` header from response headers (for operations that return ETag in headers).
     /// The ETag is typically a hash of the object content, but it may vary based on the storage backend.
     #[inline]
-    fn etag(&self) -> Result<String> {
+    fn etag(&self) -> Result<String, ValidationErr> {
         // Retrieve the ETag from the response headers.
         let etag = self
             .headers()
@@ -149,7 +149,7 @@ pub trait HasEtagFromBody: HasS3Fields {
     /// Returns the value of the `ETag` from the response body, which is a unique identifier for
     /// the object version. The ETag is typically a hash of the object content, but it may vary
     /// based on the storage backend.
-    fn etag(&self) -> Result<String> {
+    fn etag(&self) -> Result<String, ValidationErr> {
         // Retrieve the ETag from the response body.
         let root = xmltree::Element::parse(self.body().clone().reader())?;
         let etag: String = get_text_result(&root, "ETag")?;
@@ -182,7 +182,7 @@ pub trait HasIsDeleteMarker: HasS3Fields {
     /// was not (false) a delete marker before deletion. In a simple DELETE, this header indicates
     /// whether (true) or not (false) the current version of the object is a delete marker.
     #[inline]
-    fn is_delete_marker(&self) -> Result<bool> {
+    fn is_delete_marker(&self) -> Result<bool, ValidationErr> {
         self.headers()
             .get(X_AMZ_DELETE_MARKER)
             .map_or(Ok(false), |v| parse_bool(v.to_str()?))
@@ -194,7 +194,7 @@ pub trait HasTagging: HasS3Fields {
     ///
     /// If the bucket has no tags, this will return an empty `HashMap`.
     #[inline]
-    fn tags(&self) -> Result<HashMap<String, String>> {
+    fn tags(&self) -> Result<HashMap<String, String>, ValidationErr> {
         let mut tags = HashMap::new();
         if self.body().is_empty() {
             // Note: body is empty when server responses with NoSuchTagSet
@@ -203,7 +203,7 @@ pub trait HasTagging: HasS3Fields {
         let mut root = Element::parse(self.body().clone().reader())?;
         let element = root
             .get_mut_child("TagSet")
-            .ok_or(MinioError::xml_error("<TagSet> tag not found"))?;
+            .ok_or(ValidationErr::xml_error("<TagSet> tag not found"))?;
         while let Some(v) = element.take_child("Tag") {
             tags.insert(get_text_result(&v, "Key")?, get_text_result(&v, "Value")?);
         }

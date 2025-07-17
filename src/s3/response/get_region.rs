@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::client::DEFAULT_REGION;
-use crate::s3::error::Result;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
 use crate::{impl_from_s3response, impl_has_s3fields};
@@ -43,7 +43,7 @@ impl GetRegionResponse {
     /// Returns the region response for the bucket.
     ///
     /// This method retrieves the region where the bucket is located.
-    pub fn region_response(&self) -> Result<String> {
+    pub fn region_response(&self) -> Result<String, ValidationErr> {
         let root = Element::parse(self.body.clone().reader())?;
 
         let mut location = root.get_text().unwrap_or_default().to_string();

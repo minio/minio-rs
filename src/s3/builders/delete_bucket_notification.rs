@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::builders::BucketCommon;
-use crate::s3::error::Result;
+use crate::s3::error::ValidationErr;
 use crate::s3::response::DeleteBucketNotificationResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{NotificationConfig, S3Api, S3Request, ToS3Request};
@@ -38,7 +38,7 @@ impl S3Api for DeleteBucketNotification {
 }
 
 impl ToS3Request for DeleteBucketNotification {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
         const CONFIG: NotificationConfig = NotificationConfig {

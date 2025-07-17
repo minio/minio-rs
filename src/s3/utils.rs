@@ -15,7 +15,6 @@
 
 //! Various utility and helper functions
 
-use crate::s3::error::{MinioError, Result};
 use crate::s3::multimap::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use base64::engine::Engine as _;
@@ -35,13 +34,13 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use xmltree::Element;
-
 /// Date and time with UTC timezone
 pub type UtcTime = DateTime<Utc>;
-
 use crate::s3::Client;
+use crate::s3::error::ValidationErr;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use url::form_urlencoded;
+
 // Great stuff to get confused about.
 // String "a b+c" in Percent-Encoding (RFC 3986) becomes "a%20b%2Bc".
 // S3 sometimes returns Form-Encoding (application/x-www-form-urlencoded) rendering string "a%20b%2Bc" into "a+b%2Bc"
@@ -73,11 +72,11 @@ pub fn crc32(data: &[u8]) -> u32 {
     Crc::<u32>::new(&CRC_32_ISO_HDLC).checksum(data)
 }
 
-/// Converts data array into 32 bit unsigned int
-pub fn uint32(mut data: &[u8]) -> Result<u32> {
+/// Converts data array into 32 bit BigEndian unsigned int
+pub fn uint32(mut data: &[u8]) -> Result<u32, ValidationErr> {
     data.read_u32::<BigEndian>()
-        .map_err(|e| MinioError::RuntimeError {
-            message: "data is not a valid 32-bit unsigned integer".into(),
+        .map_err(|e| ValidationErr::InvalidIntegerValue {
+            message: "data is not a valid 32-bit BigEndian unsigned integer".into(),
             source: Box::new(e),
         })
 }
@@ -184,7 +183,7 @@ pub fn to_iso8601utc(time: UtcTime) -> String {
 }
 
 /// Parses ISO8601 UTC formatted value to time
-pub fn from_iso8601utc(s: &str) -> Result<UtcTime> {
+pub fn from_iso8601utc(s: &str) -> Result<UtcTime, ValidationErr> {
     let dt = NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S.%3fZ")
         .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%SZ"))?;
     Ok(DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
@@ -221,18 +220,18 @@ pub mod aws_date_format {
     }
 }
 
-pub fn parse_bool(value: &str) -> Result<bool> {
+pub fn parse_bool(value: &str) -> Result<bool, ValidationErr> {
     if value.eq_ignore_ascii_case("true") {
         Ok(true)
     } else if value.eq_ignore_ascii_case("false") {
         Ok(false)
     } else {
-        Err(MinioError::InvalidBooleanValue(value.to_string()))
+        Err(ValidationErr::InvalidBooleanValue(value.to_string()))
     }
 }
 
 /// Parses HTTP header value to time
-pub fn from_http_header_value(s: &str) -> Result<UtcTime> {
+pub fn from_http_header_value(s: &str) -> Result<UtcTime, ValidationErr> {
     let dt = NaiveDateTime::parse_from_str(s, "%a, %d %b %Y %H:%M:%S GMT")?;
     Ok(DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
 }
@@ -275,23 +274,26 @@ pub fn match_region(value: &str) -> bool {
 }
 
 /// Validates given bucket name. TODO S3Express has slightly different rules for bucket names
-pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<()> {
+pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(), ValidationErr> {
     let bucket_name: &str = bucket_name.as_ref().trim();
     let bucket_name_len = bucket_name.len();
     if bucket_name_len == 0 {
-        return Err(MinioError::InvalidBucketName(
-            "bucket name cannot be empty".into(),
-        ));
+        return Err(ValidationErr::InvalidBucketName {
+            name: "".into(),
+            reason: "bucket name cannot be empty".into(),
+        });
     }
     if bucket_name_len < 3 {
-        return Err(MinioError::InvalidBucketName(format!(
-            "bucket name ('{bucket_name}') cannot be less than 3 characters"
-        )));
+        return Err(ValidationErr::InvalidBucketName {
+            name: bucket_name.into(),
+            reason: "bucket name  cannot be less than 3 characters".into(),
+        });
     }
     if bucket_name_len > 63 {
-        return Err(MinioError::InvalidBucketName(format!(
-            "Bucket name ('{bucket_name}') cannot be greater than 63 characters"
-        )));
+        return Err(ValidationErr::InvalidBucketName {
+            name: bucket_name.into(),
+            reason: "bucket name cannot be greater than 63 characters".into(),
+        });
     }
 
     lazy_static! {
@@ -303,42 +305,50 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
     }
 
     if IPV4_REGEX.is_match(bucket_name) {
-        return Err(MinioError::InvalidBucketName(format!(
-            "bucket name ('{bucket_name}') cannot be an IP address"
-        )));
+        return Err(ValidationErr::InvalidBucketName {
+            name: bucket_name.into(),
+            reason: "bucket name cannot be an IP address".into(),
+        });
     }
 
     if bucket_name.contains("..") || bucket_name.contains(".-") || bucket_name.contains("-.") {
-        return Err(MinioError::InvalidBucketName(format!(
-            "bucket name ('{bucket_name}') contains invalid successive characters '..', '.-' or '-.'",
-        )));
+        return Err(ValidationErr::InvalidBucketName {
+            name: bucket_name.into(),
+            reason: "bucket name contains invalid successive characters '..', '.-' or '-.'".into(),
+        });
     }
 
     if strict {
         if !VALID_BUCKET_NAME_STRICT_REGEX.is_match(bucket_name) {
-            return Err(MinioError::InvalidBucketName(format!(
-                "bucket name ('{bucket_name}') does not follow S3 standards strictly, according to {}",
-                *VALID_BUCKET_NAME_STRICT_REGEX
-            )));
+            return Err(ValidationErr::InvalidBucketName {
+                name: bucket_name.into(),
+                reason: format!(
+                    "bucket name does not follow S3 standards strictly, according to {}",
+                    *VALID_BUCKET_NAME_STRICT_REGEX
+                ),
+            });
         }
     } else if !VALID_BUCKET_NAME_REGEX.is_match(bucket_name) {
-        return Err(MinioError::InvalidBucketName(format!(
-            "bucket name ('{bucket_name}') does not follow S3 standards, according to {}",
-            *VALID_BUCKET_NAME_REGEX
-        )));
+        return Err(ValidationErr::InvalidBucketName {
+            name: bucket_name.into(),
+            reason: format!(
+                "bucket name does not follow S3 standards, according to {}",
+                *VALID_BUCKET_NAME_REGEX
+            ),
+        });
     }
 
     Ok(())
 }
 
 /// Validates given object name. TODO S3Express has slightly different rules for object names
-pub fn check_object_name(object_name: impl AsRef<str>) -> Result<()> {
+pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), ValidationErr> {
     let name = object_name.as_ref();
     match name.len() {
-        0 => Err(MinioError::InvalidObjectName(
+        0 => Err(ValidationErr::InvalidObjectName(
             "object name cannot be empty".into(),
         )),
-        n if n > 1024 => Err(MinioError::InvalidObjectName(format!(
+        n if n > 1024 => Err(ValidationErr::InvalidObjectName(format!(
             "Object name ('{name}') cannot be greater than 1024 bytes"
         ))),
         _ => Ok(()),
@@ -346,19 +356,19 @@ pub fn check_object_name(object_name: impl AsRef<str>) -> Result<()> {
 }
 
 /// Validates SSE (Server-Side Encryption) settings.
-pub fn check_sse(sse: &Option<Arc<dyn Sse>>, client: &Client) -> Result<()> {
+pub fn check_sse(sse: &Option<Arc<dyn Sse>>, client: &Client) -> Result<(), ValidationErr> {
     if let Some(v) = &sse {
         if v.tls_required() && !client.is_secure() {
-            return Err(MinioError::SseTlsRequired(None));
+            return Err(ValidationErr::SseTlsRequired(None));
         }
     }
     Ok(())
 }
 
 /// Validates SSE-C (Server-Side Encryption with Customer-Provided Keys) settings.
-pub fn check_ssec(ssec: &Option<SseCustomerKey>, client: &Client) -> Result<()> {
+pub fn check_ssec(ssec: &Option<SseCustomerKey>, client: &Client) -> Result<(), ValidationErr> {
     if ssec.is_some() && !client.is_secure() {
-        return Err(MinioError::SseTlsRequired(None));
+        return Err(ValidationErr::SseTlsRequired(None));
     }
     Ok(())
 }
@@ -370,9 +380,9 @@ pub fn check_ssec_with_log(
     bucket: &str,
     object: &str,
     version: &Option<String>,
-) -> Result<()> {
+) -> Result<(), ValidationErr> {
     if ssec.is_some() && !client.is_secure() {
-        return Err(MinioError::SseTlsRequired(Some(format!(
+        return Err(ValidationErr::SseTlsRequired(Some(format!(
             "source {bucket}/{object}{}: ",
             version
                 .as_ref()
@@ -390,12 +400,12 @@ pub fn get_text_default(element: &Element, tag: &str) -> String {
 }
 
 /// Gets text value of given XML element for given tag.
-pub fn get_text_result(element: &Element, tag: &str) -> Result<String> {
+pub fn get_text_result(element: &Element, tag: &str) -> Result<String, ValidationErr> {
     Ok(element
         .get_child(tag)
-        .ok_or(MinioError::xml_error(format!("<{tag}> tag not found")))?
+        .ok_or(ValidationErr::xml_error(format!("<{tag}> tag not found")))?
         .get_text()
-        .ok_or(MinioError::xml_error(format!(
+        .ok_or(ValidationErr::xml_error(format!(
             "text of <{tag}> tag not found"
         )))?
         .to_string())
@@ -451,10 +461,10 @@ const QUERY_ESCAPE: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'.')
     .remove(b'~');
 
-fn unescape(s: &str) -> Result<String> {
+fn unescape(s: &str) -> Result<String, ValidationErr> {
     percent_decode_str(s)
         .decode_utf8()
-        .map_err(|e| MinioError::TagDecodingError {
+        .map_err(|e| ValidationErr::TagDecodingError {
             input: s.to_string(),
             error_message: e.to_string(),
         })
@@ -476,14 +486,14 @@ pub fn encode_tags(h: &HashMap<String, String>) -> String {
     tags.join("&")
 }
 
-pub fn parse_tags(s: &str) -> Result<HashMap<String, String>> {
+pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, ValidationErr> {
     let mut tags = HashMap::new();
     for tag in s.split('&') {
         let mut kv = tag.split('=');
         let k = match kv.next() {
             Some(v) => unescape(v)?,
             None => {
-                return Err(MinioError::TagDecodingError {
+                return Err(ValidationErr::TagDecodingError {
                     input: s.into(),
                     error_message: "tag key was empty".into(),
                 });
@@ -494,7 +504,7 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>> {
             None => "".to_owned(),
         };
         if kv.next().is_some() {
-            return Err(MinioError::TagDecodingError {
+            return Err(ValidationErr::TagDecodingError {
                 input: s.into(),
                 error_message: "tag had too many values for a key".into(),
             });
@@ -513,9 +523,8 @@ pub fn insert(data: Option<Multimap>, key: impl Into<String>) -> Multimap {
 }
 
 pub mod xml {
+    use crate::s3::error::ValidationErr;
     use std::collections::HashMap;
-
-    use crate::s3::error::{MinioError, Result};
 
     #[derive(Debug, Clone)]
     struct XmlElementIndex {
@@ -582,17 +591,17 @@ pub mod xml {
                 .map(|v| v.to_string())
         }
 
-        pub fn get_child_text_or_error(&self, tag: &str) -> Result<String> {
+        pub fn get_child_text_or_error(&self, tag: &str) -> Result<String, ValidationErr> {
             let i = self
                 .child_element_index
                 .get_first(tag)
-                .ok_or(MinioError::xml_error(format!("<{tag}> tag not found")))?;
+                .ok_or(ValidationErr::xml_error(format!("<{tag}> tag not found")))?;
             self.inner.children[i]
                 .as_element()
                 .unwrap()
                 .get_text()
                 .map(|x| x.to_string())
-                .ok_or(MinioError::xml_error(format!(
+                .ok_or(ValidationErr::xml_error(format!(
                     "text of <{tag}> tag not found"
                 )))
         }

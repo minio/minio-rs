@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::{MinioError, Result};
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::{
     HasBucket, HasEtagFromHeaders, HasObject, HasRegion, HasS3Fields, HasVersion,
 };
@@ -99,9 +99,10 @@ impl HasEtagFromHeaders for S3MultipartResponse {}
 
 impl S3MultipartResponse {
     /// Returns the upload ID for the multipart upload, while consuming the response.
-    pub async fn upload_id(&self) -> Result<String> {
+    pub async fn upload_id(&self) -> Result<String, ValidationErr> {
         let root = Element::parse(self.body.clone().reader())?;
-        get_text_result(&root, "UploadId").map_err(|e| MinioError::InvalidUploadId(e.to_string()))
+        get_text_result(&root, "UploadId")
+            .map_err(|e| ValidationErr::InvalidUploadId(e.to_string()))
     }
 }
 

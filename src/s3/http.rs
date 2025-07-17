@@ -17,7 +17,8 @@
 
 use super::utils::urlencode_object_key;
 use crate::s3::client::DEFAULT_REGION;
-use crate::s3::error::{MinioError, Result};
+
+use crate::s3::error::ValidationErr;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::utils::match_hostname;
 use derivative::Derivative;
@@ -135,7 +136,7 @@ fn get_aws_info(
     aws_s3_prefix: &mut String,
     aws_domain_suffix: &mut String,
     dualstack: &mut bool,
-) -> Result<()> {
+) -> Result<(), ValidationErr> {
     if !match_hostname(host) {
         return Ok(());
     }
@@ -156,7 +157,7 @@ fn get_aws_info(
     }
 
     if !match_aws_s3_endpoint(host) {
-        return Err(MinioError::UrlBuildError(format!(
+        return Err(ValidationErr::UrlBuildError(format!(
             "invalid Amazon AWS host {host}"
         )));
     }
@@ -165,7 +166,7 @@ fn get_aws_info(
     let s3_prefix = host.get(..matcher.end()).unwrap();
 
     if s3_prefix.contains("s3-accesspoint") && !https {
-        return Err(MinioError::UrlBuildError(format!(
+        return Err(ValidationErr::UrlBuildError(format!(
             "use HTTPS scheme for host {host}"
         )));
     }
@@ -195,7 +196,7 @@ fn get_aws_info(
 
     if domain_suffix.ends_with(".cn") && !s3_prefix.ends_with("s3-accelerate.") && region.is_empty()
     {
-        return Err(MinioError::UrlBuildError(format!(
+        return Err(ValidationErr::UrlBuildError(format!(
             "region missing in Amazon S3 China endpoint {host}"
         )));
     }
@@ -223,7 +224,7 @@ pub struct BaseUrl {
 }
 
 impl FromStr for BaseUrl {
-    type Err = MinioError;
+    type Err = ValidationErr;
 
     /// Convert a string to a BaseUrl.
     ///
@@ -245,7 +246,7 @@ impl FromStr for BaseUrl {
     /// // Get base URL from IPv6 address
     /// let base_url: BaseUrl = "[0:0:0:0:0:ffff:c0a8:7c3f]:9000".parse().unwrap();
     /// ```
-    fn from_str(s: &str) -> Result<Self> {
+    fn from_str(s: &str) -> Result<Self, ValidationErr> {
         let url = s.parse::<Uri>()?;
 
         let https = match url.scheme() {
@@ -254,7 +255,7 @@ impl FromStr for BaseUrl {
                 "http" => false,
                 "https" => true,
                 _ => {
-                    return Err(MinioError::InvalidBaseUrl(
+                    return Err(ValidationErr::InvalidBaseUrl(
                         "scheme must be http or https".into(),
                     ));
                 }
@@ -264,7 +265,7 @@ impl FromStr for BaseUrl {
         let mut host = match url.host() {
             Some(h) => h,
             _ => {
-                return Err(MinioError::InvalidBaseUrl(
+                return Err(ValidationErr::InvalidBaseUrl(
                     "valid host must be provided".into(),
                 ));
             }
@@ -285,13 +286,13 @@ impl FromStr for BaseUrl {
         }
 
         if url.path() != "/" && url.path() != "" {
-            return Err(MinioError::InvalidBaseUrl(
+            return Err(ValidationErr::InvalidBaseUrl(
                 "path must be empty for base URL".into(),
             ));
         }
 
         if url.query().is_some() {
-            return Err(MinioError::InvalidBaseUrl(
+            return Err(ValidationErr::InvalidBaseUrl(
                 "query must be none for base URL".into(),
             ));
         }
@@ -335,7 +336,7 @@ impl BaseUrl {
         bucket_name: &str,
         enforce_path_style: bool,
         region: &str,
-    ) -> Result<()> {
+    ) -> Result<(), ValidationErr> {
         let mut host = String::from(&self.aws_s3_prefix);
         host.push_str(&self.aws_domain_suffix);
         if host.eq_ignore_ascii_case("s3-external-1.amazonaws.com")
@@ -349,7 +350,7 @@ impl BaseUrl {
         host = String::from(&self.aws_s3_prefix);
         if self.aws_s3_prefix.contains("s3-accelerate") {
             if bucket_name.contains('.') {
-                return Err(MinioError::UrlBuildError(
+                return Err(ValidationErr::UrlBuildError(
                     "bucket name with '.' is not allowed for accelerate endpoint".into(),
                 ));
             }
@@ -408,7 +409,7 @@ impl BaseUrl {
         query: &Multimap,
         bucket_name: Option<&str>,
         object_name: Option<&str>,
-    ) -> Result<Url> {
+    ) -> Result<Url, ValidationErr> {
         let mut url = Url {
             https: self.https,
             host: self.host.clone(),

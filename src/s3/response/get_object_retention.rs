@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::{MinioError, MinioErrorCode, Result};
+use crate::s3::error::{Error, S3ServerError, ValidationErr};
+use crate::s3::minio_error_response::MinioErrorCode;
 use crate::s3::response::a_response_traits::{
     HasBucket, HasObject, HasRegion, HasS3Fields, HasVersion,
 };
@@ -45,7 +46,7 @@ impl GetObjectRetentionResponse {
     /// Returns the retention mode of the object.
     ///
     /// This method retrieves the retention mode, which can be either `Governance` or `Compliance`.
-    pub fn retention_mode(&self) -> Result<Option<RetentionMode>> {
+    pub fn retention_mode(&self) -> Result<Option<RetentionMode>, ValidationErr> {
         if self.body.is_empty() {
             return Ok(None);
         }
@@ -59,7 +60,7 @@ impl GetObjectRetentionResponse {
     /// Returns the date until which the object is retained.
     ///
     /// This method retrieves the retention date, which indicates when the object will no longer be retained.
-    pub fn retain_until_date(&self) -> Result<Option<UtcTime>> {
+    pub fn retain_until_date(&self) -> Result<Option<UtcTime>, ValidationErr> {
         if self.body.is_empty() {
             return Ok(None);
         }
@@ -75,15 +76,15 @@ impl GetObjectRetentionResponse {
 impl FromS3Response for GetObjectRetentionResponse {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response>,
-    ) -> Result<Self> {
+        response: Result<reqwest::Response, Error>,
+    ) -> Result<Self, Error> {
         match response {
             Ok(mut resp) => Ok(Self {
                 request,
                 headers: mem::take(resp.headers_mut()),
-                body: resp.bytes().await?,
+                body: resp.bytes().await.map_err(ValidationErr::from)?,
             }),
-            Err(MinioError::S3Error(mut e))
+            Err(Error::S3Server(S3ServerError::S3Error(mut e)))
                 if matches!(e.code(), MinioErrorCode::NoSuchObjectLockConfiguration) =>
             {
                 Ok(Self {

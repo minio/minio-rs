@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Result;
+use crate::s3::error::ValidationErr;
 use crate::s3::multimap::Multimap;
 use crate::s3::response::PutBucketEncryptionResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
@@ -75,7 +75,7 @@ impl S3Api for PutBucketEncryption {
 }
 
 impl ToS3Request for PutBucketEncryption {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
         let bytes: Bytes = self.config.to_xml().into();

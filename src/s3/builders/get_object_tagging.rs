@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Result;
+use crate::s3::error::ValidationErr;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::GetObjectTaggingResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
@@ -74,7 +74,7 @@ impl S3Api for GetObjectTagging {
 }
 
 impl ToS3Request for GetObjectTagging {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
 
