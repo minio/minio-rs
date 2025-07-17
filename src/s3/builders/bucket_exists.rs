@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::builders::BucketCommon;
-use crate::s3::error::Result;
+use crate::s3::error::ValidationErr;
 use crate::s3::response::BucketExistsResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::check_bucket_name;
@@ -35,7 +35,7 @@ impl S3Api for BucketExists {
 }
 
 impl ToS3Request for BucketExists {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
         Ok(S3Request::new(self.client, Method::HEAD)

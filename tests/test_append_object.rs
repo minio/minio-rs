@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use minio::s3::builders::ObjectContent;
-use minio::s3::error::{MinioError, MinioErrorCode, Result};
+use minio::s3::error::{Error, S3ServerError};
+use minio::s3::minio_error_response::MinioErrorCode;
 use minio::s3::response::a_response_traits::{
     HasBucket, HasEtagFromHeaders, HasObject, HasObjectSize,
 };
@@ -184,7 +185,7 @@ async fn append_object_2(ctx: TestContext, bucket_name: String) {
     // now try to append "bbbb" to the object at an invalid offset
     let offset_bytes = size - 1;
     let data2: SegmentedBytes = SegmentedBytes::from(content2.to_string());
-    let resp: Result<AppendObjectResponse> = ctx
+    let resp: Result<AppendObjectResponse, Error> = ctx
         .client
         .append_object(&bucket_name, &object_name, data2, offset_bytes)
         .send()
@@ -192,7 +193,7 @@ async fn append_object_2(ctx: TestContext, bucket_name: String) {
 
     match resp {
         Ok(v) => panic!("append object should have failed; got value: {:?}", v),
-        Err(MinioError::S3Error(e)) => {
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::InvalidWriteOffset);
         }
         Err(e) => panic!("append object should have failed; got error: {:?}", e),
@@ -213,7 +214,7 @@ async fn append_object_3(ctx: TestContext, bucket_name: String) {
     // now try to append "bbbb" to the object at an invalid offset
     let data2: SegmentedBytes = SegmentedBytes::from(content2.to_string());
     let offset_bytes = size + 1;
-    let resp: Result<AppendObjectResponse> = ctx
+    let resp: Result<AppendObjectResponse, Error> = ctx
         .client
         .append_object(&bucket_name, &object_name, data2, offset_bytes)
         .send()
@@ -221,7 +222,7 @@ async fn append_object_3(ctx: TestContext, bucket_name: String) {
 
     match resp {
         Ok(v) => panic!("append object should have failed; got value: {:?}", v),
-        Err(MinioError::S3Error(e)) => {
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::InvalidWriteOffset);
         }
         Err(e) => panic!("append object should have failed; got error: {:?}", e),
@@ -282,7 +283,7 @@ async fn append_object_5(ctx: TestContext, bucket_name: String) {
     let data1: SegmentedBytes = SegmentedBytes::from(content1.to_string());
 
     let offset_bytes = 1; // byte 1, thus beyond the current length of the (non-existing) file
-    let resp: Result<AppendObjectResponse> = ctx
+    let resp: Result<AppendObjectResponse, Error> = ctx
         .client
         .append_object(&bucket_name, &object_name, data1, offset_bytes)
         .send()
@@ -290,7 +291,7 @@ async fn append_object_5(ctx: TestContext, bucket_name: String) {
 
     match resp {
         Ok(v) => panic!("append object should have failed; got value: {:?}", v),
-        Err(MinioError::S3Error(e)) => {
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::NoSuchKey);
         }
         Err(e) => panic!("append object should have failed; got error: {:?}", e),

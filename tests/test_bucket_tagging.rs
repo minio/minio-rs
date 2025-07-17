@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use minio::s3::client::DEFAULT_REGION;
-use minio::s3::error::{MinioError, MinioErrorCode, Result};
+use minio::s3::error::{Error, S3ServerError};
+use minio::s3::minio_error_response::MinioErrorCode;
 use minio::s3::response::a_response_traits::{HasBucket, HasRegion, HasTagging};
 use minio::s3::response::{
     DeleteBucketTaggingResponse, GetBucketTaggingResponse, PutBucketTaggingResponse,
@@ -71,28 +72,34 @@ async fn bucket_tags_s3(ctx: TestContext, bucket_name: String) {
 async fn bucket_tags_s3express(ctx: TestContext, bucket_name: String) {
     let tags = create_tags_example();
 
-    let resp: Result<PutBucketTaggingResponse> = ctx
+    let resp: Result<PutBucketTaggingResponse, Error> = ctx
         .client
         .put_bucket_tagging(&bucket_name)
         .tags(tags.clone())
         .send()
         .await;
     match resp {
-        Err(MinioError::S3Error(e)) => assert_eq!(e.code(), MinioErrorCode::NotSupported),
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
+            assert_eq!(e.code(), MinioErrorCode::NotSupported)
+        }
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 
-    let resp: Result<GetBucketTaggingResponse> =
+    let resp: Result<GetBucketTaggingResponse, Error> =
         ctx.client.get_bucket_tagging(&bucket_name).send().await;
     match resp {
-        Err(MinioError::S3Error(e)) => assert_eq!(e.code(), MinioErrorCode::NotSupported),
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
+            assert_eq!(e.code(), MinioErrorCode::NotSupported)
+        }
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 
-    let resp: Result<DeleteBucketTaggingResponse> =
+    let resp: Result<DeleteBucketTaggingResponse, Error> =
         ctx.client.delete_bucket_tagging(&bucket_name).send().await;
     match resp {
-        Err(MinioError::S3Error(e)) => assert_eq!(e.code(), MinioErrorCode::NotSupported),
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
+            assert_eq!(e.code(), MinioErrorCode::NotSupported)
+        }
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 }

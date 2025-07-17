@@ -45,7 +45,7 @@ pub fn create_bucket_notification_config_example() -> NotificationConfig {
                 String::from("s3:ObjectCreated:Put"),
                 String::from("s3:ObjectCreated:Copy"),
             ],
-            id: Some("".to_string()), //TODO or should this be NONE??
+            id: None, //Some("".to_string()), //TODO or should this be NONE??
             prefix_filter_rule: Some(PrefixFilterRule {
                 value: String::from("images"),
             }),

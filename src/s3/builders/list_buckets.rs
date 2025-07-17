@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Result;
+use crate::s3::error::ValidationErr;
 use crate::s3::multimap::Multimap;
 use crate::s3::response::ListBucketsResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
@@ -55,7 +55,7 @@ impl S3Api for ListBuckets {
 }
 
 impl ToS3Request for ListBuckets {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         Ok(S3Request::new(self.client, Method::GET)
             .query_params(self.extra_query_params.unwrap_or_default())
             .headers(self.extra_headers.unwrap_or_default()))

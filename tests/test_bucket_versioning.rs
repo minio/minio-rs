@@ -15,7 +15,8 @@
 
 use minio::s3::builders::VersioningStatus;
 use minio::s3::client::DEFAULT_REGION;
-use minio::s3::error::{MinioError, MinioErrorCode, Result};
+use minio::s3::error::{Error, S3ServerError};
+use minio::s3::minio_error_response::MinioErrorCode;
 use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
 use minio::s3::response::{GetBucketVersioningResponse, PutBucketVersioningResponse};
 use minio::s3::types::S3Api;
@@ -66,21 +67,25 @@ async fn bucket_versioning_s3(ctx: TestContext, bucket_name: String) {
 
 #[minio_macros::test(skip_if_not_express)]
 async fn bucket_versioning_s3express(ctx: TestContext, bucket_name: String) {
-    let resp: Result<PutBucketVersioningResponse> = ctx
+    let resp: Result<PutBucketVersioningResponse, Error> = ctx
         .client
         .put_bucket_versioning(&bucket_name)
         .versioning_status(VersioningStatus::Enabled)
         .send()
         .await;
     match resp {
-        Err(MinioError::S3Error(e)) => assert_eq!(e.code(), MinioErrorCode::NotSupported),
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
+            assert_eq!(e.code(), MinioErrorCode::NotSupported)
+        }
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 
-    let resp: Result<GetBucketVersioningResponse> =
+    let resp: Result<GetBucketVersioningResponse, Error> =
         ctx.client.get_bucket_versioning(&bucket_name).send().await;
     match resp {
-        Err(MinioError::S3Error(e)) => assert_eq!(e.code(), MinioErrorCode::NotSupported),
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
+            assert_eq!(e.code(), MinioErrorCode::NotSupported)
+        }
         v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
     }
 }

@@ -15,7 +15,9 @@
 
 use super::Client;
 use crate::s3::builders::{DeleteBucket, DeleteObject, ObjectToDelete};
-use crate::s3::error::{MinioError, MinioErrorCode, Result};
+use crate::s3::error::Error;
+use crate::s3::error::S3ServerError::S3Error;
+use crate::s3::minio_error_response::MinioErrorCode;
 use crate::s3::response::{BucketExistsResponse, DeleteResult};
 use crate::s3::response::{
     DeleteBucketResponse, DeleteObjectResponse, DeleteObjectsResponse, PutObjectLegalHoldResponse,
@@ -55,7 +57,7 @@ impl Client {
     pub async fn delete_and_purge_bucket<S: Into<String>>(
         &self,
         bucket: S,
-    ) -> Result<DeleteBucketResponse> {
+    ) -> Result<DeleteBucketResponse, Error> {
         let bucket: String = bucket.into();
 
         let resp: BucketExistsResponse = self.bucket_exists(&bucket).send().await?;
@@ -130,7 +132,7 @@ impl Client {
         let request: DeleteBucket = self.delete_bucket(&bucket);
         match request.send().await {
             Ok(resp) => Ok(resp),
-            Err(MinioError::S3Error(mut e)) => {
+            Err(Error::S3Server(S3Error(mut e))) => {
                 if matches!(e.code(), MinioErrorCode::NoSuchBucket) {
                     Ok(DeleteBucketResponse {
                         request: Default::default(), //TODO consider how to handle this
@@ -163,9 +165,9 @@ impl Client {
                         Some(msg) => format!("{msg}, found content: {objs:?}"),
                     };
                     e.set_message(new_msg);
-                    Err(MinioError::S3Error(e))
+                    Err(Error::S3Server(S3Error(e)))
                 } else {
-                    Err(MinioError::S3Error(e))
+                    Err(Error::S3Server(S3Error(e)))
                 }
             }
             Err(e) => Err(e),

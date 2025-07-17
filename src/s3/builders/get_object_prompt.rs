@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::client::Client;
-use crate::s3::error::{MinioError, Result};
+use crate::s3::error::ValidationErr;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::GetObjectPromptResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
@@ -92,13 +92,13 @@ impl S3Api for GetObjectPrompt {
 }
 
 impl ToS3Request for GetObjectPrompt {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
             check_ssec(&self.ssec, &self.client)?;
             if self.client.is_aws_host() {
-                return Err(MinioError::UnsupportedAwsApi("ObjectPrompt".into()));
+                return Err(ValidationErr::UnsupportedAwsApi("ObjectPrompt".into()));
             }
         }
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();

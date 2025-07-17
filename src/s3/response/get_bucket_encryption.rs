@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::{MinioError, MinioErrorCode, Result};
+use crate::s3::error::{Error, S3ServerError, ValidationErr};
+use crate::s3::minio_error_response::MinioErrorCode;
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request, SseConfig};
 use crate::s3::utils::{get_text_option, get_text_result};
@@ -49,19 +50,19 @@ impl GetBucketEncryptionResponse {
     ///
     /// This includes the encryption algorithm and, if applicable, the AWS KMS key ID used for encrypting objects.
     /// If the bucket has no default encryption configuration, this method returns a default `SseConfig` with empty fields.
-    pub fn config(&self) -> Result<SseConfig> {
+    pub fn config(&self) -> Result<SseConfig, ValidationErr> {
         if self.body.is_empty() {
             return Ok(SseConfig::default());
         }
-        let mut root = Element::parse(self.body.clone().reader())?; // clone of Bytes is inexpensive
+        let mut root = Element::parse(self.body.clone().reader()).map_err(ValidationErr::from)?; // clone of Bytes is inexpensive
 
         let rule = root
             .get_mut_child("Rule")
-            .ok_or(MinioError::xml_error("<Rule> tag not found"))?;
+            .ok_or(ValidationErr::xml_error("<Rule> tag not found"))?;
 
         let sse_by_default = rule
             .get_mut_child("ApplyServerSideEncryptionByDefault")
-            .ok_or(MinioError::xml_error(
+            .ok_or(ValidationErr::xml_error(
                 "<ApplyServerSideEncryptionByDefault> tag not found",
             ))?;
 
@@ -76,15 +77,15 @@ impl GetBucketEncryptionResponse {
 impl FromS3Response for GetBucketEncryptionResponse {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response>,
-    ) -> Result<Self> {
+        response: Result<reqwest::Response, Error>,
+    ) -> Result<Self, Error> {
         match response {
             Ok(mut resp) => Ok(Self {
                 request,
                 headers: mem::take(resp.headers_mut()),
-                body: resp.bytes().await?,
+                body: resp.bytes().await.map_err(ValidationErr::from)?,
             }),
-            Err(MinioError::S3Error(mut e))
+            Err(Error::S3Server(S3ServerError::S3Error(mut e)))
                 if matches!(
                     e.code(),
                     MinioErrorCode::ServerSideEncryptionConfigurationNotFoundError

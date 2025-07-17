@@ -13,10 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
 use crate::s3::client::Client;
 use crate::s3::multimap::Multimap;
+use std::marker::PhantomData;
 
 /// Common parameters for bucket operations
 ///

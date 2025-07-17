@@ -14,24 +14,21 @@
 // limitations under the License.
 
 use super::ObjectContent;
+use crate::s3::builders::{ContentStream, Size};
+use crate::s3::client::Client;
+use crate::s3::error::{Error, IoError, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::HasEtagFromHeaders;
-use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::utils::{check_object_name, check_sse, insert};
-use crate::s3::{
-    builders::{ContentStream, Size},
-    client::Client,
-    error::{MinioError, Result},
-    response::{
-        AbortMultipartUploadResponse, CompleteMultipartUploadResponse,
-        CreateMultipartUploadResponse, PutObjectContentResponse, PutObjectResponse,
-        UploadPartResponse,
-    },
-    sse::Sse,
-    types::{PartInfo, Retention, S3Api, S3Request, ToS3Request},
-    utils::{check_bucket_name, md5sum_hash, to_iso8601utc, url_encode},
+use crate::s3::response::{
+    AbortMultipartUploadResponse, CompleteMultipartUploadResponse, CreateMultipartUploadResponse,
+    PutObjectContentResponse, PutObjectResponse, UploadPartResponse,
 };
+use crate::s3::segmented_bytes::SegmentedBytes;
+use crate::s3::sse::Sse;
+use crate::s3::types::{PartInfo, Retention, S3Api, S3Request, ToS3Request};
+use crate::s3::utils::{check_bucket_name, md5sum_hash, to_iso8601utc, url_encode};
+use crate::s3::utils::{check_object_name, check_sse, insert};
 use bytes::{Bytes, BytesMut};
 use http::Method;
 use std::{collections::HashMap, sync::Arc};
@@ -120,7 +117,7 @@ impl S3Api for CreateMultipartUpload {
 }
 
 impl ToS3Request for CreateMultipartUpload {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
 
@@ -196,7 +193,7 @@ impl S3Api for AbortMultipartUpload {
 }
 
 impl ToS3Request for AbortMultipartUpload {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
 
@@ -273,17 +270,17 @@ impl CompleteMultipartUpload {
 }
 
 impl ToS3Request for CompleteMultipartUpload {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
             if self.upload_id.is_empty() {
-                return Err(MinioError::InvalidUploadId(
+                return Err(ValidationErr::InvalidUploadId(
                     "upload ID cannot be empty".into(),
                 ));
             }
             if self.parts.is_empty() {
-                return Err(MinioError::EmptyParts("parts cannot be empty".into()));
+                return Err(ValidationErr::EmptyParts("parts cannot be empty".into()));
             }
         }
 
@@ -412,21 +409,21 @@ impl S3Api for UploadPart {
 }
 
 impl ToS3Request for UploadPart {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
 
             if let Some(upload_id) = &self.upload_id {
                 if upload_id.is_empty() {
-                    return Err(MinioError::InvalidUploadId(
+                    return Err(ValidationErr::InvalidUploadId(
                         "upload ID cannot be empty".into(),
                     ));
                 }
             }
             if let Some(part_number) = self.part_number {
                 if !(1..=MAX_MULTIPART_COUNT).contains(&part_number) {
-                    return Err(MinioError::InvalidPartNumber(format!(
+                    return Err(ValidationErr::InvalidPartNumber(format!(
                         "part number must be between 1 and {MAX_MULTIPART_COUNT}"
                     )));
                 }
@@ -528,7 +525,7 @@ impl S3Api for PutObject {
 }
 
 impl ToS3Request for PutObject {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         self.0.to_s3request()
     }
 }
@@ -633,13 +630,16 @@ impl PutObjectContent {
         self
     }
 
-    pub async fn send(mut self) -> Result<PutObjectContentResponse> {
+    pub async fn send(mut self) -> Result<PutObjectContentResponse, Error> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
         check_sse(&self.sse, &self.client)?;
 
         let input_content = std::mem::take(&mut self.input_content);
-        self.content_stream = input_content.to_content_stream().await?;
+        self.content_stream = input_content
+            .to_content_stream()
+            .await
+            .map_err(IoError::from)?;
 
         // object_size may be Size::Unknown.
         let object_size = self.content_stream.get_size();
@@ -650,7 +650,11 @@ impl PutObjectContent {
         self.part_count = expected_parts;
 
         // Read the first part.
-        let seg_bytes = self.content_stream.read_upto(part_size as usize).await?;
+        let seg_bytes = self
+            .content_stream
+            .read_upto(part_size as usize)
+            .await
+            .map_err(IoError::from)?;
 
         // In the first part read, if:
         //
@@ -688,7 +692,10 @@ impl PutObjectContent {
             // Not enough data!
             let expected: u64 = object_size.as_u64().unwrap();
             let got: u64 = seg_bytes.len() as u64;
-            Err(MinioError::InsufficientData { expected, got })
+            Err(Error::Validation(ValidationErr::InsufficientData {
+                expected,
+                got,
+            }))
         } else {
             let bucket: String = self.bucket.clone();
             let object: String = self.object.clone();
@@ -735,7 +742,7 @@ impl PutObjectContent {
         upload_id: String,
         object_size: Size,
         first_part: SegmentedBytes,
-    ) -> Result<PutObjectContentResponse> {
+    ) -> Result<PutObjectContentResponse, Error> {
         let mut done = false;
         let mut part_number = 0;
         let mut parts: Vec<PartInfo> = if let Some(pc) = self.part_count {
@@ -751,7 +758,10 @@ impl PutObjectContent {
                 if let Some(v) = first_part.take() {
                     v
                 } else {
-                    self.content_stream.read_upto(part_size as usize).await?
+                    self.content_stream
+                        .read_upto(part_size as usize)
+                        .await
+                        .map_err(IoError::from)?
                 }
             };
             part_number += 1;
@@ -767,13 +777,15 @@ impl PutObjectContent {
 
             // Check if we have too many parts to upload.
             if self.part_count.is_none() && (part_number > MAX_MULTIPART_COUNT) {
-                return Err(MinioError::TooManyParts(part_number as u64));
+                return Err(Error::Validation(ValidationErr::TooManyParts(
+                    part_number as u64,
+                )));
             }
 
             if object_size.is_known() {
                 let exp = object_size.as_u64().unwrap();
                 if exp < total_read {
-                    return Err(MinioError::TooMuchData(exp));
+                    return Err(Error::Validation(ValidationErr::TooMuchData(exp)));
                 }
             }
 
@@ -817,10 +829,10 @@ impl PutObjectContent {
         if object_size.is_known() {
             let expected = object_size.as_u64().unwrap();
             if expected != size {
-                return Err(MinioError::InsufficientData {
+                return Err(Error::Validation(ValidationErr::InsufficientData {
                     expected,
                     got: size,
-                });
+                }));
             }
         }
 
@@ -851,7 +863,7 @@ fn into_headers_put_object(
     retention: Option<Retention>,
     legal_hold: bool,
     content_type: Option<String>,
-) -> Result<Multimap> {
+) -> Result<Multimap, ValidationErr> {
     let mut map = Multimap::new();
 
     if let Some(v) = extra_headers {
@@ -862,12 +874,12 @@ fn into_headers_put_object(
         // Validate it.
         for (k, _) in v.iter() {
             if k.is_empty() {
-                return Err(MinioError::InvalidUserMetadata(
+                return Err(ValidationErr::InvalidUserMetadata(
                     "user metadata key cannot be empty".into(),
                 ));
             }
             if !k.starts_with("x-amz-meta-") {
-                return Err(MinioError::InvalidUserMetadata(format!(
+                return Err(ValidationErr::InvalidUserMetadata(format!(
                     "user metadata key '{k}' does not start with 'x-amz-meta-'",
                 )));
             }
@@ -925,27 +937,30 @@ pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 
 /// Returns the size of each part to upload and the total number of parts. The
 /// number of parts is `None` when the object size is unknown.
-pub fn calc_part_info(object_size: Size, part_size: Size) -> Result<(u64, Option<u16>)> {
+pub fn calc_part_info(
+    object_size: Size,
+    part_size: Size,
+) -> Result<(u64, Option<u16>), ValidationErr> {
     // Validate arguments against limits.
     if let Size::Known(v) = part_size {
         if v < MIN_PART_SIZE {
-            return Err(MinioError::InvalidMinPartSize(v));
+            return Err(ValidationErr::InvalidMinPartSize(v));
         }
 
         if v > MAX_PART_SIZE {
-            return Err(MinioError::InvalidMaxPartSize(v));
+            return Err(ValidationErr::InvalidMaxPartSize(v));
         }
     }
 
     if let Size::Known(v) = object_size {
         if v > MAX_OBJECT_SIZE {
-            return Err(MinioError::InvalidObjectSize(v));
+            return Err(ValidationErr::InvalidObjectSize(v));
         }
     }
 
     match (object_size, part_size) {
         // If object size is unknown, part size must be provided.
-        (Size::Unknown, Size::Unknown) => Err(MinioError::MissingPartSize),
+        (Size::Unknown, Size::Unknown) => Err(ValidationErr::MissingPartSize),
 
         // If object size is unknown, and part size is known, the number of
         // parts will be unknown, so return None for that.
@@ -979,7 +994,7 @@ pub fn calc_part_info(object_size: Size, part_size: Size) -> Result<(u64, Option
         (Size::Known(object_size), Size::Known(part_size)) => {
             let part_count = (object_size as f64 / part_size as f64).ceil() as u16;
             if part_count == 0 || part_count > MAX_MULTIPART_COUNT {
-                return Err(MinioError::InvalidPartCount {
+                return Err(ValidationErr::InvalidPartCount {
                     object_size,
                     part_size,
                     part_count: MAX_MULTIPART_COUNT,
@@ -1002,13 +1017,13 @@ mod tests {
             if let Size::Known(v) = part_size {
                 if v < MIN_PART_SIZE {
                     return match res {
-                        Err(MinioError::InvalidMinPartSize(v_err)) => v == v_err,
+                        Err(ValidationErr::InvalidMinPartSize(v_err)) => v == v_err,
                         _ => false,
                     }
                 }
                 if v > MAX_PART_SIZE {
                     return match res {
-                        Err(MinioError::InvalidMaxPartSize(v_err)) => v == v_err,
+                        Err(ValidationErr::InvalidMaxPartSize(v_err)) => v == v_err,
                         _ => false,
                     }
                 }
@@ -1016,7 +1031,7 @@ mod tests {
             if let Size::Known(v) = object_size {
                 if v > MAX_OBJECT_SIZE {
                     return match res {
-                        Err(MinioError::InvalidObjectSize(v_err)) => v == v_err,
+                        Err(ValidationErr::InvalidObjectSize(v_err)) => v == v_err,
                         _ => false,
                     }
                 }
@@ -1024,7 +1039,7 @@ mod tests {
 
             // Validate the calculation of part size and part count.
             match (object_size, part_size, res) {
-                (Size::Unknown, Size::Unknown, Err(MinioError::MissingPartSize)) => true,
+                (Size::Unknown, Size::Unknown, Err(ValidationErr::MissingPartSize)) => true,
                 (Size::Unknown, Size::Unknown, _) => false,
 
                 (Size::Unknown, Size::Known(part_size), Ok((psize, None))) => {
@@ -1049,7 +1064,7 @@ mod tests {
                 (Size::Known(object_size), Size::Known(part_size), res) => {
                     if (part_size > object_size) || ((part_size * (MAX_MULTIPART_COUNT as u64)) < object_size) {
                         return match res {
-                            Err(MinioError::InvalidPartCount{object_size:v1, part_size:v2, part_count:v3}) => {
+                            Err(ValidationErr::InvalidPartCount{object_size:v1, part_size:v2, part_count:v3}) => {
                                 (v1 == object_size) && (v2 == part_size) && (v3 == MAX_MULTIPART_COUNT)
                             }
                             _ => false,

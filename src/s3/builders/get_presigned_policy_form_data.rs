@@ -15,8 +15,7 @@
 
 use crate::s3::Client;
 use crate::s3::creds::Credentials;
-use crate::s3::error::MinioError;
-use crate::s3::error::Result;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::utils::{
@@ -36,19 +35,21 @@ impl GetPresignedPolicyFormData {
         Self { client, policy }
     }
 
-    pub async fn send(self) -> Result<HashMap<String, String>> {
+    pub async fn send(self) -> Result<HashMap<String, String>, Error> {
         let region: String = self
             .client
             .get_region_cached(&self.policy.bucket, &self.policy.region)
             .await?;
 
         let creds: Credentials = self.client.shared.provider.as_ref().unwrap().fetch();
-        self.policy.form_data(
-            creds.access_key,
-            creds.secret_key,
-            creds.session_token,
-            region,
-        )
+        self.policy
+            .form_data(
+                creds.access_key,
+                creds.secret_key,
+                creds.session_token,
+                region,
+            )
+            .map_err(Error::Validation)
     }
 }
 
@@ -84,7 +85,7 @@ impl PostPolicy {
     /// let expiration = utc_now() + Duration::days(7);
     /// let policy = PostPolicy::new("bucket-name", expiration).unwrap();
     /// ```
-    pub fn new(bucket_name: &str, expiration: UtcTime) -> Result<Self> {
+    pub fn new(bucket_name: &str, expiration: UtcTime) -> Result<Self, ValidationErr> {
         check_bucket_name(bucket_name, true)?;
 
         Ok(Self {
@@ -107,7 +108,7 @@ impl PostPolicy {
             || element.eq_ignore_ascii_case(X_AMZ_ALGORITHM)
             || element.eq_ignore_ascii_case(X_AMZ_CREDENTIAL)
             || element.eq_ignore_ascii_case(X_AMZ_DATE)
-            || element.eq_ignore_ascii_case("policy")
+            || element.eq_ignore_ascii_case(POLICY)
             || element.eq_ignore_ascii_case(X_AMZ_SIGNATURE)
     }
 
@@ -133,9 +134,13 @@ impl PostPolicy {
     /// // Add condition that 'key' (object name) equals to 'bucket-name'
     /// policy.add_equals_condition("key", "bucket-name").unwrap();
     /// ```
-    pub fn add_equals_condition(&mut self, element: &str, value: &str) -> Result<()> {
+    pub fn add_equals_condition(
+        &mut self,
+        element: &str,
+        value: &str,
+    ) -> Result<(), ValidationErr> {
         if element.is_empty() {
-            return Err(MinioError::PostPolicyError(
+            return Err(ValidationErr::PostPolicyError(
                 "condition element cannot be empty".into(),
             ));
         }
@@ -145,13 +150,15 @@ impl PostPolicy {
             || v.eq_ignore_ascii_case("redirect")
             || v.eq_ignore_ascii_case("content-length-range")
         {
-            return Err(MinioError::PostPolicyError(format!(
+            return Err(ValidationErr::PostPolicyError(format!(
                 "{element} is unsupported for equals condition",
             )));
         }
 
         if PostPolicy::is_reserved_element(v.as_str()) {
-            return Err(MinioError::PostPolicyError(format!("{element} cannot set")));
+            return Err(ValidationErr::PostPolicyError(format!(
+                "{element} cannot set"
+            )));
         }
 
         self.eq_conditions.insert(v, value.to_string());
@@ -188,9 +195,13 @@ impl PostPolicy {
     /// // Add condition that 'Content-Type' starts with 'image/'
     /// policy.add_starts_with_condition("Content-Type", "image/").unwrap();
     /// ```
-    pub fn add_starts_with_condition(&mut self, element: &str, value: &str) -> Result<()> {
+    pub fn add_starts_with_condition(
+        &mut self,
+        element: &str,
+        value: &str,
+    ) -> Result<(), ValidationErr> {
         if element.is_empty() {
-            return Err(MinioError::PostPolicyError(
+            return Err(ValidationErr::PostPolicyError(
                 "condition element cannot be empty".into(),
             ));
         }
@@ -200,13 +211,15 @@ impl PostPolicy {
             || v.eq_ignore_ascii_case("content-length-range")
             || (v.starts_with("x-amz-") && v.starts_with("x-amz-meta-"))
         {
-            return Err(MinioError::PostPolicyError(format!(
+            return Err(ValidationErr::PostPolicyError(format!(
                 "{element} is unsupported for starts-with condition",
             )));
         }
 
         if PostPolicy::is_reserved_element(v.as_str()) {
-            return Err(MinioError::PostPolicyError(format!("{element} cannot set")));
+            return Err(ValidationErr::PostPolicyError(format!(
+                "{element} cannot set"
+            )));
         }
 
         self.starts_with_conditions.insert(v, value.to_string());
@@ -248,9 +261,9 @@ impl PostPolicy {
         &mut self,
         lower_limit: usize,
         upper_limit: usize,
-    ) -> Result<()> {
+    ) -> Result<(), ValidationErr> {
         if lower_limit > upper_limit {
-            return Err(MinioError::PostPolicyError(
+            return Err(ValidationErr::PostPolicyError(
                 "lower limit cannot be greater than upper limit".into(),
             ));
         }
@@ -274,15 +287,17 @@ impl PostPolicy {
         secret_key: String,
         session_token: Option<String>,
         region: String,
-    ) -> Result<HashMap<String, String>> {
+    ) -> Result<HashMap<String, String>, ValidationErr> {
         if region.is_empty() {
-            return Err(MinioError::PostPolicyError("region cannot be empty".into()));
+            return Err(ValidationErr::PostPolicyError(
+                "region cannot be empty".into(),
+            ));
         }
 
         if !self.eq_conditions.contains_key("key")
             && !self.starts_with_conditions.contains_key("key")
         {
-            return Err(MinioError::PostPolicyError(
+            return Err(ValidationErr::PostPolicyError(
                 "key condition must be set".into(),
             ));
         }
@@ -333,7 +348,7 @@ impl PostPolicy {
         data.insert(X_AMZ_ALGORITHM.into(), PostPolicy::ALGORITHM.to_string());
         data.insert(X_AMZ_CREDENTIAL.into(), credential);
         data.insert(X_AMZ_DATE.into(), amz_date);
-        data.insert("policy".into(), encoded_policy);
+        data.insert(POLICY.into(), encoded_policy);
         data.insert(X_AMZ_SIGNATURE.into(), signature);
         if let Some(v) = session_token {
             data.insert(X_AMZ_SECURITY_TOKEN.into(), v);

@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::{MinioError, Result};
+
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
 use bytes::Bytes;
@@ -39,21 +40,21 @@ impl HasRegion for DeleteBucketResponse {}
 impl FromS3Response for DeleteBucketResponse {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response>,
-    ) -> Result<Self> {
+        response: Result<reqwest::Response, Error>,
+    ) -> Result<Self, Error> {
         let mut resp: reqwest::Response = response?;
 
         let mut request = request;
         let bucket = request
             .bucket
             .as_deref()
-            .ok_or(MinioError::InvalidBucketName("no bucket specified".into()))?;
+            .ok_or(Error::Validation(ValidationErr::MissingBucketName))?;
 
         request.client.remove_bucket_region(bucket);
         Ok(Self {
             request,
             headers: mem::take(resp.headers_mut()),
-            body: resp.bytes().await?,
+            body: resp.bytes().await.map_err(ValidationErr::from)?,
         })
     }
 }

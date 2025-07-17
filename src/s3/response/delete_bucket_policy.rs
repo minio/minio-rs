@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::{MinioError, MinioErrorCode, Result};
+use crate::s3::error::{Error, S3ServerError, ValidationErr};
+use crate::s3::minio_error_response::MinioErrorCode;
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
@@ -40,15 +41,15 @@ impl HasRegion for DeleteBucketPolicyResponse {}
 impl FromS3Response for DeleteBucketPolicyResponse {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response>,
-    ) -> Result<Self> {
+        response: Result<reqwest::Response, Error>,
+    ) -> Result<Self, Error> {
         match response {
             Ok(mut resp) => Ok(Self {
                 request,
                 headers: mem::take(resp.headers_mut()),
-                body: resp.bytes().await?,
+                body: resp.bytes().await.map_err(ValidationErr::from)?,
             }),
-            Err(MinioError::S3Error(mut e))
+            Err(Error::S3Server(S3ServerError::S3Error(mut e)))
                 if matches!(e.code(), MinioErrorCode::NoSuchBucketPolicy) =>
             {
                 Ok(Self {

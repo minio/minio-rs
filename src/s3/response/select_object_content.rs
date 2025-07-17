@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::{MinioError, Result};
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request, SelectProgress};
@@ -79,39 +79,45 @@ impl SelectObjectContentResponse {
         self.message_crc_read = false;
     }
 
-    fn read_prelude(&mut self) -> Result<bool> {
+    fn read_prelude(&mut self) -> Result<bool, ValidationErr> {
         if self.buf.len() < 8 {
             return Ok(false);
         }
 
         self.prelude_read = true;
         for i in 0..8 {
-            self.prelude[i] = self.buf.pop_front().ok_or(MinioError::InsufficientData {
-                expected: 8,
-                got: i as u64,
-            })?;
+            self.prelude[i] = self
+                .buf
+                .pop_front()
+                .ok_or(ValidationErr::InsufficientData {
+                    expected: 8,
+                    got: i as u64,
+                })?;
         }
 
         Ok(true)
     }
 
-    fn read_prelude_crc(&mut self) -> Result<bool> {
+    fn read_prelude_crc(&mut self) -> Result<bool, ValidationErr> {
         if self.buf.len() < 4 {
             return Ok(false);
         }
 
         self.prelude_crc_read = true;
         for i in 0..4 {
-            self.prelude_crc[i] = self.buf.pop_front().ok_or(MinioError::InsufficientData {
-                expected: 4,
-                got: i as u64,
-            })?;
+            self.prelude_crc[i] = self
+                .buf
+                .pop_front()
+                .ok_or(ValidationErr::InsufficientData {
+                    expected: 4,
+                    got: i as u64,
+                })?;
         }
 
         Ok(true)
     }
 
-    fn read_data(&mut self) -> Result<bool> {
+    fn read_data(&mut self) -> Result<bool, ValidationErr> {
         let data_length = self.total_length - 8 - 4 - 4;
         if self.buf.len() < data_length {
             return Ok(false);
@@ -121,33 +127,39 @@ impl SelectObjectContentResponse {
 
         self.data_read = true;
         for i in 0..data_length {
-            self.data
-                .push(self.buf.pop_front().ok_or(MinioError::InsufficientData {
-                    expected: data_length as u64,
-                    got: i as u64,
-                })?);
+            self.data.push(
+                self.buf
+                    .pop_front()
+                    .ok_or(ValidationErr::InsufficientData {
+                        expected: data_length as u64,
+                        got: i as u64,
+                    })?,
+            );
         }
 
         Ok(true)
     }
 
-    fn read_message_crc(&mut self) -> Result<bool> {
+    fn read_message_crc(&mut self) -> Result<bool, ValidationErr> {
         if self.buf.len() < 4 {
             return Ok(false);
         }
 
         self.message_crc_read = true;
         for i in 0..4 {
-            self.message_crc[i] = self.buf.pop_front().ok_or(MinioError::InsufficientData {
-                expected: 4,
-                got: i as u64,
-            })?;
+            self.message_crc[i] = self
+                .buf
+                .pop_front()
+                .ok_or(ValidationErr::InsufficientData {
+                    expected: 4,
+                    got: i as u64,
+                })?;
         }
 
         Ok(true)
     }
 
-    fn decode_header(&mut self, header_length: usize) -> Result<Multimap> {
+    fn decode_header(&mut self, header_length: usize) -> Result<Multimap, ValidationErr> {
         let mut headers = Multimap::new();
         let mut offset = 0_usize;
         while offset < header_length {
@@ -160,7 +172,7 @@ impl SelectObjectContentResponse {
             let name: &str = std::str::from_utf8(&self.data[offset..offset + length])?;
             offset += length;
             if self.data[offset] != 7 {
-                return Err(MinioError::InvalidHeaderValueType(self.data[offset]));
+                return Err(ValidationErr::InvalidHeaderValueType(self.data[offset]));
             }
             offset += 1;
 
@@ -179,7 +191,7 @@ impl SelectObjectContentResponse {
         Ok(headers)
     }
 
-    async fn do_read(&mut self) -> Result<()> {
+    async fn do_read(&mut self) -> Result<(), ValidationErr> {
         if self.done {
             return Ok(());
         }
@@ -205,7 +217,7 @@ impl SelectObjectContentResponse {
                 let expected = uint32(&self.prelude_crc)?;
                 if got != expected {
                     self.done = true;
-                    return Err(MinioError::CrcMismatch {
+                    return Err(ValidationErr::CrcMismatch {
                         crc_type: "prelude".into(),
                         expected,
                         got,
@@ -233,7 +245,7 @@ impl SelectObjectContentResponse {
                 let expected = uint32(&self.message_crc)?;
                 if got != expected {
                     self.done = true;
-                    return Err(MinioError::CrcMismatch {
+                    return Err(ValidationErr::CrcMismatch {
                         crc_type: "message".into(),
                         expected,
                         got,
@@ -249,7 +261,7 @@ impl SelectObjectContentResponse {
             };
             if value == "error" {
                 self.done = true;
-                return Err(MinioError::SelectError {
+                return Err(ValidationErr::SelectError {
                     error_code: match headers.get(":error-code") {
                         Some(v) => v.clone(),
                         None => String::new(),
@@ -297,7 +309,7 @@ impl SelectObjectContentResponse {
             }
 
             self.done = true;
-            return Err(MinioError::UnknownEventType(event_type.into()));
+            return Err(ValidationErr::UnknownEventType(event_type.into()));
         }
     }
 
@@ -341,8 +353,8 @@ impl SelectObjectContentResponse {
 impl FromS3Response for SelectObjectContentResponse {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response>,
-    ) -> Result<Self> {
+        response: Result<reqwest::Response, Error>,
+    ) -> Result<Self, Error> {
         let mut resp = response?;
 
         Ok(Self {

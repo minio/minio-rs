@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use minio::s3::client::DEFAULT_REGION;
-use minio::s3::error::{MinioError, MinioErrorCode, Result};
+use minio::s3::error::{Error, S3ServerError};
+use minio::s3::minio_error_response::MinioErrorCode;
 use minio::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion};
 use minio::s3::response::{
     BucketExistsResponse, CreateBucketResponse, DeleteBucketResponse, PutObjectContentResponse,
@@ -39,10 +40,11 @@ async fn bucket_create(ctx: TestContext) {
     assert_eq!(resp.region(), DEFAULT_REGION);
 
     // try to create a bucket that already exists
-    let resp: Result<CreateBucketResponse> = ctx.client.create_bucket(&bucket_name).send().await;
+    let resp: Result<CreateBucketResponse, Error> =
+        ctx.client.create_bucket(&bucket_name).send().await;
     match resp {
         Ok(_) => panic!("Bucket already exists, but was created again"),
-        Err(MinioError::S3Error(e))
+        Err(Error::S3Server(S3ServerError::S3Error(e)))
             if matches!(e.code(), MinioErrorCode::BucketAlreadyOwnedByYou) =>
         {
             // this is expected, as the bucket already exists
@@ -56,10 +58,13 @@ async fn bucket_delete(ctx: TestContext) {
     let bucket_name = rand_bucket_name();
 
     // try to remove a bucket that does not exist
-    let resp: Result<DeleteBucketResponse> = ctx.client.delete_bucket(&bucket_name).send().await;
+    let resp: Result<DeleteBucketResponse, Error> =
+        ctx.client.delete_bucket(&bucket_name).send().await;
     match resp {
         Ok(_) => panic!("Bucket does not exist, but was removed"),
-        Err(MinioError::S3Error(e)) if matches!(e.code(), MinioErrorCode::NoSuchBucket) => {
+        Err(Error::S3Server(S3ServerError::S3Error(e)))
+            if matches!(e.code(), MinioErrorCode::NoSuchBucket) =>
+        {
             // this is expected, as the bucket does not exist
         }
         Err(e) => panic!("Unexpected error: {:?}", e),
@@ -99,7 +104,8 @@ async fn test_bucket_delete_and_purge(ctx: &TestContext, bucket_name: &str, obje
     assert_eq!(resp.object(), object_name);
 
     // try to remove the bucket without purging, this should fail because the bucket is not empty
-    let resp: Result<DeleteBucketResponse> = ctx.client.delete_bucket(bucket_name).send().await;
+    let resp: Result<DeleteBucketResponse, Error> =
+        ctx.client.delete_bucket(bucket_name).send().await;
 
     assert!(resp.is_err());
 

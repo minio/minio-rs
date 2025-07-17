@@ -15,7 +15,8 @@
 
 use super::{Client, DEFAULT_REGION};
 use crate::s3::builders::GetRegion;
-use crate::s3::error::{MinioError, Result};
+
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::types::S3Api;
 
 impl Client {
@@ -52,16 +53,16 @@ impl Client {
         &self,
         bucket: S,
         region: &Option<String>, // the region as provided by the S3Request
-    ) -> Result<String> {
+    ) -> Result<String, Error> {
         // If a region is provided, validate it against the base_url region
         if let Some(requested_region) = region {
             if !self.shared.base_url.region.is_empty()
                 && (self.shared.base_url.region != *requested_region)
             {
-                return Err(MinioError::RegionMismatch {
+                return Err(Error::Validation(ValidationErr::RegionMismatch {
                     bucket_region: self.shared.base_url.region.clone(),
                     region: requested_region.clone(),
-                });
+                }));
             }
             return Ok(requested_region.clone());
         }

@@ -15,7 +15,7 @@
 
 use crate::s3::Client;
 use crate::s3::client::{MAX_MULTIPART_COUNT, MAX_PART_SIZE};
-use crate::s3::error::{MinioError, Result};
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::HasEtagFromBody;
@@ -96,17 +96,17 @@ impl S3Api for UploadPartCopy {
 }
 
 impl ToS3Request for UploadPartCopy {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
             if self.upload_id.is_empty() {
-                return Err(MinioError::InvalidUploadId(
+                return Err(ValidationErr::InvalidUploadId(
                     "upload ID cannot be empty".into(),
                 ));
             }
             if !(1..=MAX_MULTIPART_COUNT).contains(&self.part_number) {
-                return Err(MinioError::InvalidPartNumber(format!(
+                return Err(ValidationErr::InvalidPartNumber(format!(
                     "part number must be between 1 and {MAX_MULTIPART_COUNT}"
                 )));
             }
@@ -229,7 +229,7 @@ impl S3Api for CopyObjectInternal {
 }
 
 impl ToS3Request for CopyObjectInternal {
-    fn to_s3request(self) -> Result<S3Request> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_sse(&self.sse, &self.client)?;
         check_ssec(&self.source.ssec, &self.client)?;
 
@@ -417,7 +417,7 @@ impl CopyObject {
     ///
     /// Functionally related to the [S3Api::send()](crate::s3::types::S3Api::send) method, but
     /// specifically tailored for the `CopyObject` operation.
-    pub async fn send(self) -> Result<CopyObjectResponse> {
+    pub async fn send(self) -> Result<CopyObjectResponse, Error> {
         check_sse(&self.sse, &self.client)?;
         check_ssec(&self.source.ssec, &self.client)?;
 
@@ -444,9 +444,9 @@ impl CopyObject {
             if let Some(v) = &self.metadata_directive {
                 match v {
                     Directive::Copy => {
-                        return Err(MinioError::InvalidCopyDirective(
+                        return Err(Error::Validation(ValidationErr::InvalidCopyDirective(
                             "COPY metadata directive is not applicable to source object size greater than 5 GiB".into()
-                        ));
+                        )));
                     }
                     _ => todo!(), // Nothing to do.
                 }
@@ -454,9 +454,9 @@ impl CopyObject {
             if let Some(v) = &self.tagging_directive {
                 match v {
                     Directive::Copy => {
-                        return Err(MinioError::InvalidCopyDirective(
+                        return Err(Error::Validation(ValidationErr::InvalidCopyDirective(
                             "COPY tagging directive is not applicable to source object size greater than 5 GiB".into()
-                        ));
+                        )));
                     }
                     _ => todo!(), // Nothing to do.
                 }
@@ -601,7 +601,7 @@ impl ComposeObjectInternal {
     }
 
     #[async_recursion]
-    pub async fn send(self) -> (Result<ComposeObjectResponse>, String) {
+    pub async fn send(self) -> (Result<ComposeObjectResponse, Error>, String) {
         let mut upload_id = String::new();
 
         let mut sources = self.sources;
@@ -663,7 +663,7 @@ impl ComposeObjectInternal {
             // the multipart upload was successful: update the upload_id
             let upload_id_cmu: String = match cmu.upload_id().await {
                 Ok(v) => v,
-                Err(e) => return (Err(e), upload_id),
+                Err(e) => return (Err(e.into()), upload_id),
             };
             upload_id.push_str(&upload_id_cmu);
 
@@ -719,7 +719,7 @@ impl ComposeObjectInternal {
 
                     let etag = match resp.etag() {
                         Ok(v) => v,
-                        Err(e) => return (Err(e), upload_id),
+                        Err(e) => return (Err(e.into()), upload_id),
                     };
 
                     parts.push(PartInfo {
@@ -758,7 +758,7 @@ impl ComposeObjectInternal {
 
                         let etag = match resp.etag() {
                             Ok(v) => v,
-                            Err(e) => return (Err(e), upload_id),
+                            Err(e) => return (Err(e.into()), upload_id),
                         };
 
                         parts.push(PartInfo {
@@ -773,7 +773,7 @@ impl ComposeObjectInternal {
                 }
             }
 
-            let resp: Result<CompleteMultipartUploadResponse> = self
+            let resp: Result<CompleteMultipartUploadResponse, Error> = self
                 .client
                 .complete_multipart_upload(&self.bucket, &self.object, &upload_id, parts)
                 .region(self.region)
@@ -879,13 +879,13 @@ impl ComposeObject {
         self
     }
 
-    pub async fn send(self) -> Result<ComposeObjectResponse> {
+    pub async fn send(self) -> Result<ComposeObjectResponse, Error> {
         check_sse(&self.sse, &self.client)?;
 
         let object: String = self.object.clone();
         let bucket: String = self.bucket.clone();
 
-        let (res, upload_id): (Result<ComposeObjectResponse>, String) = self
+        let (res, upload_id): (Result<ComposeObjectResponse, Error>, String) = self
             .client
             .compose_object_internal(&self.bucket, &self.object)
             .extra_headers(self.extra_headers)
@@ -949,7 +949,7 @@ impl ComposeSource {
     /// use minio::s3::builders::ComposeSource;
     /// let src = ComposeSource::new("my-src-bucket", "my-src-object").unwrap();
     /// ```
-    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self> {
+    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self, ValidationErr> {
         check_bucket_name(bucket_name, true)?;
         check_object_name(object_name)?;
 
@@ -968,10 +968,10 @@ impl ComposeSource {
         self.headers.as_ref().expect("B: ABORT: ComposeSource::build_headers() must be called prior to this method invocation. This should not happen.").clone()
     }
 
-    pub fn build_headers(&mut self, object_size: u64, etag: String) -> Result<()> {
+    pub fn build_headers(&mut self, object_size: u64, etag: String) -> Result<(), ValidationErr> {
         if let Some(v) = self.offset {
             if v >= object_size {
-                return Err(MinioError::InvalidComposeSourceOffset {
+                return Err(ValidationErr::InvalidComposeSourceOffset {
                     bucket: self.bucket.to_string(),
                     object: self.object.to_string(),
                     version: self.version_id.clone(),
@@ -983,7 +983,7 @@ impl ComposeSource {
 
         if let Some(v) = self.length {
             if v > object_size {
-                return Err(MinioError::InvalidComposeSourceLength {
+                return Err(ValidationErr::InvalidComposeSourceLength {
                     bucket: self.bucket.to_string(),
                     object: self.object.to_string(),
                     version: self.version_id.clone(),
@@ -993,7 +993,7 @@ impl ComposeSource {
             }
 
             if (self.offset.unwrap_or_default() + v) > object_size {
-                return Err(MinioError::InvalidComposeSourceSize {
+                return Err(ValidationErr::InvalidComposeSourceSize {
                     bucket: self.bucket.to_string(),
                     object: self.object.to_string(),
                     version: self.version_id.clone(),
@@ -1069,7 +1069,7 @@ pub struct CopySource {
 }
 
 impl CopySource {
-    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self> {
+    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self, ValidationErr> {
         check_bucket_name(bucket_name, true)?;
         check_object_name(object_name)?;
 

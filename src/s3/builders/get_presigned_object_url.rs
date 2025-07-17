@@ -15,7 +15,7 @@
 
 use crate::s3::Client;
 use crate::s3::creds::Credentials;
-use crate::s3::error::Result;
+use crate::s3::error::Error;
 use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::GetPresignedObjectUrlResponse;
@@ -68,7 +68,7 @@ impl GetPresignedObjectUrl {
     }
 
     /// Sends the request to generate a presigned URL for an S3 object.
-    pub async fn send(self) -> Result<GetPresignedObjectUrlResponse> {
+    pub async fn send(self) -> Result<GetPresignedObjectUrlResponse, Error> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
 

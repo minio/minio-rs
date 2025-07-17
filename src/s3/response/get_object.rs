@@ -14,14 +14,12 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
+use crate::s3::builders::ObjectContent;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::{
     HasBucket, HasEtagFromHeaders, HasObject, HasRegion, HasS3Fields, HasVersion,
 };
-use crate::s3::{
-    builders::ObjectContent,
-    error::{MinioError, Result},
-    types::{FromS3Response, S3Request},
-};
+use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::TryStreamExt;
@@ -45,17 +43,17 @@ impl HasEtagFromHeaders for GetObjectResponse {}
 
 impl GetObjectResponse {
     /// Returns the content of the object as a (streaming) byte buffer. Note: consumes the response.
-    pub fn content(self) -> Result<ObjectContent> {
+    pub fn content(self) -> Result<ObjectContent, Error> {
         let content_length: u64 = self.object_size()?;
         let body = self.resp.bytes_stream().map_err(std::io::Error::other);
         Ok(ObjectContent::new_from_stream(body, Some(content_length)))
     }
 
     /// Returns the content size (in Bytes) of the object.
-    pub fn object_size(&self) -> Result<u64> {
+    pub fn object_size(&self) -> Result<u64, ValidationErr> {
         self.resp
             .content_length()
-            .ok_or(MinioError::ContentLengthUnknown)
+            .ok_or(ValidationErr::ContentLengthUnknown)
     }
 }
 
@@ -63,8 +61,8 @@ impl GetObjectResponse {
 impl FromS3Response for GetObjectResponse {
     async fn from_s3response(
         request: S3Request,
-        response: Result<reqwest::Response>,
-    ) -> Result<Self> {
+        response: Result<reqwest::Response, Error>,
+    ) -> Result<Self, Error> {
         let mut resp = response?;
         Ok(Self {
             request,

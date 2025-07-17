@@ -17,6 +17,7 @@ use crate::common_benches::{Ctx2, benchmark_s3_api};
 
 use criterion::Criterion;
 use minio::s3::builders::AppendObject;
+use minio::s3::error::Error;
 use minio::s3::response::StatObjectResponse;
 use minio::s3::segmented_bytes::SegmentedBytes;
 use minio::s3::types::S3Api;
@@ -38,8 +39,9 @@ pub(crate) async fn bench_object_append(criterion: &mut Criterion) {
             let data1: SegmentedBytes = SegmentedBytes::from(content1.to_string());
 
             let resp: StatObjectResponse = task::block_in_place(|| {
-                tokio::runtime::Runtime::new()?
-                    .block_on(ctx.client.stat_object(&ctx.bucket, &ctx.object).send())
+                let runtime =
+                    tokio::runtime::Runtime::new().map_err(|e| Error::DriveIo(e.into()))?;
+                runtime.block_on(ctx.client.stat_object(&ctx.bucket, &ctx.object).send())
             })
             .unwrap();
 
