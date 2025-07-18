@@ -370,22 +370,19 @@ impl Client {
             }
 
             if (size < MIN_PART_SIZE) && (sources_len != 1) && (i != sources_len) {
-                return Err(Error::Validation(
-                    ValidationErr::InvalidComposeSourcePartSize {
-                        bucket: source.bucket.clone(),
-                        object: source.object.clone(),
-                        version: source.version_id.clone(),
-                        size,
-                        expected_size: MIN_PART_SIZE,
-                    },
-                ));
+                return Err(ValidationErr::InvalidComposeSourcePartSize {
+                    bucket: source.bucket.clone(),
+                    object: source.object.clone(),
+                    version: source.version_id.clone(),
+                    size,
+                    expected_size: MIN_PART_SIZE,
+                }
+                .into());
             }
 
             object_size += size;
             if object_size > MAX_OBJECT_SIZE {
-                return Err(Error::Validation(ValidationErr::InvalidObjectSize(
-                    object_size,
-                )));
+                return Err(ValidationErr::InvalidObjectSize(object_size).into());
             }
 
             if size > MAX_PART_SIZE {
@@ -398,15 +395,14 @@ impl Client {
                 }
 
                 if last_part_size < MIN_PART_SIZE && sources_len != 1 && i != sources_len {
-                    return Err(Error::Validation(
-                        ValidationErr::InvalidComposeSourceMultipart {
-                            bucket: source.bucket.to_string(),
-                            object: source.object.to_string(),
-                            version: source.version_id.clone(),
-                            size,
-                            expected_size: MIN_PART_SIZE,
-                        },
-                    ));
+                    return Err(ValidationErr::InvalidComposeSourceMultipart {
+                        bucket: source.bucket.to_string(),
+                        object: source.object.to_string(),
+                        version: source.version_id.clone(),
+                        size,
+                        expected_size: MIN_PART_SIZE,
+                    }
+                    .into());
                 }
 
                 part_count += count as u16;
@@ -415,9 +411,9 @@ impl Client {
             }
 
             if part_count > MAX_MULTIPART_COUNT {
-                return Err(Error::Validation(ValidationErr::InvalidMultipartCount(
-                    MAX_MULTIPART_COUNT as u64,
-                )));
+                return Err(
+                    ValidationErr::InvalidMultipartCount(MAX_MULTIPART_COUNT as u64).into(),
+                );
             }
         }
 
@@ -732,7 +728,7 @@ impl SharedClientItems {
             Some(v) => v
                 .to_str()
                 .map_err(Into::into)
-                .map_err(Error::Validation)?
+                .map_err(Error::Validation)? // ValidationErr -> Error
                 .to_string(),
             None => String::new(),
         };
@@ -741,7 +737,7 @@ impl SharedClientItems {
             Some(v) => v
                 .to_str()
                 .map_err(Into::into)
-                .map_err(Error::Validation)?
+                .map_err(Error::Validation)? // ValidationErr -> Error
                 .to_string(),
             None => String::new(),
         };

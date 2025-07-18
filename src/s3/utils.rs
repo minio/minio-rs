@@ -607,7 +607,7 @@ pub mod xml {
         }
 
         // Returns all children with given tag along with their index.
-        pub fn get_matching_children(&self, tag: &str) -> Vec<(usize, Element)> {
+        pub fn get_matching_children(&self, tag: &str) -> Vec<(usize, Element<'_>)> {
             self.child_element_index
                 .get(tag)
                 .unwrap_or(&vec![])
@@ -616,7 +616,7 @@ pub mod xml {
                 .collect()
         }
 
-        pub fn get_child(&self, tag: &str) -> Option<Element> {
+        pub fn get_child(&self, tag: &str) -> Option<Element<'_>> {
             let index = self.child_element_index.get_first(tag)?;
             Some(self.inner.children[index].as_element()?.into())
         }

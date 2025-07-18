@@ -692,10 +692,7 @@ impl PutObjectContent {
             // Not enough data!
             let expected: u64 = object_size.as_u64().unwrap();
             let got: u64 = seg_bytes.len() as u64;
-            Err(Error::Validation(ValidationErr::InsufficientData {
-                expected,
-                got,
-            }))
+            Err(ValidationErr::InsufficientData { expected, got }.into())
         } else {
             let bucket: String = self.bucket.clone();
             let object: String = self.object.clone();
@@ -777,15 +774,13 @@ impl PutObjectContent {
 
             // Check if we have too many parts to upload.
             if self.part_count.is_none() && (part_number > MAX_MULTIPART_COUNT) {
-                return Err(Error::Validation(ValidationErr::TooManyParts(
-                    part_number as u64,
-                )));
+                return Err(ValidationErr::TooManyParts(part_number as u64).into());
             }
 
             if object_size.is_known() {
                 let exp = object_size.as_u64().unwrap();
                 if exp < total_read {
-                    return Err(Error::Validation(ValidationErr::TooMuchData(exp)));
+                    return Err(ValidationErr::TooMuchData(exp).into());
                 }
             }
 
@@ -829,10 +824,11 @@ impl PutObjectContent {
         if object_size.is_known() {
             let expected = object_size.as_u64().unwrap();
             if expected != size {
-                return Err(Error::Validation(ValidationErr::InsufficientData {
+                return Err(ValidationErr::InsufficientData {
                     expected,
                     got: size,
-                }));
+                }
+                .into());
             }
         }
 
