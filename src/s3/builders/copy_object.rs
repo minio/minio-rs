@@ -444,9 +444,9 @@ impl CopyObject {
             if let Some(v) = &self.metadata_directive {
                 match v {
                     Directive::Copy => {
-                        return Err(Error::Validation(ValidationErr::InvalidCopyDirective(
+                        return Err(ValidationErr::InvalidCopyDirective(
                             "COPY metadata directive is not applicable to source object size greater than 5 GiB".into()
-                        )));
+                        ).into());
                     }
                     _ => todo!(), // Nothing to do.
                 }
@@ -454,9 +454,9 @@ impl CopyObject {
             if let Some(v) = &self.tagging_directive {
                 match v {
                     Directive::Copy => {
-                        return Err(Error::Validation(ValidationErr::InvalidCopyDirective(
+                        return Err(ValidationErr::InvalidCopyDirective(
                             "COPY tagging directive is not applicable to source object size greater than 5 GiB".into()
-                        )));
+                        ).into());
                     }
                     _ => todo!(), // Nothing to do.
                 }

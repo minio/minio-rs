@@ -300,9 +300,7 @@ impl AppendObjectContent {
 
             // Check if we have too many parts to upload.
             if self.part_count.is_none() && part_number > MAX_MULTIPART_COUNT {
-                return Err(Error::Validation(ValidationErr::TooManyParts(
-                    part_number as u64,
-                )));
+                return Err(ValidationErr::TooManyParts(part_number as u64).into());
             }
 
             // Append the part now.

@@ -54,7 +54,7 @@ impl SegmentedBytes {
         }
     }
 
-    pub fn iter(&self) -> SegmentedBytesIterator {
+    pub fn iter(&self) -> SegmentedBytesIterator<'_> {
         SegmentedBytesIterator {
             sb: self,
             current_segment: 0,
