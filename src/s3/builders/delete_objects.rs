@@ -13,27 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Builders for RemoveObject APIs.
-
+use crate::s3::Client;
 use crate::s3::client::MAX_MULTIPART_COUNT;
+use crate::s3::error::{Error, ValidationErr};
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
-use crate::s3::response::DeleteError;
-use crate::s3::types::ListEntry;
-use crate::s3::utils::{check_object_name, insert};
-use crate::s3::{
-    Client,
-    error::Error,
-    response::{DeleteObjectResponse, DeleteObjectsResponse},
-    types::{S3Api, S3Request, ToS3Request, ToStream},
-    utils::{check_bucket_name, md5sum_hash},
-};
+use crate::s3::response::{DeleteError, DeleteObjectResponse, DeleteObjectsResponse};
+use crate::s3::types::{ListEntry, S3Api, S3Request, ToS3Request, ToStream};
+use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::stream::iter;
 use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
 use std::pin::Pin;
-
 // region: object-to-delete
 
 pub trait ValidKey: Into<String> {}
@@ -154,7 +147,7 @@ impl S3Api for DeleteObject {
 }
 
 impl ToS3Request for DeleteObject {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object.key)?;
 
@@ -163,7 +156,7 @@ impl ToS3Request for DeleteObject {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         if self.bypass_governance_mode {
-            headers.add("x-amz-bypass-governance-retention", "true");
+            headers.add(X_AMZ_BYPASS_GOVERNANCE_RETENTION, "true");
         }
 
         Ok(S3Request::new(self.client, Method::DELETE)
@@ -238,7 +231,7 @@ impl S3Api for DeleteObjects {
 }
 
 impl ToS3Request for DeleteObjects {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
         let mut data: String = String::from("<Delete>");
@@ -263,10 +256,10 @@ impl ToS3Request for DeleteObjects {
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         {
             if self.bypass_governance_mode {
-                headers.add("x-amz-bypass-governance-retention", "true");
+                headers.add(X_AMZ_BYPASS_GOVERNANCE_RETENTION, "true");
             }
-            headers.add("Content-Type", "application/xml");
-            headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
+            headers.add(CONTENT_TYPE, "application/xml");
+            headers.add(CONTENT_MD5, md5sum_hash(bytes.as_ref()));
         }
 
         Ok(S3Request::new(self.client, Method::POST)
@@ -374,7 +367,7 @@ impl DeleteObjectsStreaming {
         self
     }
 
-    async fn next_request(&mut self) -> Result<Option<DeleteObjects>, Error> {
+    async fn next_request(&mut self) -> Result<Option<DeleteObjects>, ValidationErr> {
         let mut objects = Vec::new();
         while let Some(object) = self.objects.items.next().await {
             objects.push(object);
@@ -413,7 +406,7 @@ impl ToStream for DeleteObjectsStreaming {
                         Some((response, this))
                     }
                     Ok(None) => None,
-                    Err(e) => Some((Err(e), this)),
+                    Err(e) => Some((Err(e.into()), this)),
                 }
             },
         )))

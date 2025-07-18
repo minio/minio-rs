@@ -11,30 +11,30 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::HasS3Fields;
 use crate::s3::types::{FromS3Response, ListEntry, S3Request};
 use crate::s3::utils::xml::{Element, MergeXmlElements};
-use crate::s3::utils::{from_iso8601utc, parse_tags, urldecode};
+use crate::s3::utils::{from_iso8601utc, parse_tags, url_decode};
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
 use reqwest::header::HeaderMap;
 use std::collections::HashMap;
 use std::mem;
 
-fn url_decode(
+fn url_decode_w_enc(
     encoding_type: &Option<String>,
-    prefix: Option<String>,
-) -> Result<Option<String>, Error> {
+    s: Option<String>,
+) -> Result<Option<String>, ValidationErr> {
     if let Some(v) = encoding_type.as_ref() {
         if v == "url" {
-            if let Some(v) = prefix {
-                return Ok(Some(urldecode(&v)?.to_string()));
+            if let Some(raw) = s {
+                return Ok(Some(url_decode(&raw).to_string()));
             }
         }
     }
 
-    if let Some(v) = prefix.as_ref() {
+    if let Some(v) = s.as_ref() {
         return Ok(Some(v.to_string()));
     }
 
@@ -53,10 +53,10 @@ fn parse_common_list_objects_response(
         bool,
         Option<u16>,
     ),
-    Error,
+    ValidationErr,
 > {
     let encoding_type = root.get_child_text("EncodingType");
-    let prefix = url_decode(
+    let prefix = url_decode_w_enc(
         &encoding_type,
         Some(root.get_child_text("Prefix").unwrap_or_default()),
     )?;
@@ -70,7 +70,8 @@ fn parse_common_list_objects_response(
             .unwrap_or(false),
         root.get_child_text("MaxKeys")
             .map(|x| x.parse::<u16>())
-            .transpose()?,
+            .transpose()
+            .map_err(ValidationErr::from)?,
     ))
 }
 
@@ -80,7 +81,7 @@ fn parse_list_objects_contents(
     main_tag: &str,
     encoding_type: &Option<String>,
     with_delete_marker: bool,
-) -> Result<(), Error> {
+) -> Result<(), ValidationErr> {
     let children1 = root.get_matching_children(main_tag);
     let children2 = if with_delete_marker {
         root.get_matching_children("DeleteMarker")
@@ -90,7 +91,7 @@ fn parse_list_objects_contents(
     let merged = MergeXmlElements::new(&children1, &children2);
     for content in merged {
         let etype = encoding_type.as_ref().cloned();
-        let key = url_decode(&etype, Some(content.get_child_text_or_error("Key")?))?.unwrap();
+        let key = url_decode_w_enc(&etype, Some(content.get_child_text_or_error("Key")?))?.unwrap();
         let last_modified = Some(from_iso8601utc(
             &content.get_child_text_or_error("LastModified")?,
         )?);
@@ -98,7 +99,8 @@ fn parse_list_objects_contents(
         let size: Option<u64> = content
             .get_child_text("Size")
             .map(|x| x.parse::<u64>())
-            .transpose()?;
+            .transpose()
+            .map_err(ValidationErr::from)?;
         let storage_class = content.get_child_text("StorageClass");
         let is_latest = content
             .get_child_text("IsLatest")
@@ -153,10 +155,10 @@ fn parse_list_objects_common_prefixes(
     contents: &mut Vec<ListEntry>,
     root: &Element,
     encoding_type: &Option<String>,
-) -> Result<(), Error> {
+) -> Result<(), ValidationErr> {
     for (_, common_prefix) in root.get_matching_children("CommonPrefixes") {
         contents.push(ListEntry {
-            name: url_decode(
+            name: url_decode_w_enc(
                 encoding_type,
                 Some(common_prefix.get_child_text_or_error("Prefix")?),
             )?
@@ -208,14 +210,15 @@ impl FromS3Response for ListObjectsV1Response {
     ) -> Result<Self, Error> {
         let mut resp = response?;
         let headers: HeaderMap = mem::take(resp.headers_mut());
-        let body = resp.bytes().await?;
+        let body = resp.bytes().await.map_err(ValidationErr::from)?;
 
-        let xmltree_root = xmltree::Element::parse(body.clone().reader())?;
+        let xmltree_root =
+            xmltree::Element::parse(body.clone().reader()).map_err(ValidationErr::from)?;
         let root = Element::from(&xmltree_root);
         let (name, encoding_type, prefix, delimiter, is_truncated, max_keys) =
             parse_common_list_objects_response(&root)?;
-        let marker = url_decode(&encoding_type, root.get_child_text("Marker"))?;
-        let mut next_marker = url_decode(&encoding_type, root.get_child_text("NextMarker"))?;
+        let marker = url_decode_w_enc(&encoding_type, root.get_child_text("Marker"))?;
+        let mut next_marker = url_decode_w_enc(&encoding_type, root.get_child_text("NextMarker"))?;
         let mut contents: Vec<ListEntry> = Vec::new();
         parse_list_objects_contents(&mut contents, &root, "Contents", &encoding_type, false)?;
         if is_truncated && next_marker.is_none() {
@@ -271,17 +274,19 @@ impl FromS3Response for ListObjectsV2Response {
     ) -> Result<Self, Error> {
         let mut resp = response?;
         let headers: HeaderMap = mem::take(resp.headers_mut());
-        let body = resp.bytes().await?;
+        let body = resp.bytes().await.map_err(ValidationErr::from)?;
 
-        let xmltree_root = xmltree::Element::parse(body.clone().reader())?;
+        let xmltree_root =
+            xmltree::Element::parse(body.clone().reader()).map_err(ValidationErr::from)?;
         let root = Element::from(&xmltree_root);
         let (name, encoding_type, prefix, delimiter, is_truncated, max_keys) =
             parse_common_list_objects_response(&root)?;
         let key_count = root
             .get_child_text("KeyCount")
             .map(|x| x.parse::<u16>())
-            .transpose()?;
-        let start_after = url_decode(&encoding_type, root.get_child_text("StartAfter"))?;
+            .transpose()
+            .map_err(ValidationErr::from)?;
+        let start_after = url_decode_w_enc(&encoding_type, root.get_child_text("StartAfter"))?;
         let continuation_token = root.get_child_text("ContinuationToken");
         let next_continuation_token = root.get_child_text("NextContinuationToken");
         let mut contents: Vec<ListEntry> = Vec::new();
@@ -338,14 +343,16 @@ impl FromS3Response for ListObjectVersionsResponse {
     ) -> Result<Self, Error> {
         let mut resp = response?;
         let headers: HeaderMap = mem::take(resp.headers_mut());
-        let body = resp.bytes().await?;
+        let body = resp.bytes().await.map_err(ValidationErr::from)?;
 
-        let xmltree_root = xmltree::Element::parse(body.clone().reader())?;
+        let xmltree_root =
+            xmltree::Element::parse(body.clone().reader()).map_err(ValidationErr::from)?;
         let root = Element::from(&xmltree_root);
         let (name, encoding_type, prefix, delimiter, is_truncated, max_keys) =
             parse_common_list_objects_response(&root)?;
-        let key_marker = url_decode(&encoding_type, root.get_child_text("KeyMarker"))?;
-        let next_key_marker = url_decode(&encoding_type, root.get_child_text("NextKeyMarker"))?;
+        let key_marker = url_decode_w_enc(&encoding_type, root.get_child_text("KeyMarker"))?;
+        let next_key_marker =
+            url_decode_w_enc(&encoding_type, root.get_child_text("NextKeyMarker"))?;
         let version_id_marker = root.get_child_text("VersionIdMarker");
         let next_version_id_marker = root.get_child_text("NextVersionIdMarker");
         let mut contents: Vec<ListEntry> = Vec::new();

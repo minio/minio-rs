@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Error;
+use crate::s3::error::ValidationErr;
 use crate::s3::multimap::Multimap;
 use crate::s3::response::PutBucketVersioningResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
@@ -126,7 +126,7 @@ impl S3Api for PutBucketVersioning {
 }
 
 impl ToS3Request for PutBucketVersioning {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
         let data: String = {
@@ -142,7 +142,7 @@ impl ToS3Request for PutBucketVersioning {
                 Some(VersioningStatus::Enabled) => data.push_str("<Status>Enabled</Status>"),
                 Some(VersioningStatus::Suspended) => data.push_str("<Status>Suspended</Status>"),
                 None => {
-                    return Err(Error::InvalidVersioningStatus(
+                    return Err(ValidationErr::InvalidVersioningStatus(
                         "Missing VersioningStatus".into(),
                     ));
                 }

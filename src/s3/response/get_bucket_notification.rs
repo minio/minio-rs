@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, NotificationConfig, S3Request};
 use crate::{impl_from_s3response, impl_has_s3fields};
@@ -47,7 +47,7 @@ impl GetBucketNotificationResponse {
     ///
     /// This configuration includes the event types and the destinations (e.g., SNS topics, SQS queues, Lambda functions)
     /// configured to receive notifications for those events.
-    pub fn config(&self) -> Result<NotificationConfig, Error> {
+    pub fn config(&self) -> Result<NotificationConfig, ValidationErr> {
         NotificationConfig::from_xml(&mut Element::parse(self.body.clone().reader())?)
     }
 }

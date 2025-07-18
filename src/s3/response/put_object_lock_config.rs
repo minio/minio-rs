@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
 use crate::{impl_from_s3response, impl_has_s3fields};

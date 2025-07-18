@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Error;
+use crate::s3::error::ValidationErr;
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::PutObjectLegalHoldResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
@@ -75,7 +76,7 @@ impl S3Api for PutObjectLegalHold {
 }
 
 impl ToS3Request for PutObjectLegalHold {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
 
@@ -90,7 +91,7 @@ impl ToS3Request for PutObjectLegalHold {
         let bytes: Bytes = Bytes::from(payload);
         // TODO consider const payload with precalculated md5
 
-        headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
+        headers.add(CONTENT_MD5, md5sum_hash(bytes.as_ref()));
 
         Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)

@@ -15,7 +15,8 @@
 
 use crate::s3::Client;
 use crate::s3::client::DEFAULT_REGION;
-use crate::s3::error::Error;
+use crate::s3::error::ValidationErr;
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::CreateBucketResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
@@ -74,7 +75,7 @@ impl S3Api for CreateBucket {
 }
 
 impl ToS3Request for CreateBucket {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
         let region1: Option<&str> = self.region.as_deref();
@@ -86,13 +87,16 @@ impl ToS3Request for CreateBucket {
             (None, Some(v)) => v.to_string(),
             (Some(r1), Some(r2)) if r1 == r2 => self.region.unwrap(), // Both are Some and equal
             (Some(r1), Some(r2)) => {
-                return Err(Error::RegionMismatch(r1.to_string(), r2.to_string()));
+                return Err(ValidationErr::RegionMismatch {
+                    bucket_region: r1.to_string(),
+                    region: r2.to_string(),
+                });
             }
         };
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         if self.object_lock {
-            headers.add("x-amz-bucket-object-lock-enabled", "true");
+            headers.add(X_AMZ_BUCKET_OBJECT_LOCK_ENABLED, "true");
         }
 
         let data: String = match region_str.as_str() {

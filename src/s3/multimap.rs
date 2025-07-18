@@ -13,15 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::utils::urlencode;
+use crate::s3::utils::url_encode;
 use lazy_static::lazy_static;
-use multimap::MultiMap;
 use regex::Regex;
 use std::collections::BTreeMap;
-pub use urlencoding::decode as urldecode;
 
 /// Multimap for string key and string value
-pub type Multimap = MultiMap<String, String>;
+pub type Multimap = multimap::MultiMap<String, String>;
 
 pub trait MultimapExt {
     /// Adds a key-value pair to the multimap
@@ -71,9 +69,9 @@ impl MultimapExt for Multimap {
                 if !query.is_empty() {
                     query.push('&');
                 }
-                query.push_str(&urlencode(key));
+                query.push_str(&url_encode(key));
                 query.push('=');
-                query.push_str(&urlencode(value));
+                query.push_str(&url_encode(value));
             }
         }
         query
@@ -94,9 +92,9 @@ impl MultimapExt for Multimap {
                         if !query.is_empty() {
                             query.push('&');
                         }
-                        query.push_str(&urlencode(key.as_str()));
+                        query.push_str(&url_encode(key.as_str()));
                         query.push('=');
-                        query.push_str(&urlencode(value));
+                        query.push_str(&url_encode(value));
                     }
                 }
                 None => todo!(), // This never happens.

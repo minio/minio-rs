@@ -15,6 +15,7 @@
 
 use http::Method;
 use minio::s3::client::DEFAULT_REGION;
+use minio::s3::header_constants::*;
 use minio::s3::response::GetPresignedObjectUrlResponse;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
@@ -28,7 +29,7 @@ async fn get_presigned_object_url(ctx: TestContext, bucket_name: String) {
         .send()
         .await
         .unwrap();
-    assert!(resp.url.contains("X-Amz-Signature="));
+    assert!(resp.url.contains(X_AMZ_SIGNATURE));
     assert_eq!(resp.bucket, bucket_name);
     assert_eq!(resp.object, object_name);
     assert_eq!(resp.region, DEFAULT_REGION);

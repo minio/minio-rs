@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::{
     HasBucket, HasIsDeleteMarker, HasRegion, HasS3Fields, HasVersion,
 };
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::{get_default_text, get_option_text, get_text};
+use crate::s3::utils::{get_text_default, get_text_option, get_text_result};
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -101,7 +101,7 @@ impl_has_s3fields!(DeleteObjectsResponse);
 impl DeleteObjectsResponse {
     /// Returns the bucket name for which the delete operation was performed.
     pub fn result(&self) -> Result<Vec<DeleteResult>, Error> {
-        let root = Element::parse(self.body.clone().reader())?;
+        let root = Element::parse(self.body.clone().reader()).map_err(ValidationErr::from)?;
         let result = root
             .children
             .iter()
@@ -109,19 +109,19 @@ impl DeleteObjectsResponse {
             .map(|elem| {
                 if elem.name == "Deleted" {
                     Ok(DeleteResult::Deleted(DeletedObject {
-                        name: get_text(elem, "Key")?,
-                        version_id: get_option_text(elem, "VersionId"),
-                        delete_marker: get_default_text(elem, "DeleteMarker").to_lowercase()
+                        name: get_text_result(elem, "Key")?,
+                        version_id: get_text_option(elem, "VersionId"),
+                        delete_marker: get_text_default(elem, "DeleteMarker").to_lowercase()
                             == "true",
-                        delete_marker_version_id: get_option_text(elem, "DeleteMarkerVersionId"),
+                        delete_marker_version_id: get_text_option(elem, "DeleteMarkerVersionId"),
                     }))
                 } else {
                     assert_eq!(elem.name, "Error");
                     Ok(DeleteResult::Error(DeleteError {
-                        code: get_text(elem, "Code")?,
-                        message: get_text(elem, "Message")?,
-                        object_name: get_text(elem, "Key")?,
-                        version_id: get_option_text(elem, "VersionId"),
+                        code: get_text_result(elem, "Code")?,
+                        message: get_text_result(elem, "Message")?,
+                        object_name: get_text_result(elem, "Key")?,
+                        version_id: get_text_option(elem, "VersionId"),
                     }))
                 }
             })

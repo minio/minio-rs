@@ -14,12 +14,13 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::{Error, ErrorCode};
+use crate::s3::error::{Error, S3ServerError, ValidationErr};
+use crate::s3::minio_error_response::MinioErrorCode;
 use crate::s3::response::a_response_traits::{
     HasBucket, HasObject, HasRegion, HasS3Fields, HasVersion,
 };
 use crate::s3::types::{FromS3Response, RetentionMode, S3Request};
-use crate::s3::utils::{UtcTime, from_iso8601utc, get_option_text};
+use crate::s3::utils::{UtcTime, from_iso8601utc, get_text_option};
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -45,12 +46,12 @@ impl GetObjectRetentionResponse {
     /// Returns the retention mode of the object.
     ///
     /// This method retrieves the retention mode, which can be either `Governance` or `Compliance`.
-    pub fn retention_mode(&self) -> Result<Option<RetentionMode>, Error> {
+    pub fn retention_mode(&self) -> Result<Option<RetentionMode>, ValidationErr> {
         if self.body.is_empty() {
             return Ok(None);
         }
         let root = Element::parse(self.body.clone().reader())?;
-        Ok(match get_option_text(&root, "Mode") {
+        Ok(match get_text_option(&root, "Mode") {
             Some(v) => Some(RetentionMode::parse(&v)?),
             _ => None,
         })
@@ -59,12 +60,12 @@ impl GetObjectRetentionResponse {
     /// Returns the date until which the object is retained.
     ///
     /// This method retrieves the retention date, which indicates when the object will no longer be retained.
-    pub fn retain_until_date(&self) -> Result<Option<UtcTime>, Error> {
+    pub fn retain_until_date(&self) -> Result<Option<UtcTime>, ValidationErr> {
         if self.body.is_empty() {
             return Ok(None);
         }
         let root = Element::parse(self.body.clone().reader())?;
-        Ok(match get_option_text(&root, "RetainUntilDate") {
+        Ok(match get_text_option(&root, "RetainUntilDate") {
             Some(v) => Some(from_iso8601utc(&v)?),
             _ => None,
         })
@@ -81,14 +82,14 @@ impl FromS3Response for GetObjectRetentionResponse {
             Ok(mut resp) => Ok(Self {
                 request,
                 headers: mem::take(resp.headers_mut()),
-                body: resp.bytes().await?,
+                body: resp.bytes().await.map_err(ValidationErr::from)?,
             }),
-            Err(Error::S3Error(e))
-                if matches!(e.code, ErrorCode::NoSuchObjectLockConfiguration) =>
+            Err(Error::S3Server(S3ServerError::S3Error(mut e)))
+                if matches!(e.code(), MinioErrorCode::NoSuchObjectLockConfiguration) =>
             {
                 Ok(Self {
                     request,
-                    headers: e.headers,
+                    headers: e.take_headers(),
                     body: Bytes::new(),
                 })
             }

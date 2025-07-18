@@ -15,6 +15,7 @@
 
 //! Signature V4 for S3 API
 
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::utils::{UtcTime, sha256_hash, to_amz_date, to_signer_date};
 use hex::encode as hexencode;
@@ -139,7 +140,7 @@ fn sign_v4(
     let signature = get_signature(signing_key.as_slice(), string_to_sign.as_bytes());
     let authorization = get_authorization(access_key, &scope, &signed_headers, &signature);
 
-    headers.add("Authorization", authorization);
+    headers.add(AUTHORIZATION, authorization);
 }
 
 /// Signs and updates headers for given parameters for S3 request
@@ -184,11 +185,11 @@ pub(crate) fn presign_v4(
     let canonical_headers = "host:".to_string() + host;
     let signed_headers = "host";
 
-    query_params.add("X-Amz-Algorithm", "AWS4-HMAC-SHA256");
-    query_params.add("X-Amz-Credential", access_key.to_string() + "/" + &scope);
-    query_params.add("X-Amz-Date", to_amz_date(date));
-    query_params.add("X-Amz-Expires", expires.to_string());
-    query_params.add("X-Amz-SignedHeaders", signed_headers.to_string());
+    query_params.add(X_AMZ_ALGORITHM, "AWS4-HMAC-SHA256");
+    query_params.add(X_AMZ_CREDENTIAL, access_key.to_string() + "/" + &scope);
+    query_params.add(X_AMZ_DATE, to_amz_date(date));
+    query_params.add(X_AMZ_EXPIRES, expires.to_string());
+    query_params.add(X_AMZ_SIGNED_HEADERS, signed_headers.to_string());
 
     let canonical_query_string = query_params.get_canonical_query_string();
     let canonical_request_hash = get_canonical_request_hash(
@@ -203,7 +204,7 @@ pub(crate) fn presign_v4(
     let signing_key = get_signing_key(secret_key, date, region, "s3");
     let signature = get_signature(signing_key.as_slice(), string_to_sign.as_bytes());
 
-    query_params.add("X-Amz-Signature", signature);
+    query_params.add(X_AMZ_SIGNATURE, signature);
 }
 
 /// Signs and updates headers for given parameters for pre-sign POST request

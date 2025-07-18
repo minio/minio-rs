@@ -15,7 +15,7 @@
 
 use crate::s3::Client;
 use crate::s3::client::DEFAULT_REGION;
-use crate::s3::error::Error;
+use crate::s3::error::ValidationErr;
 use crate::s3::multimap::Multimap;
 use crate::s3::response::GetRegionResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
@@ -63,7 +63,7 @@ impl S3Api for GetRegion {
 }
 
 impl ToS3Request for GetRegion {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
         Ok(S3Request::new(self.client, Method::GET)

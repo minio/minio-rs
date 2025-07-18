@@ -14,12 +14,13 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Error;
+use crate::s3::error::ValidationErr;
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::SelectObjectContentResponse;
 use crate::s3::sse::SseCustomerKey;
 use crate::s3::types::{S3Api, S3Request, SelectRequest, ToS3Request};
-use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
+use crate::s3::utils::{check_bucket_name, check_object_name, check_ssec, insert, md5sum_hash};
 use async_trait::async_trait;
 use bytes::Bytes;
 use http::Method;
@@ -90,19 +91,15 @@ impl S3Api for SelectObjectContent {
 
 #[async_trait]
 impl ToS3Request for SelectObjectContent {
-    fn to_s3request(self) -> Result<S3Request, Error> {
-        {
-            check_bucket_name(&self.bucket, true)?;
-            check_object_name(&self.object)?;
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
+        check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
+        check_ssec(&self.ssec, &self.client)?;
 
-            if self.ssec.is_some() && !self.client.is_secure() {
-                return Err(Error::SseTlsRequired(None));
-            }
-        }
         let bytes: Bytes = self.request.to_xml().into();
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
-        headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
+        headers.add(CONTENT_MD5, md5sum_hash(bytes.as_ref()));
 
         let mut query_params: Multimap = insert(self.extra_query_params, "select");
         query_params.add("select-type", "2");

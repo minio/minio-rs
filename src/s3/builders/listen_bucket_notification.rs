@@ -13,18 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::s3::client::Client;
+use crate::s3::error::{Error, ValidationErr};
+use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::response::ListenBucketNotificationResponse;
+use crate::s3::types::{NotificationRecords, S3Api, S3Request, ToS3Request};
+use crate::s3::utils::check_bucket_name;
 use async_trait::async_trait;
 use futures_util::Stream;
 use http::Method;
-
-use crate::s3::multimap::{Multimap, MultimapExt};
-use crate::s3::{
-    client::Client,
-    error::Error,
-    response::ListenBucketNotificationResponse,
-    types::{NotificationRecords, S3Api, S3Request, ToS3Request},
-    utils::check_bucket_name,
-};
 
 /// Argument builder for the [`ListenBucketNotification`](https://min.io/docs/minio/linux/developers/go/API.html#ListenBucketNotification)
 ///
@@ -92,11 +89,13 @@ impl S3Api for ListenBucketNotification {
 }
 
 impl ToS3Request for ListenBucketNotification {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         {
             check_bucket_name(&self.bucket, true)?;
             if self.client.is_aws_host() {
-                return Err(Error::UnsupportedApi("ListenBucketNotification".into()));
+                return Err(ValidationErr::UnsupportedAwsApi(
+                    "ListenBucketNotification".into(),
+                ));
             }
         }
 

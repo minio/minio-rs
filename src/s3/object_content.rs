@@ -24,7 +24,7 @@ use crate::s3::segmented_bytes::SegmentedBytes;
 #[cfg(test)]
 use quickcheck::Arbitrary;
 
-type IoResult<T> = Result<T, std::io::Error>;
+type IoResult<T> = core::result::Result<T, std::io::Error>;
 
 // region: Size
 
@@ -209,11 +209,9 @@ impl ObjectContent {
         if file_path.is_dir() {
             return Err(std::io::Error::other("path is a directory"));
         }
-        let parent_dir = file_path.parent().ok_or_else(|| {
-            std::io::Error::other(format!(
-                "path {file_path:?} does not have a parent directory"
-            ))
-        })?;
+        let parent_dir = file_path.parent().ok_or(std::io::Error::other(format!(
+            "path {file_path:?} does not have a parent directory"
+        )))?;
         if !parent_dir.is_dir() {
             async_std::fs::create_dir_all(parent_dir).await?;
         }
