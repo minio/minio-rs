@@ -37,18 +37,18 @@ impl CleanupGuard {
 
 pub async fn cleanup(client: Client, bucket_name: &str) {
     tokio::select!(
-                _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
-                    eprintln!("Cleanup timeout after 60s while removing bucket {}", bucket_name);
-                },
-                outcome = client.delete_and_purge_bucket(bucket_name) => {
-                    match outcome {
-                        Ok(_) => {
-                            eprintln!("Bucket {} removed successfully", bucket_name);
-                        }
-                        Err(e) => {
-                            eprintln!("Error removing bucket {}: {:?}", bucket_name, e);
-                        }
-                    }
+        _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
+            eprintln!("Cleanup timeout after 60s while removing bucket {}", bucket_name);
+        },
+        outcome = client.delete_and_purge_bucket(bucket_name) => {
+            match outcome {
+                Ok(_) => {
+                    //eprintln!("Bucket {} removed successfully", bucket_name);
                 }
+                Err(e) => {
+                    eprintln!("Error removing bucket {}: {:?}", bucket_name, e);
+                }
+            }
+        }
     );
 }

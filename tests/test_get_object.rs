@@ -18,16 +18,13 @@ use minio::s3::response::a_response_traits::{HasBucket, HasObject};
 use minio::s3::response::{GetObjectResponse, PutObjectContentResponse};
 use minio::s3::types::S3Api;
 use minio_common::test_context::TestContext;
-use minio_common::utils::rand_object_name;
+use minio_common::utils::rand_object_name_utf8;
 
-#[minio_macros::test]
-async fn get_object(ctx: TestContext, bucket_name: String) {
-    let object_name = rand_object_name();
-
+async fn test_get_object(ctx: &TestContext, bucket_name: &str, object_name: &str) {
     let data: Bytes = Bytes::from("hello, world".to_string().into_bytes());
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &object_name, data.clone())
+        .put_object_content(bucket_name, object_name, data.clone())
         .send()
         .await
         .unwrap();
@@ -37,7 +34,7 @@ async fn get_object(ctx: TestContext, bucket_name: String) {
 
     let resp: GetObjectResponse = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name, object_name)
         .send()
         .await
         .unwrap();
@@ -53,4 +50,16 @@ async fn get_object(ctx: TestContext, bucket_name: String) {
         .unwrap()
         .to_bytes();
     assert_eq!(got, data);
+}
+
+/// Test getting an object with a name that contains utf-8 characters.
+#[minio_macros::test]
+async fn get_object_1(ctx: TestContext, bucket_name: String) {
+    test_get_object(&ctx, &bucket_name, &rand_object_name_utf8(20)).await;
+}
+
+/// Test getting an object with a name that contains white space characters.
+#[minio_macros::test]
+async fn get_object_2(ctx: TestContext, bucket_name: String) {
+    test_get_object(&ctx, &bucket_name, "a b+c").await;
 }

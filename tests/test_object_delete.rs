@@ -23,7 +23,7 @@ use minio::s3::types::{S3Api, ToStream};
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name_utf8;
 
-async fn create_object(
+async fn create_object_helper(
     ctx: &TestContext,
     bucket_name: &str,
     object_name: &str,
@@ -39,14 +39,12 @@ async fn create_object(
     resp
 }
 
-#[minio_macros::test]
-async fn delete_object(ctx: TestContext, bucket_name: String) {
-    let object_name = rand_object_name_utf8(20);
-    let _resp = create_object(&ctx, &bucket_name, &object_name).await;
+async fn test_delete_object(ctx: &TestContext, bucket_name: &str, object_name: &str) {
+    let _resp = create_object_helper(ctx, bucket_name, object_name).await;
 
     let resp: DeleteObjectResponse = ctx
         .client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name)
         .send()
         .await
         .unwrap();
@@ -54,19 +52,16 @@ async fn delete_object(ctx: TestContext, bucket_name: String) {
     assert_eq!(resp.bucket(), bucket_name);
 }
 
+/// Test deleting an object with a name that contains utf-8 characters.
 #[minio_macros::test]
-async fn delete_object_with_whitespace(ctx: TestContext, bucket_name: String) {
-    let object_name = format!(" {}", rand_object_name_utf8(20));
-    let _resp = create_object(&ctx, &bucket_name, &object_name).await;
+async fn delete_object_1(ctx: TestContext, bucket_name: String) {
+    test_delete_object(&ctx, &bucket_name, &rand_object_name_utf8(20)).await;
+}
 
-    let resp: DeleteObjectResponse = ctx
-        .client
-        .delete_object(&bucket_name, &object_name)
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(resp.bucket(), bucket_name);
+/// Test deleting an object with a name that contains white space characters.
+#[minio_macros::test]
+async fn delete_object_2(ctx: TestContext, bucket_name: String) {
+    test_delete_object(&ctx, &bucket_name, "a b+c").await;
 }
 
 #[minio_macros::test]
@@ -75,7 +70,7 @@ async fn delete_objects(ctx: TestContext, bucket_name: String) {
     let mut names: Vec<String> = Vec::new();
     for _ in 1..=OBJECT_COUNT {
         let object_name = rand_object_name_utf8(20);
-        let _resp = create_object(&ctx, &bucket_name, &object_name).await;
+        let _resp = create_object_helper(&ctx, &bucket_name, &object_name).await;
         names.push(object_name);
     }
     let del_items: Vec<ObjectToDelete> = names
@@ -104,7 +99,7 @@ async fn delete_objects_streaming(ctx: TestContext, bucket_name: String) {
     let mut names: Vec<String> = Vec::new();
     for _ in 1..=OBJECT_COUNT {
         let object_name = rand_object_name_utf8(20);
-        let _resp = create_object(&ctx, &bucket_name, &object_name).await;
+        let _resp = create_object_helper(&ctx, &bucket_name, &object_name).await;
         names.push(object_name);
     }
     let del_items: Vec<ObjectToDelete> = names
@@ -129,5 +124,5 @@ async fn delete_objects_streaming(ctx: TestContext, bucket_name: String) {
             assert!(obj.is_deleted());
         }
     }
-    assert_eq!(del_count, 3);
+    assert_eq!(del_count, OBJECT_COUNT);
 }

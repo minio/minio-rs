@@ -26,7 +26,7 @@ use crate::s3::response::{
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{Directive, PartInfo, Retention, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{
-    UtcTime, check_bucket_name, check_object_name, to_http_header_value, to_iso8601utc, urlencode,
+    UtcTime, check_bucket_name, check_object_name, to_http_header_value, to_iso8601utc, url_encode,
 };
 use async_recursion::async_recursion;
 use http::Method;
@@ -254,9 +254,9 @@ impl ToS3Request for CopyObjectInternal {
                     if !tagging.is_empty() {
                         tagging.push('&');
                     }
-                    tagging.push_str(&urlencode(key));
+                    tagging.push_str(&url_encode(key));
                     tagging.push('=');
-                    tagging.push_str(&urlencode(value));
+                    tagging.push_str(&url_encode(value));
                 }
                 if !tagging.is_empty() {
                     headers.add("x-amz-tagging", tagging);
@@ -285,7 +285,7 @@ impl ToS3Request for CopyObjectInternal {
             copy_source.push_str(&self.source.object);
             if let Some(v) = &self.source.version_id {
                 copy_source.push_str("?versionId=");
-                copy_source.push_str(&urlencode(v));
+                copy_source.push_str(&url_encode(v));
             }
             headers.add("x-amz-copy-source", copy_source);
 
@@ -1032,7 +1032,7 @@ impl ComposeSource {
         copy_source.push_str(&self.object);
         if let Some(v) = &self.version_id {
             copy_source.push_str("?versionId=");
-            copy_source.push_str(&urlencode(v));
+            copy_source.push_str(&url_encode(v));
         }
         headers.add("x-amz-copy-source", copy_source);
 
@@ -1155,9 +1155,9 @@ fn into_headers_copy_object(
             if !tagging.is_empty() {
                 tagging.push('&');
             }
-            tagging.push_str(&urlencode(key));
+            tagging.push_str(&url_encode(key));
             tagging.push('=');
-            tagging.push_str(&urlencode(value));
+            tagging.push_str(&url_encode(value));
         }
 
         if !tagging.is_empty() {

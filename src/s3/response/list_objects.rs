@@ -15,26 +15,26 @@ use crate::s3::error::Error;
 use crate::s3::response::a_response_traits::HasS3Fields;
 use crate::s3::types::{FromS3Response, ListEntry, S3Request};
 use crate::s3::utils::xml::{Element, MergeXmlElements};
-use crate::s3::utils::{from_iso8601utc, parse_tags, urldecode};
+use crate::s3::utils::{from_iso8601utc, parse_tags, url_decode};
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
 use reqwest::header::HeaderMap;
 use std::collections::HashMap;
 use std::mem;
 
-fn url_decode(
+fn url_decode_w_enc(
     encoding_type: &Option<String>,
-    prefix: Option<String>,
+    s: Option<String>,
 ) -> Result<Option<String>, Error> {
     if let Some(v) = encoding_type.as_ref() {
         if v == "url" {
-            if let Some(v) = prefix {
-                return Ok(Some(urldecode(&v)?.to_string()));
+            if let Some(raw) = s {
+                return Ok(Some(url_decode(&raw).to_string()));
             }
         }
     }
 
-    if let Some(v) = prefix.as_ref() {
+    if let Some(v) = s.as_ref() {
         return Ok(Some(v.to_string()));
     }
 
@@ -56,7 +56,7 @@ fn parse_common_list_objects_response(
     Error,
 > {
     let encoding_type = root.get_child_text("EncodingType");
-    let prefix = url_decode(
+    let prefix = url_decode_w_enc(
         &encoding_type,
         Some(root.get_child_text("Prefix").unwrap_or_default()),
     )?;
@@ -90,7 +90,7 @@ fn parse_list_objects_contents(
     let merged = MergeXmlElements::new(&children1, &children2);
     for content in merged {
         let etype = encoding_type.as_ref().cloned();
-        let key = url_decode(&etype, Some(content.get_child_text_or_error("Key")?))?.unwrap();
+        let key = url_decode_w_enc(&etype, Some(content.get_child_text_or_error("Key")?))?.unwrap();
         let last_modified = Some(from_iso8601utc(
             &content.get_child_text_or_error("LastModified")?,
         )?);
@@ -156,7 +156,7 @@ fn parse_list_objects_common_prefixes(
 ) -> Result<(), Error> {
     for (_, common_prefix) in root.get_matching_children("CommonPrefixes") {
         contents.push(ListEntry {
-            name: url_decode(
+            name: url_decode_w_enc(
                 encoding_type,
                 Some(common_prefix.get_child_text_or_error("Prefix")?),
             )?
@@ -214,8 +214,8 @@ impl FromS3Response for ListObjectsV1Response {
         let root = Element::from(&xmltree_root);
         let (name, encoding_type, prefix, delimiter, is_truncated, max_keys) =
             parse_common_list_objects_response(&root)?;
-        let marker = url_decode(&encoding_type, root.get_child_text("Marker"))?;
-        let mut next_marker = url_decode(&encoding_type, root.get_child_text("NextMarker"))?;
+        let marker = url_decode_w_enc(&encoding_type, root.get_child_text("Marker"))?;
+        let mut next_marker = url_decode_w_enc(&encoding_type, root.get_child_text("NextMarker"))?;
         let mut contents: Vec<ListEntry> = Vec::new();
         parse_list_objects_contents(&mut contents, &root, "Contents", &encoding_type, false)?;
         if is_truncated && next_marker.is_none() {
@@ -281,7 +281,7 @@ impl FromS3Response for ListObjectsV2Response {
             .get_child_text("KeyCount")
             .map(|x| x.parse::<u16>())
             .transpose()?;
-        let start_after = url_decode(&encoding_type, root.get_child_text("StartAfter"))?;
+        let start_after = url_decode_w_enc(&encoding_type, root.get_child_text("StartAfter"))?;
         let continuation_token = root.get_child_text("ContinuationToken");
         let next_continuation_token = root.get_child_text("NextContinuationToken");
         let mut contents: Vec<ListEntry> = Vec::new();
@@ -344,8 +344,9 @@ impl FromS3Response for ListObjectVersionsResponse {
         let root = Element::from(&xmltree_root);
         let (name, encoding_type, prefix, delimiter, is_truncated, max_keys) =
             parse_common_list_objects_response(&root)?;
-        let key_marker = url_decode(&encoding_type, root.get_child_text("KeyMarker"))?;
-        let next_key_marker = url_decode(&encoding_type, root.get_child_text("NextKeyMarker"))?;
+        let key_marker = url_decode_w_enc(&encoding_type, root.get_child_text("KeyMarker"))?;
+        let next_key_marker =
+            url_decode_w_enc(&encoding_type, root.get_child_text("NextKeyMarker"))?;
         let version_id_marker = root.get_child_text("VersionIdMarker");
         let next_version_id_marker = root.get_child_text("NextVersionIdMarker");
         let mut contents: Vec<ListEntry> = Vec::new();
