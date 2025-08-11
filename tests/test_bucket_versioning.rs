@@ -77,7 +77,7 @@ async fn bucket_versioning_s3express(ctx: TestContext, bucket_name: String) {
         Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::NotSupported)
         }
-        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+        v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 
     let resp: Result<GetBucketVersioningResponse, Error> =
@@ -86,6 +86,6 @@ async fn bucket_versioning_s3express(ctx: TestContext, bucket_name: String) {
         Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::NotSupported)
         }
-        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+        v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 }

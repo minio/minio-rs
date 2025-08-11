@@ -78,9 +78,6 @@ async fn bucket_lifecycle(ctx: TestContext, bucket_name: String) {
         Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::NoSuchLifecycleConfiguration)
         }
-        v => panic!(
-            "Expected error S3Error(NoSuchLifecycleConfiguration): but got {:?}",
-            v
-        ),
+        v => panic!("Expected error S3Error(NoSuchLifecycleConfiguration): but got {v:?}"),
     }
 }

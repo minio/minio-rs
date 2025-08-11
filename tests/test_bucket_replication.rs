@@ -118,7 +118,7 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
             .send()
             .await
             .unwrap();
-        println!("response of deleting replication: resp={:?}", resp);
+        println!("response of deleting replication: resp={resp:?}");
     }
     let _resp: GetBucketVersioningResponse = ctx
         .client
@@ -144,7 +144,7 @@ async fn bucket_replication_s3express(ctx: TestContext, bucket_name: String) {
         Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::NotSupported)
         }
-        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+        v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 
     let resp: Result<GetBucketReplicationResponse, Error> =
@@ -153,7 +153,7 @@ async fn bucket_replication_s3express(ctx: TestContext, bucket_name: String) {
         Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::NotSupported)
         }
-        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+        v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 
     let resp: Result<DeleteBucketReplicationResponse, Error> = ctx
@@ -165,6 +165,6 @@ async fn bucket_replication_s3express(ctx: TestContext, bucket_name: String) {
         Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::NotSupported)
         }
-        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+        v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 }

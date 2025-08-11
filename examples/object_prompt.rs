@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     //Note: object prompt is not supported on play.min.io, you will need point to AIStor
     let base_url = "http://localhost:9000".parse::<BaseUrl>()?;
-    log::info!("Trying to connect to MinIO at: `{:?}`", base_url);
+    log::info!("Trying to connect to MinIO at: `{base_url:?}`");
 
     let static_provider = StaticProvider::new("admin", "admin", None);
 

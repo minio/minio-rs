@@ -49,7 +49,7 @@ async fn bucket_create(ctx: TestContext) {
         {
             // this is expected, as the bucket already exists
         }
-        Err(e) => panic!("Unexpected error: {:?}", e),
+        Err(e) => panic!("Unexpected error: {e:?}"),
     }
 }
 
@@ -67,7 +67,7 @@ async fn bucket_delete(ctx: TestContext) {
         {
             // this is expected, as the bucket does not exist
         }
-        Err(e) => panic!("Unexpected error: {:?}", e),
+        Err(e) => panic!("Unexpected error: {e:?}"),
     }
 
     // create a new bucket

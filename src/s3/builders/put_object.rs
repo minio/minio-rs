@@ -534,7 +534,7 @@ impl ToS3Request for PutObject {
 
 // region: put-object-content
 
-/// PutObjectContent takes a `ObjectContent` stream and uploads it to MinIO/S3.
+/// PutObjectContent takes an `ObjectContent` stream and uploads it to MinIO/S3.
 ///
 /// It is a higher level API and handles multipart uploads transparently.
 #[derive(Default)]
@@ -768,7 +768,7 @@ impl PutObjectContent {
             assert!(buffer_size <= part_size, "{buffer_size} <= {part_size}",);
 
             if (buffer_size == 0) && (part_number > 1) {
-                // We are done as we uploaded at least 1 part and we have reached the end of the stream.
+                // We are done as we uploaded at least 1 part, and we have reached the end of the stream.
                 break;
             }
 
@@ -812,7 +812,7 @@ impl PutObjectContent {
                 size: buffer_size,
             });
 
-            // Finally check if we are done.
+            // Finally, check if we are done.
             if buffer_size < part_size {
                 done = true;
             }
@@ -955,7 +955,7 @@ pub fn calc_part_info(
     }
 
     match (object_size, part_size) {
-        // If object size is unknown, part size must be provided.
+        // If the object size is unknown, the part size must be provided.
         (Size::Unknown, Size::Unknown) => Err(ValidationErr::MissingPartSize),
 
         // If object size is unknown, and part size is known, the number of
@@ -965,8 +965,7 @@ pub fn calc_part_info(
         // If object size is known, and part size is unknown, calculate part
         // size.
         (Size::Known(object_size), Size::Unknown) => {
-            // 1. Calculate the minimum part size (i.e. assuming part count is
-            // maximum).
+            // 1. Calculate the minimum part size (i.e., assuming part count is the maximum).
             let mut psize: u64 = (object_size as f64 / MAX_MULTIPART_COUNT as f64).ceil() as u64;
 
             // 2. Round up to the nearest multiple of MIN_PART_SIZE.
@@ -1024,14 +1023,14 @@ mod tests {
                     }
                 }
             }
-            if let Size::Known(v) = object_size {
-                if v > MAX_OBJECT_SIZE {
+            if let Size::Known(v) = object_size
+                && v > MAX_OBJECT_SIZE {
                     return match res {
                         Err(ValidationErr::InvalidObjectSize(v_err)) => v == v_err,
                         _ => false,
                     }
                 }
-            }
+
 
             // Validate the calculation of part size and part count.
             match (object_size, part_size, res) {

@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // TODO
         let resp: GetBucketLifecycleResponse =
             client.get_bucket_lifecycle(bucket_name).send().await?;
-        log::info!("life cycle settings before setting: resp={:?}", resp);
+        log::info!("life cycle settings before setting: resp={resp:?}");
     }
 
     let rules: Vec<LifecycleRule> = vec![LifecycleRule {
@@ -54,20 +54,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .life_cycle_config(LifecycleConfig { rules })
         .send()
         .await?;
-    log::info!("response of setting life cycle config: resp={:?}", resp);
+    log::info!("response of setting life cycle config: resp={resp:?}");
 
     if false {
         // TODO
         let resp: GetBucketLifecycleResponse =
             client.get_bucket_lifecycle(bucket_name).send().await?;
-        log::info!("life cycle settings after setting: resp={:?}", resp);
+        log::info!("life cycle settings after setting: resp={resp:?}");
     }
 
     if false {
         // TODO
         let resp: DeleteBucketLifecycleResponse =
             client.delete_bucket_lifecycle(bucket_name).send().await?;
-        log::info!("response of deleting lifecycle config: resp={:?}", resp);
+        log::info!("response of deleting lifecycle config: resp={resp:?}");
     }
     Ok(())
 }

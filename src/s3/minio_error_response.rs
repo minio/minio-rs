@@ -211,8 +211,7 @@ mod test_error_code {
             let code_obs: MinioErrorCode = str.parse().unwrap();
             assert_eq!(
                 code_obs, *code,
-                "Failed MinioErrorCode round-trip: code {} -> str '{}' -> code {}",
-                code, str, code_obs
+                "Failed MinioErrorCode round-trip: code {code} -> str '{str}' -> code {code_obs}"
             );
         }
     }
