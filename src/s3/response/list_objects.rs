@@ -26,12 +26,11 @@ fn url_decode_w_enc(
     encoding_type: &Option<String>,
     s: Option<String>,
 ) -> Result<Option<String>, ValidationErr> {
-    if let Some(v) = encoding_type.as_ref() {
-        if v == "url" {
-            if let Some(raw) = s {
-                return Ok(Some(url_decode(&raw).to_string()));
-            }
-        }
+    if let Some(v) = encoding_type.as_ref()
+        && v == "url"
+        && let Some(raw) = s
+    {
+        return Ok(Some(url_decode(&raw).to_string()));
     }
 
     if let Some(v) = s.as_ref() {

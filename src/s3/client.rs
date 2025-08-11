@@ -540,12 +540,11 @@ impl Client {
         )?;
 
         // If the error is a NoSuchBucket or RetryHead, remove the bucket from the region map.
-        if matches!(e.code(), MinioErrorCode::NoSuchBucket)
-            || matches!(e.code(), MinioErrorCode::RetryHead)
+        if (matches!(e.code(), MinioErrorCode::NoSuchBucket)
+            || matches!(e.code(), MinioErrorCode::RetryHead))
+            && let Some(v) = bucket_name
         {
-            if let Some(v) = bucket_name {
-                self.shared.region_map.remove(v);
-            }
+            self.shared.region_map.remove(v);
         };
 
         Err(Error::S3Server(S3ServerError::S3Error(Box::new(e))))
@@ -637,13 +636,14 @@ impl SharedClientItems {
             message.push_str(region);
         }
 
-        if retry && !region.is_empty() && (method == Method::HEAD) {
-            if let Some(v) = bucket_name {
-                if self.region_map.contains_key(v) {
-                    code = MinioErrorCode::RetryHead;
-                    message = String::new();
-                }
-            }
+        if retry
+            && !region.is_empty()
+            && (method == Method::HEAD)
+            && let Some(v) = bucket_name
+            && self.region_map.contains_key(v)
+        {
+            code = MinioErrorCode::RetryHead;
+            message = String::new();
         }
 
         Ok((code, message))

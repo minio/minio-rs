@@ -105,17 +105,15 @@ impl LifecycleConfig {
                     data.push_str(&days.to_string());
                     data.push_str("</Days>");
                 }
-                if let Some(delete_marker) = rule.expiration_expired_object_delete_marker {
-                    if delete_marker {
-                        data.push_str(
-                            "<ExpiredObjectDeleteMarker>true</ExpiredObjectDeleteMarker>",
-                        );
-                    }
+                if let Some(delete_marker) = rule.expiration_expired_object_delete_marker
+                    && delete_marker
+                {
+                    data.push_str("<ExpiredObjectDeleteMarker>true</ExpiredObjectDeleteMarker>");
                 }
-                if let Some(delete_all) = rule.expiration_expired_object_all_versions {
-                    if delete_all {
-                        data.push_str("<ExpiredObjectAllVersions>true</ExpiredObjectAllVersions>");
-                    }
+                if let Some(delete_all) = rule.expiration_expired_object_all_versions
+                    && delete_all
+                {
+                    data.push_str("<ExpiredObjectAllVersions>true</ExpiredObjectAllVersions>");
                 }
                 data.push_str("</Expiration>");
             }
@@ -133,10 +131,10 @@ impl LifecycleConfig {
                 data.push_str(&days.to_string());
                 data.push_str("</Days>");
 
-                if let Some(delete_marker) = rule.all_versions_expiration_delete_marker {
-                    if delete_marker {
-                        data.push_str("<DeleteMarker>true</DeleteMarker>");
-                    }
+                if let Some(delete_marker) = rule.all_versions_expiration_delete_marker
+                    && delete_marker
+                {
+                    data.push_str("<DeleteMarker>true</DeleteMarker>");
                 }
 
                 data.push_str("</AllVersionsExpiration>");
@@ -267,10 +265,10 @@ impl LifecycleRule {
         let mut rule = LifecycleRule::default();
 
         // Parse ID
-        if let Some(id_elem) = rule_elem.get_child("ID") {
-            if let Some(id_text) = id_elem.get_text() {
-                rule.id = id_text.to_string();
-            }
+        if let Some(id_elem) = rule_elem.get_child("ID")
+            && let Some(id_text) = id_elem.get_text()
+        {
+            rule.id = id_text.to_string();
         }
 
         // Parse Status
@@ -288,175 +286,163 @@ impl LifecycleRule {
         }
 
         // Parse AbortIncompleteMultipartUpload
-        if let Some(abort_elem) = rule_elem.get_child("AbortIncompleteMultipartUpload") {
-            if let Some(days_elem) = abort_elem.get_child("DaysAfterInitiation") {
-                if let Some(days_text) = days_elem.get_text() {
-                    rule.abort_incomplete_multipart_upload_days_after_initiation =
-                        Some(days_text.parse().map_err(|e| {
-                            ValidationErr::xml_error_with_source(
-                                "Invalid DaysAfterInitiation value",
-                                e,
-                            )
-                        })?)
-                };
-            }
-        }
+        if let Some(abort_elem) = rule_elem.get_child("AbortIncompleteMultipartUpload")
+            && let Some(days_elem) = abort_elem.get_child("DaysAfterInitiation")
+            && let Some(days_text) = days_elem.get_text()
+        {
+            rule.abort_incomplete_multipart_upload_days_after_initiation =
+                Some(days_text.parse().map_err(|e| {
+                    ValidationErr::xml_error_with_source("Invalid DaysAfterInitiation value", e)
+                })?)
+        };
 
         // Parse Expiration
         if let Some(expiration_elem) = rule_elem.get_child("Expiration") {
             // Date
-            if let Some(date_elem) = expiration_elem.get_child("Date") {
-                if let Some(date_text) = date_elem.get_text() {
-                    // Assume a function that parses ISO8601 to DateTime<Utc>
-                    rule.expiration_date = Some(parse_iso8601(&date_text)?);
-                }
+            if let Some(date_elem) = expiration_elem.get_child("Date")
+                && let Some(date_text) = date_elem.get_text()
+            {
+                // Assume a function that parses ISO8601 to DateTime<Utc>
+                rule.expiration_date = Some(parse_iso8601(&date_text)?);
             }
 
             // Days
-            if let Some(days_elem) = expiration_elem.get_child("Days") {
-                if let Some(days_text) = days_elem.get_text() {
-                    rule.expiration_days = Some(days_text.parse().map_err(|e| {
-                        ValidationErr::xml_error_with_source("Invalid Expiration Days value", e)
-                    })?);
-                }
+            if let Some(days_elem) = expiration_elem.get_child("Days")
+                && let Some(days_text) = days_elem.get_text()
+            {
+                rule.expiration_days = Some(days_text.parse().map_err(|e| {
+                    ValidationErr::xml_error_with_source("Invalid Expiration Days value", e)
+                })?);
             }
 
             // ExpiredObjectDeleteMarker
             if let Some(delete_marker_elem) = expiration_elem.get_child("ExpiredObjectDeleteMarker")
+                && let Some(delete_marker_text) = delete_marker_elem.get_text()
             {
-                if let Some(delete_marker_text) = delete_marker_elem.get_text() {
-                    rule.expiration_expired_object_delete_marker =
-                        Some(delete_marker_text == "true");
-                }
+                rule.expiration_expired_object_delete_marker = Some(delete_marker_text == "true");
             }
 
             // ExpiredObjectAllVersions
-            if let Some(all_versions_elem) = expiration_elem.get_child("ExpiredObjectAllVersions") {
-                if let Some(all_versions_text) = all_versions_elem.get_text() {
-                    rule.expiration_expired_object_all_versions = Some(all_versions_text == "true");
-                }
+            if let Some(all_versions_elem) = expiration_elem.get_child("ExpiredObjectAllVersions")
+                && let Some(all_versions_text) = all_versions_elem.get_text()
+            {
+                rule.expiration_expired_object_all_versions = Some(all_versions_text == "true");
             }
         }
 
         // Parse DelMarkerExpiration
-        if let Some(del_marker_elem) = rule_elem.get_child("DelMarkerExpiration") {
-            if let Some(days_elem) = del_marker_elem.get_child("Days") {
-                if let Some(days_text) = days_elem.get_text() {
-                    rule.del_marker_expiration_days = Some(days_text.parse().map_err(|e| {
-                        ValidationErr::xml_error_with_source(
-                            "Invalid DelMarkerExpiration Days value",
-                            e,
-                        )
-                    })?);
-                }
-            }
+        if let Some(del_marker_elem) = rule_elem.get_child("DelMarkerExpiration")
+            && let Some(days_elem) = del_marker_elem.get_child("Days")
+            && let Some(days_text) = days_elem.get_text()
+        {
+            rule.del_marker_expiration_days = Some(days_text.parse().map_err(|e| {
+                ValidationErr::xml_error_with_source("Invalid DelMarkerExpiration Days value", e)
+            })?);
         }
 
         // Parse AllVersionsExpiration
         if let Some(all_versions_elem) = rule_elem.get_child("AllVersionsExpiration") {
-            if let Some(days_elem) = all_versions_elem.get_child("Days") {
-                if let Some(days_text) = days_elem.get_text() {
-                    rule.all_versions_expiration_days = Some(days_text.parse().map_err(|e| {
-                        ValidationErr::xml_error_with_source(
-                            "Invalid AllVersionsExpiration Days value",
-                            e,
-                        )
-                    })?);
-                }
+            if let Some(days_elem) = all_versions_elem.get_child("Days")
+                && let Some(days_text) = days_elem.get_text()
+            {
+                rule.all_versions_expiration_days = Some(days_text.parse().map_err(|e| {
+                    ValidationErr::xml_error_with_source(
+                        "Invalid AllVersionsExpiration Days value",
+                        e,
+                    )
+                })?);
             }
 
-            if let Some(delete_marker_elem) = all_versions_elem.get_child("DeleteMarker") {
-                if let Some(delete_marker_text) = delete_marker_elem.get_text() {
-                    rule.all_versions_expiration_delete_marker = Some(delete_marker_text == "true");
-                }
+            if let Some(delete_marker_elem) = all_versions_elem.get_child("DeleteMarker")
+                && let Some(delete_marker_text) = delete_marker_elem.get_text()
+            {
+                rule.all_versions_expiration_delete_marker = Some(delete_marker_text == "true");
             }
         }
 
         // Parse NoncurrentVersionExpiration
         if let Some(noncurrent_exp_elem) = rule_elem.get_child("NoncurrentVersionExpiration") {
-            if let Some(days_elem) = noncurrent_exp_elem.get_child("NoncurrentDays") {
-                if let Some(days_text) = days_elem.get_text() {
-                    rule.noncurrent_version_expiration_noncurrent_days =
-                        Some(days_text.parse().map_err(|e| {
-                            ValidationErr::xml_error_with_source(
-                                "Invalid NoncurrentVersionExpiration NoncurrentDays value",
-                                e,
-                            )
-                        })?);
-                }
+            if let Some(days_elem) = noncurrent_exp_elem.get_child("NoncurrentDays")
+                && let Some(days_text) = days_elem.get_text()
+            {
+                rule.noncurrent_version_expiration_noncurrent_days =
+                    Some(days_text.parse().map_err(|e| {
+                        ValidationErr::xml_error_with_source(
+                            "Invalid NoncurrentVersionExpiration NoncurrentDays value",
+                            e,
+                        )
+                    })?);
             }
 
-            if let Some(versions_elem) = noncurrent_exp_elem.get_child("NewerNoncurrentVersions") {
-                if let Some(versions_text) = versions_elem.get_text() {
-                    rule.noncurrent_version_expiration_newer_versions =
-                        Some(versions_text.parse().map_err(|e| {
-                            ValidationErr::xml_error_with_source(
-                                "Invalid NewerNoncurrentVersions value",
-                                e,
-                            )
-                        })?);
-                }
+            if let Some(versions_elem) = noncurrent_exp_elem.get_child("NewerNoncurrentVersions")
+                && let Some(versions_text) = versions_elem.get_text()
+            {
+                rule.noncurrent_version_expiration_newer_versions =
+                    Some(versions_text.parse().map_err(|e| {
+                        ValidationErr::xml_error_with_source(
+                            "Invalid NewerNoncurrentVersions value",
+                            e,
+                        )
+                    })?);
             }
         }
 
         // Parse NoncurrentVersionTransition
         if let Some(noncurrent_trans_elem) = rule_elem.get_child("NoncurrentVersionTransition") {
-            if let Some(days_elem) = noncurrent_trans_elem.get_child("NoncurrentDays") {
-                if let Some(days_text) = days_elem.get_text() {
-                    rule.noncurrent_version_transition_noncurrent_days =
-                        Some(days_text.parse().map_err(|e| {
-                            ValidationErr::xml_error_with_source(
-                                "Invalid NoncurrentVersionTransition NoncurrentDays value",
-                                e,
-                            )
-                        })?);
-                }
+            if let Some(days_elem) = noncurrent_trans_elem.get_child("NoncurrentDays")
+                && let Some(days_text) = days_elem.get_text()
+            {
+                rule.noncurrent_version_transition_noncurrent_days =
+                    Some(days_text.parse().map_err(|e| {
+                        ValidationErr::xml_error_with_source(
+                            "Invalid NoncurrentVersionTransition NoncurrentDays value",
+                            e,
+                        )
+                    })?);
             }
 
-            if let Some(storage_elem) = noncurrent_trans_elem.get_child("StorageClass") {
-                if let Some(storage_text) = storage_elem.get_text() {
-                    rule.noncurrent_version_transition_storage_class =
-                        Some(storage_text.to_string());
-                }
+            if let Some(storage_elem) = noncurrent_trans_elem.get_child("StorageClass")
+                && let Some(storage_text) = storage_elem.get_text()
+            {
+                rule.noncurrent_version_transition_storage_class = Some(storage_text.to_string());
             }
 
             if let Some(versions_elem) = noncurrent_trans_elem.get_child("NewerNoncurrentVersions")
+                && let Some(versions_text) = versions_elem.get_text()
             {
-                if let Some(versions_text) = versions_elem.get_text() {
-                    rule.noncurrent_version_transition_newer_versions =
-                        Some(versions_text.parse().map_err(|e| {
-                            ValidationErr::xml_error_with_source(
-                                "Invalid NewerNoncurrentVersions value",
-                                e,
-                            )
-                        })?);
-                }
+                rule.noncurrent_version_transition_newer_versions =
+                    Some(versions_text.parse().map_err(|e| {
+                        ValidationErr::xml_error_with_source(
+                            "Invalid NewerNoncurrentVersions value",
+                            e,
+                        )
+                    })?);
             }
         }
 
         // Parse Transition
         if let Some(transition_elem) = rule_elem.get_child("Transition") {
             // Date
-            if let Some(date_elem) = transition_elem.get_child("Date") {
-                if let Some(date_text) = date_elem.get_text() {
-                    rule.transition_date = Some(parse_iso8601(&date_text)?);
-                }
+            if let Some(date_elem) = transition_elem.get_child("Date")
+                && let Some(date_text) = date_elem.get_text()
+            {
+                rule.transition_date = Some(parse_iso8601(&date_text)?);
             }
 
             // Days
-            if let Some(days_elem) = transition_elem.get_child("Days") {
-                if let Some(days_text) = days_elem.get_text() {
-                    rule.transition_days = Some(days_text.parse().map_err(|e| {
-                        ValidationErr::xml_error_with_source("Invalid Transition Days value", e)
-                    })?);
-                }
+            if let Some(days_elem) = transition_elem.get_child("Days")
+                && let Some(days_text) = days_elem.get_text()
+            {
+                rule.transition_days = Some(days_text.parse().map_err(|e| {
+                    ValidationErr::xml_error_with_source("Invalid Transition Days value", e)
+                })?);
             }
 
             // StorageClass
-            if let Some(storage_elem) = transition_elem.get_child("StorageClass") {
-                if let Some(storage_text) = storage_elem.get_text() {
-                    rule.transition_storage_class = Some(storage_text.to_string());
-                }
+            if let Some(storage_elem) = transition_elem.get_child("StorageClass")
+                && let Some(storage_text) = storage_elem.get_text()
+            {
+                rule.transition_storage_class = Some(storage_text.to_string());
             }
         }
 
@@ -472,20 +458,20 @@ impl LifecycleRule {
         }
 
         // Validate storage classes in transitions
-        if let Some(storage_class) = &self.transition_storage_class {
-            if storage_class.is_empty() {
-                return Err(ValidationErr::xml_error(
-                    "Transition StorageClass cannot be empty",
-                ));
-            }
+        if let Some(storage_class) = &self.transition_storage_class
+            && storage_class.is_empty()
+        {
+            return Err(ValidationErr::xml_error(
+                "Transition StorageClass cannot be empty",
+            ));
         }
 
-        if let Some(storage_class) = &self.noncurrent_version_transition_storage_class {
-            if storage_class.is_empty() {
-                return Err(ValidationErr::xml_error(
-                    "NoncurrentVersionTransition StorageClass cannot be empty",
-                ));
-            }
+        if let Some(storage_class) = &self.noncurrent_version_transition_storage_class
+            && storage_class.is_empty()
+        {
+            return Err(ValidationErr::xml_error(
+                "NoncurrentVersionTransition StorageClass cannot be empty",
+            ));
         }
 
         // Check that expiration has either days or date, not both

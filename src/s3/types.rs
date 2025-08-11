@@ -672,17 +672,17 @@ impl SelectRequest {
             data.push_str("<RequestProgress><Enabled>true</Enabled></RequestProgress>");
         }
 
-        if let Some(s) = self.scan_start_range {
-            if let Some(e) = self.scan_end_range {
-                data.push_str("<ScanRange>");
-                data.push_str("<Start>");
-                data.push_str(&s.to_string());
-                data.push_str("</Start>");
-                data.push_str("<End>");
-                data.push_str(&e.to_string());
-                data.push_str("</End>");
-                data.push_str("</ScanRange>");
-            }
+        if let Some(s) = self.scan_start_range
+            && let Some(e) = self.scan_end_range
+        {
+            data.push_str("<ScanRange>");
+            data.push_str("<Start>");
+            data.push_str(&s.to_string());
+            data.push_str("</Start>");
+            data.push_str("<End>");
+            data.push_str(&e.to_string());
+            data.push_str("</End>");
+            data.push_str("</ScanRange>");
         }
 
         data.push_str("</SelectObjectContentRequest>");

@@ -357,10 +357,11 @@ pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), ValidationE
 
 /// Validates SSE (Server-Side Encryption) settings.
 pub fn check_sse(sse: &Option<Arc<dyn Sse>>, client: &Client) -> Result<(), ValidationErr> {
-    if let Some(v) = &sse {
-        if v.tls_required() && !client.is_secure() {
-            return Err(ValidationErr::SseTlsRequired(None));
-        }
+    if let Some(v) = &sse
+        && v.tls_required()
+        && !client.is_secure()
+    {
+        return Err(ValidationErr::SseTlsRequired(None));
     }
     Ok(())
 }

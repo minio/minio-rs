@@ -414,19 +414,19 @@ impl ToS3Request for UploadPart {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
 
-            if let Some(upload_id) = &self.upload_id {
-                if upload_id.is_empty() {
-                    return Err(ValidationErr::InvalidUploadId(
-                        "upload ID cannot be empty".into(),
-                    ));
-                }
+            if let Some(upload_id) = &self.upload_id
+                && upload_id.is_empty()
+            {
+                return Err(ValidationErr::InvalidUploadId(
+                    "upload ID cannot be empty".into(),
+                ));
             }
-            if let Some(part_number) = self.part_number {
-                if !(1..=MAX_MULTIPART_COUNT).contains(&part_number) {
-                    return Err(ValidationErr::InvalidPartNumber(format!(
-                        "part number must be between 1 and {MAX_MULTIPART_COUNT}"
-                    )));
-                }
+            if let Some(part_number) = self.part_number
+                && !(1..=MAX_MULTIPART_COUNT).contains(&part_number)
+            {
+                return Err(ValidationErr::InvalidPartNumber(format!(
+                    "part number must be between 1 and {MAX_MULTIPART_COUNT}"
+                )));
             }
         }
 
@@ -948,10 +948,10 @@ pub fn calc_part_info(
         }
     }
 
-    if let Size::Known(v) = object_size {
-        if v > MAX_OBJECT_SIZE {
-            return Err(ValidationErr::InvalidObjectSize(v));
-        }
+    if let Size::Known(v) = object_size
+        && v > MAX_OBJECT_SIZE
+    {
+        return Err(ValidationErr::InvalidObjectSize(v));
     }
 
     match (object_size, part_size) {

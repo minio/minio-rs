@@ -969,16 +969,16 @@ impl ComposeSource {
     }
 
     pub fn build_headers(&mut self, object_size: u64, etag: String) -> Result<(), ValidationErr> {
-        if let Some(v) = self.offset {
-            if v >= object_size {
-                return Err(ValidationErr::InvalidComposeSourceOffset {
-                    bucket: self.bucket.to_string(),
-                    object: self.object.to_string(),
-                    version: self.version_id.clone(),
-                    offset: v,
-                    object_size,
-                });
-            }
+        if let Some(v) = self.offset
+            && v >= object_size
+        {
+            return Err(ValidationErr::InvalidComposeSourceOffset {
+                bucket: self.bucket.to_string(),
+                object: self.object.to_string(),
+                version: self.version_id.clone(),
+                offset: v,
+                object_size,
+            });
         }
 
         if let Some(v) = self.length {
