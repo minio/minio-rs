@@ -33,7 +33,6 @@ bytes = "1.10.1"
 chrono = "0.4.41"
 crc = "3.3.0"
 dashmap = "6.1.0"
-derivative = "2.2.0"
 env_logger = "0.11.8"
 futures-util = "0.3.31"
 hex = "0.4.3"
@@ -58,13 +57,13 @@ http = "1.3.1"
 thiserror = "2.0.12"
 
 [dev-dependencies]
+minio-common = { path = "./common" }
+minio-macros = { path = "./macros" }
 tokio = { version = "1.47.1", features = ["full"] }
-minio_common = { path = "./common" }
 async-std = { version = "1.13.1", features = ["attributes", "tokio1"] }
 clap = { version = "4.5.44", features = ["derive"] }
 quickcheck = "1.0.3"
 criterion = "0.7.0"
-minio-macros = { path = "./macros" }
 
 [lib]
 name = "minio"
