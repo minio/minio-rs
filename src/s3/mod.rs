@@ -23,7 +23,7 @@ pub mod header_constants;
 pub mod http;
 pub mod lifecycle_config;
 pub mod minio_error_response;
-pub mod multimap;
+pub mod multimap_ext;
 mod object_content;
 pub mod response;
 pub mod segmented_bytes;

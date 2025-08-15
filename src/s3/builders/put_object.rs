@@ -18,7 +18,7 @@ use crate::s3::builders::{ContentStream, Size};
 use crate::s3::client::Client;
 use crate::s3::error::{Error, IoError, ValidationErr};
 use crate::s3::header_constants::*;
-use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::HasEtagFromHeaders;
 use crate::s3::response::{
     AbortMultipartUploadResponse, CompleteMultipartUploadResponse, CreateMultipartUploadResponse,

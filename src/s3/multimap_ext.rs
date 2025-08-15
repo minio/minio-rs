@@ -49,9 +49,7 @@ impl MultimapExt for Multimap {
     }
     fn add_multimap(&mut self, other: Multimap) {
         for (key, values) in other.into_iter() {
-            for value in values {
-                self.insert(key.clone(), value);
-            }
+            self.insert_many(key.clone(), values);
         }
     }
     fn add_version(&mut self, version: Option<String>) {

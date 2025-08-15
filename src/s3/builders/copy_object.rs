@@ -17,7 +17,7 @@ use crate::s3::Client;
 use crate::s3::client::{MAX_MULTIPART_COUNT, MAX_PART_SIZE};
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
-use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::HasEtagFromBody;
 use crate::s3::response::{
     AbortMultipartUploadResponse, CompleteMultipartUploadResponse, ComposeObjectResponse,

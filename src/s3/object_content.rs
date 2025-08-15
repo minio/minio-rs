@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::s3::segmented_bytes::SegmentedBytes;
 use async_std::io::{ReadExt, WriteExt};
 use bytes::Bytes;
-use futures::stream::{self, Stream, StreamExt};
-use rand::prelude::random;
+use futures_util::stream::{self, Stream, StreamExt};
 use std::path::PathBuf;
-use std::{ffi::OsString, fs, path::Path, pin::Pin};
+use std::{fs, path::Path, pin::Pin};
+use uuid::Uuid;
 
-use crate::s3::segmented_bytes::SegmentedBytes;
 #[cfg(test)]
 use quickcheck::Arbitrary;
 
@@ -216,13 +216,11 @@ impl ObjectContent {
             async_std::fs::create_dir_all(parent_dir).await?;
         }
         let file_name = file_path.file_name().ok_or(std::io::Error::other(
-            "could not get filename component of path",
+            "could not get filename-component of path",
         ))?;
-        let mut tmp_file_name: OsString = file_name.to_os_string();
-        tmp_file_name.push(format!("_{}", random::<u64>()));
-        let tmp_file_path = parent_dir
-            .to_path_buf()
-            .join(Path::new(tmp_file_name.as_os_str()));
+        let mut tmp_file_name = file_name.to_os_string();
+        tmp_file_name.push(format!("_{}", Uuid::new_v4().to_string().replace('-', "_")));
+        let tmp_file_path = parent_dir.join(tmp_file_name);
 
         let mut total_bytes_written = 0;
         let mut fp = async_std::fs::OpenOptions::new()

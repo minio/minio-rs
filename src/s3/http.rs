@@ -19,9 +19,8 @@ use super::utils::urlencode_object_key;
 use crate::s3::client::DEFAULT_REGION;
 
 use crate::s3::error::ValidationErr;
-use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::utils::match_hostname;
-use derivative::Derivative;
 use hyper::Uri;
 use hyper::http::Method;
 use lazy_static::lazy_static;
@@ -37,11 +36,9 @@ lazy_static! {
     static ref AWS_S3_PREFIX_REGEX: Regex = Regex::new(AWS_S3_PREFIX).unwrap();
 }
 
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 /// Represents HTTP URL
 pub struct Url {
-    #[derivative(Default(value = "true"))]
     pub https: bool,
     pub host: String,
     pub port: u16,
@@ -55,6 +52,18 @@ impl Url {
             return format!("{}:{}", self.host, self.port);
         }
         self.host.clone()
+    }
+}
+
+impl Default for Url {
+    fn default() -> Self {
+        Self {
+            https: true,
+            host: String::default(),
+            port: u16::default(),
+            path: String::default(),
+            query: Multimap::default(),
+        }
     }
 }
 
@@ -208,11 +217,9 @@ fn get_aws_info(
     Ok(())
 }
 
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 /// Represents Base URL of S3 endpoint
 pub struct BaseUrl {
-    #[derivative(Default(value = "true"))]
     pub https: bool,
     host: String,
     port: u16,
@@ -221,6 +228,21 @@ pub struct BaseUrl {
     aws_domain_suffix: String,
     pub dualstack: bool,
     pub virtual_style: bool,
+}
+
+impl Default for BaseUrl {
+    fn default() -> Self {
+        Self {
+            https: true,
+            host: String::default(),
+            port: u16::default(),
+            region: "".to_string(),
+            aws_s3_prefix: "".to_string(),
+            aws_domain_suffix: "".to_string(),
+            dualstack: false,
+            virtual_style: false,
+        }
+    }
 }
 
 impl FromStr for BaseUrl {

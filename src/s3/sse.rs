@@ -16,8 +16,8 @@
 //! Server side encryption definitions
 
 use crate::s3::header_constants::*;
-use crate::s3::multimap::{Multimap, MultimapExt};
-use crate::s3::utils::{b64encode, md5sum_hash};
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
+use crate::s3::utils::{b64_encode, md5sum_hash};
 use std::any::Any;
 
 /// Base server side encryption
@@ -39,7 +39,7 @@ pub struct SseCustomerKey {
 
 impl SseCustomerKey {
     pub fn new(key: &str) -> Self {
-        let b64key: String = b64encode(key);
+        let b64key: String = b64_encode(key);
         let md5key: String = md5sum_hash(key.as_bytes());
 
         let mut headers = Multimap::with_capacity(3);
@@ -102,7 +102,7 @@ impl SseKms {
         headers.add(X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID, key);
         headers.add(X_AMZ_SERVER_SIDE_ENCRYPTION, "aws:kms");
         if let Some(v) = context {
-            headers.add(X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT, b64encode(v));
+            headers.add(X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT, b64_encode(v));
         }
 
         SseKms { headers }

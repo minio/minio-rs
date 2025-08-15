@@ -20,7 +20,7 @@ use crate::s3::builders::{
 use crate::s3::error::ValidationErr;
 use crate::s3::error::{Error, IoError};
 use crate::s3::header_constants::*;
-use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::HasObjectSize;
 use crate::s3::response::{AppendObjectResponse, StatObjectResponse};
 use crate::s3::segmented_bytes::SegmentedBytes;
