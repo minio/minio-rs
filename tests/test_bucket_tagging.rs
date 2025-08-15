@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use minio::s3::client::DEFAULT_REGION;
-use minio::s3::error::{Error, ErrorCode};
+use minio::s3::error::{Error, S3ServerError};
+use minio::s3::minio_error_response::MinioErrorCode;
 use minio::s3::response::a_response_traits::{HasBucket, HasRegion, HasTagging};
 use minio::s3::response::{
     DeleteBucketTaggingResponse, GetBucketTaggingResponse, PutBucketTaggingResponse,
@@ -78,21 +79,27 @@ async fn bucket_tags_s3express(ctx: TestContext, bucket_name: String) {
         .send()
         .await;
     match resp {
-        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
-        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
+            assert_eq!(e.code(), MinioErrorCode::NotSupported)
+        }
+        v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 
     let resp: Result<GetBucketTaggingResponse, Error> =
         ctx.client.get_bucket_tagging(&bucket_name).send().await;
     match resp {
-        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
-        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
+            assert_eq!(e.code(), MinioErrorCode::NotSupported)
+        }
+        v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 
     let resp: Result<DeleteBucketTaggingResponse, Error> =
         ctx.client.delete_bucket_tagging(&bucket_name).send().await;
     match resp {
-        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
-        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
+            assert_eq!(e.code(), MinioErrorCode::NotSupported)
+        }
+        v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 }

@@ -1,6 +1,7 @@
-use crate::s3::error::Error;
+use crate::s3::error::ValidationErr;
+use crate::s3::header_constants::*;
 use crate::s3::types::S3Request;
-use crate::s3::utils::{get_text, trim_quotes};
+use crate::s3::utils::{get_text_result, parse_bool, trim_quotes};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::collections::HashMap;
@@ -21,7 +22,7 @@ macro_rules! impl_from_s3response {
                     Ok(Self {
                         request,
                         headers: mem::take(resp.headers_mut()),
-                        body: resp.bytes().await?
+                        body: resp.bytes().await.map_err(ValidationErr::from)?,
                     })
                 }
             }
@@ -44,7 +45,7 @@ macro_rules! impl_from_s3response_with_size {
                     Ok(Self {
                         request,
                         headers: mem::take(resp.headers_mut()),
-                        body: resp.bytes().await?,
+                        body: resp.bytes().await.map_err(ValidationErr::from)?,
                         object_size: 0, // Default value, can be set later
                     })
                 }
@@ -117,7 +118,7 @@ pub trait HasVersion: HasS3Fields {
     #[inline]
     fn version_id(&self) -> Option<&str> {
         self.headers()
-            .get("x-amz-version-id")
+            .get(X_AMZ_VERSION_ID)
             .and_then(|v| v.to_str().ok())
     }
 }
@@ -128,7 +129,7 @@ pub trait HasEtagFromHeaders: HasS3Fields {
     /// Returns the value of the `ETag` header from response headers (for operations that return ETag in headers).
     /// The ETag is typically a hash of the object content, but it may vary based on the storage backend.
     #[inline]
-    fn etag(&self) -> Result<String, Error> {
+    fn etag(&self) -> Result<String, ValidationErr> {
         // Retrieve the ETag from the response headers.
         let etag = self
             .headers()
@@ -148,10 +149,10 @@ pub trait HasEtagFromBody: HasS3Fields {
     /// Returns the value of the `ETag` from the response body, which is a unique identifier for
     /// the object version. The ETag is typically a hash of the object content, but it may vary
     /// based on the storage backend.
-    fn etag(&self) -> Result<String, Error> {
+    fn etag(&self) -> Result<String, ValidationErr> {
         // Retrieve the ETag from the response body.
         let root = xmltree::Element::parse(self.body().clone().reader())?;
-        let etag: String = get_text(&root, "ETag")?;
+        let etag: String = get_text_result(&root, "ETag")?;
         Ok(trim_quotes(etag))
     }
 }
@@ -162,7 +163,7 @@ pub trait HasObjectSize: HasS3Fields {
     #[inline]
     fn object_size(&self) -> u64 {
         self.headers()
-            .get("x-amz-object-size")
+            .get(X_AMZ_OBJECT_SIZE)
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(0)
@@ -181,18 +182,10 @@ pub trait HasIsDeleteMarker: HasS3Fields {
     /// was not (false) a delete marker before deletion. In a simple DELETE, this header indicates
     /// whether (true) or not (false) the current version of the object is a delete marker.
     #[inline]
-    fn is_delete_marker(&self) -> Result<Option<bool>, Error> {
-        Ok(Some(
-            self.headers()
-                .get("x-amz-delete-marker")
-                .map(|v| v == "true")
-                .unwrap_or(false),
-        ))
-
-        //Ok(match self.headers().get("x-amz-delete-marker") {
-        //    Some(v) => Some(v.to_str()?.parse::<bool>()?),
-        //    None => None,
-        //})
+    fn is_delete_marker(&self) -> Result<bool, ValidationErr> {
+        self.headers()
+            .get(X_AMZ_DELETE_MARKER)
+            .map_or(Ok(false), |v| parse_bool(v.to_str()?))
     }
 }
 
@@ -201,7 +194,7 @@ pub trait HasTagging: HasS3Fields {
     ///
     /// If the bucket has no tags, this will return an empty `HashMap`.
     #[inline]
-    fn tags(&self) -> Result<HashMap<String, String>, Error> {
+    fn tags(&self) -> Result<HashMap<String, String>, ValidationErr> {
         let mut tags = HashMap::new();
         if self.body().is_empty() {
             // Note: body is empty when server responses with NoSuchTagSet
@@ -210,9 +203,9 @@ pub trait HasTagging: HasS3Fields {
         let mut root = Element::parse(self.body().clone().reader())?;
         let element = root
             .get_mut_child("TagSet")
-            .ok_or(Error::XmlError("<TagSet> tag not found".to_string()))?;
+            .ok_or(ValidationErr::xml_error("<TagSet> tag not found"))?;
         while let Some(v) = element.take_child("Tag") {
-            tags.insert(get_text(&v, "Key")?, get_text(&v, "Value")?);
+            tags.insert(get_text_result(&v, "Key")?, get_text_result(&v, "Value")?);
         }
         Ok(tags)
     }

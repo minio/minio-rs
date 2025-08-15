@@ -15,7 +15,9 @@
 
 use super::Client;
 use crate::s3::builders::{DeleteBucket, DeleteObject, ObjectToDelete};
-use crate::s3::error::{Error, ErrorCode};
+use crate::s3::error::Error;
+use crate::s3::error::S3ServerError::S3Error;
+use crate::s3::minio_error_response::MinioErrorCode;
 use crate::s3::response::{BucketExistsResponse, DeleteResult};
 use crate::s3::response::{
     DeleteBucketResponse, DeleteObjectResponse, DeleteObjectsResponse, PutObjectLegalHoldResponse,
@@ -130,14 +132,14 @@ impl Client {
         let request: DeleteBucket = self.delete_bucket(&bucket);
         match request.send().await {
             Ok(resp) => Ok(resp),
-            Err(Error::S3Error(mut e)) => {
-                if matches!(e.code, ErrorCode::NoSuchBucket) {
+            Err(Error::S3Server(S3Error(mut e))) => {
+                if matches!(e.code(), MinioErrorCode::NoSuchBucket) {
                     Ok(DeleteBucketResponse {
                         request: Default::default(), //TODO consider how to handle this
                         body: Bytes::new(),
-                        headers: e.headers,
+                        headers: e.take_headers(),
                     })
-                } else if let ErrorCode::BucketNotEmpty(reason) = &e.code {
+                } else if matches!(e.code(), MinioErrorCode::BucketNotEmpty) {
                     // for convenience, add the first 5 documents that were are still in the bucket
                     // to the error message
                     let mut stream = self
@@ -158,11 +160,14 @@ impl Client {
                         // else: silently ignore the error and keep looping
                     }
 
-                    let new_reason = format!("{reason}: found content: {objs:?}");
-                    e.code = ErrorCode::BucketNotEmpty(new_reason);
-                    Err(Error::S3Error(e))
+                    let new_msg = match e.message() {
+                        None => format!("found content: {objs:?}"),
+                        Some(msg) => format!("{msg}, found content: {objs:?}"),
+                    };
+                    e.set_message(new_msg);
+                    Err(Error::S3Server(S3Error(e)))
                 } else {
-                    Err(Error::S3Error(e))
+                    Err(Error::S3Server(S3Error(e)))
                 }
             }
             Err(e) => Err(e),

@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use crate::s3::Client;
-use crate::s3::error::Error;
+use crate::s3::error::ValidationErr;
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::PutObjectRetentionResponse;
 use crate::s3::types::{RetentionMode, S3Api, S3Request, ToS3Request};
@@ -95,15 +96,15 @@ impl S3Api for PutObjectRetention {
 }
 
 impl ToS3Request for PutObjectRetention {
-    fn to_s3request(self) -> Result<S3Request, Error> {
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         {
             check_bucket_name(&self.bucket, true)?;
             check_object_name(&self.object)?;
 
             if self.retention_mode.is_some() ^ self.retain_until_date.is_some() {
-                return Err(Error::InvalidRetentionConfig(String::from(
-                    "both mode and retain_until_date must be set or unset",
-                )));
+                return Err(ValidationErr::InvalidRetentionConfig(
+                    "both mode and retain_until_date must be set or unset".into(),
+                ));
             }
         }
 
@@ -125,9 +126,9 @@ impl ToS3Request for PutObjectRetention {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         if self.bypass_governance_mode {
-            headers.add("x-amz-bypass-governance-retention", "true");
+            headers.add(X_AMZ_BYPASS_GOVERNANCE_RETENTION, "true");
         }
-        headers.add("Content-MD5", md5sum_hash(bytes.as_ref()));
+        headers.add(CONTENT_MD5, md5sum_hash(bytes.as_ref()));
 
         let mut query_params: Multimap = insert(self.extra_query_params, "retention");
         query_params.add_version(self.version_id);

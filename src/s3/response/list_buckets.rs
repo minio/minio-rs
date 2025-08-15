@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::HasS3Fields;
 use crate::s3::types::{Bucket, FromS3Response, S3Request};
-use crate::s3::utils::{from_iso8601utc, get_text};
+use crate::s3::utils::{from_iso8601utc, get_text_result};
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -36,18 +36,18 @@ impl_has_s3fields!(ListBucketsResponse);
 
 impl ListBucketsResponse {
     /// Returns the list of buckets in the account.
-    pub fn buckets(&self) -> Result<Vec<Bucket>, Error> {
+    pub fn buckets(&self) -> Result<Vec<Bucket>, ValidationErr> {
         let mut root = Element::parse(self.body().clone().reader())?;
         let buckets_xml = root
             .get_mut_child("Buckets")
-            .ok_or(Error::XmlError("<Buckets> tag not found".into()))?;
+            .ok_or(ValidationErr::xml_error("<Buckets> tag not found"))?;
 
         let mut buckets: Vec<Bucket> = Vec::new();
         while let Some(b) = buckets_xml.take_child("Bucket") {
             let bucket = b;
             buckets.push(Bucket {
-                name: get_text(&bucket, "Name")?,
-                creation_date: from_iso8601utc(&get_text(&bucket, "CreationDate")?)?,
+                name: get_text_result(&bucket, "Name")?,
+                creation_date: from_iso8601utc(&get_text_result(&bucket, "CreationDate")?)?,
             })
         }
         Ok(buckets)

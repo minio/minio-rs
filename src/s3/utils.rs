@@ -15,13 +15,12 @@
 
 //! Various utility and helper functions
 
-use crate::s3::error::Error;
 use crate::s3::multimap::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use base64::engine::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use byteorder::{BigEndian, ReadBytesExt};
-use chrono::{DateTime, Datelike, NaiveDateTime, ParseError, Utc};
+use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
 use crc::{CRC_32_ISO_HDLC, Crc};
 use hex::ToHex;
 use lazy_static::lazy_static;
@@ -35,10 +34,11 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use xmltree::Element;
-
 /// Date and time with UTC timezone
 pub type UtcTime = DateTime<Utc>;
-
+use crate::s3::Client;
+use crate::s3::error::ValidationErr;
+use crate::s3::sse::{Sse, SseCustomerKey};
 use url::form_urlencoded;
 
 // Great stuff to get confused about.
@@ -72,9 +72,13 @@ pub fn crc32(data: &[u8]) -> u32 {
     Crc::<u32>::new(&CRC_32_ISO_HDLC).checksum(data)
 }
 
-/// Converts data array into 32 bit unsigned int
-pub fn uint32(mut data: &[u8]) -> Result<u32, std::io::Error> {
+/// Converts data array into 32 bit BigEndian unsigned int
+pub fn uint32(mut data: &[u8]) -> Result<u32, ValidationErr> {
     data.read_u32::<BigEndian>()
+        .map_err(|e| ValidationErr::InvalidIntegerValue {
+            message: "data is not a valid 32-bit BigEndian unsigned integer".into(),
+            source: Box::new(e),
+        })
 }
 
 /// sha256 hash of empty data
@@ -179,14 +183,10 @@ pub fn to_iso8601utc(time: UtcTime) -> String {
 }
 
 /// Parses ISO8601 UTC formatted value to time
-pub fn from_iso8601utc(s: &str) -> Result<UtcTime, ParseError> {
-    Ok(DateTime::<Utc>::from_naive_utc_and_offset(
-        match NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S.%3fZ") {
-            Ok(d) => d,
-            _ => NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%SZ")?,
-        },
-        Utc,
-    ))
+pub fn from_iso8601utc(s: &str) -> Result<UtcTime, ValidationErr> {
+    let dt = NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S.%3fZ")
+        .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%SZ"))?;
+    Ok(DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
 }
 
 const OBJECT_KEY_ENCODE_SET: &AsciiSet = &NON_ALPHANUMERIC
@@ -220,12 +220,20 @@ pub mod aws_date_format {
     }
 }
 
+pub fn parse_bool(value: &str) -> Result<bool, ValidationErr> {
+    if value.eq_ignore_ascii_case("true") {
+        Ok(true)
+    } else if value.eq_ignore_ascii_case("false") {
+        Ok(false)
+    } else {
+        Err(ValidationErr::InvalidBooleanValue(value.to_string()))
+    }
+}
+
 /// Parses HTTP header value to time
-pub fn from_http_header_value(s: &str) -> Result<UtcTime, ParseError> {
-    Ok(DateTime::<Utc>::from_naive_utc_and_offset(
-        NaiveDateTime::parse_from_str(s, "%a, %d %b %Y %H:%M:%S GMT")?,
-        Utc,
-    ))
+pub fn from_http_header_value(s: &str) -> Result<UtcTime, ValidationErr> {
+    let dt = NaiveDateTime::parse_from_str(s, "%a, %d %b %Y %H:%M:%S GMT")?;
+    Ok(DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
 }
 
 /// Checks if given hostname is valid or not
@@ -266,23 +274,26 @@ pub fn match_region(value: &str) -> bool {
 }
 
 /// Validates given bucket name. TODO S3Express has slightly different rules for bucket names
-pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(), Error> {
+pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(), ValidationErr> {
     let bucket_name: &str = bucket_name.as_ref().trim();
     let bucket_name_len = bucket_name.len();
     if bucket_name_len == 0 {
-        return Err(Error::InvalidBucketName(
-            "bucket name cannot be empty".into(),
-        ));
+        return Err(ValidationErr::InvalidBucketName {
+            name: "".into(),
+            reason: "bucket name cannot be empty".into(),
+        });
     }
     if bucket_name_len < 3 {
-        return Err(Error::InvalidBucketName(format!(
-            "bucket name ('{bucket_name}') cannot be less than 3 characters"
-        )));
+        return Err(ValidationErr::InvalidBucketName {
+            name: bucket_name.into(),
+            reason: "bucket name  cannot be less than 3 characters".into(),
+        });
     }
     if bucket_name_len > 63 {
-        return Err(Error::InvalidBucketName(format!(
-            "Bucket name ('{bucket_name}') cannot be greater than 63 characters"
-        )));
+        return Err(ValidationErr::InvalidBucketName {
+            name: bucket_name.into(),
+            reason: "bucket name cannot be greater than 63 characters".into(),
+        });
     }
 
     lazy_static! {
@@ -294,69 +305,118 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
     }
 
     if IPV4_REGEX.is_match(bucket_name) {
-        return Err(Error::InvalidBucketName(format!(
-            "bucket name ('{bucket_name}') cannot be an IP address"
-        )));
+        return Err(ValidationErr::InvalidBucketName {
+            name: bucket_name.into(),
+            reason: "bucket name cannot be an IP address".into(),
+        });
     }
 
     if bucket_name.contains("..") || bucket_name.contains(".-") || bucket_name.contains("-.") {
-        return Err(Error::InvalidBucketName(format!(
-            "bucket name ('{bucket_name}') contains invalid successive characters '..', '.-' or '-.'",
-        )));
+        return Err(ValidationErr::InvalidBucketName {
+            name: bucket_name.into(),
+            reason: "bucket name contains invalid successive characters '..', '.-' or '-.'".into(),
+        });
     }
 
     if strict {
         if !VALID_BUCKET_NAME_STRICT_REGEX.is_match(bucket_name) {
-            return Err(Error::InvalidBucketName(format!(
-                "bucket name ('{bucket_name}') does not follow S3 standards strictly, according to {}",
-                *VALID_BUCKET_NAME_STRICT_REGEX
-            )));
+            return Err(ValidationErr::InvalidBucketName {
+                name: bucket_name.into(),
+                reason: format!(
+                    "bucket name does not follow S3 standards strictly, according to {}",
+                    *VALID_BUCKET_NAME_STRICT_REGEX
+                ),
+            });
         }
     } else if !VALID_BUCKET_NAME_REGEX.is_match(bucket_name) {
-        return Err(Error::InvalidBucketName(format!(
-            "bucket name ('{bucket_name}') does not follow S3 standards, according to {}",
-            *VALID_BUCKET_NAME_REGEX
-        )));
+        return Err(ValidationErr::InvalidBucketName {
+            name: bucket_name.into(),
+            reason: format!(
+                "bucket name does not follow S3 standards, according to {}",
+                *VALID_BUCKET_NAME_REGEX
+            ),
+        });
     }
 
     Ok(())
 }
 
 /// Validates given object name. TODO S3Express has slightly different rules for object names
-pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), Error> {
-    let object_name: &str = object_name.as_ref();
-    let object_name_n_bytes = object_name.len();
-    if object_name_n_bytes == 0 {
-        return Err(Error::InvalidObjectName(
+pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), ValidationErr> {
+    let name = object_name.as_ref();
+    match name.len() {
+        0 => Err(ValidationErr::InvalidObjectName(
             "object name cannot be empty".into(),
-        ));
+        )),
+        n if n > 1024 => Err(ValidationErr::InvalidObjectName(format!(
+            "Object name ('{name}') cannot be greater than 1024 bytes"
+        ))),
+        _ => Ok(()),
     }
-    if object_name_n_bytes > 1024 {
-        return Err(Error::InvalidObjectName(format!(
-            "Object name ('{object_name}') cannot be greater than 1024 bytes"
-        )));
-    }
+}
 
+/// Validates SSE (Server-Side Encryption) settings.
+pub fn check_sse(sse: &Option<Arc<dyn Sse>>, client: &Client) -> Result<(), ValidationErr> {
+    if let Some(v) = &sse
+        && v.tls_required()
+        && !client.is_secure()
+    {
+        return Err(ValidationErr::SseTlsRequired(None));
+    }
     Ok(())
 }
 
+/// Validates SSE-C (Server-Side Encryption with Customer-Provided Keys) settings.
+pub fn check_ssec(ssec: &Option<SseCustomerKey>, client: &Client) -> Result<(), ValidationErr> {
+    if ssec.is_some() && !client.is_secure() {
+        return Err(ValidationErr::SseTlsRequired(None));
+    }
+    Ok(())
+}
+
+/// Validates SSE-C (Server-Side Encryption with Customer-Provided Keys) settings and logs an error
+pub fn check_ssec_with_log(
+    ssec: &Option<SseCustomerKey>,
+    client: &Client,
+    bucket: &str,
+    object: &str,
+    version: &Option<String>,
+) -> Result<(), ValidationErr> {
+    if ssec.is_some() && !client.is_secure() {
+        return Err(ValidationErr::SseTlsRequired(Some(format!(
+            "source {bucket}/{object}{}: ",
+            version
+                .as_ref()
+                .map_or(String::new(), |v| String::from("?versionId=") + v)
+        ))));
+    }
+    Ok(())
+}
+
+/// Gets default text value of given XML element for given tag.
+pub fn get_text_default(element: &Element, tag: &str) -> String {
+    element.get_child(tag).map_or(String::new(), |v| {
+        v.get_text().unwrap_or_default().to_string()
+    })
+}
+
 /// Gets text value of given XML element for given tag.
-pub fn get_text(element: &Element, tag: &str) -> Result<String, Error> {
+pub fn get_text_result(element: &Element, tag: &str) -> Result<String, ValidationErr> {
     Ok(element
         .get_child(tag)
-        .ok_or(Error::XmlError(format!("<{tag}> tag not found")))?
+        .ok_or(ValidationErr::xml_error(format!("<{tag}> tag not found")))?
         .get_text()
-        .ok_or(Error::XmlError(format!("text of <{tag}> tag not found")))?
+        .ok_or(ValidationErr::xml_error(format!(
+            "text of <{tag}> tag not found"
+        )))?
         .to_string())
 }
 
 /// Gets optional text value of given XML element for given tag.
-pub fn get_option_text(element: &Element, tag: &str) -> Option<String> {
-    if let Some(v) = element.get_child(tag) {
-        return Some(v.get_text().unwrap_or_default().to_string());
-    }
-
-    None
+pub fn get_text_option(element: &Element, tag: &str) -> Option<String> {
+    element
+        .get_child(tag)
+        .and_then(|v| v.get_text().map(|s| s.to_string()))
 }
 
 /// Trim leading and trailing quotes from a string. It consumes the
@@ -366,13 +426,6 @@ pub fn trim_quotes(mut s: String) -> String {
         s.pop(); // remove the trailing quote
     }
     s
-}
-
-/// Gets default text value of given XML element for given tag.
-pub fn get_default_text(element: &Element, tag: &str) -> String {
-    element.get_child(tag).map_or(String::new(), |v| {
-        v.get_text().unwrap_or_default().to_string()
-    })
 }
 
 /// Copies source byte slice into destination byte slice
@@ -409,10 +462,13 @@ const QUERY_ESCAPE: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'.')
     .remove(b'~');
 
-fn unescape(s: &str) -> Result<String, Error> {
+fn unescape(s: &str) -> Result<String, ValidationErr> {
     percent_decode_str(s)
         .decode_utf8()
-        .map_err(|e| Error::TagDecodingError(s.to_string(), e.to_string()))
+        .map_err(|e| ValidationErr::TagDecodingError {
+            input: s.to_string(),
+            error_message: e.to_string(),
+        })
         .map(|s| s.to_string())
 }
 
@@ -431,17 +487,17 @@ pub fn encode_tags(h: &HashMap<String, String>) -> String {
     tags.join("&")
 }
 
-pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
+pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, ValidationErr> {
     let mut tags = HashMap::new();
     for tag in s.split('&') {
         let mut kv = tag.split('=');
         let k = match kv.next() {
             Some(v) => unescape(v)?,
             None => {
-                return Err(Error::TagDecodingError(
-                    s.into(),
-                    "tag key was empty".into(),
-                ));
+                return Err(ValidationErr::TagDecodingError {
+                    input: s.into(),
+                    error_message: "tag key was empty".into(),
+                });
             }
         };
         let v = match kv.next() {
@@ -449,10 +505,10 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, Error> {
             None => "".to_owned(),
         };
         if kv.next().is_some() {
-            return Err(Error::TagDecodingError(
-                s.into(),
-                "tag had too many values for a key".into(),
-            ));
+            return Err(ValidationErr::TagDecodingError {
+                input: s.into(),
+                error_message: "tag had too many values for a key".into(),
+            });
         }
         tags.insert(k, v);
     }
@@ -468,9 +524,8 @@ pub fn insert(data: Option<Multimap>, key: impl Into<String>) -> Multimap {
 }
 
 pub mod xml {
+    use crate::s3::error::ValidationErr;
     use std::collections::HashMap;
-
-    use crate::s3::error::Error;
 
     #[derive(Debug, Clone)]
     struct XmlElementIndex {
@@ -537,21 +592,23 @@ pub mod xml {
                 .map(|v| v.to_string())
         }
 
-        pub fn get_child_text_or_error(&self, tag: &str) -> Result<String, Error> {
+        pub fn get_child_text_or_error(&self, tag: &str) -> Result<String, ValidationErr> {
             let i = self
                 .child_element_index
                 .get_first(tag)
-                .ok_or(Error::XmlError(format!("<{tag}> tag not found")))?;
+                .ok_or(ValidationErr::xml_error(format!("<{tag}> tag not found")))?;
             self.inner.children[i]
                 .as_element()
                 .unwrap()
                 .get_text()
                 .map(|x| x.to_string())
-                .ok_or(Error::XmlError(format!("text of <{tag}> tag not found")))
+                .ok_or(ValidationErr::xml_error(format!(
+                    "text of <{tag}> tag not found"
+                )))
         }
 
         // Returns all children with given tag along with their index.
-        pub fn get_matching_children(&self, tag: &str) -> Vec<(usize, Element)> {
+        pub fn get_matching_children(&self, tag: &str) -> Vec<(usize, Element<'_>)> {
             self.child_element_index
                 .get(tag)
                 .unwrap_or(&vec![])
@@ -560,7 +617,7 @@ pub mod xml {
                 .collect()
         }
 
-        pub fn get_child(&self, tag: &str) -> Option<Element> {
+        pub fn get_child(&self, tag: &str) -> Option<Element<'_>> {
             let index = self.child_element_index.get_first(tag)?;
             Some(self.inner.children[index].as_element()?.into())
         }

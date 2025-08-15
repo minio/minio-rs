@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     log::info!("encryption before: config={:?}", resp.config());
 
     let config = SseConfig::default();
-    log::info!("going to set encryption config={:?}", config);
+    log::info!("going to set encryption config={config:?}");
 
     let _resp: PutBucketEncryptionResponse = client
         .put_bucket_encryption(bucket_name)

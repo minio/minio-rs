@@ -7,7 +7,7 @@ use minio::s3::{Client, ClientBuilder};
 #[allow(dead_code)]
 pub fn create_client_on_play() -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
     let base_url = "https://play.min.io".parse::<BaseUrl>()?;
-    log::info!("Trying to connect to MinIO at: `{:?}`", base_url);
+    log::info!("Trying to connect to MinIO at: `{base_url:?}`");
 
     let static_provider = StaticProvider::new(
         "Q3AM3UQ867SPQQA43P2F",
@@ -24,7 +24,7 @@ pub fn create_client_on_play() -> Result<Client, Box<dyn std::error::Error + Sen
 #[allow(dead_code)]
 pub fn create_client_on_localhost() -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
     let base_url = "http://localhost:9000/".parse::<BaseUrl>()?;
-    log::info!("Trying to connect to MinIO at: `{:?}`", base_url);
+    log::info!("Trying to connect to MinIO at: `{base_url:?}`");
 
     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
 

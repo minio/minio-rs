@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use minio::s3::client::DEFAULT_REGION;
-use minio::s3::error::{Error, ErrorCode};
+use minio::s3::error::{Error, S3ServerError};
+use minio::s3::minio_error_response::MinioErrorCode;
 use minio::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion};
 use minio::s3::response::{
     BucketExistsResponse, CreateBucketResponse, DeleteBucketResponse, PutObjectContentResponse,
@@ -43,10 +44,12 @@ async fn bucket_create(ctx: TestContext) {
         ctx.client.create_bucket(&bucket_name).send().await;
     match resp {
         Ok(_) => panic!("Bucket already exists, but was created again"),
-        Err(Error::S3Error(e)) if matches!(e.code, ErrorCode::BucketAlreadyOwnedByYou) => {
+        Err(Error::S3Server(S3ServerError::S3Error(e)))
+            if matches!(e.code(), MinioErrorCode::BucketAlreadyOwnedByYou) =>
+        {
             // this is expected, as the bucket already exists
         }
-        Err(e) => panic!("Unexpected error: {:?}", e),
+        Err(e) => panic!("Unexpected error: {e:?}"),
     }
 }
 
@@ -59,10 +62,12 @@ async fn bucket_delete(ctx: TestContext) {
         ctx.client.delete_bucket(&bucket_name).send().await;
     match resp {
         Ok(_) => panic!("Bucket does not exist, but was removed"),
-        Err(Error::S3Error(e)) if matches!(e.code, ErrorCode::NoSuchBucket) => {
+        Err(Error::S3Server(S3ServerError::S3Error(e)))
+            if matches!(e.code(), MinioErrorCode::NoSuchBucket) =>
+        {
             // this is expected, as the bucket does not exist
         }
-        Err(e) => panic!("Unexpected error: {:?}", e),
+        Err(e) => panic!("Unexpected error: {e:?}"),
     }
 
     // create a new bucket

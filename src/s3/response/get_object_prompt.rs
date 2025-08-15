@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request};
 use crate::{impl_from_s3response, impl_has_s3fields};
@@ -38,9 +38,7 @@ impl GetObjectPromptResponse {
     /// Returns the prompt response for the object.
     ///
     /// This method retrieves the content of the object as a UTF-8 encoded string.
-    pub fn prompt_response(&self) -> Result<&str, Error> {
-        std::str::from_utf8(&self.body).map_err(|e| {
-            Error::Utf8Error(format!("Failed to parse prompt_response as UTF-8: {e}").into())
-        })
+    pub fn prompt_response(&self) -> Result<&str, ValidationErr> {
+        Ok(std::str::from_utf8(&self.body)?)
     }
 }

@@ -14,14 +14,12 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
+use crate::s3::builders::ObjectContent;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::{
     HasBucket, HasEtagFromHeaders, HasObject, HasRegion, HasS3Fields, HasVersion,
 };
-use crate::s3::{
-    builders::ObjectContent,
-    error::Error,
-    types::{FromS3Response, S3Request},
-};
+use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::TryStreamExt;
@@ -52,10 +50,10 @@ impl GetObjectResponse {
     }
 
     /// Returns the content size (in Bytes) of the object.
-    pub fn object_size(&self) -> Result<u64, Error> {
+    pub fn object_size(&self) -> Result<u64, ValidationErr> {
         self.resp
             .content_length()
-            .ok_or(Error::ContentLengthUnknown)
+            .ok_or(ValidationErr::ContentLengthUnknown)
     }
 }
 

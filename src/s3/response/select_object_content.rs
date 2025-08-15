@@ -14,14 +14,15 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ValidationErr};
+use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request, SelectProgress};
-use crate::s3::utils::{copy_slice, crc32, get_text, uint32};
+use crate::s3::utils::{copy_slice, crc32, get_text_result, uint32};
 use async_trait::async_trait;
 use bytes::Bytes;
 use http::HeaderMap;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::io::BufReader;
 use std::mem;
 use xmltree::Element;
@@ -78,7 +79,7 @@ impl SelectObjectContentResponse {
         self.message_crc_read = false;
     }
 
-    fn read_prelude(&mut self) -> Result<bool, Error> {
+    fn read_prelude(&mut self) -> Result<bool, ValidationErr> {
         if self.buf.len() < 8 {
             return Ok(false);
         }
@@ -88,13 +89,16 @@ impl SelectObjectContentResponse {
             self.prelude[i] = self
                 .buf
                 .pop_front()
-                .ok_or(Error::InsufficientData(8, i as u64))?;
+                .ok_or(ValidationErr::InsufficientData {
+                    expected: 8,
+                    got: i as u64,
+                })?;
         }
 
         Ok(true)
     }
 
-    fn read_prelude_crc(&mut self) -> Result<bool, Error> {
+    fn read_prelude_crc(&mut self) -> Result<bool, ValidationErr> {
         if self.buf.len() < 4 {
             return Ok(false);
         }
@@ -104,13 +108,16 @@ impl SelectObjectContentResponse {
             self.prelude_crc[i] = self
                 .buf
                 .pop_front()
-                .ok_or(Error::InsufficientData(4, i as u64))?;
+                .ok_or(ValidationErr::InsufficientData {
+                    expected: 4,
+                    got: i as u64,
+                })?;
         }
 
         Ok(true)
     }
 
-    fn read_data(&mut self) -> Result<bool, Error> {
+    fn read_data(&mut self) -> Result<bool, ValidationErr> {
         let data_length = self.total_length - 8 - 4 - 4;
         if self.buf.len() < data_length {
             return Ok(false);
@@ -123,14 +130,17 @@ impl SelectObjectContentResponse {
             self.data.push(
                 self.buf
                     .pop_front()
-                    .ok_or(Error::InsufficientData(data_length as u64, i as u64))?,
+                    .ok_or(ValidationErr::InsufficientData {
+                        expected: data_length as u64,
+                        got: i as u64,
+                    })?,
             );
         }
 
         Ok(true)
     }
 
-    fn read_message_crc(&mut self) -> Result<bool, Error> {
+    fn read_message_crc(&mut self) -> Result<bool, ValidationErr> {
         if self.buf.len() < 4 {
             return Ok(false);
         }
@@ -140,14 +150,17 @@ impl SelectObjectContentResponse {
             self.message_crc[i] = self
                 .buf
                 .pop_front()
-                .ok_or(Error::InsufficientData(4, i as u64))?;
+                .ok_or(ValidationErr::InsufficientData {
+                    expected: 4,
+                    got: i as u64,
+                })?;
         }
 
         Ok(true)
     }
 
-    fn decode_header(&mut self, header_length: usize) -> Result<HashMap<String, String>, Error> {
-        let mut headers: HashMap<String, String> = HashMap::new();
+    fn decode_header(&mut self, header_length: usize) -> Result<Multimap, ValidationErr> {
+        let mut headers = Multimap::new();
         let mut offset = 0_usize;
         while offset < header_length {
             let mut length = self.data[offset] as usize;
@@ -156,10 +169,10 @@ impl SelectObjectContentResponse {
                 break;
             }
 
-            let name = String::from_utf8(self.data[offset..offset + length].to_vec())?;
+            let name: &str = std::str::from_utf8(&self.data[offset..offset + length])?;
             offset += length;
             if self.data[offset] != 7 {
-                return Err(Error::InvalidHeaderValueType(self.data[offset]));
+                return Err(ValidationErr::InvalidHeaderValueType(self.data[offset]));
             }
             offset += 1;
 
@@ -169,16 +182,16 @@ impl SelectObjectContentResponse {
             offset += 1;
             length = ((b0 << 8) | b1) as usize;
 
-            let value = String::from_utf8(self.data[offset..offset + length].to_vec())?;
+            let value = std::str::from_utf8(&self.data[offset..offset + length])?;
             offset += length;
 
-            headers.insert(name, value);
+            headers.add(name, value);
         }
 
         Ok(headers)
     }
 
-    async fn do_read(&mut self) -> Result<(), Error> {
+    async fn do_read(&mut self) -> Result<(), ValidationErr> {
         if self.done {
             return Ok(());
         }
@@ -204,7 +217,11 @@ impl SelectObjectContentResponse {
                 let expected = uint32(&self.prelude_crc)?;
                 if got != expected {
                     self.done = true;
-                    return Err(Error::CrcMismatch("prelude".into(), expected, got));
+                    return Err(ValidationErr::CrcMismatch {
+                        crc_type: "prelude".into(),
+                        expected,
+                        got,
+                    });
                 }
 
                 self.total_length = uint32(&self.prelude[0..4])? as usize;
@@ -228,7 +245,11 @@ impl SelectObjectContentResponse {
                 let expected = uint32(&self.message_crc)?;
                 if got != expected {
                     self.done = true;
-                    return Err(Error::CrcMismatch("message".into(), expected, got));
+                    return Err(ValidationErr::CrcMismatch {
+                        crc_type: "message".into(),
+                        expected,
+                        got,
+                    });
                 }
             }
 
@@ -240,16 +261,16 @@ impl SelectObjectContentResponse {
             };
             if value == "error" {
                 self.done = true;
-                return Err(Error::SelectError(
-                    match headers.get(":error-code") {
+                return Err(ValidationErr::SelectError {
+                    error_code: match headers.get(":error-code") {
                         Some(v) => v.clone(),
                         None => String::new(),
                     },
-                    match headers.get(":error-message") {
+                    error_message: match headers.get(":error-message") {
                         Some(v) => v.clone(),
                         None => String::new(),
                     },
-                ));
+                });
             }
 
             let event_type = match headers.get(":event-type") {
@@ -273,9 +294,9 @@ impl SelectObjectContentResponse {
                 let root = Element::parse(&mut BufReader::new(payload))?;
                 self.reset();
                 self.progress = SelectProgress {
-                    bytes_scanned: get_text(&root, "BytesScanned")?.parse::<usize>()?,
-                    bytes_progressed: get_text(&root, "BytesProcessed")?.parse::<usize>()?,
-                    bytes_returned: get_text(&root, "BytesReturned")?.parse::<usize>()?,
+                    bytes_scanned: get_text_result(&root, "BytesScanned")?.parse::<usize>()?,
+                    bytes_progressed: get_text_result(&root, "BytesProcessed")?.parse::<usize>()?,
+                    bytes_returned: get_text_result(&root, "BytesReturned")?.parse::<usize>()?,
                 };
                 continue;
             }
@@ -288,7 +309,7 @@ impl SelectObjectContentResponse {
             }
 
             self.done = true;
-            return Err(Error::UnknownEventType(event_type.to_string()));
+            return Err(ValidationErr::UnknownEventType(event_type.into()));
         }
     }
 

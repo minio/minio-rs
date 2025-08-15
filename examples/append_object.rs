@@ -57,23 +57,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         offset_bytes += data_size;
         if resp.object_size() != offset_bytes {
             panic!(
-                "from the append_object: size mismatch: expected {}, got {}",
+                "from the append_object: size mismatch: expected {}, got {offset_bytes}",
                 resp.object_size(),
-                offset_bytes
             )
         }
-        //println!("Append response: {:#?}", resp);
+        //println!("Append response: {resp:#?}");
 
         let resp: StatObjectResponse = client.stat_object(bucket_name, object_name).send().await?;
         if resp.size()? != offset_bytes {
             panic!(
-                "from the stat_Object: size mismatch: expected {}, got {}",
+                "from the stat_Object: size mismatch: expected {}, got {offset_bytes}",
                 resp.size()?,
-                offset_bytes
             )
         }
-        println!("{}/{}", i, n_segments);
-        //println!("Stat response: {:#?}", resp);
+        println!("{i}/{n_segments}");
+        //println!("Stat response: {resp:#?}");
     }
 
     Ok(())

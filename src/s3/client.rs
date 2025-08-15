@@ -23,21 +23,23 @@ use std::sync::{Arc, OnceLock};
 
 use crate::s3::builders::{BucketExists, ComposeSource};
 use crate::s3::creds::Provider;
-use crate::s3::error::{Error, ErrorCode, ErrorResponse};
+use crate::s3::header_constants::*;
 use crate::s3::http::BaseUrl;
+use crate::s3::minio_error_response::{MinioErrorCode, MinioErrorResponse};
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::{HasEtagFromHeaders, HasS3Fields};
 use crate::s3::response::*;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::signer::sign_v4_s3;
-use crate::s3::utils::{EMPTY_SHA256, sha256_hash_sb, to_amz_date, utc_now};
+use crate::s3::utils::{EMPTY_SHA256, check_ssec_with_log, sha256_hash_sb, to_amz_date, utc_now};
 
+use crate::s3::error::{Error, IoError, NetworkError, S3ServerError, ValidationErr};
 use bytes::Bytes;
 use dashmap::DashMap;
 use http::HeaderMap;
 use hyper::http::Method;
 use rand::Rng;
-use reqwest::Body;
+use reqwest::{Body, Response};
 
 mod append_object;
 mod bucket_exists;
@@ -197,15 +199,17 @@ impl ClientBuilder {
         ))]
         if let Some(v) = self.ssl_cert_file {
             let mut buf = Vec::new();
-            File::open(v)?.read_to_end(&mut buf)?;
-            let certs = reqwest::Certificate::from_pem_bundle(&buf)?;
+            let mut file = File::open(v).map_err(IoError::IOError)?;
+            file.read_to_end(&mut buf).map_err(IoError::IOError)?;
+
+            let certs = reqwest::Certificate::from_pem_bundle(&buf).map_err(ValidationErr::from)?;
             for cert in certs {
                 builder = builder.add_root_certificate(cert);
             }
         }
 
         Ok(Client {
-            http_client: builder.build()?,
+            http_client: builder.build().map_err(ValidationErr::from)?,
             shared: Arc::new(SharedClientItems {
                 base_url: self.base_url,
                 provider: self.provider,
@@ -333,17 +337,13 @@ impl Client {
 
         let sources_len = sources.len();
         for source in sources.iter_mut() {
-            if source.ssec.is_some() && !self.is_secure() {
-                return Err(Error::SseTlsRequired(Some(format!(
-                    "source {}/{}{}: ",
-                    source.bucket,
-                    source.object,
-                    source
-                        .version_id
-                        .as_ref()
-                        .map_or(String::new(), |v| String::from("?versionId=") + v)
-                ))));
-            }
+            check_ssec_with_log(
+                &source.ssec,
+                self,
+                &source.bucket,
+                &source.object,
+                &source.version_id,
+            )?;
 
             i += 1;
 
@@ -370,18 +370,19 @@ impl Client {
             }
 
             if (size < MIN_PART_SIZE) && (sources_len != 1) && (i != sources_len) {
-                return Err(Error::InvalidComposeSourcePartSize(
-                    source.bucket.clone(),
-                    source.object.clone(),
-                    source.version_id.clone(),
+                return Err(ValidationErr::InvalidComposeSourcePartSize {
+                    bucket: source.bucket.clone(),
+                    object: source.object.clone(),
+                    version: source.version_id.clone(),
                     size,
-                    MIN_PART_SIZE,
-                ));
+                    expected_size: MIN_PART_SIZE,
+                }
+                .into());
             }
 
             object_size += size;
             if object_size > MAX_OBJECT_SIZE {
-                return Err(Error::InvalidObjectSize(object_size));
+                return Err(ValidationErr::InvalidObjectSize(object_size).into());
             }
 
             if size > MAX_PART_SIZE {
@@ -394,13 +395,14 @@ impl Client {
                 }
 
                 if last_part_size < MIN_PART_SIZE && sources_len != 1 && i != sources_len {
-                    return Err(Error::InvalidComposeSourceMultipart(
-                        source.bucket.to_string(),
-                        source.object.to_string(),
-                        source.version_id.clone(),
+                    return Err(ValidationErr::InvalidComposeSourceMultipart {
+                        bucket: source.bucket.to_string(),
+                        object: source.object.to_string(),
+                        version: source.version_id.clone(),
                         size,
-                        MIN_PART_SIZE,
-                    ));
+                        expected_size: MIN_PART_SIZE,
+                    }
+                    .into());
                 }
 
                 part_count += count as u16;
@@ -409,7 +411,9 @@ impl Client {
             }
 
             if part_count > MAX_MULTIPART_COUNT {
-                return Err(Error::InvalidMultipartCount(MAX_MULTIPART_COUNT));
+                return Err(
+                    ValidationErr::InvalidMultipartCount(MAX_MULTIPART_COUNT as u64).into(),
+                );
             }
         }
 
@@ -436,14 +440,14 @@ impl Client {
         )?;
 
         {
-            headers.add("Host", url.host_header_value());
+            headers.add(HOST, url.host_header_value());
             let sha256: String = match *method {
                 Method::PUT | Method::POST => {
-                    if !headers.contains_key("Content-Type") {
-                        headers.add("Content-Type", "application/octet-stream");
+                    if !headers.contains_key(CONTENT_TYPE) {
+                        headers.add(CONTENT_TYPE, "application/octet-stream");
                     }
                     let len: usize = body.as_ref().map_or(0, |b| b.len());
-                    headers.add("Content-Length", len.to_string());
+                    headers.add(CONTENT_LENGTH, len.to_string());
                     match body {
                         None => EMPTY_SHA256.into(),
                         Some(ref v) => {
@@ -454,14 +458,14 @@ impl Client {
                 }
                 _ => EMPTY_SHA256.into(),
             };
-            headers.add("x-amz-content-sha256", sha256.clone());
+            headers.add(X_AMZ_CONTENT_SHA256, sha256.clone());
 
             let date = utc_now();
-            headers.add("x-amz-date", to_amz_date(date));
+            headers.add(X_AMZ_DATE, to_amz_date(date));
             if let Some(p) = &self.shared.provider {
                 let creds = p.fetch();
                 if creds.session_token.is_some() {
-                    headers.add("X-Amz-Security-Token", creds.session_token.unwrap());
+                    headers.add(X_AMZ_SECURITY_TOKEN, creds.session_token.unwrap());
                 }
                 sign_v4_s3(
                     method,
@@ -509,15 +513,12 @@ impl Client {
                 None => Vec::new(),
             };
             let stream = futures_util::stream::iter(
-                bytes_vec
-                    .into_iter()
-                    .map(|b| -> Result<_, std::io::Error> { Ok(b) }),
+                bytes_vec.into_iter().map(|b| -> Result<_, Error> { Ok(b) }),
             );
             req = req.body(Body::wrap_stream(stream));
         }
 
-        let resp: reqwest::Response = req.send().await?;
-
+        let resp: Response = req.send().await.map_err(ValidationErr::from)?; //TODO request error handled by network error layer
         if resp.status().is_success() {
             return Ok(resp);
         }
@@ -525,9 +526,9 @@ impl Client {
         let mut resp = resp;
         let status_code = resp.status().as_u16();
         let headers: HeaderMap = mem::take(resp.headers_mut());
-        let body: Bytes = resp.bytes().await?;
+        let body: Bytes = resp.bytes().await.map_err(ValidationErr::from)?;
 
-        let e: Error = self.shared.get_error_response(
+        let e: MinioErrorResponse = self.shared.create_minio_error_response(
             body,
             status_code,
             headers,
@@ -536,17 +537,17 @@ impl Client {
             bucket_name,
             object_name,
             retry,
-        );
+        )?;
 
-        if let Error::S3Error(ref err) = e {
-            if (err.code == ErrorCode::NoSuchBucket) || (err.code == ErrorCode::RetryHead) {
-                if let Some(v) = bucket_name {
-                    self.shared.region_map.remove(v);
-                }
-            }
+        // If the error is a NoSuchBucket or RetryHead, remove the bucket from the region map.
+        if (matches!(e.code(), MinioErrorCode::NoSuchBucket)
+            || matches!(e.code(), MinioErrorCode::RetryHead))
+            && let Some(v) = bucket_name
+        {
+            self.shared.region_map.remove(v);
         };
 
-        Err(e)
+        Err(Error::S3Server(S3ServerError::S3Error(Box::new(e))))
     }
 
     pub(crate) async fn execute(
@@ -574,8 +575,8 @@ impl Client {
         match resp {
             Ok(r) => return Ok(r),
             Err(e) => match e {
-                Error::S3Error(ref er) => {
-                    if er.code != ErrorCode::RetryHead {
+                Error::S3Server(S3ServerError::S3Error(ref er)) => {
+                    if !matches!(er.code(), MinioErrorCode::RetryHead) {
                         return Err(e);
                     }
                 }
@@ -614,16 +615,19 @@ impl SharedClientItems {
         header_map: &reqwest::header::HeaderMap,
         bucket_name: Option<&str>,
         retry: bool,
-    ) -> Result<(ErrorCode, String), Error> {
+    ) -> Result<(MinioErrorCode, String), Error> {
         let (mut code, mut message) = match status_code {
-            301 => (ErrorCode::PermanentRedirect, "Moved Permanently".into()),
-            307 => (ErrorCode::Redirect, "Temporary redirect".into()),
-            400 => (ErrorCode::BadRequest, "Bad request".into()),
-            _ => (ErrorCode::NoError, String::new()),
+            301 => (
+                MinioErrorCode::PermanentRedirect,
+                "Moved Permanently".into(),
+            ),
+            307 => (MinioErrorCode::Redirect, "Temporary redirect".into()),
+            400 => (MinioErrorCode::BadRequest, "Bad request".into()),
+            _ => (MinioErrorCode::NoError, String::new()),
         };
 
-        let region: &str = match header_map.get("x-amz-bucket-region") {
-            Some(v) => v.to_str()?,
+        let region: &str = match header_map.get(X_AMZ_BUCKET_REGION) {
+            Some(v) => v.to_str().map_err(ValidationErr::from)?,
             _ => "",
         };
 
@@ -632,19 +636,20 @@ impl SharedClientItems {
             message.push_str(region);
         }
 
-        if retry && !region.is_empty() && (method == Method::HEAD) {
-            if let Some(v) = bucket_name {
-                if self.region_map.contains_key(v) {
-                    code = ErrorCode::RetryHead;
-                    message = String::new();
-                }
-            }
+        if retry
+            && !region.is_empty()
+            && (method == Method::HEAD)
+            && let Some(v) = bucket_name
+            && self.region_map.contains_key(v)
+        {
+            code = MinioErrorCode::RetryHead;
+            message = String::new();
         }
 
         Ok((code, message))
     }
 
-    fn get_error_response(
+    fn create_minio_error_response(
         &self,
         body: Bytes,
         http_status_code: u16,
@@ -654,88 +659,98 @@ impl SharedClientItems {
         bucket_name: Option<&str>,
         object_name: Option<&str>,
         retry: bool,
-    ) -> Error {
+    ) -> Result<MinioErrorResponse, Error> {
+        // if body is present, try to parse it as XML error response
         if !body.is_empty() {
-            return match headers.get("Content-Type") {
-                Some(v) => match v.to_str() {
-                    Ok(s) => match s.to_lowercase().contains("application/xml") {
-                        true => match ErrorResponse::parse(body, headers) {
-                            Ok(v) => Error::S3Error(v),
-                            Err(e) => e,
-                        },
-                        false => Error::InvalidResponse(http_status_code, s.to_string()),
-                    },
-                    Err(e) => return Error::StrError(e),
-                },
-                _ => Error::InvalidResponse(http_status_code, String::new()),
+            let content_type = headers
+                .get(CONTENT_TYPE)
+                .ok_or_else(|| {
+                    Error::S3Server(S3ServerError::InvalidServerResponse {
+                        message: "missing Content-Type header".into(),
+                        http_status_code,
+                        content_type: String::new(),
+                    })
+                })?
+                .to_str()
+                .map_err(Into::into) // ToStrError -> ValidationErr
+                .map_err(Error::Validation)?; // ValidationErr -> Error
+
+            return if content_type.to_lowercase().contains("application/xml") {
+                MinioErrorResponse::new_from_body(body, headers)
+            } else {
+                Err(Error::S3Server(S3ServerError::InvalidServerResponse {
+                    message: format!(
+                        "expected content-type 'application/xml', but got {content_type}"
+                    ),
+                    http_status_code,
+                    content_type: content_type.into(),
+                }))
             };
         }
 
+        // Decide code and message by status
         let (code, message) = match http_status_code {
-            301 | 307 | 400 => match self.handle_redirect_response(
+            301 | 307 | 400 => self.handle_redirect_response(
                 http_status_code,
                 method,
                 &headers,
                 bucket_name,
                 retry,
-            ) {
-                Ok(v) => v,
-                Err(e) => return e,
-            },
-            403 => (ErrorCode::AccessDenied, "Access denied".into()),
+            )?,
+            403 => (MinioErrorCode::AccessDenied, "Access denied".into()),
             404 => match object_name {
-                Some(_) => (ErrorCode::NoSuchKey, "Object does not exist".into()),
-                _ => match bucket_name {
-                    Some(_) => (ErrorCode::NoSuchBucket, "Bucket does not exist".into()),
-                    _ => (
-                        ErrorCode::ResourceNotFound,
+                Some(_) => (MinioErrorCode::NoSuchKey, "Object does not exist".into()),
+                None => match bucket_name {
+                    Some(_) => (MinioErrorCode::NoSuchBucket, "Bucket does not exist".into()),
+                    None => (
+                        MinioErrorCode::ResourceNotFound,
                         "Request resource not found".into(),
                     ),
                 },
             },
-            405 => (
-                ErrorCode::MethodNotAllowed,
+            405 | 501 => (
+                MinioErrorCode::MethodNotAllowed,
                 "The specified method is not allowed against this resource".into(),
             ),
             409 => match bucket_name {
-                Some(_) => (ErrorCode::NoSuchBucket, "Bucket does not exist".into()),
-                _ => (
-                    ErrorCode::ResourceConflict,
+                Some(_) => (MinioErrorCode::NoSuchBucket, "Bucket does not exist".into()),
+                None => (
+                    MinioErrorCode::ResourceConflict,
                     "Request resource conflicts".into(),
                 ),
             },
-            501 => (
-                ErrorCode::MethodNotAllowed,
-                "The specified method is not allowed against this resource".into(),
-            ),
-            _ => return Error::ServerError(http_status_code),
+            _ => {
+                return Err(Error::Network(NetworkError::ServerError(http_status_code)));
+            }
         };
 
-        let request_id: String = match headers.get("x-amz-request-id") {
-            Some(v) => match v.to_str() {
-                Ok(s) => s.to_string(),
-                Err(e) => return Error::StrError(e),
-            },
-            _ => String::new(),
+        let request_id = match headers.get(X_AMZ_REQUEST_ID) {
+            Some(v) => v
+                .to_str()
+                .map_err(Into::into)
+                .map_err(Error::Validation)? // ValidationErr -> Error
+                .to_string(),
+            None => String::new(),
         };
 
-        let host_id: String = match headers.get("x-amz-id-2") {
-            Some(v) => match v.to_str() {
-                Ok(s) => s.to_string(),
-                Err(e) => return Error::StrError(e),
-            },
-            _ => String::new(),
+        let host_id = match headers.get(X_AMZ_ID_2) {
+            Some(v) => v
+                .to_str()
+                .map_err(Into::into)
+                .map_err(Error::Validation)? // ValidationErr -> Error
+                .to_string(),
+            None => String::new(),
         };
 
-        Error::S3Error(ErrorResponse {
+        Ok(MinioErrorResponse::new(
             headers,
             code,
-            message,
-            resource: resource.to_string(),
+            (!message.is_empty()).then_some(message),
+            resource.to_string(),
             request_id,
             host_id,
-            bucket_name: bucket_name.unwrap_or_default().to_string(),
-            object_name: object_name.unwrap_or_default().to_string(),
-        })
+            bucket_name.map(String::from),
+            object_name.map(String::from),
+        ))
     }
 }

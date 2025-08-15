@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, ReplicationConfig, S3Request};
 use crate::{impl_from_s3response, impl_has_s3fields};
@@ -48,7 +48,7 @@ impl GetBucketReplicationResponse {
     /// and one or more replication rules that specify the conditions under which objects are replicated.
     ///
     /// For more details on replication configuration elements, see the [AWS S3 Replication Configuration documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication-add-config.html).
-    pub fn config(&self) -> Result<ReplicationConfig, Error> {
+    pub fn config(&self) -> Result<ReplicationConfig, ValidationErr> {
         let root = Element::parse(self.body.clone().reader())?;
         ReplicationConfig::from_xml(&root)
     }

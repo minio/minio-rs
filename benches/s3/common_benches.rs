@@ -24,7 +24,6 @@ use minio_common::utils::{
     get_bytes_from_response, get_response_from_bytes, rand_bucket_name, rand_object_name,
 };
 use std::env;
-
 use tokio::runtime::Runtime;
 
 pub(crate) struct Ctx2 {
@@ -170,7 +169,7 @@ pub(crate) fn benchmark_s3_api<ApiType, GlobalSetupFuture>(
 pub(crate) async fn skip_express_mode(bench_name: &str) -> bool {
     let skip = TestContext::new_from_env().client.is_minio_express().await;
     if skip {
-        println!("Skipping benchmark '{}' (MinIO Express mode)", bench_name);
+        println!("Skipping benchmark '{bench_name}' (MinIO Express mode)");
     }
     skip
 }

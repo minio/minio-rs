@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::Error;
+use crate::s3::error::{Error, ValidationErr};
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request, SseConfig};
-use crate::s3::utils::{get_option_text, get_text};
+use crate::s3::utils::{get_text_option, get_text_result};
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -41,22 +41,22 @@ impl HasRegion for PutBucketEncryptionResponse {}
 
 impl PutBucketEncryptionResponse {
     /// Returns the server-side encryption configuration.
-    pub fn config(&self) -> Result<SseConfig, Error> {
+    pub fn config(&self) -> Result<SseConfig, ValidationErr> {
         let mut root = Element::parse(self.body().clone().reader())?;
 
         let rule = root
             .get_mut_child("Rule")
-            .ok_or(Error::XmlError(String::from("<Rule> tag not found")))?;
+            .ok_or(ValidationErr::xml_error("<Rule> tag not found"))?;
 
         let sse_by_default = rule
             .get_mut_child("ApplyServerSideEncryptionByDefault")
-            .ok_or(Error::XmlError(String::from(
+            .ok_or(ValidationErr::xml_error(
                 "<ApplyServerSideEncryptionByDefault> tag not found",
-            )))?;
+            ))?;
 
         Ok(SseConfig {
-            sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
-            kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID"),
+            sse_algorithm: get_text_result(sse_by_default, "SSEAlgorithm")?,
+            kms_master_key_id: get_text_option(sse_by_default, "KMSMasterKeyID"),
         })
     }
 }

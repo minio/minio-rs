@@ -9,11 +9,11 @@ proc-macro = true
 
 
 [dependencies]
-syn = "2.0.53"
-proc-macro2 = "1.0.37"
-quote = "1.0.18"
-darling = "0.20.8"
-darling_core = "0.20.8"
+syn = "2.0.104"
+proc-macro2 = "1.0.95"
+quote = "1.0.40"
+darling = "0.21.0"
+darling_core = "0.21.0"
 uuid = { version = "1.17.0", features = ["v4"] }
 
 [dev-dependencies]

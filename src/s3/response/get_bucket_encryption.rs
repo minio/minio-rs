@@ -14,10 +14,11 @@
 // limitations under the License.
 
 use crate::impl_has_s3fields;
-use crate::s3::error::{Error, ErrorCode};
+use crate::s3::error::{Error, S3ServerError, ValidationErr};
+use crate::s3::minio_error_response::MinioErrorCode;
 use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
 use crate::s3::types::{FromS3Response, S3Request, SseConfig};
-use crate::s3::utils::{get_option_text, get_text};
+use crate::s3::utils::{get_text_option, get_text_result};
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -49,25 +50,25 @@ impl GetBucketEncryptionResponse {
     ///
     /// This includes the encryption algorithm and, if applicable, the AWS KMS key ID used for encrypting objects.
     /// If the bucket has no default encryption configuration, this method returns a default `SseConfig` with empty fields.
-    pub fn config(&self) -> Result<SseConfig, Error> {
+    pub fn config(&self) -> Result<SseConfig, ValidationErr> {
         if self.body.is_empty() {
             return Ok(SseConfig::default());
         }
-        let mut root = Element::parse(self.body.clone().reader())?; // clone of Bytes is inexpensive
+        let mut root = Element::parse(self.body.clone().reader()).map_err(ValidationErr::from)?; // clone of Bytes is inexpensive
 
         let rule = root
             .get_mut_child("Rule")
-            .ok_or(Error::XmlError("<Rule> tag not found".into()))?;
+            .ok_or(ValidationErr::xml_error("<Rule> tag not found"))?;
 
         let sse_by_default = rule
             .get_mut_child("ApplyServerSideEncryptionByDefault")
-            .ok_or(Error::XmlError(
-                "<ApplyServerSideEncryptionByDefault> tag not found".into(),
+            .ok_or(ValidationErr::xml_error(
+                "<ApplyServerSideEncryptionByDefault> tag not found",
             ))?;
 
         Ok(SseConfig {
-            sse_algorithm: get_text(sse_by_default, "SSEAlgorithm")?,
-            kms_master_key_id: get_option_text(sse_by_default, "KMSMasterKeyID"),
+            sse_algorithm: get_text_result(sse_by_default, "SSEAlgorithm")?,
+            kms_master_key_id: get_text_option(sse_by_default, "KMSMasterKeyID"),
         })
     }
 }
@@ -82,17 +83,17 @@ impl FromS3Response for GetBucketEncryptionResponse {
             Ok(mut resp) => Ok(Self {
                 request,
                 headers: mem::take(resp.headers_mut()),
-                body: resp.bytes().await?,
+                body: resp.bytes().await.map_err(ValidationErr::from)?,
             }),
-            Err(Error::S3Error(e))
+            Err(Error::S3Server(S3ServerError::S3Error(mut e)))
                 if matches!(
-                    e.code,
-                    ErrorCode::ServerSideEncryptionConfigurationNotFoundError
+                    e.code(),
+                    MinioErrorCode::ServerSideEncryptionConfigurationNotFoundError
                 ) =>
             {
                 Ok(Self {
                     request,
-                    headers: e.headers,
+                    headers: e.take_headers(),
                     body: Bytes::new(),
                 })
             }

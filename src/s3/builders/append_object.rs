@@ -17,14 +17,16 @@ use crate::s3::Client;
 use crate::s3::builders::{
     ContentStream, MAX_MULTIPART_COUNT, ObjectContent, Size, calc_part_info,
 };
-use crate::s3::error::Error;
+use crate::s3::error::ValidationErr;
+use crate::s3::error::{Error, IoError};
+use crate::s3::header_constants::*;
 use crate::s3::multimap::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::HasObjectSize;
 use crate::s3::response::{AppendObjectResponse, StatObjectResponse};
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::Sse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, check_object_name};
+use crate::s3::utils::{check_bucket_name, check_object_name, check_sse};
 use http::Method;
 use std::sync::Arc;
 // region: append-object
@@ -83,20 +85,13 @@ impl S3Api for AppendObject {
 }
 
 impl ToS3Request for AppendObject {
-    fn to_s3request(self) -> Result<S3Request, Error> {
-        {
-            check_bucket_name(&self.bucket, true)?;
-            check_object_name(&self.object)?;
-
-            if let Some(v) = &self.sse {
-                if v.tls_required() && !self.client.is_secure() {
-                    return Err(Error::SseTlsRequired(None));
-                }
-            }
-        }
+    fn to_s3request(self) -> Result<S3Request, ValidationErr> {
+        check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
+        check_sse(&self.sse, &self.client)?;
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
-        headers.add("x-amz-write-offset-bytes", self.offset_bytes.to_string());
+        headers.add(X_AMZ_WRITE_OFFSET_BYTES, self.offset_bytes.to_string());
 
         Ok(S3Request::new(self.client, Method::PUT)
             .region(self.region)
@@ -191,29 +186,23 @@ impl AppendObjectContent {
     }
 
     pub async fn send(mut self) -> Result<AppendObjectResponse, Error> {
-        {
-            check_bucket_name(&self.bucket, true)?;
-            check_object_name(&self.object)?;
-            if let Some(v) = &self.sse {
-                if v.tls_required() && !self.client.is_secure() {
-                    return Err(Error::SseTlsRequired(None));
-                }
-            }
-        }
+        check_bucket_name(&self.bucket, true)?;
+        check_object_name(&self.object)?;
+        check_sse(&self.sse, &self.client)?;
 
         {
             let mut headers: Multimap = match self.extra_headers {
                 Some(ref headers) => headers.clone(),
                 None => Multimap::new(),
             };
-            headers.add("x-amz-write-offset-bytes", self.offset_bytes.to_string());
+            headers.add(X_AMZ_WRITE_OFFSET_BYTES, self.offset_bytes.to_string());
             self.extra_query_params = Some(headers);
         }
 
         self.content_stream = std::mem::take(&mut self.input_content)
             .to_content_stream()
             .await
-            .map_err(Error::IOError)?;
+            .map_err(IoError::from)?;
 
         // object_size may be Size::Unknown.
         let object_size = self.content_stream.get_size();
@@ -224,7 +213,11 @@ impl AppendObjectContent {
         self.part_count = n_expected_parts;
 
         // Read the first part.
-        let seg_bytes = self.content_stream.read_upto(part_size as usize).await?;
+        let seg_bytes = self
+            .content_stream
+            .read_upto(part_size as usize)
+            .await
+            .map_err(IoError::from)?;
 
         // get the length (if any) of the current file
         let resp: StatObjectResponse = self
@@ -261,7 +254,7 @@ impl AppendObjectContent {
             // Not enough data!
             let expected = object_size.as_u64().unwrap();
             let got = seg_bytes.len() as u64;
-            Err(Error::InsufficientData(expected, got))
+            Err(ValidationErr::InsufficientData { expected, got })?
         } else {
             // Otherwise, we start a multipart append.
             self.send_mpa(part_size, current_file_size, seg_bytes).await
@@ -288,7 +281,10 @@ impl AppendObjectContent {
                 if let Some(v) = first_part.take() {
                     v
                 } else {
-                    self.content_stream.read_upto(part_size as usize).await?
+                    self.content_stream
+                        .read_upto(part_size as usize)
+                        .await
+                        .map_err(IoError::from)?
                 }
             };
             part_number += 1;
@@ -304,7 +300,7 @@ impl AppendObjectContent {
 
             // Check if we have too many parts to upload.
             if self.part_count.is_none() && part_number > MAX_MULTIPART_COUNT {
-                return Err(Error::TooManyParts);
+                return Err(ValidationErr::TooManyParts(part_number as u64).into());
             }
 
             // Append the part now.

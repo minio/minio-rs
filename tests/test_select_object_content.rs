@@ -13,7 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use minio::s3::error::{Error, ErrorCode};
+use minio::s3::error::{Error, S3ServerError};
+use minio::s3::minio_error_response::MinioErrorCode;
 use minio::s3::response::a_response_traits::{HasBucket, HasObject};
 use minio::s3::response::{PutObjectContentResponse, SelectObjectContentResponse};
 use minio::s3::types::{S3Api, SelectRequest};
@@ -75,7 +76,9 @@ async fn select_object_content_express(ctx: TestContext, bucket_name: String) {
         .send()
         .await;
     match resp {
-        Err(Error::S3Error(e)) => assert_eq!(e.code, ErrorCode::NotSupported),
-        v => panic!("Expected error S3Error(NotSupported): but got {:?}", v),
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
+            assert_eq!(e.code(), MinioErrorCode::NotSupported)
+        }
+        v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 }
