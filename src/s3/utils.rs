@@ -95,6 +95,39 @@ pub fn sha256_hash(data: &[u8]) -> String {
     }
 }
 
+/// Hex-encode a byte slice into a lowercase ASCII string.
+///
+/// # Safety
+/// This implementation uses `unsafe` code for performance reasons:
+/// - We call [`String::as_mut_vec`] to get direct access to the
+///   underlying `Vec<u8>` backing the `String`.
+/// - We then use [`set_len`] to pre-allocate the final length without
+///   initializing the contents first.
+/// - Finally, we use [`get_unchecked`] and [`get_unchecked_mut`] to
+///   avoid bounds checking inside the tight encoding loop.
+///
+/// # Why unsafe is needed
+/// Normally, writing this function with safe Rust requires:
+/// - Pushing each hex digit one-by-one into the string (extra bounds checks).
+/// - Or allocating and copying temporary buffers.
+///
+/// Using `unsafe` avoids redundant checks and makes this implementation
+///   significantly faster, especially for large inputs.
+///
+/// # Why this is correct
+/// - `s` is allocated with exactly `len * 2` capacity, and we immediately
+///   set its length to that value. Every byte in the string buffer will be
+///   initialized before being read or used.
+/// - The loop index `i` is always in `0..len`, so `bytes.get_unchecked(i)`
+///   is safe.
+/// - Each write goes to positions `j` and `j + 1`, where `j = i * 2`.
+///   Since `i < len`, the maximum write index is `2*len - 1`, which is
+///   within the allocated range.
+/// - All written bytes come from the `LUT` table, which has exactly 16
+///   elements, and indices are masked into the 0–15 range.
+///
+/// Therefore, although `unsafe` is used to skip bounds checking,
+/// the logic ensures all memory accesses remain in-bounds and initialized.
 pub fn hex_encode(bytes: &[u8]) -> String {
     const LUT: &[u8; 16] = b"0123456789abcdef";
     let len = bytes.len();

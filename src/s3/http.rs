@@ -234,8 +234,8 @@ impl Default for BaseUrl {
     fn default() -> Self {
         Self {
             https: true,
-            host: String::default(),
-            port: u16::default(),
+            host: "127.0.0.1".to_string(),
+            port: 9000,
             region: "".to_string(),
             aws_s3_prefix: "".to_string(),
             aws_domain_suffix: "".to_string(),
