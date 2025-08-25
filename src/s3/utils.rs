@@ -13,18 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Various utility and helper functions
-
-use crate::s3::multimap::Multimap;
+use crate::s3::Client;
+use crate::s3::error::ValidationErr;
+use crate::s3::multimap_ext::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
+use crate::s3::sse::{Sse, SseCustomerKey};
 use base64::engine::Engine as _;
-use base64::engine::general_purpose::STANDARD as BASE64;
-use byteorder::{BigEndian, ReadBytesExt};
 use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
 use crc::{CRC_32_ISO_HDLC, Crc};
-use hex::ToHex;
 use lazy_static::lazy_static;
-use md5::compute as md5compute;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use regex::Regex;
 #[cfg(feature = "ring")]
@@ -34,12 +31,9 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use xmltree::Element;
+
 /// Date and time with UTC timezone
 pub type UtcTime = DateTime<Utc>;
-use crate::s3::Client;
-use crate::s3::error::ValidationErr;
-use crate::s3::sse::{Sse, SseCustomerKey};
-use url::form_urlencoded;
 
 // Great stuff to get confused about.
 // String "a b+c" in Percent-Encoding (RFC 3986) becomes "a%20b%2Bc".
@@ -50,7 +44,7 @@ use url::form_urlencoded;
 /// Decodes a URL-encoded string in the application/x-www-form-urlencoded syntax into a string.
 /// Note that "+" is decoded to a space character, and "%2B" is decoded to a plus sign.
 pub fn url_decode(s: &str) -> String {
-    form_urlencoded::parse(s.as_bytes())
+    url::form_urlencoded::parse(s.as_bytes())
         .map(|(k, _)| k)
         .collect()
 }
@@ -62,8 +56,8 @@ pub fn url_encode(s: &str) -> String {
 }
 
 /// Encodes data using base64 algorithm
-pub fn b64encode(input: impl AsRef<[u8]>) -> String {
-    BASE64.encode(input)
+pub fn b64_encode(input: impl AsRef<[u8]>) -> String {
+    base64::engine::general_purpose::STANDARD.encode(input)
 }
 
 /// Computes CRC32 of given data.
@@ -73,12 +67,17 @@ pub fn crc32(data: &[u8]) -> u32 {
 }
 
 /// Converts data array into 32 bit BigEndian unsigned int
-pub fn uint32(mut data: &[u8]) -> Result<u32, ValidationErr> {
-    data.read_u32::<BigEndian>()
-        .map_err(|e| ValidationErr::InvalidIntegerValue {
+pub fn uint32(data: &[u8]) -> Result<u32, ValidationErr> {
+    if data.len() < 4 {
+        return Err(ValidationErr::InvalidIntegerValue {
             message: "data is not a valid 32-bit BigEndian unsigned integer".into(),
-            source: Box::new(e),
-        })
+            source: Box::new(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "not enough bytes",
+            )),
+        });
+    }
+    Ok(u32::from_be_bytes(data[..4].try_into().unwrap()))
 }
 
 /// sha256 hash of empty data
@@ -88,12 +87,66 @@ pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934c
 pub fn sha256_hash(data: &[u8]) -> String {
     #[cfg(feature = "ring")]
     {
-        ring::digest::digest(&SHA256, data).encode_hex()
+        hex_encode(ring::digest::digest(&SHA256, data).as_ref())
     }
     #[cfg(not(feature = "ring"))]
     {
-        Sha256::new_with_prefix(data).finalize().encode_hex()
+        hex_encode(Sha256::new_with_prefix(data).finalize().as_slice())
     }
+}
+
+/// Hex-encode a byte slice into a lowercase ASCII string.
+///
+/// # Safety
+/// This implementation uses `unsafe` code for performance reasons:
+/// - We call [`String::as_mut_vec`] to get direct access to the
+///   underlying `Vec<u8>` backing the `String`.
+/// - We then use [`set_len`] to pre-allocate the final length without
+///   initializing the contents first.
+/// - Finally, we use [`get_unchecked`] and [`get_unchecked_mut`] to
+///   avoid bounds checking inside the tight encoding loop.
+///
+/// # Why unsafe is needed
+/// Normally, writing this function with safe Rust requires:
+/// - Pushing each hex digit one-by-one into the string (extra bounds checks).
+/// - Or allocating and copying temporary buffers.
+///
+/// Using `unsafe` avoids redundant checks and makes this implementation
+///   significantly faster, especially for large inputs.
+///
+/// # Why this is correct
+/// - `s` is allocated with exactly `len * 2` capacity, and we immediately
+///   set its length to that value. Every byte in the string buffer will be
+///   initialized before being read or used.
+/// - The loop index `i` is always in `0..len`, so `bytes.get_unchecked(i)`
+///   is safe.
+/// - Each write goes to positions `j` and `j + 1`, where `j = i * 2`.
+///   Since `i < len`, the maximum write index is `2*len - 1`, which is
+///   within the allocated range.
+/// - All written bytes come from the `LUT` table, which has exactly 16
+///   elements, and indices are masked into the 0–15 range.
+///
+/// Therefore, although `unsafe` is used to skip bounds checking,
+/// the logic ensures all memory accesses remain in-bounds and initialized.
+pub fn hex_encode(bytes: &[u8]) -> String {
+    const LUT: &[u8; 16] = b"0123456789abcdef";
+    let len = bytes.len();
+    let mut s = String::with_capacity(len * 2);
+
+    unsafe {
+        let v = s.as_mut_vec();
+        v.set_len(len * 2);
+        for i in 0..len {
+            let b = bytes.get_unchecked(i);
+            let hi = LUT.get_unchecked((b >> 4) as usize);
+            let lo = LUT.get_unchecked((b & 0xF) as usize);
+            let j = i * 2;
+            *v.get_unchecked_mut(j) = *hi;
+            *v.get_unchecked_mut(j + 1) = *lo;
+        }
+    }
+
+    s
 }
 
 pub fn sha256_hash_sb(sb: Arc<SegmentedBytes>) -> String {
@@ -101,19 +154,17 @@ pub fn sha256_hash_sb(sb: Arc<SegmentedBytes>) -> String {
     {
         let mut context = Context::new(&SHA256);
         for data in sb.iter() {
-            // Note: &SegmentedBytes.iter yields clones of Bytes, but those clones are cheap
             context.update(data.as_ref());
         }
-        context.finish().encode_hex()
+        hex_encode(context.finish().as_ref())
     }
     #[cfg(not(feature = "ring"))]
     {
         let mut hasher = Sha256::new();
         for data in sb.iter() {
-            // Note: &SegmentedBytes.iter yields clones of Bytes, but those clones are cheap
             hasher.update(data);
         }
-        hasher.finalize().encode_hex()
+        hex_encode(hasher.finalize().as_slice())
     }
 }
 
@@ -134,7 +185,7 @@ mod tests {
 
 /// Gets bas64 encoded MD5 hash of given data
 pub fn md5sum_hash(data: &[u8]) -> String {
-    b64encode(md5compute(data).as_slice())
+    b64_encode(md5::compute(data).as_slice())
 }
 
 /// Gets current UTC time
@@ -480,7 +531,7 @@ fn escape(s: &str) -> String {
 //
 // Handles escaping same as MinIO server - needed for ensuring compatibility.
 pub fn encode_tags(h: &HashMap<String, String>) -> String {
-    let mut tags = Vec::new();
+    let mut tags = Vec::with_capacity(h.len());
     for (k, v) in h {
         tags.push(format!("{}={}", escape(k), escape(v)));
     }

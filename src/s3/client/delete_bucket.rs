@@ -24,7 +24,7 @@ use crate::s3::response::{
 };
 use crate::s3::types::{S3Api, ToStream};
 use bytes::Bytes;
-use futures::StreamExt;
+use futures_util::StreamExt;
 
 impl Client {
     /// Creates a [`DeleteBucket`] request builder.

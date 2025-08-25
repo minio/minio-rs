@@ -17,7 +17,7 @@ use crate::s3::Client;
 use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::ValidationErr;
 use crate::s3::header_constants::*;
-use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::CreateBucketResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};

@@ -22,7 +22,7 @@ use minio::s3::response::{AppendObjectResponse, StatObjectResponse};
 use minio::s3::segmented_bytes::SegmentedBytes;
 use minio::s3::types::S3Api;
 use rand::Rng;
-use rand::distributions::Alphanumeric;
+use rand::distr::Alphanumeric;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 }
 
 fn random_string(len: usize) -> String {
-    rand::thread_rng()
+    rand::rng()
         .sample_iter(&Alphanumeric)
         .take(len)
         .map(char::from)

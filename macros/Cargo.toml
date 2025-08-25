@@ -3,18 +3,19 @@ name = "minio-macros"
 version = "0.1.0"
 edition = "2024"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[lib]
-proc-macro = true
-
-
 [dependencies]
+uuid = { workspace = true, features = ["v4"] }
+futures-util = { workspace = true }
+
 syn = "2.0.104"
-proc-macro2 = "1.0.95"
+proc-macro2 = "1.0.97"
 quote = "1.0.40"
 darling = "0.21.0"
 darling_core = "0.21.0"
-uuid = { version = "1.17.0", features = ["v4"] }
 
 [dev-dependencies]
-minio_common = { path = "../common" }
+minio-common = { path = "../common" }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+proc-macro = true

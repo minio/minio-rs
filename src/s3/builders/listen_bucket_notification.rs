@@ -15,7 +15,7 @@
 
 use crate::s3::client::Client;
 use crate::s3::error::{Error, ValidationErr};
-use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::ListenBucketNotificationResponse;
 use crate::s3::types::{NotificationRecords, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::check_bucket_name;

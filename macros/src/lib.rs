@@ -104,6 +104,6 @@ pub fn test(
     // Expand the macro
     match test_attr::expand_test_macro(args, input_fn) {
         Ok(expanded) => expanded.into(),
-        Err(err) => err.into(),
+        Err(err) => err,
     }
 }

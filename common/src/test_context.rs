@@ -84,10 +84,10 @@ impl TestContext {
 
             let host: String =
                 std::env::var("SERVER_ENDPOINT").unwrap_or(DEFAULT_SERVER_ENDPOINT.to_string());
-            log::debug!("SERVER_ENDPOINT={}", host);
+            log::debug!("SERVER_ENDPOINT={host}");
             let access_key: String =
                 std::env::var("ACCESS_KEY").unwrap_or(DEFAULT_ACCESS_KEY.to_string());
-            log::debug!("ACCESS_KEY={}", access_key);
+            log::debug!("ACCESS_KEY={access_key}");
             let secret_key: String =
                 std::env::var("SECRET_KEY").unwrap_or(DEFAULT_SECRET_KEY.to_string());
             log::debug!("SECRET_KEY=*****");
@@ -95,19 +95,19 @@ impl TestContext {
                 .unwrap_or(DEFAULT_ENABLE_HTTPS.to_string())
                 .parse()
                 .unwrap_or(false);
-            log::debug!("ENABLE_HTTPS={}", secure);
+            log::debug!("ENABLE_HTTPS={secure}");
             let ssl_cert: String =
                 std::env::var("MINIO_SSL_CERT_FILE").unwrap_or(DEFAULT_SSL_CERT_FILE.to_string());
-            log::debug!("MINIO_SSL_CERT_FILE={}", ssl_cert);
+            log::debug!("MINIO_SSL_CERT_FILE={ssl_cert}");
             let ssl_cert_file: PathBuf = ssl_cert.into();
             let ignore_cert_check: bool = std::env::var("IGNORE_CERT_CHECK")
                 .unwrap_or(DEFAULT_IGNORE_CERT_CHECK.to_string())
                 .parse()
                 .unwrap_or(true);
-            log::debug!("IGNORE_CERT_CHECK={}", ignore_cert_check);
+            log::debug!("IGNORE_CERT_CHECK={ignore_cert_check}");
             let region: String =
                 std::env::var("SERVER_REGION").unwrap_or(DEFAULT_SERVER_REGION.to_string());
-            log::debug!("SERVER_REGION={:?}", region);
+            log::debug!("SERVER_REGION={region:?}");
 
             let mut base_url: BaseUrl = host.parse().unwrap();
             base_url.https = secure;

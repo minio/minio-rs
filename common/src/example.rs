@@ -140,7 +140,7 @@ pub fn create_bucket_replication_config_example(dst_bucket: &str) -> Replication
         rules: vec![ReplicationRule {
             id: Some(String::from("rule1")),
             destination: Destination {
-                bucket_arn: String::from(&format!("arn:aws:s3:::{}", dst_bucket)),
+                bucket_arn: String::from(&format!("arn:aws:s3:::{dst_bucket}")),
                 ..Default::default()
             },
             filter: Some(Filter {
@@ -170,8 +170,8 @@ pub fn create_object_lock_config_example() -> ObjectLockConfig {
 pub fn create_post_policy_example(bucket_name: &str, object_name: &str) -> PostPolicy {
     let expiration: DateTime<Utc> = utc_now() + chrono::Duration::days(5);
 
-    let mut policy = PostPolicy::new(&bucket_name, expiration).unwrap();
-    policy.add_equals_condition("key", &object_name).unwrap();
+    let mut policy = PostPolicy::new(bucket_name, expiration).unwrap();
+    policy.add_equals_condition("key", object_name).unwrap();
     policy
         .add_content_length_range_condition(1024 * 1024, 4 * 1024 * 1024)
         .unwrap();
@@ -189,7 +189,7 @@ pub fn create_select_content_data() -> (String, String) {
     (body, data)
 }
 pub fn create_select_content_request() -> SelectRequest {
-    let request = SelectRequest::new_csv_input_output(
+    SelectRequest::new_csv_input_output(
         "select * from S3Object",
         CsvInputSerialization {
             compression_type: None,
@@ -209,6 +209,5 @@ pub fn create_select_content_request() -> SelectRequest {
             record_delimiter: None,
         },
     )
-    .unwrap();
-    request
+    .unwrap()
 }
