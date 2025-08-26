@@ -55,7 +55,7 @@ impl MacroArgs {
         }
 
         // Validate that the function has exactly two arguments: ctx and bucket_name
-        if func.sig.inputs.len() != 2 && !self.no_bucket.is_present() {
+        if (func.sig.inputs.len() != 2) && !self.no_bucket.is_present() {
             let error_msg = "Minio test function must have exactly two arguments: (ctx: TestContext, bucket_name: String)";
             return Err(proc_macro::TokenStream::from(
                 Error::custom(error_msg)
@@ -80,18 +80,18 @@ impl MacroArgs {
             }
         }
 
-        // Check second argument (bucket_name: String)
-        if !self.no_bucket.is_present() {
-            if let Some(FnArg::Typed(pat_type)) = iter.next() {
-                let type_str = pat_type.ty.to_token_stream().to_string();
-                if !type_str.contains("String") {
-                    let error_msg = "Second argument must be of type String";
-                    return Err(proc_macro::TokenStream::from(
-                        Error::custom(error_msg)
-                            .with_span(&pat_type.span())
-                            .write_errors(),
-                    ));
-                }
+        // Check the second argument (bucket_name: String)
+        if !self.no_bucket.is_present()
+            && let Some(FnArg::Typed(pat_type)) = iter.next()
+        {
+            let type_str = pat_type.ty.to_token_stream().to_string();
+            if !type_str.contains("String") {
+                let error_msg = "Second argument must be of type String";
+                return Err(proc_macro::TokenStream::from(
+                    Error::custom(error_msg)
+                        .with_span(&pat_type.span())
+                        .write_errors(),
+                ));
             }
         }
 
@@ -124,7 +124,7 @@ pub(crate) fn expand_test_macro(
 
     // Setup common prelude
     let prelude = quote!(
-            use ::futures::FutureExt;
+            use ::futures_util::FutureExt;
             use ::std::panic::AssertUnwindSafe;
             use ::minio::s3::types::S3Api;
             use ::minio::s3::response::a_response_traits::HasBucket;

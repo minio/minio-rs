@@ -16,7 +16,7 @@
 use crate::s3::client::Client;
 use crate::s3::error::ValidationErr;
 use crate::s3::header_constants::*;
-use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::GetObjectResponse;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{S3Api, S3Request, ToS3Request};

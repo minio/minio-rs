@@ -14,11 +14,11 @@
 // limitations under the License.
 
 use async_std::io::ReadExt;
-use hex::ToHex;
 use minio::s3::builders::ObjectContent;
 use minio::s3::response::a_response_traits::{HasBucket, HasObject};
 use minio::s3::response::{GetObjectResponse, PutObjectContentResponse};
 use minio::s3::types::S3Api;
+use minio::s3::utils::hex_encode;
 use minio_common::rand_reader::RandReader;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name_utf8;
@@ -36,7 +36,7 @@ async fn get_hash(filename: &str) -> String {
         let mut buf = Vec::new();
         file.read_to_end(&mut buf).await.unwrap();
         context.update(&buf);
-        context.finish().encode_hex()
+        hex_encode(context.finish().as_ref())
     }
     #[cfg(not(feature = "ring"))]
     {
@@ -45,7 +45,7 @@ async fn get_hash(filename: &str) -> String {
         let mut buf = Vec::new();
         file.read_to_end(&mut buf).await.unwrap();
         hasher.update(&buf);
-        hasher.finalize().encode_hex()
+        hex_encode(hasher.finalize().as_slice())
     }
 }
 

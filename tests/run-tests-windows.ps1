@@ -12,3 +12,7 @@ cargo test -- --nocapture
 
 # run one specific test and show stdout
 # cargo test --test test_bucket_exists -- --nocapture
+
+# run tests with ring instead of default-crypto
+# cargo test --no-default-features --features "default-tls,ring" -- --nocapture
+

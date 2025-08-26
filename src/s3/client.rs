@@ -15,31 +15,30 @@
 
 //! S3 client to perform bucket and object operations
 
+use bytes::Bytes;
+use dashmap::DashMap;
+use http::HeaderMap;
+use hyper::http::Method;
+use reqwest::{Body, Response};
 use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
+use uuid::Uuid;
 
 use crate::s3::builders::{BucketExists, ComposeSource};
 use crate::s3::creds::Provider;
+use crate::s3::error::{Error, IoError, NetworkError, S3ServerError, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::http::BaseUrl;
 use crate::s3::minio_error_response::{MinioErrorCode, MinioErrorResponse};
-use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::a_response_traits::{HasEtagFromHeaders, HasS3Fields};
 use crate::s3::response::*;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::signer::sign_v4_s3;
 use crate::s3::utils::{EMPTY_SHA256, check_ssec_with_log, sha256_hash_sb, to_amz_date, utc_now};
-
-use crate::s3::error::{Error, IoError, NetworkError, S3ServerError, ValidationErr};
-use bytes::Bytes;
-use dashmap::DashMap;
-use http::HeaderMap;
-use hyper::http::Method;
-use rand::Rng;
-use reqwest::{Body, Response};
 
 mod append_object;
 mod bucket_exists;
@@ -276,12 +275,7 @@ impl Client {
             *val
         } else {
             // Create a random bucket name
-            let bucket_name: String = rand::thread_rng()
-                .sample_iter(&rand::distributions::Alphanumeric)
-                .take(20)
-                .map(char::from)
-                .collect::<String>()
-                .to_lowercase();
+            let bucket_name: String = Uuid::new_v4().to_string();
 
             let express = match BucketExists::new(self.clone(), bucket_name).send().await {
                 Ok(v) => {

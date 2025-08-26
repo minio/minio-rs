@@ -19,7 +19,7 @@ use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::signer::post_presign_v4;
 use crate::s3::utils::{
-    UtcTime, b64encode, check_bucket_name, to_amz_date, to_iso8601utc, to_signer_date, utc_now,
+    UtcTime, b64_encode, check_bucket_name, to_amz_date, to_iso8601utc, to_signer_date, utc_now,
 };
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -341,7 +341,7 @@ impl PostPolicy {
             "conditions": conditions,
         });
 
-        let encoded_policy = b64encode(policy.to_string());
+        let encoded_policy = b64_encode(policy.to_string());
         let signature = post_presign_v4(&encoded_policy, &secret_key, date, &region);
 
         let mut data: HashMap<String, String> = HashMap::new();

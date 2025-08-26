@@ -14,7 +14,7 @@
 
 use crate::s3::client::Client;
 use crate::s3::error::{Error, ValidationErr};
-use crate::s3::multimap::{Multimap, MultimapExt};
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::ListObjectsResponse;
 use crate::s3::response::list_objects::{
     ListObjectVersionsResponse, ListObjectsV1Response, ListObjectsV2Response,

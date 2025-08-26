@@ -16,7 +16,7 @@
 use crate::s3::Client;
 use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::ValidationErr;
-use crate::s3::multimap::Multimap;
+use crate::s3::multimap_ext::Multimap;
 use crate::s3::response::GetRegionResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
