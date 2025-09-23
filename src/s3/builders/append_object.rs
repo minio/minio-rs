@@ -231,9 +231,10 @@ impl AppendObjectContent {
                 data: Arc::new(seg_bytes),
             };
             ao.send().await
-        } else if object_size.is_known() && (seg_bytes.len() as u64) < part_size {
+        } else if let Some(expected) = object_size.value()
+            && (seg_bytes.len() as u64) < part_size
+        {
             // Not enough data!
-            let expected = object_size.as_u64().unwrap();
             let got = seg_bytes.len() as u64;
             Err(ValidationErr::InsufficientData { expected, got })?
         } else {

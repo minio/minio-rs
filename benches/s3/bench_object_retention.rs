@@ -34,7 +34,7 @@ pub(crate) async fn bench_put_object_retention(criterion: &mut Criterion) {
                 .client(ctx.client.clone())
                 .bucket(ctx.bucket.clone())
                 .object(ctx.object.clone())
-                .retention_mode(Some(RetentionMode::GOVERNANCE))
+                .retention_mode(RetentionMode::GOVERNANCE)
                 .retain_until_date(Some(utc_now() + chrono::Duration::days(1)))
                 .build()
         },
@@ -53,7 +53,7 @@ pub(crate) async fn bench_get_object_retention(criterion: &mut Criterion) {
                 .client(ctx.client.clone())
                 .bucket(ctx.bucket.clone())
                 .object(ctx.object.clone())
-                .retention_mode(Some(RetentionMode::GOVERNANCE))
+                .retention_mode(RetentionMode::GOVERNANCE)
                 .retain_until_date(Some(utc_now() + chrono::Duration::days(1)))
                 .build()
                 .send()

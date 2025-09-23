@@ -36,15 +36,18 @@ pub enum Size {
 }
 
 impl Size {
+    /// Returns `true` if the size is known and `false` otherwise.
     pub fn is_known(&self) -> bool {
         matches!(self, Size::Known(_))
     }
 
+    /// Returns `true` if the size is unknown and `false` otherwise.
     pub fn is_unknown(&self) -> bool {
         matches!(self, Size::Unknown)
     }
 
-    pub fn as_u64(&self) -> Option<u64> {
+    /// Returns the size if known, otherwise returns `None`.
+    pub fn value(&self) -> Option<u64> {
         match self {
             Size::Known(v) => Some(*v),
             Size::Unknown => None,
@@ -58,6 +61,12 @@ impl From<Option<u64>> for Size {
             Some(v) => Size::Known(v),
             None => Size::Unknown,
         }
+    }
+}
+
+impl From<u64> for Size {
+    fn from(value: u64) -> Self {
+        Size::Known(value)
     }
 }
 

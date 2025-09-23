@@ -24,6 +24,10 @@ impl MinioClient {
     ///
     /// 🛈 This operation is not supported for express buckets.
     ///
+    /// Note: there is no separate delete object retention API. To remove object retention, you must
+    /// call put_object_retention without '.retention_mode()' or '.retain_until_date()' to remove the retention.
+    /// You must set '.bypass_governance_mode(true)' to remove retention from objects in GOVERNANCE mode.
+    ///
     /// # Example
     ///
     /// ```no_run
@@ -40,7 +44,7 @@ impl MinioClient {
     ///     let retain_until_date = utc_now() + chrono::Duration::days(1);
     ///     let resp: PutObjectRetentionResponse = client
     ///         .put_object_retention("bucket-name", "object-name")
-    ///         .retention_mode(Some(RetentionMode::GOVERNANCE))
+    ///         .retention_mode(RetentionMode::GOVERNANCE)
     ///         .retain_until_date(Some(retain_until_date))
     ///         .build().send().await.unwrap();
     ///     println!("set the object retention for object '{}'", resp.object());

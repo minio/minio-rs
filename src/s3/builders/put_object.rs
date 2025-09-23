@@ -450,7 +450,7 @@ pub struct PutObjectContent {
     retention: Option<Retention>,
     #[builder(default = false)]
     legal_hold: bool,
-    #[builder(default)]
+    #[builder(default, setter(into))]
     part_size: Size,
     #[builder(default, setter(into))]
     content_type: Option<String>,
@@ -548,9 +548,10 @@ impl PutObjectContent {
                 .await?;
 
             Ok(PutObjectContentResponse::new(resp, size))
-        } else if object_size.is_known() && (seg_bytes.len() as u64) < part_size {
+        } else if let Some(expected) = object_size.value()
+            && (seg_bytes.len() as u64) < part_size
+        {
             // Not enough data!
-            let expected: u64 = object_size.as_u64().unwrap();
             let got: u64 = seg_bytes.len() as u64;
             Err(ValidationErr::InsufficientData { expected, got }.into())
         } else {
@@ -642,8 +643,7 @@ impl PutObjectContent {
                 return Err(ValidationErr::TooManyParts(part_number as u64).into());
             }
 
-            if object_size.is_known() {
-                let exp = object_size.as_u64().unwrap();
+            if let Some(exp) = object_size.value() {
                 if exp < total_read {
                     return Err(ValidationErr::TooMuchData(exp).into());
                 }
@@ -686,8 +686,7 @@ impl PutObjectContent {
         // Complete the multipart upload.
         let size = parts.iter().map(|p| p.size).sum();
 
-        if object_size.is_known() {
-            let expected = object_size.as_u64().unwrap();
+        if let Some(expected) = object_size.value() {
             if expected != size {
                 return Err(ValidationErr::InsufficientData {
                     expected,

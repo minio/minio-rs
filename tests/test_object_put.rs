@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use http::header;
-use minio::s3::builders::Size::Known;
 use minio::s3::builders::{MIN_PART_SIZE, ObjectContent};
 use minio::s3::response::a_response_traits::{
     HasBucket, HasEtagFromHeaders, HasIsDeleteMarker, HasObject, HasS3Fields,
@@ -164,7 +163,7 @@ async fn put_object_content_2(ctx: TestContext, bucket_name: String) {
                 &object_name,
                 ObjectContent::new_from_stream(data_src, None),
             )
-            .part_size(Known(MIN_PART_SIZE))
+            .part_size(MIN_PART_SIZE)
             .build()
             .send()
             .await
