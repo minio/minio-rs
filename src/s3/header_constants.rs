@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub const IF_MATCH: &str = "if-match";
-pub const IF_NONE_MATCH: &str = "if-none-match";
-pub const IF_MODIFIED_SINCE: &str = "if-modified-since";
-pub const IF_UNMODIFIED_SINCE: &str = "if-unmodified-since";
+pub const IF_MATCH: &str = "If-Match";
+pub const IF_NONE_MATCH: &str = "If-None-Match";
+pub const IF_MODIFIED_SINCE: &str = "If-Modified-Since";
+pub const IF_UNMODIFIED_SINCE: &str = "If-Unmodified-Since";
 pub const CONTENT_MD5: &str = "Content-MD5";
 pub const CONTENT_TYPE: &str = "Content-Type";
 pub const AUTHORIZATION: &str = "Authorization";
@@ -26,61 +26,61 @@ pub const CONTENT_LENGTH: &str = "Content-Length";
 
 pub const POLICY: &str = "policy";
 
-pub const X_MINIO_DEPLOYMENT_ID: &str = "x-minio-deployment-id";
+pub const X_MINIO_DEPLOYMENT_ID: &str = "X-Minio-Deployment-Id";
 
-pub const X_AMZ_VERSION_ID: &str = "x-amz-version-id";
-pub const X_AMZ_ID_2: &str = "x-amz-id-2";
-pub const X_AMZ_WRITE_OFFSET_BYTES: &str = "x-amz-write-offset-bytes";
+pub const X_AMZ_VERSION_ID: &str = "X-Amz-Version-Id";
+pub const X_AMZ_ID_2: &str = "X-Amz-Id-2";
+pub const X_AMZ_WRITE_OFFSET_BYTES: &str = "X-Amz-Write-Offset-Bytes";
 
-pub const X_AMZ_OBJECT_SIZE: &str = "x-amz-object-size";
-pub const X_AMZ_TAGGING: &str = "x-amz-tagging";
+pub const X_AMZ_OBJECT_SIZE: &str = "X-Amz-Object-Size";
+pub const X_AMZ_TAGGING: &str = "X-Amz-Tagging";
 
-pub const X_AMZ_BUCKET_REGION: &str = "x-amz-bucket-region";
+pub const X_AMZ_BUCKET_REGION: &str = "X-Amz-Bucket-Region";
 
-pub const X_AMZ_OBJECT_LOCK_MODE: &str = "x-amz-object-lock-mode";
+pub const X_AMZ_OBJECT_LOCK_MODE: &str = "X-Amz-Object-Lock-Mode";
 
-pub const X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE: &str = "x-amz-object-lock-retain-until-date";
+pub const X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE: &str = "X-Amz-Object-Lock-Retain-Until-Date";
 
-pub const X_AMZ_OBJECT_LOCK_LEGAL_HOLD: &str = "x-amz-object-lock-legal-hold";
+pub const X_AMZ_OBJECT_LOCK_LEGAL_HOLD: &str = "X-Amz-Object-Lock-Legal-Hold";
 
-pub const X_AMZ_METADATA_DIRECTIVE: &str = "x-amz-metadata-directive";
+pub const X_AMZ_METADATA_DIRECTIVE: &str = "X-Amz-Metadata-Directive";
 
-pub const X_AMZ_TAGGING_DIRECTIVE: &str = "x-amz-tagging-directive";
+pub const X_AMZ_TAGGING_DIRECTIVE: &str = "X-Amz-Tagging-Directive";
 
-pub const X_AMZ_COPY_SOURCE: &str = "x-amz-copy-source";
+pub const X_AMZ_COPY_SOURCE: &str = "X-Amz-Copy-Source";
 
-pub const X_AMZ_COPY_SOURCE_RANGE: &str = "x-amz-copy-source-range";
+pub const X_AMZ_COPY_SOURCE_RANGE: &str = "X-Amz-Copy-Source-Range";
 
-pub const X_AMZ_COPY_SOURCE_IF_MATCH: &str = "x-amz-copy-source-if-match";
+pub const X_AMZ_COPY_SOURCE_IF_MATCH: &str = "X-Amz-Copy-Source-If-Match";
 
-pub const X_AMZ_COPY_SOURCE_IF_NONE_MATCH: &str = "x-amz-copy-source-if-none-match";
+pub const X_AMZ_COPY_SOURCE_IF_NONE_MATCH: &str = "X-Amz-Copy-Source-If-None-Match";
 
-pub const X_AMZ_COPY_SOURCE_IF_UNMODIFIED_SINCE: &str = "x-amz-copy-source-if-unmodified-since";
+pub const X_AMZ_COPY_SOURCE_IF_UNMODIFIED_SINCE: &str = "X-Amz-Copy-Source-If-Unmodified-Since";
 
-pub const X_AMZ_COPY_SOURCE_IF_MODIFIED_SINCE: &str = "x-amz-copy-source-if-modified-since";
+pub const X_AMZ_COPY_SOURCE_IF_MODIFIED_SINCE: &str = "X-Amz-Copy-Source-If-Modified-Since";
 
-pub const X_AMZ_BUCKET_OBJECT_LOCK_ENABLED: &str = "x-amz-bucket-object-lock-enabled";
+pub const X_AMZ_BUCKET_OBJECT_LOCK_ENABLED: &str = "X-Amz-Bucket-Object-Lock-Enabled";
 
-pub const X_AMZ_BYPASS_GOVERNANCE_RETENTION: &str = "x-amz-bypass-governance-retention";
+pub const X_AMZ_BYPASS_GOVERNANCE_RETENTION: &str = "X-Amz-Bypass-Governance-Retention";
 
-pub const X_AMZ_DATE: &str = "x-amz-date";
+pub const X_AMZ_DATE: &str = "X-Amz-Date";
 
-pub const X_AMZ_DELETE_MARKER: &str = "x-amz-delete-marker";
-pub const X_AMZ_ALGORITHM: &str = "x-amz-algorithm";
+pub const X_AMZ_DELETE_MARKER: &str = "X-Amz-Delete-Marker";
+pub const X_AMZ_ALGORITHM: &str = "X-Amz-Algorithm";
 
-pub const X_AMZ_CREDENTIAL: &str = "x-amz-credential";
+pub const X_AMZ_CREDENTIAL: &str = "X-Amz-Credential";
 
-pub const X_AMZ_SIGNATURE: &str = "x-amz-signature";
+pub const X_AMZ_SIGNATURE: &str = "X-Amz-Signature";
 
-pub const X_AMZ_REQUEST_ID: &str = "x-amz-request-id";
+pub const X_AMZ_REQUEST_ID: &str = "X-Amz-Request-Id";
 
-pub const X_AMZ_EXPIRES: &str = "x-amz-expires";
+pub const X_AMZ_EXPIRES: &str = "X-Amz-Expires";
 
-pub const X_AMZ_SIGNED_HEADERS: &str = "x-amz-signedheaders";
+pub const X_AMZ_SIGNED_HEADERS: &str = "X-Amz-SignedHeaders";
 
-pub const X_AMZ_CONTENT_SHA256: &str = "x-amz-content-sha256";
+pub const X_AMZ_CONTENT_SHA256: &str = "X-Amz-Content-SHA256";
 
-pub const X_AMZ_SECURITY_TOKEN: &str = "x-amz-security-token";
+pub const X_AMZ_SECURITY_TOKEN: &str = "X-Amz-Security-Token";
 
 pub const X_AMZ_SERVER_SIDE_ENCRYPTION: &str = "X-Amz-Server-Side-Encryption";
 
