@@ -29,8 +29,11 @@ pub(crate) async fn bench_put_bucket_tagging(criterion: &mut Criterion) {
         criterion,
         || async { Ctx2::new().await },
         |ctx| {
-            PutBucketTagging::new(ctx.client.clone(), ctx.bucket.clone())
+            PutBucketTagging::builder()
+                .client(ctx.client.clone())
+                .bucket(ctx.bucket.clone())
                 .tags(create_tags_example())
+                .build()
         },
     )
 }
@@ -46,12 +49,18 @@ pub(crate) async fn bench_get_bucket_tagging(criterion: &mut Criterion) {
             ctx.client
                 .put_bucket_tagging(&ctx.bucket)
                 .tags(create_tags_example())
+                .build()
                 .send()
                 .await
                 .unwrap();
             ctx
         },
-        |ctx| GetBucketTagging::new(ctx.client.clone(), ctx.bucket.clone()),
+        |ctx| {
+            GetBucketTagging::builder()
+                .client(ctx.client.clone())
+                .bucket(ctx.bucket.clone())
+                .build()
+        },
     )
 }
 pub(crate) async fn bench_delete_bucket_tagging(criterion: &mut Criterion) {
@@ -62,6 +71,11 @@ pub(crate) async fn bench_delete_bucket_tagging(criterion: &mut Criterion) {
         "delete_bucket_tagging",
         criterion,
         || async { Ctx2::new().await },
-        |ctx| DeleteBucketTagging::new(ctx.client.clone(), ctx.bucket.clone()),
+        |ctx| {
+            DeleteBucketTagging::builder()
+                .client(ctx.client.clone())
+                .bucket(ctx.bucket.clone())
+                .build()
+        },
     )
 }

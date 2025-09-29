@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::client::Client;
+use crate::s3::client::MinioClient;
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::ListenBucketNotificationResponse;
@@ -22,63 +22,36 @@ use crate::s3::utils::check_bucket_name;
 use async_trait::async_trait;
 use futures_util::Stream;
 use http::Method;
+use typed_builder::TypedBuilder;
 
 /// Argument builder for the [`ListenBucketNotification`](https://min.io/docs/minio/linux/developers/go/API.html#ListenBucketNotification)
 ///
-/// This struct constructs the parameters required for the [`Client::listen_bucket_notification`](crate::s3::client::Client::listen_bucket_notification) method.
-#[derive(Clone, Debug, Default)]
+/// This struct constructs the parameters required for the [`Client::listen_bucket_notification`](crate::s3::client::MinioClient::listen_bucket_notification) method.
+#[derive(Clone, Debug, TypedBuilder)]
 pub struct ListenBucketNotification {
-    client: Client,
-
+    #[builder(!default)] // force required
+    client: MinioClient,
+    #[builder(default, setter(into))]
     extra_headers: Option<Multimap>,
+    #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
+    #[builder(default, setter(into))]
     region: Option<String>,
+    #[builder(setter(into))] // force required + accept Into<String>
     bucket: String,
+    #[builder(default, setter(into))]
     prefix: Option<String>,
+    #[builder(default, setter(into))]
     suffix: Option<String>,
+    #[builder(default, setter(into))]
     events: Option<Vec<String>>,
 }
 
-impl ListenBucketNotification {
-    pub fn new(client: Client, bucket: String) -> Self {
-        Self {
-            client,
-            bucket,
-            ..Default::default()
-        }
-    }
-
-    pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
-        self.extra_headers = extra_headers;
-        self
-    }
-
-    pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
-        self.extra_query_params = extra_query_params;
-        self
-    }
-
-    /// Sets the region for the request
-    pub fn region(mut self, region: Option<String>) -> Self {
-        self.region = region;
-        self
-    }
-
-    pub fn prefix(mut self, prefix: Option<String>) -> Self {
-        self.prefix = prefix;
-        self
-    }
-
-    pub fn suffix(mut self, suffix: Option<String>) -> Self {
-        self.suffix = suffix;
-        self
-    }
-
-    pub fn events(mut self, events: Option<Vec<String>>) -> Self {
-        self.events = events;
-        self
-    }
-}
+/// Builder type alias for [`ListenBucketNotification`].
+///
+/// Constructed via [`ListenBucketNotification::builder()`](ListenBucketNotification::builder) and used to build a [`ListenBucketNotification`] instance.
+pub type ListenBucketNotificationBldr =
+    ListenBucketNotificationBuilder<((MinioClient,), (), (), (), (String,), (), (), ())>;
 
 #[async_trait]
 impl S3Api for ListenBucketNotification {
@@ -118,10 +91,13 @@ impl ToS3Request for ListenBucketNotification {
             }
         }
 
-        Ok(S3Request::new(self.client, Method::GET)
+        Ok(S3Request::builder()
+            .client(self.client)
+            .method(Method::GET)
             .region(self.region)
-            .bucket(Some(self.bucket))
+            .bucket(self.bucket)
             .query_params(query_params)
-            .headers(self.extra_headers.unwrap_or_default()))
+            .headers(self.extra_headers.unwrap_or_default())
+            .build())
     }
 }

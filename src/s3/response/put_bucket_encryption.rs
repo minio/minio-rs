@@ -24,7 +24,7 @@ use std::mem;
 use xmltree::Element;
 
 /// Response of
-/// [put_bucket_encryption()](crate::s3::client::Client::put_bucket_encryption)
+/// [put_bucket_encryption()](crate::s3::client::MinioClient::put_bucket_encryption)
 /// API
 #[derive(Clone, Debug)]
 pub struct PutBucketEncryptionResponse {

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::Client;
+use crate::s3::client::MinioClient;
 use crate::s3::creds::Credentials;
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
@@ -23,18 +23,20 @@ use crate::s3::utils::{
 };
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use typed_builder::TypedBuilder;
 
-/// This struct constructs the parameters required for the [`Client::get_presigned_object_url`](crate::s3::client::Client::get_presigned_object_url) method.
+/// Argument builder for generating presigned POST policy for the [`POST Object`](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html) S3 API operation.
+///
+/// This struct constructs the parameters required for the [`Client::get_presigned_policy_form_data`](crate::s3::client::Client::get_presigned_policy_form_data) method.
+#[derive(Debug, Clone, TypedBuilder)]
 pub struct GetPresignedPolicyFormData {
-    client: Client,
+    #[builder(!default)] // force required
+    client: MinioClient,
+    #[builder(!default)] // force required
     policy: PostPolicy,
 }
 
 impl GetPresignedPolicyFormData {
-    pub fn new(client: Client, policy: PostPolicy) -> Self {
-        Self { client, policy }
-    }
-
     pub async fn send(self) -> Result<HashMap<String, String>, Error> {
         let region: String = self
             .client
@@ -53,11 +55,17 @@ impl GetPresignedPolicyFormData {
     }
 }
 
+/// Builder type alias for [`GetPresignedPolicyFormData`].
+///
+/// Constructed via [`GetPresignedPolicyFormData::builder()`](GetPresignedPolicyFormData::builder) and used to build a [`GetPresignedPolicyFormData`] instance.
+pub type GetPresignedPolicyFormDataBldr =
+    GetPresignedPolicyFormDataBuilder<((MinioClient,), (PostPolicy,))>;
+
 /// Post policy information for presigned post policy form-data
 ///
 /// Condition elements and respective condition for Post policy is available <a
 /// href="https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html#sigv4-PolicyConditions">here</a>.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct PostPolicy {
     pub region: Option<String>,
     pub bucket: String,
@@ -89,9 +97,13 @@ impl PostPolicy {
         check_bucket_name(bucket_name, true)?;
 
         Ok(Self {
+            region: None,
             bucket: bucket_name.to_owned(),
             expiration,
-            ..Default::default()
+            eq_conditions: Default::default(),
+            starts_with_conditions: Default::default(),
+            lower_limit: None,
+            upper_limit: None,
         })
     }
 

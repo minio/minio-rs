@@ -14,9 +14,10 @@
 // limitations under the License.
 
 use crate::common_benches::{Ctx2, benchmark_s3_api};
+use std::sync::Arc;
 
 use criterion::Criterion;
-use minio::s3::builders::{ObjectContent, PutObject};
+use minio::s3::builders::{ObjectContent, PutObject, UploadPart};
 use minio::s3::segmented_bytes::SegmentedBytes;
 use minio_common::rand_src::RandSrc;
 use minio_common::utils::rand_object_name;
@@ -37,7 +38,16 @@ pub(crate) fn bench_object_put(criterion: &mut Criterion) {
             })
             .unwrap();
 
-            PutObject::new(ctx.client.clone(), ctx.bucket.clone(), object_name, data)
+            PutObject::builder()
+                .inner(
+                    UploadPart::builder()
+                        .client(ctx.client.clone())
+                        .bucket(ctx.bucket.clone())
+                        .object(object_name)
+                        .data(Arc::new(data))
+                        .build(),
+                )
+                .build()
         },
     )
 }

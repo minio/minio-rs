@@ -24,7 +24,7 @@ use http::HeaderMap;
 use std::mem;
 
 /// Response of
-/// [listen_bucket_notification()](crate::s3::client::Client::listen_bucket_notification)
+/// [listen_bucket_notification()](crate::s3::client::MinioClient::listen_bucket_notification)
 /// API
 #[derive(Clone, Debug)]
 pub struct ListenBucketNotificationResponse {

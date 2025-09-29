@@ -30,6 +30,7 @@ async fn bucket_policy(ctx: TestContext, bucket_name: String) {
         .client
         .put_bucket_policy(&bucket_name)
         .config(config.clone())
+        .build()
         .send()
         .await
         .unwrap();
@@ -39,6 +40,7 @@ async fn bucket_policy(ctx: TestContext, bucket_name: String) {
     let resp: GetBucketPolicyResponse = ctx
         .client
         .get_bucket_policy(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -52,6 +54,7 @@ async fn bucket_policy(ctx: TestContext, bucket_name: String) {
     let resp: DeleteBucketPolicyResponse = ctx
         .client
         .delete_bucket_policy(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -61,6 +64,7 @@ async fn bucket_policy(ctx: TestContext, bucket_name: String) {
     let resp: GetBucketPolicyResponse = ctx
         .client
         .get_bucket_policy(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();

@@ -27,8 +27,17 @@ pub(crate) fn bench_object_copy_internal(criterion: &mut Criterion) {
         |ctx| {
             let object_name_src = &ctx.object;
             let object_name_dst = rand_object_name();
-            CopyObjectInternal::new(ctx.client.clone(), ctx.bucket.clone(), object_name_dst)
-                .source(CopySource::new(&ctx.bucket, object_name_src).unwrap())
+            CopyObjectInternal::builder()
+                .client(ctx.client.clone())
+                .bucket(ctx.bucket.clone())
+                .object(object_name_dst)
+                .source(
+                    CopySource::builder()
+                        .bucket(ctx.bucket.clone())
+                        .object(object_name_src)
+                        .build(),
+                )
+                .build()
         },
     )
 }

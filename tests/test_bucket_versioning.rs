@@ -28,6 +28,7 @@ async fn bucket_versioning_s3(ctx: TestContext, bucket_name: String) {
         .client
         .put_bucket_versioning(&bucket_name)
         .versioning_status(VersioningStatus::Enabled)
+        .build()
         .send()
         .await
         .unwrap();
@@ -37,6 +38,7 @@ async fn bucket_versioning_s3(ctx: TestContext, bucket_name: String) {
     let resp: GetBucketVersioningResponse = ctx
         .client
         .get_bucket_versioning(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -48,6 +50,7 @@ async fn bucket_versioning_s3(ctx: TestContext, bucket_name: String) {
         .client
         .put_bucket_versioning(&bucket_name)
         .versioning_status(VersioningStatus::Suspended)
+        .build()
         .send()
         .await
         .unwrap();
@@ -57,6 +60,7 @@ async fn bucket_versioning_s3(ctx: TestContext, bucket_name: String) {
     let resp: GetBucketVersioningResponse = ctx
         .client
         .get_bucket_versioning(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -71,6 +75,7 @@ async fn bucket_versioning_s3express(ctx: TestContext, bucket_name: String) {
         .client
         .put_bucket_versioning(&bucket_name)
         .versioning_status(VersioningStatus::Enabled)
+        .build()
         .send()
         .await;
     match resp {
@@ -80,8 +85,12 @@ async fn bucket_versioning_s3express(ctx: TestContext, bucket_name: String) {
         v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 
-    let resp: Result<GetBucketVersioningResponse, Error> =
-        ctx.client.get_bucket_versioning(&bucket_name).send().await;
+    let resp: Result<GetBucketVersioningResponse, Error> = ctx
+        .client
+        .get_bucket_versioning(&bucket_name)
+        .build()
+        .send()
+        .await;
     match resp {
         Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::NotSupported)

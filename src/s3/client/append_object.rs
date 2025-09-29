@@ -15,12 +15,14 @@
 
 // ! S3 APIs for appending objects.
 
-use super::Client;
-use crate::s3::builders::ObjectContent;
-use crate::s3::builders::{AppendObject, AppendObjectContent};
+use super::MinioClient;
+use crate::s3::builders::{
+    AppendObject, AppendObjectBldr, AppendObjectContent, AppendObjectContentBldr, ObjectContent,
+};
 use crate::s3::segmented_bytes::SegmentedBytes;
+use std::sync::Arc;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`AppendObject`] request builder to append data to the end of an (existing) object.
     /// This is a lower-level API that performs a non-multipart object upload.
     ///
@@ -32,7 +34,7 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::{AppendObjectResponse, PutObjectResponse};
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     /// use minio::s3::types::S3Api;
@@ -40,16 +42,16 @@ impl Client {
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let data1: SegmentedBytes = SegmentedBytes::from("aaaa".to_string());
     ///     let data2: SegmentedBytes = SegmentedBytes::from("bbbb".to_string());
     ///     let resp: PutObjectResponse = client
     ///         .put_object("bucket-name", "object-name", data1)
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     let offset_bytes = 4; // the offset at which to append the data
     ///     let resp: AppendObjectResponse = client
     ///         .append_object("bucket-name", "object-name", data2, offset_bytes)
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("size of the final object is {} bytes", resp.object_size());
     /// }
     /// ```
@@ -59,14 +61,13 @@ impl Client {
         object: S2,
         data: SegmentedBytes,
         offset_bytes: u64,
-    ) -> AppendObject {
-        AppendObject::new(
-            self.clone(),
-            bucket.into(),
-            object.into(),
-            data,
-            offset_bytes,
-        )
+    ) -> AppendObjectBldr {
+        AppendObject::builder()
+            .client(self.clone())
+            .bucket(bucket.into())
+            .object(object.into())
+            .data(Arc::new(data))
+            .offset_bytes(offset_bytes)
     }
 
     /// Creates an [`AppendObjectContent`] request builder to append data to the end of an (existing)
@@ -81,7 +82,7 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::{AppendObjectResponse, PutObjectResponse};
     /// use minio::s3::builders::ObjectContent;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
@@ -90,15 +91,15 @@ impl Client {
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let data1: SegmentedBytes = SegmentedBytes::from("aaaa".to_string());
     ///     let content2: String = "bbbb".to_string();
     ///     let resp: PutObjectResponse = client
     ///         .put_object("bucket-name", "object-name", data1)
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     let resp: AppendObjectResponse = client
     ///         .append_object_content("bucket-name", "object-name", content2)
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("size of the final object is {} bytes", resp.object_size());
     /// }
     /// ```
@@ -107,7 +108,11 @@ impl Client {
         bucket: S1,
         object: S2,
         content: C,
-    ) -> AppendObjectContent {
-        AppendObjectContent::new(self.clone(), bucket.into(), object.into(), content)
+    ) -> AppendObjectContentBldr {
+        AppendObjectContent::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
+            .input_content(content)
     }
 }

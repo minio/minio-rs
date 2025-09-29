@@ -24,7 +24,7 @@ use std::mem;
 use xmltree::Element;
 
 /// Response of
-/// [get_region()](crate::s3::client::Client::get_region)
+/// [get_region()](crate::s3::client::MinioClient::get_region)
 /// API
 #[derive(Clone, Debug)]
 pub struct GetRegionResponse {

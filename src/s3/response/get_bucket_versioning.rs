@@ -24,7 +24,7 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response from the [`get_bucket_versioning`](crate::s3::client::Client::get_bucket_versioning) API call,
+/// Response from the [`get_bucket_versioning`](crate::s3::client::MinioClient::get_bucket_versioning) API call,
 /// providing the versioning configuration of a bucket.
 ///
 /// This includes the current versioning status and the MFA (Multi-Factor Authentication) delete setting,

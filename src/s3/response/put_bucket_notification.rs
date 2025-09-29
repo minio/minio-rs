@@ -21,7 +21,7 @@ use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
-/// Response of [put_bucket_notification()](crate::s3::client::Client::put_bucket_notification) API
+/// Response of [put_bucket_notification()](crate::s3::client::MinioClient::put_bucket_notification) API
 #[derive(Clone, Debug)]
 pub struct PutBucketNotificationResponse {
     request: S3Request,

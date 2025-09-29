@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::GetObjectLockConfig;
+use crate::s3::builders::{GetObjectLockConfig, GetObjectLockConfigBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`GetObjectLockConfig`] request builder.
     ///
     /// To execute the request, call [`GetObjectLockConfig::send()`](crate::s3::types::S3Api::send),
@@ -27,21 +27,23 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::GetObjectLockConfigResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: GetObjectLockConfigResponse = client
     ///         .get_object_lock_config("bucket-name")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("retrieved object lock config '{:?}' from bucket '{}' is enabled", resp.config(), resp.bucket());
     /// }
     /// ```
-    pub fn get_object_lock_config<S: Into<String>>(&self, bucket: S) -> GetObjectLockConfig {
-        GetObjectLockConfig::new(self.clone(), bucket.into())
+    pub fn get_object_lock_config<S: Into<String>>(&self, bucket: S) -> GetObjectLockConfigBldr {
+        GetObjectLockConfig::builder()
+            .client(self.clone())
+            .bucket(bucket)
     }
 }

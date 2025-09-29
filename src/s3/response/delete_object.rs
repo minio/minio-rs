@@ -84,9 +84,9 @@ impl DeleteResult {
 }
 
 /// Response of
-/// [delete_objects()](crate::s3::client::Client::delete_objects)
+/// [delete_objects()](crate::s3::client::MinioClient::delete_objects)
 /// S3 API. It is also returned by the
-/// [remove_objects()](crate::s3::client::Client::delete_objects_streaming) API in the
+/// [remove_objects()](crate::s3::client::MinioClient::delete_objects_streaming) API in the
 /// form of a stream.
 #[derive(Clone, Debug)]
 pub struct DeleteObjectsResponse {

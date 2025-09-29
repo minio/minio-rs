@@ -28,9 +28,9 @@ use std::mem;
 use xmltree::Element;
 
 /// Response of
-/// [select_object_content()](crate::s3::client::Client::select_object_content)
+/// [select_object_content()](crate::s3::client::MinioClient::select_object_content)
 /// API
-/// Response of [select_object_content()](crate::s3::client::Client::select_object_content) API
+/// Response of [select_object_content()](crate::s3::client::MinioClient::select_object_content) API
 #[derive(Debug)]
 pub struct SelectObjectContentResponse {
     request: S3Request,

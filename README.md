@@ -24,8 +24,8 @@ use minio::s3::response::BucketExistsResponse;
 
 #[tokio::main]
 async fn main() {
-    let client: Client = Default::default(); // configure your client
-
+    let client = Client::create_client_on_localhost().unwrap(); // configure your client here
+    
     let exists: BucketExistsResponse = client
         .bucket_exists("my-bucket")
         .send()

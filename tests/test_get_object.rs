@@ -25,6 +25,7 @@ async fn test_get_object(ctx: &TestContext, bucket_name: &str, object_name: &str
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(bucket_name, object_name, data.clone())
+        .build()
         .send()
         .await
         .unwrap();
@@ -35,6 +36,7 @@ async fn test_get_object(ctx: &TestContext, bucket_name: &str, object_name: &str
     let resp: GetObjectResponse = ctx
         .client
         .get_object(bucket_name, object_name)
+        .build()
         .send()
         .await
         .unwrap();

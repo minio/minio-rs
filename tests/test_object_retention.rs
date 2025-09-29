@@ -38,6 +38,7 @@ async fn object_retention(ctx: TestContext, bucket_name: String) {
             &object_name,
             ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
+        .build()
         .send()
         .await
         .unwrap();
@@ -52,8 +53,9 @@ async fn object_retention(ctx: TestContext, bucket_name: String) {
     let resp: PutObjectRetentionResponse = ctx
         .client
         .put_object_retention(&bucket_name, &object_name)
-        .retention_mode(Some(RetentionMode::GOVERNANCE))
-        .retain_until_date(Some(retain_until_date))
+        .retention_mode(RetentionMode::GOVERNANCE)
+        .retain_until_date(retain_until_date)
+        .build()
         .send()
         .await
         .unwrap();
@@ -65,6 +67,7 @@ async fn object_retention(ctx: TestContext, bucket_name: String) {
     let resp: GetObjectRetentionResponse = ctx
         .client
         .get_object_retention(&bucket_name, &object_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -81,6 +84,7 @@ async fn object_retention(ctx: TestContext, bucket_name: String) {
         .client
         .put_object_retention(&bucket_name, &object_name)
         .bypass_governance_mode(true)
+        .build()
         .send()
         .await
         .unwrap();
@@ -92,6 +96,7 @@ async fn object_retention(ctx: TestContext, bucket_name: String) {
     let resp: GetObjectRetentionResponse = ctx
         .client
         .get_object_retention(&bucket_name, &object_name)
+        .build()
         .send()
         .await
         .unwrap();

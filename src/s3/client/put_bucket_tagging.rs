@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::PutBucketTagging;
+use crate::s3::builders::{PutBucketTagging, PutBucketTaggingBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`PutBucketTagging`] request builder.
     ///
     /// To execute the request, call [`PutBucketTagging::send()`](crate::s3::types::S3Api::send),
@@ -27,17 +27,16 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketTaggingResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::HasBucket;
-    ///
     /// use std::collections::HashMap;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///
     ///     let mut tags: HashMap<String, String> = HashMap::new();
     ///     tags.insert(String::from("Project"), String::from("Project One"));
@@ -46,11 +45,13 @@ impl Client {
     ///     let resp: PutBucketTaggingResponse = client
     ///         .put_bucket_tagging("bucket-name")
     ///         .tags(tags)
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("set tags on bucket '{}'", resp.bucket());
     /// }
     /// ```
-    pub fn put_bucket_tagging<S: Into<String>>(&self, bucket: S) -> PutBucketTagging {
-        PutBucketTagging::new(self.clone(), bucket.into())
+    pub fn put_bucket_tagging<S: Into<String>>(&self, bucket: S) -> PutBucketTaggingBldr {
+        PutBucketTagging::builder()
+            .client(self.clone())
+            .bucket(bucket)
     }
 }

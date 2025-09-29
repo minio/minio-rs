@@ -31,6 +31,7 @@ async fn bucket_encryption(ctx: TestContext, bucket_name: String) {
             .client
             .put_bucket_encryption(&bucket_name)
             .sse_config(config.clone())
+            .build()
             .send()
             .await
             .unwrap();
@@ -42,6 +43,7 @@ async fn bucket_encryption(ctx: TestContext, bucket_name: String) {
     let resp: GetBucketEncryptionResponse = ctx
         .client
         .get_bucket_encryption(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -52,6 +54,7 @@ async fn bucket_encryption(ctx: TestContext, bucket_name: String) {
     let resp: DeleteBucketEncryptionResponse = ctx
         .client
         .delete_bucket_encryption(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -61,6 +64,7 @@ async fn bucket_encryption(ctx: TestContext, bucket_name: String) {
     let resp: GetBucketEncryptionResponse = ctx
         .client
         .get_bucket_encryption(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();

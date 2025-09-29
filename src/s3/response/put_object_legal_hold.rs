@@ -23,7 +23,7 @@ use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
-/// Response from the [`put_object_legal_hold`](crate::s3::client::Client::put_object_legal_hold) API call,
+/// Response from the [`put_object_legal_hold`](crate::s3::client::MinioClient::put_object_legal_hold) API call,
 /// indicating that a legal hold has been successfully removed from a specific object version in an S3 bucket.
 ///
 /// Removing a legal hold allows the specified object version to be deleted or overwritten, subject to the bucket's

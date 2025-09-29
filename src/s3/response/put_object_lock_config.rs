@@ -22,7 +22,7 @@ use http::HeaderMap;
 use std::mem;
 
 /// Response of
-/// [put_object_lock_config()](crate::s3::client::Client::put_object_lock_config)
+/// [put_object_lock_config()](crate::s3::client::MinioClient::put_object_lock_config)
 /// API
 #[derive(Clone, Debug)]
 pub struct PutObjectLockConfigResponse {

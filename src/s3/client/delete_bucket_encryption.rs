@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::DeleteBucketEncryption;
+use crate::s3::builders::{DeleteBucketEncryption, DeleteBucketEncryptionBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`DeleteBucketEncryption`] request builder.
     ///
     /// To execute the request, call [`DeleteBucketEncryption::send()`](crate::s3::types::S3Api::send),
@@ -25,21 +25,26 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::DeleteBucketEncryptionResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: DeleteBucketEncryptionResponse = client
     ///         .delete_bucket_encryption("bucket-name")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("bucket '{}' is deleted", resp.bucket());
     /// }
     /// ```
-    pub fn delete_bucket_encryption<S: Into<String>>(&self, bucket: S) -> DeleteBucketEncryption {
-        DeleteBucketEncryption::new(self.clone(), bucket.into())
+    pub fn delete_bucket_encryption<S: Into<String>>(
+        &self,
+        bucket: S,
+    ) -> DeleteBucketEncryptionBldr {
+        DeleteBucketEncryption::builder()
+            .client(self.clone())
+            .bucket(bucket)
     }
 }

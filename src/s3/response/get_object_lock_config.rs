@@ -22,7 +22,7 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response from the [`get_object_lock_config`](crate::s3::client::Client::get_object_lock_config) API call,
+/// Response from the [`get_object_lock_config`](crate::s3::client::MinioClient::get_object_lock_config) API call,
 /// which retrieves the Object Lock configuration of a bucket.
 ///
 /// This configuration determines the default retention mode and period applied to new objects,

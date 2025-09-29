@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::PutObjectLegalHold;
+use crate::s3::builders::{PutObjectLegalHold, PutObjectLegalHoldBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`PutObjectLegalHold`] request builder.
     ///
     /// To execute the request, call [`DisableObjectLegalHold::send()`](crate::s3::types::S3Api::send),
@@ -27,17 +27,17 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::PutObjectLegalHoldResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: PutObjectLegalHoldResponse = client
     ///         .put_object_legal_hold("bucket-name", "object-name", true)
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("legal hold of bucket '{}' is enabled", resp.bucket());
     /// }
     /// ```
@@ -46,8 +46,11 @@ impl Client {
         bucket: S1,
         object: S2,
         legal_hold: bool,
-    ) -> PutObjectLegalHold {
-        PutObjectLegalHold::new(self.clone(), bucket.into(), object.into())
-            .legal_hold(Some(legal_hold))
+    ) -> PutObjectLegalHoldBldr {
+        PutObjectLegalHold::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
+            .legal_hold(legal_hold)
     }
 }

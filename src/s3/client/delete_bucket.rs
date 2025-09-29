@@ -13,20 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::{DeleteBucket, DeleteObject, ObjectToDelete};
+use crate::s3::builders::{DeleteBucket, DeleteBucketBldr, DeleteObject, ObjectToDelete};
+use crate::s3::client::MinioClient;
 use crate::s3::error::Error;
 use crate::s3::error::S3ServerError::S3Error;
 use crate::s3::minio_error_response::MinioErrorCode;
-use crate::s3::response::{BucketExistsResponse, DeleteResult};
 use crate::s3::response::{
-    DeleteBucketResponse, DeleteObjectResponse, DeleteObjectsResponse, PutObjectLegalHoldResponse,
+    BucketExistsResponse, DeleteBucketResponse, DeleteObjectResponse, DeleteObjectsResponse,
+    DeleteResult, PutObjectLegalHoldResponse,
 };
-use crate::s3::types::{S3Api, ToStream};
+use crate::s3::types::{S3Api, S3Request, ToStream};
 use bytes::Bytes;
 use futures_util::StreamExt;
+use http::Method;
+use multimap::MultiMap;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`DeleteBucket`] request builder.
     ///
     /// To execute the request, call [`DeleteBucket::send()`](crate::s3::types::S3Api::send),
@@ -35,21 +37,22 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::DeleteBucketResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
-    ///     let resp: DeleteBucketResponse =
-    ///         client.delete_bucket("bucket-name").send().await.unwrap();
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let resp: DeleteBucketResponse = client
+    ///         .delete_bucket("bucket-name")
+    ///         .build().send().await.unwrap();
     ///     println!("bucket '{}' in region '{}' is removed", resp.bucket(), resp.region());
     /// }
     /// ```
-    pub fn delete_bucket<S: Into<String>>(&self, bucket: S) -> DeleteBucket {
-        DeleteBucket::new(self.clone(), bucket.into())
+    pub fn delete_bucket<S: Into<String>>(&self, bucket: S) -> DeleteBucketBldr {
+        DeleteBucket::builder().client(self.clone()).bucket(bucket)
     }
 
     /// Deletes a bucket and also deletes non-empty buckets by first removing all objects before
@@ -60,11 +63,13 @@ impl Client {
     ) -> Result<DeleteBucketResponse, Error> {
         let bucket: String = bucket.into();
 
-        let resp: BucketExistsResponse = self.bucket_exists(&bucket).send().await?;
+        let resp: BucketExistsResponse = self.bucket_exists(&bucket).build().send().await?;
         if !resp.exists {
             // if the bucket does not exist, we can return early
+            let dummy: S3Request = S3Request::builder().client(self.clone()).method(Method::DELETE).bucket(bucket).headers(MultiMap::default()).build(/* S3RequestBuilder_Error_Missing_required_field_headers */);
+
             return Ok(DeleteBucketResponse {
-                request: Default::default(), //TODO consider how to handle this
+                request: dummy, //TODO consider how to handle this
                 body: Bytes::new(),
                 headers: Default::default(),
             });
@@ -76,6 +81,7 @@ impl Client {
             .list_objects(&bucket)
             .include_versions(!is_express)
             .recursive(true)
+            .build()
             .to_stream()
             .await;
 
@@ -111,17 +117,18 @@ impl Client {
                                 let _resp: PutObjectLegalHoldResponse = self
                                     .put_object_legal_hold(&bucket, &v.object_name, false)
                                     .version_id(v.version_id.clone())
+                                    .build()
                                     .send()
                                     .await?;
 
-                                let _resp: DeleteObjectResponse = DeleteObject::new(
-                                    self.clone(),
-                                    bucket.clone(),
-                                    ObjectToDelete::from(v),
-                                )
-                                .bypass_governance_mode(true)
-                                .send()
-                                .await?;
+                                let _resp: DeleteObjectResponse = DeleteObject::builder()
+                                    .client(self.clone())
+                                    .bucket(bucket.clone())
+                                    .object(v)
+                                    .bypass_governance_mode(true)
+                                    .build()
+                                    .send()
+                                    .await?;
                             }
                         }
                     }
@@ -129,13 +136,15 @@ impl Client {
             }
         }
 
-        let request: DeleteBucket = self.delete_bucket(&bucket);
+        let request: DeleteBucket = self.delete_bucket(&bucket).build();
         match request.send().await {
             Ok(resp) => Ok(resp),
             Err(Error::S3Server(S3Error(mut e))) => {
                 if matches!(e.code(), MinioErrorCode::NoSuchBucket) {
+                    let dummy: S3Request = S3Request::builder().client(self.clone()).method(Method::DELETE).bucket(bucket).headers(MultiMap::default()).build(/* S3RequestBuilder_Error_Missing_required_field_headers */);
+
                     Ok(DeleteBucketResponse {
-                        request: Default::default(), //TODO consider how to handle this
+                        request: dummy, //TODO consider how to handle this
                         body: Bytes::new(),
                         headers: e.take_headers(),
                     })
@@ -146,6 +155,7 @@ impl Client {
                         .list_objects(&bucket)
                         .include_versions(!is_express)
                         .recursive(true)
+                        .build()
                         .to_stream()
                         .await;
 

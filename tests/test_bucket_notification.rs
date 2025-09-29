@@ -32,6 +32,7 @@ async fn test_bucket_notification(ctx: TestContext, bucket_name: String) {
         .client
         .put_bucket_notification(&bucket_name)
         .notification_config(config.clone())
+        .build()
         .send()
         .await
         .unwrap();
@@ -42,6 +43,7 @@ async fn test_bucket_notification(ctx: TestContext, bucket_name: String) {
     let resp: GetBucketNotificationResponse = ctx
         .client
         .get_bucket_notification(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -86,6 +88,7 @@ async fn test_bucket_notification(ctx: TestContext, bucket_name: String) {
     let resp: DeleteBucketNotificationResponse = ctx
         .client
         .delete_bucket_notification(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -96,6 +99,7 @@ async fn test_bucket_notification(ctx: TestContext, bucket_name: String) {
     let resp: GetBucketNotificationResponse = ctx
         .client
         .get_bucket_notification(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();

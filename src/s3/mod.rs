@@ -32,4 +32,4 @@ pub mod sse;
 pub mod types;
 pub mod utils;
 
-pub use client::{Client, ClientBuilder};
+pub use client::{MinioClient, MinioClientBuilder};

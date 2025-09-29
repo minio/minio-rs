@@ -181,7 +181,7 @@ fn parse_list_objects_common_prefixes(
     Ok(())
 }
 
-/// Response of [list_objects_v1()](crate::s3::client::Client::list_objects_v1) S3 API
+/// Response of [list_objects_v1()](crate::s3::client::MinioClient::list_objects_v1) S3 API
 #[derive(Clone, Debug)]
 pub struct ListObjectsV1Response {
     request: S3Request,
@@ -243,7 +243,7 @@ impl FromS3Response for ListObjectsV1Response {
     }
 }
 
-/// Response of [list_objects_v2()](crate::s3::client::Client::list_objects_v2) S3 API
+/// Response of [list_objects_v2()](crate::s3::client::MinioClient::list_objects_v2) S3 API
 #[derive(Clone, Debug)]
 pub struct ListObjectsV2Response {
     request: S3Request,
@@ -312,7 +312,7 @@ impl FromS3Response for ListObjectsV2Response {
     }
 }
 
-/// Response of [list_object_versions()](crate::s3::client::Client::list_object_versions) S3 API
+/// Response of [list_object_versions()](crate::s3::client::MinioClient::list_object_versions) S3 API
 #[derive(Clone, Debug)]
 pub struct ListObjectVersionsResponse {
     request: S3Request,
@@ -378,8 +378,8 @@ impl FromS3Response for ListObjectVersionsResponse {
     }
 }
 
-/// Response of [list_objects()](crate::s3::client::Client::list_objects) API
-#[derive(Clone, Debug, Default)]
+/// Response of [list_objects()](crate::s3::client::MinioClient::list_objects) API
+#[derive(Clone, Debug)]
 pub struct ListObjectsResponse {
     request: S3Request,
     headers: HeaderMap,
@@ -430,7 +430,13 @@ impl From<ListObjectVersionsResponse> for ListObjectsResponse {
             next_key_marker: value.next_key_marker,
             version_id_marker: value.version_id_marker,
             next_version_id_marker: value.next_version_id_marker,
-            ..Default::default()
+
+            marker: None,
+            next_marker: None,
+            key_count: None,
+            start_after: None,
+            continuation_token: None,
+            next_continuation_token: None,
         }
     }
 }
@@ -453,7 +459,13 @@ impl From<ListObjectsV2Response> for ListObjectsResponse {
             start_after: value.start_after,
             continuation_token: value.continuation_token,
             next_continuation_token: value.next_continuation_token,
-            ..Default::default()
+
+            marker: None,
+            next_marker: None,
+            key_marker: None,
+            next_key_marker: None,
+            version_id_marker: None,
+            next_version_id_marker: None,
         }
     }
 }
@@ -474,7 +486,15 @@ impl From<ListObjectsV1Response> for ListObjectsResponse {
             contents: value.contents,
             marker: value.marker,
             next_marker: value.next_marker,
-            ..Default::default()
+
+            key_count: None,
+            start_after: None,
+            continuation_token: None,
+            next_continuation_token: None,
+            key_marker: None,
+            next_key_marker: None,
+            version_id_marker: None,
+            next_version_id_marker: None,
         }
     }
 }

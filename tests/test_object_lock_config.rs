@@ -31,6 +31,7 @@ async fn object_lock_config(ctx: TestContext, bucket_name: String) {
         .client
         .put_object_lock_config(&bucket_name)
         .config(config)
+        .build()
         .send()
         .await
         .unwrap();
@@ -40,6 +41,7 @@ async fn object_lock_config(ctx: TestContext, bucket_name: String) {
     let resp: GetObjectLockConfigResponse = ctx
         .client
         .get_object_lock_config(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -54,6 +56,7 @@ async fn object_lock_config(ctx: TestContext, bucket_name: String) {
     let resp: DeleteObjectLockConfigResponse = ctx
         .client
         .delete_object_lock_config(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -63,6 +66,7 @@ async fn object_lock_config(ctx: TestContext, bucket_name: String) {
     let resp: GetObjectLockConfigResponse = ctx
         .client
         .get_object_lock_config(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();

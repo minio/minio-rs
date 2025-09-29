@@ -219,7 +219,7 @@ mod test_error_code {
 
 /// MinioErrorResponse Is the typed error returned by all API operations.
 /// equivalent of ErrorResponse in the minio-go SDK
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct MinioErrorResponse {
     code: MinioErrorCode,
     message: Option<String>,

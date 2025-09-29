@@ -106,19 +106,19 @@ impl S3MultipartResponse {
     }
 }
 
-/// Response of [put_object_api()](crate::s3::client::Client::put_object) API
+/// Response of [put_object_api()](crate::s3::client::MinioClient::put_object) API
 pub type PutObjectResponse = S3Response1;
 
-/// Response of [create_multipart_upload()](crate::s3::client::Client::create_multipart_upload) API
+/// Response of [create_multipart_upload()](crate::s3::client::MinioClient::create_multipart_upload) API
 pub type CreateMultipartUploadResponse = S3MultipartResponse;
 
-/// Response of [abort_multipart_upload()](crate::s3::client::Client::abort_multipart_upload) API
+/// Response of [abort_multipart_upload()](crate::s3::client::MinioClient::abort_multipart_upload) API
 pub type AbortMultipartUploadResponse = S3MultipartResponse;
 
-/// Response of [complete_multipart_upload()](crate::s3::client::Client::complete_multipart_upload) API
+/// Response of [complete_multipart_upload()](crate::s3::client::MinioClient::complete_multipart_upload) API
 pub type CompleteMultipartUploadResponse = S3Response1;
 
-/// Response of [upload_part()](crate::s3::client::Client::upload_part) API
+/// Response of [upload_part()](crate::s3::client::MinioClient::upload_part) API
 pub type UploadPartResponse = S3Response1;
 
 /// Response for put_object operations that include object size information

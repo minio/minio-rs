@@ -24,7 +24,7 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response from the [`get_bucket_lifecycle`](crate::s3::client::Client::get_bucket_lifecycle) API call,
+/// Response from the [`get_bucket_lifecycle`](crate::s3::client::MinioClient::get_bucket_lifecycle) API call,
 /// providing the lifecycle configuration of an S3 bucket.
 ///
 /// The lifecycle configuration defines rules for managing the lifecycle of objects in the bucket,

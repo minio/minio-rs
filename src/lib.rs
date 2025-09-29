@@ -26,16 +26,17 @@
 //! ## Basic Usage
 //!
 //! ```no_run
-//! use minio::s3::Client;
+//! use minio::s3::MinioClient;
 //! use minio::s3::types::S3Api;
 //! use minio::s3::response::BucketExistsResponse;
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let client: Client = Default::default(); // configure your client
+//!     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
 //!
 //!     let exists: BucketExistsResponse = client
 //!         .bucket_exists("my-bucket")
+//!         .build()
 //!         .send()
 //!         .await
 //!         .expect("request failed");
@@ -51,7 +52,7 @@
 //! - Transparent error handling via `Result<T, Error>`
 //!
 //! ## Design
-//! - Each API method on the [`s3::client::Client`] returns a builder struct
+//! - Each API method on the [`s3::client::MinioClient`] returns a builder struct
 //! - Builders implement [`s3::types::ToS3Request`] for request conversion and [`s3::types::S3Api`] for execution
 //! - Responses implement [`s3::types::FromS3Response`] for consistent deserialization
 

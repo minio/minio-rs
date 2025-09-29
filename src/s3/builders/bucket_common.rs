@@ -13,49 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::client::Client;
+use crate::s3::client::MinioClient;
 use crate::s3::multimap_ext::Multimap;
 use std::marker::PhantomData;
+use typed_builder::TypedBuilder;
 
 /// Common parameters for bucket operations
-///
-/// See [Amazon S3 Buckets](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingBucket.html) for more information.
-#[derive(Clone, Debug, Default)]
-pub struct BucketCommon<A> {
-    pub(crate) client: Client,
+#[derive(Clone, Debug, TypedBuilder)]
+pub struct BucketCommon<T> {
+    #[builder(!default)] // force required
+    pub(crate) client: MinioClient,
 
+    #[builder(default, setter(into))]
     pub(crate) extra_headers: Option<Multimap>,
+    #[builder(default, setter(into))]
     pub(crate) extra_query_params: Option<Multimap>,
+    #[builder(default, setter(into))]
     pub(crate) region: Option<String>,
+    #[builder(setter(into))] // force required + accept Into<String>
     pub(crate) bucket: String,
 
-    _operation: PhantomData<A>,
-}
-
-impl<A: Default> BucketCommon<A> {
-    pub fn new(client: Client, bucket: String) -> BucketCommon<A> {
-        BucketCommon {
-            client,
-            bucket,
-            ..Default::default()
-        }
-    }
-
-    /// Sets extra headers for the request
-    pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
-        self.extra_headers = extra_headers;
-        self
-    }
-
-    /// Sets extra query parameters for the request
-    pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
-        self.extra_query_params = extra_query_params;
-        self
-    }
-
-    /// Sets the region for the request
-    pub fn region(mut self, region: Option<String>) -> Self {
-        self.region = region;
-        self
-    }
+    #[builder(default)]
+    _operation: PhantomData<T>,
 }

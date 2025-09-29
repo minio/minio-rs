@@ -31,6 +31,7 @@ async fn create_object_helper(
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(bucket_name, object_name, "hello world")
+        .build()
         .send()
         .await
         .unwrap();
@@ -45,6 +46,7 @@ async fn test_delete_object(ctx: &TestContext, bucket_name: &str, object_name: &
     let resp: DeleteObjectResponse = ctx
         .client
         .delete_object(bucket_name, object_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -80,8 +82,9 @@ async fn delete_objects(ctx: TestContext, bucket_name: String) {
 
     let resp: DeleteObjectsResponse = ctx
         .client
-        .delete_objects::<&String, ObjectToDelete>(&bucket_name, del_items)
+        .delete_objects::<&String>(&bucket_name, del_items)
         .verbose_mode(true) // Enable verbose mode to get detailed response
+        .build()
         .send()
         .await
         .unwrap();

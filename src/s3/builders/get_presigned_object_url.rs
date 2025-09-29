@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::Client;
+use crate::s3::client::MinioClient;
 use crate::s3::creds::Credentials;
 use crate::s3::error::Error;
 use crate::s3::header_constants::*;
@@ -22,51 +22,51 @@ use crate::s3::response::GetPresignedObjectUrlResponse;
 use crate::s3::signer::presign_v4;
 use crate::s3::utils::{UtcTime, check_bucket_name, check_object_name, utc_now};
 use http::Method;
+use typed_builder::TypedBuilder;
 
 /// The default expiry time in seconds for a [`GetPresignedObjectUrl`].
 pub const DEFAULT_EXPIRY_SECONDS: u32 = 604_800; // 7 days
 
-/// This struct constructs the parameters required for the [`Client::get_presigned_object_url`](crate::s3::client::Client::get_presigned_object_url) method.
-#[derive(Clone, Debug, Default)]
+/// This struct constructs the parameters required for the [`Client::get_presigned_object_url`](crate::s3::client::MinioClient::get_presigned_object_url) method.
+#[derive(Clone, Debug, TypedBuilder)]
 pub struct GetPresignedObjectUrl {
-    client: Client,
-
+    #[builder(!default)] // force required
+    client: MinioClient,
+    #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
+    #[builder(default, setter(into))]
     region: Option<String>,
+    #[builder(setter(into))] // force required + accept Into<String>
     bucket: String,
-
+    #[builder(setter(into))] // force required + accept Into<String>
     object: String,
+    #[builder(default, setter(into))]
     version_id: Option<String>,
+    #[builder(!default)]
     method: Method,
 
+    #[builder(default=Some(DEFAULT_EXPIRY_SECONDS), setter(into))]
     expiry_seconds: Option<u32>,
+    #[builder(default, setter(into))]
     request_time: Option<UtcTime>,
 }
 
+/// Builder type alias for [`GetPresignedObjectUrl`].
+///
+/// Constructed via [`GetPresignedObjectUrl::builder()`](GetPresignedObjectUrl::builder) and used to build a [`GetPresignedObjectUrl`] instance.
+pub type GetPresignedObjectUrlBldr = GetPresignedObjectUrlBuilder<(
+    (MinioClient,),
+    (),
+    (),
+    (String,),
+    (String,),
+    (),
+    (Method,),
+    (),
+    (),
+)>;
+
 impl GetPresignedObjectUrl {
-    pub fn new(client: Client, bucket: String, object: String, method: Method) -> Self {
-        Self {
-            client,
-            bucket,
-            object,
-            method,
-            expiry_seconds: Some(DEFAULT_EXPIRY_SECONDS),
-            ..Default::default()
-        }
-    }
-
-    /// Sets the expiry time for the presigned URL, defaulting to 7 days if not specified.
-    pub fn expiry_seconds(mut self, seconds: u32) -> Self {
-        self.expiry_seconds = Some(seconds);
-        self
-    }
-
-    /// Sets the request time for the presigned URL, defaulting to the current time if not specified.
-    pub fn request_time(mut self, time: UtcTime) -> Self {
-        self.request_time = Some(time);
-        self
-    }
-
     /// Sends the request to generate a presigned URL for an S3 object.
     pub async fn send(self) -> Result<GetPresignedObjectUrlResponse, Error> {
         check_bucket_name(&self.bucket, true)?;

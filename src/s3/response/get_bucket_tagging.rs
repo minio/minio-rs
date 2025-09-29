@@ -23,7 +23,7 @@ use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
-/// Response from the [`get_bucket_tagging`](crate::s3::client::Client::get_bucket_tagging) API call,
+/// Response from the [`get_bucket_tagging`](crate::s3::client::MinioClient::get_bucket_tagging) API call,
 /// providing the set of tags associated with an S3 bucket.
 ///
 /// Tags are key-value pairs that help organize and manage resources,

@@ -24,7 +24,7 @@ use http::HeaderMap;
 use std::mem;
 
 /// Response of
-/// [get_object_tags()](crate::s3::client::Client::get_object_tagging)
+/// [get_object_tags()](crate::s3::client::MinioClient::get_object_tagging)
 /// API
 #[derive(Clone, Debug)]
 pub struct GetObjectTaggingResponse {

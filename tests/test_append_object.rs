@@ -43,6 +43,7 @@ async fn create_object_helper(
     let resp: PutObjectResponse = ctx
         .client
         .put_object(bucket_name, object_name, data)
+        .build()
         .send()
         .await
         .unwrap();
@@ -52,6 +53,7 @@ async fn create_object_helper(
     let resp: GetObjectResponse = ctx
         .client
         .get_object(bucket_name, object_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -59,7 +61,7 @@ async fn create_object_helper(
     assert_eq!(resp.object(), object_name);
     assert_eq!(resp.object_size().unwrap(), size);
 
-    // double check that the content we just have put is "aaaa"
+    // double-check that the content we just have put is "aaaa"
     let content1: String = String::from_utf8(
         resp.content()
             .unwrap()
@@ -90,6 +92,7 @@ async fn append_object_0(ctx: TestContext, bucket_name: String) {
     let resp: AppendObjectResponse = ctx
         .client
         .append_object(&bucket_name, &object_name, data2, offset_bytes)
+        .build()
         .send()
         .await
         .unwrap();
@@ -100,6 +103,7 @@ async fn append_object_0(ctx: TestContext, bucket_name: String) {
     let resp: GetObjectResponse = ctx
         .client
         .get_object(&bucket_name, &object_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -139,6 +143,7 @@ async fn append_object_1(ctx: TestContext, bucket_name: String) {
     let resp: AppendObjectResponse = ctx
         .client
         .append_object(&bucket_name, &object_name, data2, offset_bytes)
+        .build()
         .send()
         .await
         .unwrap();
@@ -149,6 +154,7 @@ async fn append_object_1(ctx: TestContext, bucket_name: String) {
     let resp: GetObjectResponse = ctx
         .client
         .get_object(&bucket_name, &object_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -188,6 +194,7 @@ async fn append_object_2(ctx: TestContext, bucket_name: String) {
     let resp: Result<AppendObjectResponse, Error> = ctx
         .client
         .append_object(&bucket_name, &object_name, data2, offset_bytes)
+        .build()
         .send()
         .await;
 
@@ -217,6 +224,7 @@ async fn append_object_3(ctx: TestContext, bucket_name: String) {
     let resp: Result<AppendObjectResponse, Error> = ctx
         .client
         .append_object(&bucket_name, &object_name, data2, offset_bytes)
+        .build()
         .send()
         .await;
 
@@ -243,6 +251,7 @@ async fn append_object_4(ctx: TestContext, bucket_name: String) {
     let resp: AppendObjectResponse = ctx
         .client
         .append_object(&bucket_name, &object_name, data1, offset_bytes)
+        .build()
         .send()
         .await
         .unwrap();
@@ -253,6 +262,7 @@ async fn append_object_4(ctx: TestContext, bucket_name: String) {
     let resp: GetObjectResponse = ctx
         .client
         .get_object(&bucket_name, &object_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -286,6 +296,7 @@ async fn append_object_5(ctx: TestContext, bucket_name: String) {
     let resp: Result<AppendObjectResponse, Error> = ctx
         .client
         .append_object(&bucket_name, &object_name, data1, offset_bytes)
+        .build()
         .send()
         .await;
 
@@ -311,6 +322,7 @@ async fn append_object_content_0(ctx: TestContext, bucket_name: String) {
     let resp: AppendObjectResponse = ctx
         .client
         .append_object_content(&bucket_name, &object_name, content2)
+        .build()
         .send()
         .await
         .unwrap();
@@ -321,6 +333,7 @@ async fn append_object_content_0(ctx: TestContext, bucket_name: String) {
     let resp: GetObjectResponse = ctx
         .client
         .get_object(&bucket_name, &object_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -353,6 +366,7 @@ async fn append_object_content_1(ctx: TestContext, bucket_name: String) {
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(&bucket_name, &object_name, data1)
+        .build()
         .send()
         .await
         .unwrap();
@@ -367,6 +381,7 @@ async fn append_object_content_1(ctx: TestContext, bucket_name: String) {
         let resp: AppendObjectResponse = ctx
             .client
             .append_object_content(&bucket_name, &object_name, data2)
+            .build()
             .send()
             .await
             .unwrap();
@@ -377,6 +392,7 @@ async fn append_object_content_1(ctx: TestContext, bucket_name: String) {
         let resp: StatObjectResponse = ctx
             .client
             .stat_object(&bucket_name, &object_name)
+            .build()
             .send()
             .await
             .unwrap();
@@ -398,6 +414,7 @@ async fn append_object_content_2(ctx: TestContext, bucket_name: String) {
         let resp: PutObjectContentResponse = ctx
             .client
             .put_object_content(&bucket_name, &object_name, data1)
+            .build()
             .send()
             .await
             .unwrap();
@@ -410,6 +427,7 @@ async fn append_object_content_2(ctx: TestContext, bucket_name: String) {
         let resp: AppendObjectResponse = ctx
             .client
             .append_object_content(&bucket_name, &object_name, data2)
+            .build()
             .send()
             .await
             .unwrap();
@@ -420,6 +438,7 @@ async fn append_object_content_2(ctx: TestContext, bucket_name: String) {
         let resp: StatObjectResponse = ctx
             .client
             .stat_object(&bucket_name, &object_name)
+            .build()
             .send()
             .await
             .unwrap();
@@ -464,6 +483,7 @@ async fn append_object_content_3(ctx: TestContext, bucket_name: String) {
 
                 let resp: PutObjectContentResponse = client
                     .put_object_content(&test_bucket, &object_name, content)
+                    .build()
                     .send()
                     .await
                     .unwrap();
@@ -471,6 +491,7 @@ async fn append_object_content_3(ctx: TestContext, bucket_name: String) {
 
                 let resp: AppendObjectResponse = client
                     .append_object_content(&test_bucket, &object_name, item)
+                    .build()
                     .send()
                     .await
                     .unwrap();
@@ -479,6 +500,7 @@ async fn append_object_content_3(ctx: TestContext, bucket_name: String) {
 
                 let resp: StatObjectResponse = client
                     .stat_object(&test_bucket, &object_name)
+                    .build()
                     .send()
                     .await
                     .unwrap();
@@ -486,6 +508,7 @@ async fn append_object_content_3(ctx: TestContext, bucket_name: String) {
                 assert_eq!(resp.etag().unwrap(), etag);
                 client
                     .delete_object(&test_bucket, &object_name)
+                    .build()
                     .send()
                     .await
                     .unwrap();

@@ -33,6 +33,7 @@ async fn bucket_lifecycle(ctx: TestContext, bucket_name: String) {
         .client
         .put_bucket_lifecycle(&bucket_name)
         .life_cycle_config(config.clone())
+        .build()
         .send()
         .await
         .unwrap();
@@ -43,6 +44,7 @@ async fn bucket_lifecycle(ctx: TestContext, bucket_name: String) {
         .client
         .get_bucket_lifecycle(&bucket_name)
         .with_updated_at(false)
+        .build()
         .send()
         .await
         .unwrap();
@@ -55,6 +57,7 @@ async fn bucket_lifecycle(ctx: TestContext, bucket_name: String) {
         .client
         .get_bucket_lifecycle(&bucket_name)
         .with_updated_at(true)
+        .build()
         .send()
         .await
         .unwrap();
@@ -66,14 +69,19 @@ async fn bucket_lifecycle(ctx: TestContext, bucket_name: String) {
     let resp: DeleteBucketLifecycleResponse = ctx
         .client
         .delete_bucket_lifecycle(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.region(), DEFAULT_REGION);
 
-    let resp: Result<GetBucketLifecycleResponse, Error> =
-        ctx.client.get_bucket_lifecycle(&bucket_name).send().await;
+    let resp: Result<GetBucketLifecycleResponse, Error> = ctx
+        .client
+        .get_bucket_lifecycle(&bucket_name)
+        .build()
+        .send()
+        .await;
     match resp {
         Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::NoSuchLifecycleConfiguration)

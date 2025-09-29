@@ -13,9 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Various types for S3 API requests and responses
-
-use super::client::{Client, DEFAULT_REGION};
+use super::client::{DEFAULT_REGION, MinioClient};
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::Multimap;
@@ -28,65 +26,42 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
+use typed_builder::TypedBuilder;
 use xmltree::Element;
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug, TypedBuilder)]
 /// Generic S3Request
 pub struct S3Request {
-    pub(crate) client: Client,
+    #[builder(!default)] // force required
+    pub(crate) client: MinioClient,
 
+    #[builder(!default)] // force required
     method: Method,
+
+    #[builder(default, setter(into))]
     region: Option<String>,
+
+    #[builder(default, setter(into))]
     pub(crate) bucket: Option<String>,
+
+    #[builder(default, setter(into))]
     pub(crate) object: Option<String>,
+
+    #[builder(default)]
     pub(crate) query_params: Multimap,
+
+    #[builder(default)]
     headers: Multimap,
+
+    #[builder(default, setter(into))]
     body: Option<Arc<SegmentedBytes>>,
 
     /// region computed by [`S3Request::execute`]
+    #[builder(default, setter(skip))]
     pub(crate) inner_region: String,
 }
 
 impl S3Request {
-    pub fn new(client: Client, method: Method) -> Self {
-        Self {
-            client,
-            method,
-            ..Default::default()
-        }
-    }
-
-    /// Sets the region for the request
-    pub fn region(mut self, region: Option<String>) -> Self {
-        self.region = region;
-        self
-    }
-
-    pub fn bucket(mut self, bucket: Option<String>) -> Self {
-        self.bucket = bucket;
-        self
-    }
-
-    pub fn object(mut self, object: Option<String>) -> Self {
-        self.object = object;
-        self
-    }
-
-    pub fn query_params(mut self, query_params: Multimap) -> Self {
-        self.query_params = query_params;
-        self
-    }
-
-    pub fn headers(mut self, headers: Multimap) -> Self {
-        self.headers = headers;
-        self
-    }
-
-    pub fn body(mut self, body: Option<SegmentedBytes>) -> Self {
-        self.body = body.map(Arc::new);
-        self
-    }
-
     async fn compute_inner_region(&self) -> Result<String, Error> {
         Ok(match &self.bucket {
             Some(b) => self.client.get_region_cached(b, &self.region).await?,
@@ -115,7 +90,7 @@ impl S3Request {
 ///
 /// This trait is implemented by all S3 request builders and serves as an
 /// intermediate step in the request execution pipeline. It enables the
-/// conversion from a strongly-typed request builder into a generic
+/// conversion from a strongly typed request builder into a generic
 /// [`S3Request`] that can be executed over HTTP.
 ///
 /// The [`S3Api::send`] method uses this trait to convert request builders
@@ -134,7 +109,7 @@ pub trait ToS3Request: Sized {
     /// that can be executed against an S3-compatible service. The transformation
     /// includes:
     ///
-    /// * Setting appropriate HTTP method (GET, PUT, POST, etc.)
+    /// * Setting the appropriate HTTP method (GET, PUT, POST, etc.)
     /// * Building the request URL with path and query parameters
     /// * Adding required headers (authentication, content-type, etc.)
     /// * Attaching the request body, if applicable
@@ -147,7 +122,7 @@ pub trait ToS3Request: Sized {
     fn to_s3request(self) -> Result<S3Request, ValidationErr>;
 }
 
-/// Trait for converting HTTP responses into strongly-typed S3 response objects.
+/// Trait for converting HTTP responses into strongly typed S3 response objects.
 ///
 /// This trait is implemented by all S3 response types in the SDK and provides
 /// a way to parse and validate raw HTTP responses from S3-compatible services.
@@ -161,7 +136,7 @@ pub trait ToS3Request: Sized {
 /// * [`ToS3Request`] - The counterpart trait for converting request builders into HTTP requests
 #[async_trait]
 pub trait FromS3Response: Sized {
-    /// Asynchronously converts an HTTP response into a strongly-typed S3 response.
+    /// Asynchronously converts an HTTP response into a strongly typed S3 response.
     ///
     /// This method takes both the original S3 request and the HTTP response (or error)
     /// that resulted from executing that request. It then parses the response data
@@ -191,10 +166,10 @@ pub trait FromS3Response: Sized {
 /// Trait that defines a common interface for all S3 API request builders.
 ///
 /// This trait is implemented by all request builders in the SDK and provides
-/// a consistent way to send requests and obtain typed responses. It works in
+/// a consistent way to send requests and get typed responses. It works in
 /// conjunction with [`ToS3Request`] to convert the builder into a concrete
 /// HTTP request and with [`FromS3Response`] to convert the HTTP response back
-/// into a strongly-typed S3 response object.
+/// into a strongly typed S3 response object.
 ///
 /// # Type Parameters
 ///
@@ -234,8 +209,8 @@ pub trait ToStream: Sized {
     async fn to_stream(self) -> Box<dyn Stream<Item = Result<Self::Item, Error>> + Unpin + Send>;
 }
 
-#[derive(Clone, Debug, Default)]
-/// Contains information of an item of [list_objects()](crate::s3::client::Client::list_objects) API
+#[derive(Clone, Debug)]
+/// Contains information of an item of [list_objects()](crate::s3::client::MinioClient::list_objects) API
 pub struct ListEntry {
     pub name: String,
     pub last_modified: Option<UtcTime>,
@@ -254,7 +229,7 @@ pub struct ListEntry {
 }
 
 #[derive(Clone, Debug)]
-/// Contains bucket name and creation date
+/// Contains the bucket name and creation date
 pub struct Bucket {
     pub name: String,
     pub creation_date: UtcTime,
@@ -310,7 +285,7 @@ pub struct Retention {
     pub retain_until_date: UtcTime,
 }
 
-/// Parses legal hold string value
+/// Parses 'legal hold' string value
 pub fn parse_legal_hold(s: &str) -> Result<bool, ValidationErr> {
     if s.eq_ignore_ascii_case("ON") {
         Ok(true)
@@ -389,7 +364,7 @@ impl fmt::Display for QuoteFields {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 /// CSV input serialization definitions
 pub struct CsvInputSerialization {
     pub compression_type: Option<CompressionType>,
@@ -402,18 +377,18 @@ pub struct CsvInputSerialization {
     pub record_delimiter: Option<char>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 /// JSON input serialization definitions
 pub struct JsonInputSerialization {
     pub compression_type: Option<CompressionType>,
     pub json_type: Option<JsonType>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 /// Parquet input serialization definitions
 pub struct ParquetInputSerialization;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 /// CSV output serialization definitions
 pub struct CsvOutputSerialization {
     pub field_delimiter: Option<char>,
@@ -423,14 +398,15 @@ pub struct CsvOutputSerialization {
     pub record_delimiter: Option<char>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 /// JSON output serialization definitions
 pub struct JsonOutputSerialization {
     pub record_delimiter: Option<char>,
 }
 
-#[derive(Clone, Debug, Default)]
-/// Select request for [select_object_content()](crate::s3::client::Client::select_object_content) API
+#[derive(Clone, Debug)]
+/// Select request for [select_object_content()](crate::s3::client::MinioClient::select_object_content) API
+#[derive(Default)]
 pub struct SelectRequest {
     pub expr: String,
     pub csv_input: Option<CsvInputSerialization>,
@@ -690,7 +666,7 @@ impl SelectRequest {
     }
 }
 
-/// Progress information of [select_object_content()](crate::s3::client::Client::select_object_content) API
+/// Progress information of [select_object_content()](crate::s3::client::MinioClient::select_object_content) API
 #[derive(Clone, Debug)]
 pub struct SelectProgress {
     pub bytes_scanned: usize,
@@ -699,7 +675,7 @@ pub struct SelectProgress {
 }
 
 /// User identity contains principal ID
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UserIdentity {
     #[serde(alias = "principalId", default)]
     pub principal_id: String,
@@ -708,11 +684,11 @@ pub struct UserIdentity {
 /// Owner identity contains principal ID
 pub type OwnerIdentity = UserIdentity;
 
-/// Request parameters contain principal ID, region and source IP address, but
+/// Request parameters contain principal ID, region, and source IP address, but
 /// they are represented as a string-to-string map in the MinIO server. So we
 /// provide methods to fetch the known fields and a map for underlying
 /// representation.
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RequestParameters(HashMap<String, String>);
 
 impl RequestParameters {
@@ -766,21 +742,21 @@ impl ResponseElements {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 /// S3 bucket information
 pub struct S3Bucket {
-    #[serde(alias = "name", default)]
+    #[serde(alias = "name")]
     pub name: String,
-    #[serde(alias = "arn", default)]
+    #[serde(alias = "arn")]
     pub arn: String,
-    #[serde(alias = "ownerIdentity", default)]
+    #[serde(alias = "ownerIdentity")]
     pub owner_identity: OwnerIdentity,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 /// S3 object information
 pub struct S3Object {
-    #[serde(alias = "key", default)]
+    #[serde(alias = "key")]
     pub key: String,
     #[serde(alias = "size")]
     pub size: Option<u64>,
@@ -796,16 +772,16 @@ pub struct S3Object {
     pub sequencer: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 /// S3 definitions for NotificationRecord
 pub struct S3 {
-    #[serde(alias = "s3SchemaVersion", default)]
+    #[serde(alias = "s3SchemaVersion")]
     pub s3_schema_version: String,
-    #[serde(alias = "configurationId", default)]
+    #[serde(alias = "configurationId")]
     pub configuration_id: String,
-    #[serde(alias = "bucket", default)]
+    #[serde(alias = "bucket")]
     pub bucket: S3Bucket,
-    #[serde(alias = "object", default)]
+    #[serde(alias = "object")]
     pub object: S3Object,
 }
 
@@ -823,11 +799,11 @@ pub struct Source {
 /// Notification record information
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct NotificationRecord {
-    #[serde(alias = "eventVersion", default)]
+    #[serde(alias = "eventVersion")]
     pub event_version: String,
-    #[serde(alias = "eventSource", default)]
+    #[serde(alias = "eventSource")]
     pub event_source: String,
-    #[serde(alias = "awsRegion", default)]
+    #[serde(alias = "awsRegion")]
     pub aws_region: String,
     #[serde(
         alias = "eventTime",
@@ -835,17 +811,17 @@ pub struct NotificationRecord {
         with = "crate::s3::utils::aws_date_format"
     )]
     pub event_time: UtcTime,
-    #[serde(alias = "eventName", default)]
+    #[serde(alias = "eventName")]
     pub event_name: String,
-    #[serde(alias = "userIdentity", default)]
+    #[serde(alias = "userIdentity")]
     pub user_identity: UserIdentity,
-    #[serde(alias = "requestParameters", default)]
+    #[serde(alias = "requestParameters")]
     pub request_parameters: Option<RequestParameters>,
-    #[serde(alias = "responseElements", default)]
+    #[serde(alias = "responseElements")]
     pub response_elements: ResponseElements,
-    #[serde(alias = "s3", default)]
+    #[serde(alias = "s3")]
     pub s3: S3,
-    #[serde(alias = "source", default)]
+    #[serde(alias = "source")]
     pub source: Source,
 }
 
@@ -934,7 +910,7 @@ pub struct Tag {
 }
 
 #[derive(PartialEq, Clone, Debug)]
-/// And operator contains prefix and tags
+/// The 'And' operator contains prefix and tags
 pub struct AndOperator {
     pub prefix: Option<String>,
     pub tags: Option<HashMap<String, String>>,
@@ -955,7 +931,9 @@ impl Filter {
                 prefix: match v.get_child("Prefix") {
                     Some(p) => Some(
                         p.get_text()
-                            .ok_or(ValidationErr::xml_error("text of <Prefix> tag not found"))?
+                            .ok_or(ValidationErr::xml_error(
+                                "the text of <Prefix>-tag not found",
+                            ))?
                             .to_string(),
                     ),
                     None => None,
@@ -983,7 +961,9 @@ impl Filter {
         let prefix = match element.get_child("Prefix") {
             Some(v) => Some(
                 v.get_text()
-                    .ok_or(ValidationErr::xml_error("text of <Prefix> tag not found"))?
+                    .ok_or(ValidationErr::xml_error(
+                        "the text of <Prefix>-tag not found",
+                    ))?
                     .to_string(),
             ),
             None => None,
@@ -1071,7 +1051,9 @@ fn parse_common_notification_config(
     while let Some(v) = element.take_child("Event") {
         events.push(
             v.get_text()
-                .ok_or(ValidationErr::xml_error("text of <Event> tag not found"))?
+                .ok_or(ValidationErr::xml_error(
+                    "the text of the <Event>-tag is not found",
+                ))?
                 .to_string(),
         );
     }
@@ -1825,7 +1807,7 @@ impl ObjectLockConfig {
         }
 
         Err(ValidationErr::InvalidObjectLockConfig(
-            "only one days or years must be set".into(),
+            "only one field 'days' or 'years' must be set".into(),
         ))
     }
 

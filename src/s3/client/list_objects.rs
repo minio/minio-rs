@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::ListObjects;
+use crate::s3::builders::{ListObjectBldr, ListObjects};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`ListObjects`] request builder.
     ///
     /// List objects with version information optionally. This function handles
@@ -29,35 +29,35 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::types::{ToStream, S3Api};
-    ///
     /// use futures_util::StreamExt;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///    let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///
-    ///    let mut resp = client
-    ///        .list_objects("bucket-name")
-    ///        .recursive(true)
-    ///        .use_api_v1(false) // use v2
-    ///        .include_versions(true)
-    ///        .to_stream().await;
+    ///     let mut resp = client
+    ///         .list_objects("bucket-name")
+    ///         .recursive(true)
+    ///         .use_api_v1(false) // use v2
+    ///         .include_versions(true)
+    ///         .build()
+    ///         .to_stream().await;
     ///
-    ///    while let Some(result) = resp.next().await {
-    ///        match result {
-    ///            Ok(resp) => {
-    ///                for item in resp.contents {
-    ///                    println!("{:?}", item);
-    ///                }
-    ///            }
-    ///            Err(e) => println!("Error: {:?}", e),
-    ///        }
-    ///    }
-    ///}
+    ///     while let Some(result) = resp.next().await {
+    ///         match result {
+    ///             Ok(resp) => {
+    ///                 for item in resp.contents {
+    ///                     println!("{:?}", item);
+    ///                 }
+    ///             }
+    ///             Err(e) => println!("Error: {:?}", e),
+    ///         }
+    ///     }
+    /// }
     /// ```
-    pub fn list_objects<S: Into<String>>(&self, bucket: S) -> ListObjects {
-        ListObjects::new(self.clone(), bucket.into())
+    pub fn list_objects<S: Into<String>>(&self, bucket: S) -> ListObjectBldr {
+        ListObjects::builder().client(self.clone()).bucket(bucket)
     }
 }

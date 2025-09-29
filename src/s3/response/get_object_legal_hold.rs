@@ -26,7 +26,7 @@ use std::mem;
 use xmltree::Element;
 
 /// Response of
-/// [get_object_legal_hold()](crate::s3::client::Client::get_object_legal_hold)
+/// [get_object_legal_hold()](crate::s3::client::MinioClient::get_object_legal_hold)
 /// API
 #[derive(Clone, Debug)]
 pub struct GetObjectLegalHoldResponse {

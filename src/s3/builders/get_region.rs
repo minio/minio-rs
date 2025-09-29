@@ -13,46 +13,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::Client;
 use crate::s3::client::DEFAULT_REGION;
+use crate::s3::client::MinioClient;
 use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::response::GetRegionResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
+use typed_builder::TypedBuilder;
 
 /// Argument builder for the [`GetRegion`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::get_region`](crate::s3::client::Client::get_region) method.
-#[derive(Clone, Debug, Default)]
+/// This struct constructs the parameters required for the [`Client::get_region`](crate::s3::client::MinioClient::get_region) method.
+#[derive(Clone, Debug, TypedBuilder)]
 pub struct GetRegion {
-    client: Client,
-
+    #[builder(!default)] // force required
+    client: MinioClient,
+    #[builder(default, setter(into))]
     extra_headers: Option<Multimap>,
+    #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
+    #[builder(setter(into))] // force required + accept Into<String>
     bucket: String,
 }
 
-impl GetRegion {
-    pub fn new(client: Client, bucket: String) -> Self {
-        Self {
-            client,
-            bucket,
-            ..Default::default()
-        }
-    }
-
-    pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
-        self.extra_headers = extra_headers;
-        self
-    }
-
-    pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
-        self.extra_query_params = extra_query_params;
-        self
-    }
-}
+/// Builder type alias for [`GetRegion`].
+///
+/// Constructed via [`GetRegion::builder()`](GetRegion::builder) and used to build a [`GetRegion`] instance.
+pub type GetRegionBldr = GetRegionBuilder<((MinioClient,), (), (), (String,))>;
 
 #[doc(hidden)]
 #[derive(Default, Debug)]
@@ -66,10 +55,13 @@ impl ToS3Request for GetRegion {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
-        Ok(S3Request::new(self.client, Method::GET)
-            .region(Some(DEFAULT_REGION.to_string()))
-            .bucket(Some(self.bucket))
+        Ok(S3Request::builder()
+            .client(self.client)
+            .method(Method::GET)
+            .region(DEFAULT_REGION.to_string())
+            .bucket(self.bucket)
             .query_params(insert(self.extra_query_params, "location"))
-            .headers(self.extra_headers.unwrap_or_default()))
+            .headers(self.extra_headers.unwrap_or_default())
+            .build())
     }
 }

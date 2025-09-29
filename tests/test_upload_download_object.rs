@@ -68,6 +68,7 @@ async fn test_upload_download_object(
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(bucket_name, object_name, obj)
+        .build()
         .send()
         .await
         .unwrap();
@@ -79,6 +80,7 @@ async fn test_upload_download_object(
     let resp: GetObjectResponse = ctx
         .client
         .get_object(bucket_name, object_name)
+        .build()
         .send()
         .await
         .unwrap();

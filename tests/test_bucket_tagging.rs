@@ -32,6 +32,7 @@ async fn bucket_tags_s3(ctx: TestContext, bucket_name: String) {
         .client
         .put_bucket_tagging(&bucket_name)
         .tags(tags.clone())
+        .build()
         .send()
         .await
         .unwrap();
@@ -41,6 +42,7 @@ async fn bucket_tags_s3(ctx: TestContext, bucket_name: String) {
     let resp: GetBucketTaggingResponse = ctx
         .client
         .get_bucket_tagging(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -51,6 +53,7 @@ async fn bucket_tags_s3(ctx: TestContext, bucket_name: String) {
     let resp: DeleteBucketTaggingResponse = ctx
         .client
         .delete_bucket_tagging(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -60,6 +63,7 @@ async fn bucket_tags_s3(ctx: TestContext, bucket_name: String) {
     let resp: GetBucketTaggingResponse = ctx
         .client
         .get_bucket_tagging(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -76,6 +80,7 @@ async fn bucket_tags_s3express(ctx: TestContext, bucket_name: String) {
         .client
         .put_bucket_tagging(&bucket_name)
         .tags(tags.clone())
+        .build()
         .send()
         .await;
     match resp {
@@ -85,8 +90,12 @@ async fn bucket_tags_s3express(ctx: TestContext, bucket_name: String) {
         v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 
-    let resp: Result<GetBucketTaggingResponse, Error> =
-        ctx.client.get_bucket_tagging(&bucket_name).send().await;
+    let resp: Result<GetBucketTaggingResponse, Error> = ctx
+        .client
+        .get_bucket_tagging(&bucket_name)
+        .build()
+        .send()
+        .await;
     match resp {
         Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::NotSupported)
@@ -94,8 +103,12 @@ async fn bucket_tags_s3express(ctx: TestContext, bucket_name: String) {
         v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 
-    let resp: Result<DeleteBucketTaggingResponse, Error> =
-        ctx.client.delete_bucket_tagging(&bucket_name).send().await;
+    let resp: Result<DeleteBucketTaggingResponse, Error> = ctx
+        .client
+        .delete_bucket_tagging(&bucket_name)
+        .build()
+        .send()
+        .await;
     match resp {
         Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::NotSupported)

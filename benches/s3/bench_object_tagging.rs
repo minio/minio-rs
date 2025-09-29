@@ -30,8 +30,12 @@ pub(crate) async fn bench_put_object_tagging(criterion: &mut Criterion) {
         criterion,
         || async { Ctx2::new_with_object(false).await },
         |ctx| {
-            PutObjectTagging::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone())
+            PutObjectTagging::builder()
+                .client(ctx.client.clone())
+                .bucket(ctx.bucket.clone())
+                .object(ctx.object.clone())
                 .tags(create_tags_example())
+                .build()
         },
     )
 }
@@ -49,11 +53,18 @@ pub(crate) async fn bench_get_object_tagging(criterion: &mut Criterion) {
                 .client
                 .put_object_tagging(&ctx.bucket, &ctx.object)
                 .tags(create_tags_example())
+                .build()
                 .send()
                 .await
                 .unwrap();
             ctx
         },
-        |ctx| GetObjectTagging::new(ctx.client.clone(), ctx.bucket.clone(), ctx.object.clone()),
+        |ctx| {
+            GetObjectTagging::builder()
+                .client(ctx.client.clone())
+                .bucket(ctx.bucket.clone())
+                .object(ctx.object.clone())
+                .build()
+        },
     )
 }

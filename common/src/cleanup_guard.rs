@@ -13,17 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use minio::s3::Client;
+use minio::s3::MinioClient;
 
 /// Cleanup guard that removes the bucket when it is dropped
 pub struct CleanupGuard {
-    client: Client,
+    client: MinioClient,
     bucket_name: String,
 }
 
 impl CleanupGuard {
     #[allow(dead_code)]
-    pub fn new<S: Into<String>>(client: Client, bucket_name: S) -> Self {
+    pub fn new<S: Into<String>>(client: MinioClient, bucket_name: S) -> Self {
         Self {
             client,
             bucket_name: bucket_name.into(),
@@ -35,7 +35,7 @@ impl CleanupGuard {
     }
 }
 
-pub async fn cleanup(client: Client, bucket_name: &str) {
+pub async fn cleanup(client: MinioClient, bucket_name: &str) {
     tokio::select!(
         _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
             eprintln!("Cleanup timeout after 60s while removing bucket {bucket_name}");

@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::DeleteBucketTagging;
+use crate::s3::builders::{DeleteBucketTagging, DeleteBucketTaggingBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`DeleteBucketTagging`] request builder.
     ///
     /// To execute the request, call [`DeleteBucketTagging::send()`](crate::s3::types::S3Api::send),
@@ -27,21 +27,23 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::DeleteBucketTaggingResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let resp: DeleteBucketTaggingResponse = client
     ///         .delete_bucket_tagging("bucket-name")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("tags of bucket '{}' are deleted", resp.bucket());
     /// }
     /// ```
-    pub fn delete_bucket_tagging<S: Into<String>>(&self, bucket: S) -> DeleteBucketTagging {
-        DeleteBucketTagging::new(self.clone(), bucket.into())
+    pub fn delete_bucket_tagging<S: Into<String>>(&self, bucket: S) -> DeleteBucketTaggingBldr {
+        DeleteBucketTagging::builder()
+            .client(self.clone())
+            .bucket(bucket)
     }
 }

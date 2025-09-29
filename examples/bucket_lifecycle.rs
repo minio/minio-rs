@@ -16,7 +16,7 @@
 mod common;
 
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
-use minio::s3::Client;
+use minio::s3::MinioClient;
 use minio::s3::lifecycle_config::{LifecycleConfig, LifecycleRule};
 use minio::s3::response::{
     DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, PutBucketLifecycleResponse,
@@ -26,15 +26,18 @@ use minio::s3::types::{Filter, S3Api};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
-    let client: Client = create_client_on_play()?;
+    let client: MinioClient = create_client_on_play()?;
 
     let bucket_name: &str = "lifecycle-rust-bucket";
     create_bucket_if_not_exists(bucket_name, &client).await?;
 
     if false {
         // TODO
-        let resp: GetBucketLifecycleResponse =
-            client.get_bucket_lifecycle(bucket_name).send().await?;
+        let resp: GetBucketLifecycleResponse = client
+            .get_bucket_lifecycle(bucket_name)
+            .build()
+            .send()
+            .await?;
         log::info!("life cycle settings before setting: resp={resp:?}");
     }
 
@@ -52,21 +55,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let resp: PutBucketLifecycleResponse = client
         .put_bucket_lifecycle(bucket_name)
         .life_cycle_config(LifecycleConfig { rules })
+        .build()
         .send()
         .await?;
     log::info!("response of setting life cycle config: resp={resp:?}");
 
     if false {
         // TODO
-        let resp: GetBucketLifecycleResponse =
-            client.get_bucket_lifecycle(bucket_name).send().await?;
+        let resp: GetBucketLifecycleResponse = client
+            .get_bucket_lifecycle(bucket_name)
+            .build()
+            .send()
+            .await?;
         log::info!("life cycle settings after setting: resp={resp:?}");
     }
 
     if false {
         // TODO
-        let resp: DeleteBucketLifecycleResponse =
-            client.delete_bucket_lifecycle(bucket_name).send().await?;
+        let resp: DeleteBucketLifecycleResponse = client
+            .delete_bucket_lifecycle(bucket_name)
+            .build()
+            .send()
+            .await?;
         log::info!("response of deleting lifecycle config: resp={resp:?}");
     }
     Ok(())

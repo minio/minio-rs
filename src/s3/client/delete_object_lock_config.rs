@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::DeleteObjectLockConfig;
+use crate::s3::builders::{DeleteObjectLockConfig, DeleteObjectLockConfigBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`DeleteObjectLockConfig`] request builder.
     ///
     /// To execute the request, call [`DeleteObjectLockConfig::send()`](crate::s3::types::S3Api::send),
@@ -27,34 +27,42 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
     /// use minio::s3::response::{DeleteObjectLockConfigResponse, CreateBucketResponse, PutObjectLockConfigResponse};
     /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
     /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
     ///     let bucket_name = "bucket-name";
     ///
-    ///     let resp: CreateBucketResponse =
-    ///         client.create_bucket(bucket_name).object_lock(true).send().await.unwrap();
+    ///     let resp: CreateBucketResponse = client
+    ///         .create_bucket(bucket_name).object_lock(true)
+    ///         .build().send().await.unwrap();
     ///     println!("created bucket '{}' with object locking enabled", resp.bucket());
     ///
     ///
     /// const DURATION_DAYS: i32 = 7;
     ///     let config = ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();
     ///
-    ///     let resp: PutObjectLockConfigResponse =     
-    ///         client.put_object_lock_config(bucket_name).config(config).send().await.unwrap();
+    ///     let resp: PutObjectLockConfigResponse = client
+    ///         .put_object_lock_config(bucket_name).config(config)
+    ///         .build().send().await.unwrap();
     ///     println!("configured object locking for bucket '{}'", resp.bucket());
     ///
-    ///     let resp: DeleteObjectLockConfigResponse =
-    ///         client.delete_object_lock_config(bucket_name).send().await.unwrap();
+    ///     let resp: DeleteObjectLockConfigResponse = client
+    ///         .delete_object_lock_config(bucket_name)
+    ///         .build().send().await.unwrap();
     ///     println!("object locking of bucket '{}' is deleted", resp.bucket());
     /// }
     /// ```
-    pub fn delete_object_lock_config<S: Into<String>>(&self, bucket: S) -> DeleteObjectLockConfig {
-        DeleteObjectLockConfig::new(self.clone(), bucket.into())
+    pub fn delete_object_lock_config<S: Into<String>>(
+        &self,
+        bucket: S,
+    ) -> DeleteObjectLockConfigBldr {
+        DeleteObjectLockConfig::builder()
+            .client(self.clone())
+            .bucket(bucket)
     }
 }
