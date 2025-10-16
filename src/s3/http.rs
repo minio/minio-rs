@@ -66,17 +66,15 @@ impl Default for Url {
 
 impl fmt::Display for Url {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.host.is_empty() {
-            return Err(std::fmt::Error);
-        }
-
         if self.https {
             f.write_str("https://")?;
         } else {
             f.write_str("http://")?;
         }
 
-        if self.port > 0 {
+        if self.host.is_empty() {
+            f.write_str("<invalid-host>")?;
+        } else if self.port > 0 {
             f.write_str(&format!("{}:{}", self.host, self.port))?;
         } else {
             f.write_str(&self.host)?;

@@ -91,7 +91,7 @@ pub fn sha256_hash(data: &[u8]) -> String {
     }
     #[cfg(not(feature = "ring"))]
     {
-        hex_encode(Sha256::new_with_prefix(data).finalize().as_slice())
+        hex_encode(Sha256::new_with_prefix(data).finalize().as_ref())
     }
 }
 
@@ -164,7 +164,7 @@ pub fn sha256_hash_sb(sb: Arc<SegmentedBytes>) -> String {
         for data in sb.iter() {
             hasher.update(data);
         }
-        hex_encode(hasher.finalize().as_slice())
+        hex_encode(hasher.finalize().as_ref())
     }
 }
 

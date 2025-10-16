@@ -28,12 +28,16 @@ impl MinioClient {
     /// ```no_run
     /// use http::Method;
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::GetPresignedObjectUrlResponse;
     /// use minio::s3::types::S3Api;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetPresignedObjectUrlResponse = client
     ///         .get_presigned_object_url("bucket-name", "object-name", Method::GET)
     ///         .build().send().await.unwrap();

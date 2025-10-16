@@ -28,13 +28,17 @@ impl MinioClient {
     ///
     /// ```no_run
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::DeleteObjectTaggingResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::{HasBucket, HasObject};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteObjectTaggingResponse = client
     ///         .delete_object_tagging("bucket-name", "object_name")
     ///         .build().send().await.unwrap();

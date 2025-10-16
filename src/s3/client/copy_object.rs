@@ -31,6 +31,8 @@ impl MinioClient {
     ///
     /// ```no_run
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::UploadPartCopyResponse;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     /// use minio::s3::types::S3Api;
@@ -38,7 +40,9 @@ impl MinioClient {
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let data1: SegmentedBytes = SegmentedBytes::from("aaaa".to_string());
     ///     todo!();
     ///     let resp: UploadPartCopyResponse = client
@@ -95,6 +99,8 @@ impl MinioClient {
     ///
     /// ```no_run
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::CopyObjectResponse;
     /// use minio::s3::builders::CopySource;
     /// use minio::s3::types::S3Api;
@@ -102,7 +108,9 @@ impl MinioClient {
     /// #[tokio::main]
     /// async fn main() {
     /// use minio::s3::response::a_response_traits::HasVersion;
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: CopyObjectResponse = client
     ///         .copy_object("bucket-name-dst", "object-name-dst")
     ///         .source(CopySource::builder().bucket("bucket-name-src").object("object-name-src").build())

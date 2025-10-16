@@ -28,13 +28,17 @@ impl MinioClient {
     ///
     /// ```no_run
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::{CreateBucketResponse, PutObjectLockConfigResponse};
     /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
     /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let bucket_name = "bucket-name";
     ///
     ///     let resp: CreateBucketResponse = client

@@ -27,12 +27,16 @@
 //!
 //! ```no_run
 //! use minio::s3::MinioClient;
+//! use minio::s3::creds::StaticProvider;
+//! use minio::s3::http::BaseUrl;
 //! use minio::s3::types::S3Api;
 //! use minio::s3::response::BucketExistsResponse;
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+//!     let base_url = "play.min.io".parse::<BaseUrl>().unwrap();
+//!     let static_provider = StaticProvider::new("Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG", None);
+//!     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
 //!
 //!     let exists: BucketExistsResponse = client
 //!         .bucket_exists("my-bucket")

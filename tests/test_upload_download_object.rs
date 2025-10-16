@@ -45,7 +45,7 @@ async fn get_hash(filename: &str) -> String {
         let mut buf = Vec::new();
         file.read_to_end(&mut buf).await.unwrap();
         hasher.update(&buf);
-        hex_encode(hasher.finalize().as_slice())
+        hex_encode(hasher.finalize().as_ref())
     }
 }
 

@@ -706,7 +706,7 @@ impl ComposeObjectInternal {
 /// This struct constructs the parameters required for the [`Client::copy_object`](crate::s3::client::MinioClient::copy_object) method.
 #[derive(Clone, Debug, TypedBuilder)]
 pub struct ComposeObject {
-    //#[builder(!default)] // force required
+    #[builder(!default)] // force required
     client: MinioClient,
     #[builder(default)]
     extra_headers: Option<Multimap>,

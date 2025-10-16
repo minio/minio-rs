@@ -32,7 +32,7 @@ impl MinioClient {
     ///
     /// For handling large files requiring multipart upload, see [`create_multipart_upload`](#method.create_multipart_upload).
     ///
-    /// To execute the request, call [`PutObjects::send()`](crate::s3::types::S3Api::send),
+    /// To execute the request, call [`PutObject::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`PutObjectResponse`](crate::s3::response::PutObjectResponse).
     ///
     /// For more information, refer to the [AWS S3 PutObject API documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html).
@@ -41,6 +41,8 @@ impl MinioClient {
     ///
     /// ```no_run
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::PutObjectResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
@@ -48,7 +50,9 @@ impl MinioClient {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let data = SegmentedBytes::from("Hello world".to_string());
     ///     let resp: PutObjectResponse = client
     ///         .put_object("bucket-name", "object-name", data)
@@ -82,12 +86,16 @@ impl MinioClient {
     /// # Example
     /// ```no_run
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::CreateMultipartUploadResponse;
     /// use minio::s3::types::S3Api;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: CreateMultipartUploadResponse = client
     ///         .create_multipart_upload("bucket-name", "large-object")
     ///         .build().send().await.unwrap();
@@ -116,12 +124,16 @@ impl MinioClient {
     /// # Example
     /// ```no_run
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::AbortMultipartUploadResponse;
     /// use minio::s3::types::S3Api;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: AbortMultipartUploadResponse = client
     ///         .abort_multipart_upload("bucket-name", "object-name", "upload-id-123")
     ///         .build().send().await.unwrap();
@@ -152,13 +164,17 @@ impl MinioClient {
     /// # Example
     /// ```no_run
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::CompleteMultipartUploadResponse;
     /// use minio::s3::types::{S3Api, PartInfo};
     /// use minio::s3::response::a_response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let parts: Vec<PartInfo> = vec![]; // fill with your uploaded part info
     ///     let resp: CompleteMultipartUploadResponse = client
     ///         .complete_multipart_upload("bucket-name", "object-name", "upload-id-123", parts)
@@ -192,6 +208,8 @@ impl MinioClient {
     /// # Example
     /// ```no_run
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::UploadPartResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
@@ -199,7 +217,9 @@ impl MinioClient {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let data = SegmentedBytes::from("Some part data".to_string());
     ///     let resp: UploadPartResponse = client
     ///         .upload_part("bucket-name", "object-name", "upload-id", 1, data)
@@ -235,13 +255,17 @@ impl MinioClient {
     /// # Example
     /// ```no_run
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::PutObjectContentResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::{HasObject, HasEtagFromHeaders};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let content = "Hello, world!".to_string();
     ///     let resp: PutObjectContentResponse = client
     ///         .put_object_content("bucket", "object", content)

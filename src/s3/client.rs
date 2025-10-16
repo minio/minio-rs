@@ -28,7 +28,9 @@ use std::sync::{Arc, OnceLock};
 use uuid::Uuid;
 
 use crate::s3::builders::{BucketExists, ComposeSource};
-use crate::s3::creds::{Provider, StaticProvider};
+use crate::s3::creds::Provider;
+#[cfg(feature = "localhost")]
+use crate::s3::creds::StaticProvider;
 use crate::s3::error::{Error, IoError, NetworkError, S3ServerError, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::http::BaseUrl;
@@ -124,15 +126,14 @@ pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 /// compatible object storage service.
 #[derive(Debug)]
 pub struct MinioClientBuilder {
-    //#[builder(!default)] // force required
     base_url: BaseUrl,
-    //#[builder(default, setter(into, doc = "Set the credential provider. If not, set anonymous access is used."))]
+    /// Set the credential provider. If not, set anonymous access is used.
     provider: Option<Arc<dyn Provider + Send + Sync + 'static>>,
-    //#[builder(default, setter(into, doc = "Set file for loading CAs certs to trust. This is in addition to the system trust store. The file must contain PEM encoded certificates."))]
+    /// Set file for loading CAs certs to trust. This is in addition to the system trust store. The file must contain PEM encoded certificates.
     ssl_cert_file: Option<PathBuf>,
-    //#[builder(default, setter(into, doc = "Set flag to ignore certificate check. This is insecure and should only be used for testing."))]
+    /// Set flag to ignore certificate check. This is insecure and should only be used for testing.
     ignore_cert_check: Option<bool>,
-    //#[builder(default, setter(into, doc = "Set the app info as an Option of (app_name, app_version) pair. This will show up in the client's user-agent."))]
+    /// Set the app info as an Option of (app_name, app_version) pair. This will show up in the client's user-agent.
     app_info: Option<(String, String)>,
 }
 
@@ -612,6 +613,7 @@ impl MinioClient {
     }
 
     /// create an example client for testing on localhost
+    #[cfg(feature = "localhost")]
     pub fn create_client_on_localhost()
     -> Result<MinioClient, Box<dyn std::error::Error + Send + Sync>> {
         let base_url = "http://localhost:9000/".parse::<BaseUrl>()?;

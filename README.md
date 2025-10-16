@@ -18,14 +18,18 @@ All request builders implement the [`S3Api`] trait, which provides the async [`s
 ## Basic Usage
 
 ```no_run
-use minio::s3::Client;
+use minio::s3::MinioClient;
+use minio::s3::creds::StaticProvider;
+use minio::s3::http::BaseUrl;
 use minio::s3::types::S3Api;
 use minio::s3::response::BucketExistsResponse;
 
 #[tokio::main]
 async fn main() {
-    let client = Client::create_client_on_localhost().unwrap(); // configure your client here
-    
+    let base_url = "play.min.io".parse::<BaseUrl>().unwrap();
+    let static_provider = StaticProvider::new("Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG", None);
+    let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
+
     let exists: BucketExistsResponse = client
         .bucket_exists("my-bucket")
         .send()
@@ -46,7 +50,7 @@ async fn main() {
 
 ## Design
 
-- Each API method on the [`Client`] returns a builder struct
+- Each API method on the [`MinioClient`] returns a builder struct
 - Builders implement [`ToS3Request`] for request conversion and [`S3Api`] for execution
 - Responses implement [`FromS3Response`] for consistent deserialization
 

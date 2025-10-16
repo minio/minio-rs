@@ -29,6 +29,8 @@ impl MinioClient {
     /// use std::collections::HashMap;
     /// use chrono::{DateTime, Utc};
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::builders::PostPolicy;
     /// use minio::s3::utils::utc_now;
@@ -45,7 +47,9 @@ impl MinioClient {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let policy: PostPolicy = create_post_policy_example("bucket-name", "object-name");
     ///     let resp: HashMap<String, String> = client
     ///         .get_presigned_post_form_data(policy)

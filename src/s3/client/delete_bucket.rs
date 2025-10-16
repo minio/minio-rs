@@ -38,13 +38,17 @@ impl MinioClient {
     ///
     /// ```no_run
     /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::DeleteBucketResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::{HasBucket, HasRegion};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = MinioClient::create_client_on_localhost().unwrap(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteBucketResponse = client
     ///         .delete_bucket("bucket-name")
     ///         .build().send().await.unwrap();
@@ -66,7 +70,12 @@ impl MinioClient {
         let resp: BucketExistsResponse = self.bucket_exists(&bucket).build().send().await?;
         if !resp.exists {
             // if the bucket does not exist, we can return early
-            let dummy: S3Request = S3Request::builder().client(self.clone()).method(Method::DELETE).bucket(bucket).headers(MultiMap::default()).build(/* S3RequestBuilder_Error_Missing_required_field_headers */);
+            let dummy: S3Request = S3Request::builder()
+                .client(self.clone())
+                .method(Method::DELETE)
+                .bucket(bucket)
+                .headers(MultiMap::default())
+                .build();
 
             return Ok(DeleteBucketResponse {
                 request: dummy, //TODO consider how to handle this
@@ -141,7 +150,12 @@ impl MinioClient {
             Ok(resp) => Ok(resp),
             Err(Error::S3Server(S3Error(mut e))) => {
                 if matches!(e.code(), MinioErrorCode::NoSuchBucket) {
-                    let dummy: S3Request = S3Request::builder().client(self.clone()).method(Method::DELETE).bucket(bucket).headers(MultiMap::default()).build(/* S3RequestBuilder_Error_Missing_required_field_headers */);
+                    let dummy: S3Request = S3Request::builder()
+                        .client(self.clone())
+                        .method(Method::DELETE)
+                        .bucket(bucket)
+                        .headers(MultiMap::default())
+                        .build();
 
                     Ok(DeleteBucketResponse {
                         request: dummy, //TODO consider how to handle this

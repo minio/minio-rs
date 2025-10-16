@@ -17,6 +17,8 @@ mod common;
 
 use crate::common::create_bucket_if_not_exists;
 use minio::s3::MinioClient;
+use minio::s3::creds::StaticProvider;
+use minio::s3::http::BaseUrl;
 use minio::s3::response::a_response_traits::HasObjectSize;
 use minio::s3::response::{AppendObjectResponse, StatObjectResponse};
 use minio::s3::segmented_bytes::SegmentedBytes;
@@ -27,7 +29,10 @@ use rand::distr::Alphanumeric;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
-    let client: MinioClient = MinioClient::create_client_on_localhost()?;
+
+    let base_url = "http://localhost:9000/".parse::<BaseUrl>()?;
+    let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    let client = MinioClient::new(base_url, Some(static_provider), None, None)?;
 
     if !client.is_minio_express().await {
         println!("Need (MinIO) Express mode to run this example");
