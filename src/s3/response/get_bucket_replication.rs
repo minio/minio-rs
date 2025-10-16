@@ -22,7 +22,7 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response from the [`get_bucket_replication`](crate::s3::client::Client::get_bucket_replication) API call,
+/// Response from the [`get_bucket_replication`](crate::s3::client::MinioClient::get_bucket_replication) API call,
 /// providing the replication configuration of an S3 bucket.
 ///
 /// This includes the rules and settings that define how objects in the bucket are replicated to other buckets.

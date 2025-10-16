@@ -13,42 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::Client;
+use crate::s3::client::MinioClient;
 use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::response::ListBucketsResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use http::Method;
+use typed_builder::TypedBuilder;
 
 /// Argument builder for the [`ListBuckets`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::list_buckets`](crate::s3::client::Client::list_buckets) method.
-#[derive(Clone, Debug, Default)]
+/// This struct constructs the parameters required for the [`Client::list_buckets`](crate::s3::client::MinioClient::list_buckets) method.
+#[derive(Clone, Debug, TypedBuilder)]
 pub struct ListBuckets {
-    client: Client,
-
+    #[builder(!default)] // force required
+    client: MinioClient,
+    #[builder(default, setter(into))]
     extra_headers: Option<Multimap>,
+    #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
 }
 
-impl ListBuckets {
-    pub fn new(client: Client) -> Self {
-        Self {
-            client,
-            ..Default::default()
-        }
-    }
-
-    pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
-        self.extra_headers = extra_headers;
-        self
-    }
-
-    pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
-        self.extra_query_params = extra_query_params;
-        self
-    }
-}
+/// Builder type alias for [`ListBuckets`].
+///
+/// Constructed via [`ListBuckets::builder()`](ListBuckets::builder) and used to build a [`ListBuckets`] instance.
+pub type ListBucketsBldr = ListBucketsBuilder<((MinioClient,), (), ())>;
 
 impl S3Api for ListBuckets {
     type S3Response = ListBucketsResponse;
@@ -56,8 +45,11 @@ impl S3Api for ListBuckets {
 
 impl ToS3Request for ListBuckets {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        Ok(S3Request::new(self.client, Method::GET)
+        Ok(S3Request::builder()
+            .client(self.client)
+            .method(Method::GET)
             .query_params(self.extra_query_params.unwrap_or_default())
-            .headers(self.extra_headers.unwrap_or_default()))
+            .headers(self.extra_headers.unwrap_or_default())
+            .build())
     }
 }

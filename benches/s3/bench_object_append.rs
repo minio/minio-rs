@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::common_benches::{Ctx2, benchmark_s3_api};
+use std::sync::Arc;
 
 use criterion::Criterion;
 use minio::s3::builders::AppendObject;
@@ -41,18 +42,23 @@ pub(crate) async fn bench_object_append(criterion: &mut Criterion) {
             let resp: StatObjectResponse = task::block_in_place(|| {
                 let runtime =
                     tokio::runtime::Runtime::new().map_err(|e| Error::DriveIo(e.into()))?;
-                runtime.block_on(ctx.client.stat_object(&ctx.bucket, &ctx.object).send())
+                runtime.block_on(
+                    ctx.client
+                        .stat_object(&ctx.bucket, &ctx.object)
+                        .build()
+                        .send(),
+                )
             })
             .unwrap();
 
             let offset_bytes: u64 = resp.size().unwrap();
-            AppendObject::new(
-                ctx.client.clone(),
-                ctx.bucket.clone(),
-                ctx.object.clone(),
-                data1,
-                offset_bytes,
-            )
+            AppendObject::builder()
+                .client(ctx.client.clone())
+                .bucket(ctx.bucket.clone())
+                .object(ctx.object.clone())
+                .data(Arc::new(data1))
+                .offset_bytes(offset_bytes)
+                .build()
         },
     )
 }

@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::GetObjectTagging;
+use crate::s3::builders::{GetObjectTagging, GetObjectTaggingBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`GetObjectTagging`] request builder.
     ///
     /// To execute the request, call [`GetObjectTagging::send()`](crate::s3::types::S3Api::send),
@@ -27,17 +27,21 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::GetObjectTaggingResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::{HasBucket, HasObject, HasTagging};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetObjectTaggingResponse = client
     ///         .get_object_tagging("bucket-name", "object-name")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("retrieved object tags '{:?}' from object '{}' in bucket '{}' is enabled", resp.tags(), resp.object(), resp.bucket());
     /// }
     /// ```
@@ -45,7 +49,10 @@ impl Client {
         &self,
         bucket: S1,
         object: S2,
-    ) -> GetObjectTagging {
-        GetObjectTagging::new(self.clone(), bucket.into(), object.into())
+    ) -> GetObjectTaggingBldr {
+        GetObjectTagging::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
     }
 }

@@ -13,11 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! HTTP URL definitions
-
 use super::utils::urlencode_object_key;
 use crate::s3::client::DEFAULT_REGION;
-
 use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::utils::match_hostname;
@@ -69,18 +66,16 @@ impl Default for Url {
 
 impl fmt::Display for Url {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.host.is_empty() {
-            return Err(std::fmt::Error);
-        }
-
         if self.https {
             f.write_str("https://")?;
         } else {
             f.write_str("http://")?;
         }
 
-        if self.port > 0 {
-            f.write_str(format!("{}:{}", self.host, self.port).as_str())?;
+        if self.host.is_empty() {
+            f.write_str("<invalid-host>")?;
+        } else if self.port > 0 {
+            f.write_str(&format!("{}:{}", self.host, self.port))?;
         } else {
             f.write_str(&self.host)?;
         }

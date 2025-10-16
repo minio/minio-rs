@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::GetBucketPolicy;
+use crate::s3::builders::{GetBucketPolicy, GetBucketPolicyBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`GetBucketPolicy`] request builder.
     ///
     /// To execute the request, call [`GetBucketPolicy::send()`](crate::s3::types::S3Api::send),
@@ -25,21 +25,27 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::GetBucketPolicyResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetBucketPolicyResponse = client
     ///         .get_bucket_policy("bucket-name")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("retrieved bucket policy config '{:?}' from bucket '{}'", resp.config(), resp.bucket());
     /// }
     /// ```
-    pub fn get_bucket_policy<S: Into<String>>(&self, bucket: S) -> GetBucketPolicy {
-        GetBucketPolicy::new(self.clone(), bucket.into())
+    pub fn get_bucket_policy<S: Into<String>>(&self, bucket: S) -> GetBucketPolicyBldr {
+        GetBucketPolicy::builder()
+            .client(self.clone())
+            .bucket(bucket)
     }
 }

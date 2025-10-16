@@ -29,19 +29,31 @@ async fn bucket_create(ctx: TestContext) {
     let bucket_name = rand_bucket_name();
 
     // try to create a bucket that does not exist
-    let resp: CreateBucketResponse = ctx.client.create_bucket(&bucket_name).send().await.unwrap();
+    let resp: CreateBucketResponse = ctx
+        .client
+        .create_bucket(&bucket_name)
+        .build()
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.region(), DEFAULT_REGION);
 
     // check that the bucket exists
-    let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
+    let resp: BucketExistsResponse = ctx
+        .client
+        .bucket_exists(&bucket_name)
+        .build()
+        .send()
+        .await
+        .unwrap();
     assert!(resp.exists());
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.region(), DEFAULT_REGION);
 
     // try to create a bucket that already exists
     let resp: Result<CreateBucketResponse, Error> =
-        ctx.client.create_bucket(&bucket_name).send().await;
+        ctx.client.create_bucket(&bucket_name).build().send().await;
     match resp {
         Ok(_) => panic!("Bucket already exists, but was created again"),
         Err(Error::S3Server(S3ServerError::S3Error(e)))
@@ -59,7 +71,7 @@ async fn bucket_delete(ctx: TestContext) {
 
     // try to remove a bucket that does not exist
     let resp: Result<DeleteBucketResponse, Error> =
-        ctx.client.delete_bucket(&bucket_name).send().await;
+        ctx.client.delete_bucket(&bucket_name).build().send().await;
     match resp {
         Ok(_) => panic!("Bucket does not exist, but was removed"),
         Err(Error::S3Server(S3ServerError::S3Error(e)))
@@ -71,23 +83,47 @@ async fn bucket_delete(ctx: TestContext) {
     }
 
     // create a new bucket
-    let resp: CreateBucketResponse = ctx.client.create_bucket(&bucket_name).send().await.unwrap();
+    let resp: CreateBucketResponse = ctx
+        .client
+        .create_bucket(&bucket_name)
+        .build()
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.region(), DEFAULT_REGION);
 
     // check that the bucket exists
-    let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
+    let resp: BucketExistsResponse = ctx
+        .client
+        .bucket_exists(&bucket_name)
+        .build()
+        .send()
+        .await
+        .unwrap();
     assert!(resp.exists());
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.region(), DEFAULT_REGION);
 
     // try to remove a bucket that exists
-    let resp: DeleteBucketResponse = ctx.client.delete_bucket(&bucket_name).send().await.unwrap();
+    let resp: DeleteBucketResponse = ctx
+        .client
+        .delete_bucket(&bucket_name)
+        .build()
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.region(), DEFAULT_REGION);
 
     // check that the bucket does not exist anymore
-    let resp: BucketExistsResponse = ctx.client.bucket_exists(&bucket_name).send().await.unwrap();
+    let resp: BucketExistsResponse = ctx
+        .client
+        .bucket_exists(&bucket_name)
+        .build()
+        .send()
+        .await
+        .unwrap();
     assert!(!resp.exists());
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.region(), "");
@@ -97,6 +133,7 @@ async fn test_bucket_delete_and_purge(ctx: &TestContext, bucket_name: &str, obje
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(bucket_name, object_name, "Hello, World!")
+        .build()
         .send()
         .await
         .unwrap();
@@ -105,7 +142,7 @@ async fn test_bucket_delete_and_purge(ctx: &TestContext, bucket_name: &str, obje
 
     // try to remove the bucket without purging, this should fail because the bucket is not empty
     let resp: Result<DeleteBucketResponse, Error> =
-        ctx.client.delete_bucket(bucket_name).send().await;
+        ctx.client.delete_bucket(bucket_name).build().send().await;
 
     assert!(resp.is_err());
 

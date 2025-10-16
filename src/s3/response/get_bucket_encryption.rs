@@ -25,7 +25,7 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response from the [`get_bucket_encryption`](crate::s3::client::Client::get_bucket_encryption) API call,
+/// Response from the [`get_bucket_encryption`](crate::s3::client::MinioClient::get_bucket_encryption) API call,
 /// providing the default server-side encryption configuration of an S3 bucket.
 ///
 /// This configuration determines how Amazon S3 encrypts objects stored in the bucket by default.

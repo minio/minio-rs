@@ -26,6 +26,7 @@ async fn get_presigned_object_url(ctx: TestContext, bucket_name: String) {
     let resp: GetPresignedObjectUrlResponse = ctx
         .client
         .get_presigned_object_url(&bucket_name, &object_name, Method::GET)
+        .build()
         .send()
         .await
         .unwrap();

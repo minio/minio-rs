@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::DeleteBucketNotification;
+use crate::s3::builders::{DeleteBucketNotification, DeleteBucketNotificationBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`DeleteBucketNotification`] request builder.
     ///
     /// To execute the request, call [`DeleteBucketNotification::send()`](crate::s3::types::S3Api::send),
@@ -25,24 +25,30 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::DeleteBucketNotificationResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {    
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteBucketNotificationResponse = client
     ///         .delete_bucket_notification("bucket-name")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("notification of bucket '{}' is deleted", resp.bucket());
     /// }
     /// ```
     pub fn delete_bucket_notification<S: Into<String>>(
         &self,
         bucket: S,
-    ) -> DeleteBucketNotification {
-        DeleteBucketNotification::new(self.clone(), bucket.into())
+    ) -> DeleteBucketNotificationBldr {
+        DeleteBucketNotification::builder()
+            .client(self.clone())
+            .bucket(bucket)
     }
 }

@@ -23,7 +23,7 @@ use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
-/// Response from the [`get_bucket_policy`](crate::s3::client::Client::get_bucket_policy) API call,
+/// Response from the [`get_bucket_policy`](crate::s3::client::MinioClient::get_bucket_policy) API call,
 /// providing the bucket policy associated with an S3 bucket.
 ///
 /// The bucket policy is a JSON-formatted string that defines permissions for the bucket,

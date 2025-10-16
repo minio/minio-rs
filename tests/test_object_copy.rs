@@ -33,6 +33,7 @@ async fn test_copy_object(
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(bucket_name, object_name_src, content)
+        .build()
         .send()
         .await
         .unwrap();
@@ -42,7 +43,13 @@ async fn test_copy_object(
     let resp: CopyObjectResponse = ctx
         .client
         .copy_object(bucket_name, object_name_dst)
-        .source(CopySource::new(bucket_name, object_name_src).unwrap())
+        .source(
+            CopySource::builder()
+                .bucket(bucket_name)
+                .object(object_name_src)
+                .build(),
+        )
+        .build()
         .send()
         .await
         .unwrap();
@@ -52,6 +59,7 @@ async fn test_copy_object(
     let resp: StatObjectResponse = ctx
         .client
         .stat_object(bucket_name, object_name_dst)
+        .build()
         .send()
         .await
         .unwrap();

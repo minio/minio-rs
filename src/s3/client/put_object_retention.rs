@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::PutObjectRetention;
+use crate::s3::builders::{PutObjectRetention, PutObjectRetentionBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`PutObjectRetention`] request builder.
     ///
     /// To execute the request, call [`SetObjectRetention::send()`](crate::s3::types::S3Api::send),
@@ -24,10 +24,16 @@ impl Client {
     ///
     /// 🛈 This operation is not supported for express buckets.
     ///
+    /// Note: there is no separate delete object retention API. To remove object retention, you must
+    /// call put_object_retention without '.retention_mode()' or '.retain_until_date()' to remove the retention.
+    /// You must set '.bypass_governance_mode(true)' to remove retention from objects in GOVERNANCE mode.
+    ///
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::PutObjectRetentionResponse;
     /// use minio::s3::builders::ObjectToDelete;
     /// use minio::s3::types::{S3Api, RetentionMode};
@@ -36,13 +42,15 @@ impl Client {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let retain_until_date = utc_now() + chrono::Duration::days(1);
     ///     let resp: PutObjectRetentionResponse = client
     ///         .put_object_retention("bucket-name", "object-name")
-    ///         .retention_mode(Some(RetentionMode::GOVERNANCE))
+    ///         .retention_mode(RetentionMode::GOVERNANCE)
     ///         .retain_until_date(Some(retain_until_date))
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("set the object retention for object '{}'", resp.object());
     /// }
     /// ```
@@ -50,7 +58,10 @@ impl Client {
         &self,
         bucket: S1,
         object: S2,
-    ) -> PutObjectRetention {
-        PutObjectRetention::new(self.clone(), bucket.into(), object.into())
+    ) -> PutObjectRetentionBldr {
+        PutObjectRetention::builder()
+            .client(self.clone())
+            .bucket(bucket)
+            .object(object)
     }
 }

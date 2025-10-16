@@ -15,7 +15,7 @@
 
 //! Credential providers
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 /// Credentials contain access key, secret key and session token optionally
 pub struct Credentials {
     pub access_key: String,

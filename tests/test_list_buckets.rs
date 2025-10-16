@@ -33,7 +33,7 @@ async fn list_buckets(ctx: TestContext) {
     assert_eq!(names.len(), N_BUCKETS);
 
     let mut count = 0;
-    let resp: ListBucketsResponse = ctx.client.list_buckets().send().await.unwrap();
+    let resp: ListBucketsResponse = ctx.client.list_buckets().build().send().await.unwrap();
 
     for bucket in resp.buckets().unwrap().iter() {
         if names.contains(&bucket.name) {

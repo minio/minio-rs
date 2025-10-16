@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Argument builders for [minio::s3::client::Client](crate::s3::client::Client) APIs
+//! Argument builders for [minio::s3::client::Client](crate::s3::client::MinioClient) APIs
 
 mod append_object;
 mod bucket_common;

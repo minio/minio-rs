@@ -71,7 +71,7 @@ impl MacroArgs {
         if let Some(FnArg::Typed(pat_type)) = iter.next() {
             let type_str = pat_type.ty.to_token_stream().to_string();
             if !type_str.contains("TestContext") {
-                let error_msg = "First argument must be of type TestContext";
+                let error_msg = "The first argument must be of type TestContext";
                 return Err(proc_macro::TokenStream::from(
                     Error::custom(error_msg)
                         .with_span(&pat_type.span())
@@ -86,7 +86,7 @@ impl MacroArgs {
         {
             let type_str = pat_type.ty.to_token_stream().to_string();
             if !type_str.contains("String") {
-                let error_msg = "Second argument must be of type String";
+                let error_msg = "The second argument must be of type String";
                 return Err(proc_macro::TokenStream::from(
                     Error::custom(error_msg)
                         .with_span(&pat_type.span())
@@ -261,7 +261,7 @@ fn generate_with_bucket_body(
 
         let client_clone = ctx.client.clone();
         let bucket_name = #bucket_name;
-        let resp = client_clone.create_bucket(bucket_name)#maybe_lock.send().await.expect("Failed to create bucket");
+        let resp = client_clone.create_bucket(bucket_name)#maybe_lock.build().send().await.expect("Failed to create bucket");
         assert_eq!(resp.bucket(), bucket_name);
         let res = AssertUnwindSafe(#inner_fn_name(ctx, resp.bucket().to_string())).catch_unwind().await;
         #maybe_cleanup

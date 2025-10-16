@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::Client;
-use crate::s3::builders::{GetPresignedPolicyFormData, PostPolicy};
+use crate::s3::builders::{GetPresignedPolicyFormData, GetPresignedPolicyFormDataBldr, PostPolicy};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`GetPresignedPolicyFormData`] request builder.
     ///
     /// To execute the request, call [`GetPresignedPolicyFormData::send()`](crate::s3::types::S3Api::send),
@@ -28,7 +28,9 @@ impl Client {
     /// use http::Method;
     /// use std::collections::HashMap;
     /// use chrono::{DateTime, Utc};
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::builders::PostPolicy;
     /// use minio::s3::utils::utc_now;
@@ -45,15 +47,22 @@ impl Client {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let policy: PostPolicy = create_post_policy_example("bucket-name", "object-name");
     ///     let resp: HashMap<String, String> = client
     ///         .get_presigned_post_form_data(policy)
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("presigned post form data: '{:?}'", resp);
     /// }
     /// ```
-    pub fn get_presigned_post_form_data(&self, policy: PostPolicy) -> GetPresignedPolicyFormData {
-        GetPresignedPolicyFormData::new(self.clone(), policy)
+    pub fn get_presigned_post_form_data(
+        &self,
+        policy: PostPolicy,
+    ) -> GetPresignedPolicyFormDataBldr {
+        GetPresignedPolicyFormData::builder()
+            .client(self.clone())
+            .policy(policy)
     }
 }

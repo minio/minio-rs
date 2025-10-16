@@ -32,6 +32,7 @@ async fn compose_object(ctx: TestContext, bucket_name: String) {
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(&bucket_name, &object_name_src, content)
+        .build()
         .send()
         .await
         .unwrap();
@@ -49,6 +50,7 @@ async fn compose_object(ctx: TestContext, bucket_name: String) {
     let resp: ComposeObjectResponse = ctx
         .client
         .compose_object(&bucket_name, &object_name_dst, sources)
+        .build()
         .send()
         .await
         .unwrap();
@@ -58,6 +60,7 @@ async fn compose_object(ctx: TestContext, bucket_name: String) {
     let resp: StatObjectResponse = ctx
         .client
         .stat_object(&bucket_name, &object_name_dst)
+        .build()
         .send()
         .await
         .unwrap();

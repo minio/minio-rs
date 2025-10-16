@@ -38,6 +38,7 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
             .client
             .put_bucket_versioning(&bucket_name)
             .versioning_status(VersioningStatus::Enabled)
+            .build()
             .send()
             .await
             .unwrap();
@@ -48,6 +49,7 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
             .client
             .put_bucket_versioning(&bucket_name2)
             .versioning_status(VersioningStatus::Enabled)
+            .build()
             .send()
             .await
             .unwrap();
@@ -57,6 +59,7 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
         let resp: GetBucketVersioningResponse = ctx
             .client
             .get_bucket_versioning(&bucket_name)
+            .build()
             .send()
             .await
             .unwrap();
@@ -71,6 +74,7 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
                 .client
                 .put_bucket_policy(&bucket_name)
                 .config(config.clone())
+                .build()
                 .send()
                 .await
                 .unwrap();
@@ -79,6 +83,7 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
                 .client
                 .put_bucket_policy(&bucket_name2)
                 .config(config.clone())
+                .build()
                 .send()
                 .await
                 .unwrap();
@@ -94,6 +99,7 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
             .client
             .put_bucket_replication(&bucket_name)
             .replication_config(config.clone())
+            .build()
             .send()
             .await
             .unwrap();
@@ -104,6 +110,7 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
         let resp: GetBucketReplicationResponse = ctx
             .client
             .get_bucket_replication(&bucket_name)
+            .build()
             .send()
             .await
             .unwrap();
@@ -115,6 +122,7 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
         let resp: DeleteBucketReplicationResponse = ctx
             .client
             .delete_bucket_replication(&bucket_name)
+            .build()
             .send()
             .await
             .unwrap();
@@ -123,6 +131,7 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
     let _resp: GetBucketVersioningResponse = ctx
         .client
         .get_bucket_versioning(&bucket_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -138,6 +147,7 @@ async fn bucket_replication_s3express(ctx: TestContext, bucket_name: String) {
         .client
         .put_bucket_replication(&bucket_name)
         .replication_config(config.clone())
+        .build()
         .send()
         .await;
     match resp {
@@ -147,8 +157,12 @@ async fn bucket_replication_s3express(ctx: TestContext, bucket_name: String) {
         v => panic!("Expected error S3Error(NotSupported): but got {v:?}"),
     }
 
-    let resp: Result<GetBucketReplicationResponse, Error> =
-        ctx.client.get_bucket_replication(&bucket_name).send().await;
+    let resp: Result<GetBucketReplicationResponse, Error> = ctx
+        .client
+        .get_bucket_replication(&bucket_name)
+        .build()
+        .send()
+        .await;
     match resp {
         Err(Error::S3Server(S3ServerError::S3Error(e))) => {
             assert_eq!(e.code(), MinioErrorCode::NotSupported)
@@ -159,6 +173,7 @@ async fn bucket_replication_s3express(ctx: TestContext, bucket_name: String) {
     let resp: Result<DeleteBucketReplicationResponse, Error> = ctx
         .client
         .delete_bucket_replication(&bucket_name)
+        .build()
         .send()
         .await;
     match resp {

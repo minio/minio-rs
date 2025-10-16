@@ -13,13 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Client, DEFAULT_REGION};
-use crate::s3::builders::GetRegion;
-
+use super::{DEFAULT_REGION, MinioClient};
+use crate::s3::builders::{GetRegion, GetRegionBldr};
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::types::S3Api;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`GetRegion`] request builder.
     ///
     /// To execute the request, call [`GetRegion::send()`](crate::s3::types::S3Api::send),
@@ -28,22 +27,26 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::GetRegionResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response::a_response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetRegionResponse = client
     ///         .get_region("bucket-name")
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("retrieved region '{:?}' for bucket '{}'", resp.region_response(), resp.bucket());
     /// }
     /// ```
-    pub fn get_region<S: Into<String>>(&self, bucket: S) -> GetRegion {
-        GetRegion::new(self.clone(), bucket.into())
+    pub fn get_region<S: Into<String>>(&self, bucket: S) -> GetRegionBldr {
+        GetRegion::builder().client(self.clone()).bucket(bucket)
     }
 
     /// Retrieves the region for the specified bucket name from the cache.
@@ -86,7 +89,12 @@ impl Client {
 
         // Otherwise, fetch the region from the server and cache it
         let resolved_region: String = {
-            let region = self.get_region(&bucket).send().await?.region_response()?;
+            let region = self
+                .get_region(&bucket)
+                .build()
+                .send()
+                .await?
+                .region_response()?;
             if !region.is_empty() {
                 region
             } else {

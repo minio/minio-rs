@@ -1,5 +1,5 @@
 #[derive(Clone, Debug)]
-/// Response of [get_presigned_object_url()](crate::s3::client::Client::get_presigned_object_url) API
+/// Response of [get_presigned_object_url()](crate::s3::client::MinioClient::get_presigned_object_url) API
 pub struct GetPresignedObjectUrlResponse {
     /// The AWS region where the bucket resides.
     pub region: String,

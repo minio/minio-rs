@@ -13,7 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::builders::BucketCommon;
+use crate::s3::MinioClient;
+use crate::s3::builders::{BucketCommon, BucketCommonBuilder};
 use crate::s3::error::ValidationErr;
 use crate::s3::response::GetObjectLockConfigResponse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
@@ -22,12 +23,17 @@ use http::Method;
 
 /// Argument builder for the [`GetObjectLockConfig`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObjectLockConfiguration.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::get_object_lock_config`](crate::s3::client::Client::get_object_lock_config) method.
+/// This struct constructs the parameters required for the [`Client::get_object_lock_config`](crate::s3::client::MinioClient::get_object_lock_config) method.
 pub type GetObjectLockConfig = BucketCommon<GetObjectLockConfigPhantomData>;
 
 #[doc(hidden)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct GetObjectLockConfigPhantomData;
+
+pub type GetObjectLockConfigBldr = BucketCommonBuilder<
+    GetObjectLockConfigPhantomData,
+    ((MinioClient,), (), (), (), (String,), ()),
+>;
 
 impl S3Api for GetObjectLockConfig {
     type S3Response = GetObjectLockConfigResponse;
@@ -37,10 +43,13 @@ impl ToS3Request for GetObjectLockConfig {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
 
-        Ok(S3Request::new(self.client, Method::GET)
+        Ok(S3Request::builder()
+            .client(self.client)
+            .method(Method::GET)
             .region(self.region)
-            .bucket(Some(self.bucket))
+            .bucket(self.bucket)
             .query_params(insert(self.extra_query_params, "object-lock"))
-            .headers(self.extra_headers.unwrap_or_default()))
+            .headers(self.extra_headers.unwrap_or_default())
+            .build())
     }
 }

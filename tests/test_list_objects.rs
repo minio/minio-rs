@@ -58,6 +58,7 @@ async fn test_list_objects(
             let resp: PutObjectContentResponse = ctx
                 .client
                 .put_object_content(&bucket_name, &object_name, "hello world")
+                .build()
                 .send()
                 .await
                 .unwrap();
@@ -72,6 +73,7 @@ async fn test_list_objects(
         .use_api_v1(use_api_v1)
         .include_versions(include_versions)
         .recursive(true)
+        .build()
         .to_stream()
         .await;
 
@@ -128,6 +130,7 @@ async fn test_list_one_object(ctx: &TestContext, bucket_name: &str, object_name:
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(bucket_name, object_name, "Hello, World!")
+        .build()
         .send()
         .await
         .unwrap();
@@ -139,6 +142,7 @@ async fn test_list_one_object(ctx: &TestContext, bucket_name: &str, object_name:
         .list_objects(bucket_name)
         .use_api_v1(false) // S3-Express does not support V1 API
         .include_versions(false) // S3-Express does not support versions
+        .build()
         .to_stream()
         .await;
 

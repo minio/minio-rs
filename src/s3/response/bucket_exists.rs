@@ -24,7 +24,7 @@ use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
-/// Represents the response of the [bucket_exists()](crate::s3::client::Client::bucket_exists) API call.
+/// Represents the response of the [bucket_exists()](crate::s3::client::MinioClient::bucket_exists) API call.
 /// This struct contains metadata and information about the existence of a bucket.
 #[derive(Clone, Debug)]
 pub struct BucketExistsResponse {

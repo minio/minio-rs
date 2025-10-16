@@ -22,7 +22,7 @@ use http::HeaderMap;
 use std::mem;
 use xmltree::Element;
 
-/// Response from the [`get_bucket_notification`](crate::s3::client::Client::get_bucket_notification) API call,
+/// Response from the [`get_bucket_notification`](crate::s3::client::MinioClient::get_bucket_notification) API call,
 /// providing the notification configuration of an S3 bucket.
 ///
 /// This configuration specifies the events for which Amazon S3 sends notifications and the destinations

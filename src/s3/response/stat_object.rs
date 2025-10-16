@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use std::mem;
 
 #[derive(Clone, Debug)]
-/// Response from the [`stat_object`](crate::s3::client::Client::stat_object) API call,
+/// Response from the [`stat_object`](crate::s3::client::MinioClient::stat_object) API call,
 /// providing metadata about an object stored in S3 or a compatible service.
 pub struct StatObjectResponse {
     request: S3Request,

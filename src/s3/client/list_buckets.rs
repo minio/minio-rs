@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Client;
-use crate::s3::builders::ListBuckets;
+use crate::s3::builders::{ListBuckets, ListBucketsBldr};
+use crate::s3::client::MinioClient;
 
-impl Client {
+impl MinioClient {
     /// Creates a [`ListBuckets`] request builder to retrieve the list of all buckets owned by the authenticated sender of the request.
     ///
     /// To execute the request, call [`ListBuckets::send()`](crate::s3::types::S3Api::send),
@@ -27,20 +27,24 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use minio::s3::Client;
+    /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::ListBucketsResponse;
     /// use minio::s3::types::S3Api;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client: Client = Default::default(); // configure your client here
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: ListBucketsResponse = client
     ///         .list_buckets()
-    ///         .send().await.unwrap();
+    ///         .build().send().await.unwrap();
     ///     println!("retrieved buckets '{:?}'", resp.buckets());
     /// }
     /// ```
-    pub fn list_buckets(&self) -> ListBuckets {
-        ListBuckets::new(self.clone())
+    pub fn list_buckets(&self) -> ListBucketsBldr {
+        ListBuckets::builder().client(self.clone())
     }
 }

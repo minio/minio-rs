@@ -30,6 +30,7 @@ async fn select_object_content_s3(ctx: TestContext, bucket_name: String) {
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(&bucket_name, &object_name, select_body.clone())
+        .build()
         .send()
         .await
         .unwrap();
@@ -41,6 +42,7 @@ async fn select_object_content_s3(ctx: TestContext, bucket_name: String) {
     let mut resp: SelectObjectContentResponse = ctx
         .client
         .select_object_content(&bucket_name, &object_name, select_request)
+        .build()
         .send()
         .await
         .unwrap();
@@ -64,6 +66,7 @@ async fn select_object_content_express(ctx: TestContext, bucket_name: String) {
     let _resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(&bucket_name, &object_name, select_body)
+        .build()
         .send()
         .await
         .unwrap();
@@ -73,6 +76,7 @@ async fn select_object_content_express(ctx: TestContext, bucket_name: String) {
     let resp: Result<SelectObjectContentResponse, Error> = ctx
         .client
         .select_object_content(&bucket_name, &object_name, select_request)
+        .build()
         .send()
         .await;
     match resp {

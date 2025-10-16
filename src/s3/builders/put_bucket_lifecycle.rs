@@ -13,62 +13,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::Client;
+use crate::s3::client::MinioClient;
 use crate::s3::error::ValidationErr;
 use crate::s3::header_constants::*;
 use crate::s3::lifecycle_config::LifecycleConfig;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::PutBucketLifecycleResponse;
+use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
+use std::sync::Arc;
+use typed_builder::TypedBuilder;
 
 /// Argument builder for the [`PutBucketLifecycle`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketLifecycle.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::put_bucket_lifecycle`](crate::s3::client::Client::put_bucket_lifecycle) method.
-#[derive(Clone, Debug, Default)]
+/// This struct constructs the parameters required for the [`Client::put_bucket_lifecycle`](crate::s3::client::MinioClient::put_bucket_lifecycle) method.
+#[derive(Clone, Debug, TypedBuilder)]
 pub struct PutBucketLifecycle {
-    client: Client,
-
+    #[builder(!default)] // force required
+    client: MinioClient,
+    #[builder(default, setter(into))]
     extra_headers: Option<Multimap>,
+    #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
+    #[builder(default, setter(into))]
     region: Option<String>,
+    #[builder(!default, setter(into))] // force required + accept Into<String>
     bucket: String,
-
-    config: LifecycleConfig,
+    #[builder(default)]
+    life_cycle_config: LifecycleConfig,
 }
 
-impl PutBucketLifecycle {
-    pub fn new(client: Client, bucket: String) -> Self {
-        Self {
-            client,
-            bucket,
-            ..Default::default()
-        }
-    }
-
-    pub fn extra_headers(mut self, extra_headers: Option<Multimap>) -> Self {
-        self.extra_headers = extra_headers;
-        self
-    }
-
-    pub fn extra_query_params(mut self, extra_query_params: Option<Multimap>) -> Self {
-        self.extra_query_params = extra_query_params;
-        self
-    }
-
-    /// Sets the region for the request
-    pub fn region(mut self, region: Option<String>) -> Self {
-        self.region = region;
-        self
-    }
-
-    pub fn life_cycle_config(mut self, config: LifecycleConfig) -> Self {
-        self.config = config;
-        self
-    }
-}
+/// Builder type alias for [`PutBucketLifecycle`].
+///
+/// Constructed via [`PutBucketLifecycle::builder()`](PutBucketLifecycle::builder) and used to build a [`PutBucketLifecycle`] instance.
+pub type PutBucketLifecycleBldr =
+    PutBucketLifecycleBuilder<((MinioClient,), (), (), (), (String,), ())>;
 
 impl S3Api for PutBucketLifecycle {
     type S3Response = PutBucketLifecycleResponse;
@@ -80,14 +62,19 @@ impl ToS3Request for PutBucketLifecycle {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
 
-        let bytes: Bytes = self.config.to_xml().into();
+        let bytes: Bytes = self.life_cycle_config.to_xml().into();
         headers.add(CONTENT_MD5, md5sum_hash(bytes.as_ref()));
 
-        Ok(S3Request::new(self.client, Method::PUT)
+        let body = Arc::new(SegmentedBytes::from(bytes));
+
+        Ok(S3Request::builder()
+            .client(self.client)
+            .method(Method::PUT)
             .region(self.region)
-            .bucket(Some(self.bucket))
+            .bucket(self.bucket)
             .query_params(insert(self.extra_query_params, "lifecycle"))
             .headers(headers)
-            .body(Some(bytes.into())))
+            .body(body)
+            .build())
     }
 }

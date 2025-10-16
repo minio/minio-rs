@@ -32,6 +32,7 @@ async fn object_legal_hold_s3(ctx: TestContext, bucket_name: String) {
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(&bucket_name, &object_name, data.clone())
+        .build()
         .send()
         .await
         .unwrap();
@@ -42,6 +43,7 @@ async fn object_legal_hold_s3(ctx: TestContext, bucket_name: String) {
     let resp: PutObjectLegalHoldResponse = ctx
         .client
         .put_object_legal_hold(&bucket_name, &object_name, true)
+        .build()
         .send()
         .await
         .unwrap();
@@ -53,6 +55,7 @@ async fn object_legal_hold_s3(ctx: TestContext, bucket_name: String) {
     let resp: GetObjectLegalHoldResponse = ctx
         .client
         .get_object_legal_hold(&bucket_name, &object_name)
+        .build()
         .send()
         .await
         .unwrap();
@@ -65,6 +68,7 @@ async fn object_legal_hold_s3(ctx: TestContext, bucket_name: String) {
     let resp: PutObjectLegalHoldResponse = ctx
         .client
         .put_object_legal_hold(&bucket_name, &object_name, true)
+        .build()
         .send()
         .await
         .unwrap();
@@ -76,6 +80,7 @@ async fn object_legal_hold_s3(ctx: TestContext, bucket_name: String) {
     let resp: GetObjectLegalHoldResponse = ctx
         .client
         .get_object_legal_hold(&bucket_name, &object_name)
+        .build()
         .send()
         .await
         .unwrap();
