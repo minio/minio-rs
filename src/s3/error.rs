@@ -236,6 +236,12 @@ pub enum ValidationErr {
 
     #[error("Content length is unknown")]
     ContentLengthUnknown,
+
+    #[error("{name} interceptor failed: {source}")]
+    Hook {
+        source: Box<dyn std::error::Error + Send + Sync>,
+        name: String,
+    },
 }
 
 impl From<reqwest::header::ToStrError> for ValidationErr {
