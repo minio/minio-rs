@@ -253,7 +253,7 @@ impl ObjectContent {
     }
 }
 
-pub(crate) struct ContentStream {
+pub struct ContentStream {
     r: Pin<Box<dyn Stream<Item = IoResult<Bytes>> + Send>>,
     extra: Option<Bytes>,
     size: Size,

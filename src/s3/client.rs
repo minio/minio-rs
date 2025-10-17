@@ -20,7 +20,7 @@ use dashmap::DashMap;
 use http::HeaderMap;
 pub use hyper::http::Method;
 use reqwest::Body;
-pub use reqwest::{Error as ReqwestError, Response};
+pub use reqwest::Response;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::prelude::*;
@@ -30,7 +30,7 @@ use std::sync::{Arc, OnceLock};
 use uuid::Uuid;
 
 use crate::s3::builders::{BucketExists, ComposeSource};
-pub use crate::s3::client::hooks::RequestLifecycleHooks;
+pub use crate::s3::client::hooks::RequestHooks;
 use crate::s3::creds::Provider;
 #[cfg(feature = "localhost")]
 use crate::s3::creds::StaticProvider;
@@ -133,7 +133,7 @@ pub struct MinioClientBuilder {
     base_url: BaseUrl,
     /// Set the credential provider. If not, set anonymous access is used.
     provider: Option<Arc<dyn Provider + Send + Sync + 'static>>,
-    client_hooks: Vec<Arc<dyn RequestLifecycleHooks + Send + Sync + 'static>>,
+    client_hooks: Vec<Arc<dyn RequestHooks + Send + Sync + 'static>>,
     /// Set file for loading CAs certs to trust. This is in addition to the system trust store. The file must contain PEM encoded certificates.
     ssl_cert_file: Option<PathBuf>,
     /// Set flag to ignore certificate check. This is insecure and should only be used for testing.
@@ -158,7 +158,7 @@ impl MinioClientBuilder {
 
     /// Add a client hook to the builder. Hooks will be called after each other in
     /// order they were added.
-    pub fn hook(mut self, hooks: Arc<dyn RequestLifecycleHooks + Send + Sync + 'static>) -> Self {
+    pub fn hook(mut self, hooks: Arc<dyn RequestHooks + Send + Sync + 'static>) -> Self {
         self.client_hooks.push(hooks);
         self
     }
@@ -487,6 +487,7 @@ impl MinioClient {
         let date = utc_now();
         headers.add(X_AMZ_DATE, to_amz_date(date));
 
+        // Allow hooks to modify the request before signing (e.g., for client-side load balancing)
         let url_before_hook = url.to_string();
         self.run_before_signing_hooks(
             method,
@@ -496,16 +497,21 @@ impl MinioClient {
             query_params,
             bucket_name,
             object_name,
-            body.clone(),
+            &body,
             &mut extensions,
         )
         .await?;
 
-        let url_after_hook = url.to_string();
-        if url_before_hook != url_after_hook {
-            headers.add("x-minio-redirect", url_after_hook);
+        // If a hook modified the URL (e.g., redirecting to a different MinIO node for load balancing),
+        // add headers to inform the server about the client-side redirection.
+        // This enables server-side telemetry, debugging, and load balancing metrics.
+        // x-minio-redirect-from: The original URL before hook modification
+        // x-minio-redirect-to: The actual endpoint where the request is being sent
+        if url.to_string() != url_before_hook {
+            headers.add("x-minio-redirect-from", &url_before_hook);
+            headers.add("x-minio-redirect-to", url.to_string());
         }
-        
+
         if let Some(p) = &self.shared.provider {
             let creds = p.fetch();
             if creds.session_token.is_some() {
@@ -532,31 +538,9 @@ impl MinioClient {
             }
         }
 
-        if false {
-            let mut header_strings: Vec<String> = headers
-                .iter_all()
-                .map(|(k, v)| format!("{}: {}", k, v.join(",")))
-                .collect();
-
-            // Sort headers alphabetically by name
-            header_strings.sort();
-
-            let debug_str = format!(
-                "S3 request: {method} url={:?}; headers={:?}; body={body:?}",
-                url.path,
-                header_strings.join("; ")
-            );
-            let truncated = if debug_str.len() > 1000 {
-                format!("{}...", &debug_str[..997])
-            } else {
-                debug_str
-            };
-            println!("{truncated}");
-        }
-
         if (*method == Method::PUT) || (*method == Method::POST) {
             //TODO: why-oh-why first collect into a vector and then iterate to a stream?
-            let bytes_vec: Vec<Bytes> = match body.clone() {
+            let bytes_vec: Vec<Bytes> = match body.as_ref() {
                 Some(v) => v.iter().collect(),
                 None => Vec::new(),
             };
@@ -698,7 +682,7 @@ impl MinioClient {
         query_params: &Multimap,
         bucket_name: Option<&str>,
         object_name: Option<&str>,
-        body: Option<Arc<SegmentedBytes>>,
+        body: &Option<Arc<SegmentedBytes>>,
         extensions: &mut http::Extensions,
     ) -> Result<(), Error> {
         for hook in self.shared.client_hooks.iter() {
@@ -739,7 +723,7 @@ impl MinioClient {
 pub(crate) struct SharedClientItems {
     pub(crate) base_url: BaseUrl,
     pub(crate) provider: Option<Arc<dyn Provider + Send + Sync + 'static>>,
-    client_hooks: Vec<Arc<dyn RequestLifecycleHooks + Send + Sync + 'static>>,
+    client_hooks: Vec<Arc<dyn RequestHooks + Send + Sync + 'static>>,
     region_map: DashMap<String, String>,
     express: OnceLock<bool>,
 }
