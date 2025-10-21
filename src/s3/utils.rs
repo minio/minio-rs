@@ -85,10 +85,6 @@ lazy_static! {
 ///
 /// Uses crc32fast which provides hardware acceleration via pclmulqdq instruction
 /// on modern CPUs, falling back to optimized software implementation otherwise.
-///
-/// Note: Unlike `Crc<u64>` from the `crc` crate (used for CRC64-NVME), creating a new
-/// `crc32fast::Hasher` is cheap - it only initializes a u32 state value. The lookup
-/// tables are compiled into the crate, so no caching is needed here.
 pub fn crc32(data: &[u8]) -> u32 {
     let mut hasher = Crc32Hasher::new();
     hasher.update(data);

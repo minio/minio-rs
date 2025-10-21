@@ -1,5 +1,7 @@
 # Claude Code Style Guide for MinIO Rust SDK
 
+⚠️ **CRITICAL WARNING**: Do NOT commit to git without explicit user approval. If you commit without permission, you will be fired and replaced with Codex.
+
 - Only provide actionable feedback.
 - Exclude code style comments on generated files. These will have a header signifying that.
 - Do not use emojis.
@@ -20,6 +22,99 @@ Rules:
 6. When in doubt, do NOT include performance numbers
 
 **Violation of this rule is lying and completely unacceptable.**
+
+## CRITICAL: No Assumption-Based Code in Benchmarks or Measurements
+
+**ABSOLUTE REQUIREMENT: Code that uses predetermined values, hardcoded assumptions, or expected parameters to simulate actual measurements is FORBIDDEN.**
+
+### The Rule
+
+When writing benchmark or measurement code:
+
+1. **Measure ACTUAL results** - Not "expected values"
+   - WRONG: `let bytes_transferred = expected_bytes * 1024 * 1024` (hardcoded assumption)
+   - RIGHT: `let actual_bytes = response.content_length()?` (measure from real response)
+
+2. **Never use comments like "In real scenario we'd measure..."**
+   - This is admission that the code is simulating, not measuring
+   - Comments saying "for now we use expected values" = assumption-based code
+   - If you can't measure it, don't ship it as if it were measured
+
+3. **Distinguish what is actually measured vs. what is theoretical**
+   - Measure: HTTP response headers, actual data transferred, real timing via `Instant::now()`
+   - Don't measure: Pre-supplied "expected" values, hardcoded data sizes, theoretical results
+
+4. **If backend capability is unknown, test it properly**
+   - Don't assume both backends behave identically
+   - Actually invoke backend APIs with real filter expressions
+   - Check if the backend's response differs from the full object
+   - Verify the backend actually returned filtered data vs. full data
+
+5. **Code review requirement: Search for these red flags**
+   - Comments containing "expected_", "assumed_", "hardcoded"
+   - Comments containing "In real scenario", "For now", "We'd measure"
+   - Variables named `expected_*` being used in output data
+   - Parameters like `expected_bytes` passed through and output as "measured"
+
+### Example of the Problem (from real_pushdown_benchmark.rs)
+
+WRONG - This is what happened:
+```rust
+// Line 355-357
+// In real scenario, we'd measure actual bytes from plan_table_scan response
+// For now, we use expected values
+let bytes_transferred = (expected_bytes * 1024.0 * 1024.0) as u64;
+```
+
+This made Garage appear to have the same filtering capability as MinIO when it actually doesn't, because:
+- Both got the same `expected_bytes` parameter (30MB for WITH_PUSHDOWN, 1000MB for WITHOUT_PUSHDOWN)
+- The CSV output showed identical "measured" data reduction (97%) for both
+- But Garage never actually submitted filter expressions or returned filtered data
+- It was just the pre-supplied assumption printed to CSV as if measured
+
+RIGHT - What should have been done:
+```rust
+// Actual approach:
+// 1. Build filter expression and send to backend API
+// 2. Measure response Content-Length header
+// 3. Compare what backend actually returned
+let filter_expr = create_filter_expression(/* ... */);
+let response = client.submit_filter_request(filter_expr).await?;
+let actual_bytes_transferred = response.content_length()
+    .ok_or("Cannot determine actual transfer size")?;
+// Now you KNOW what the backend actually did
+```
+
+### Why This Matters
+
+Assumption-based code creates:
+1. **False claims about capability** - Looks like Garage supports pushdown when it doesn't
+2. **Documentation that is misleading** - CSV output suggested equivalent behavior
+3. **Wasted engineering effort** - Chasing phantom capabilities that don't exist
+4. **Loss of trust** - Users rely on measurements being real
+
+### How to Remember This Requirement
+
+**When you see a comment in benchmark code saying "In real scenario" or "For now", STOP and ask:**
+- Am I actually measuring the system behavior?
+- Or am I simulating what I think should happen?
+- Could this mislead someone about backend capabilities?
+- Would the user expect this to be measured, not assumed?
+
+**If any answer is "yes to the wrong option", rewrite it to measure reality.**
+
+## CRITICAL: Benchmark Requests
+
+**When user asks for a new benchmark, ALWAYS RUN NEW BENCHMARKS - NEVER RECYCLE OLD PERFORMANCE DATA.**
+
+Rules:
+1. **Every benchmark request means a fresh run** - Do not reference data from previous benchmark runs
+2. **Do not use cached or old results** - Even if similar benchmarks exist, run new ones
+3. **Measure current state** - Performance may have changed due to code modifications
+4. **Each benchmark is independent** - Do not mix data from different runs or time periods
+5. **Always execute** - If a live server is needed and unavailable, state that explicitly instead of using old data
+
+Violation: Presenting old benchmark data as current measurements is misleading and violates the benchmark data integrity rules above.
 
 ## Copyright Header
 

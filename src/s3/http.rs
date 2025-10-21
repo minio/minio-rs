@@ -347,6 +347,16 @@ impl BaseUrl {
         !self.aws_domain_suffix.is_empty()
     }
 
+    /// Returns the base URL as a string (e.g., "http://localhost:9000" or "https://play.min.io")
+    pub fn to_url_string(&self) -> String {
+        let scheme = if self.https { "https" } else { "http" };
+        if self.port > 0 {
+            format!("{}://{}:{}", scheme, self.host, self.port)
+        } else {
+            format!("{}://{}", scheme, self.host)
+        }
+    }
+
     fn build_aws_url(
         &self,
         url: &mut Url,

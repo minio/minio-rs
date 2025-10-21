@@ -79,6 +79,20 @@ These files have 0% unit test coverage **by design** because they:
 
 ### Test File Organization
 
+**S3 Tables Tests (30+ files):**
+- `tests/s3tables/` - Iceberg REST Catalog API tests
+- Core CRUD: create_delete, list_warehouses, list_namespaces, list_tables
+- Table Operations: load_table, commit_table, rename_table, drop_table, register_table
+- Namespace Operations: namespace_exists, namespace_properties, update_namespace_properties
+- View Operations: view_operations (create, load, rename, drop views)
+- Validation: name_validation (warehouse/namespace/table naming rules)
+- Concurrency: concurrent_operations (race condition handling)
+- Error Handling: error_handling (404s, conflicts)
+- RCK-Inspired: rck_inspired (Apache Iceberg REST Compatibility Kit tests)
+- Advanced: scan_planning, multi_table_transaction, metadata_location
+
+See [S3TABLES_TESTS.md](S3TABLES_TESTS.md) for detailed documentation.
+
 **madmin Tests (31 files):**
 - test_account_info.rs
 - test_batch_operations.rs

@@ -200,7 +200,7 @@ pub trait HasEtagFromHeaders: HasS3Fields {
     #[inline]
     fn etag(&self) -> Result<String, ValidationErr> {
         // Retrieve the ETag from the response headers.
-        let etag = self
+        let etag: String = self // TODO create an etag struct
             .headers()
             .get("etag")
             .and_then(|v| v.to_str().ok())

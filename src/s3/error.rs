@@ -274,6 +274,21 @@ pub enum ValidationErr {
 
     #[error("Invalid table name: {0}")]
     InvalidTableName(String),
+
+    #[error("Invalid view name: {0}")]
+    InvalidViewName(String),
+
+    #[error("Invalid plan ID: {0}")]
+    InvalidPlanId(String),
+
+    #[error("Invalid page size: {0}")]
+    InvalidPageSize(String),
+
+    #[error("Invalid table changes: {0}")]
+    InvalidTableChanges(String),
+
+    #[error("Invalid metadata location: {0}")]
+    InvalidMetadataLocation(String),
 }
 
 impl From<reqwest::header::ToStrError> for ValidationErr {
@@ -346,7 +361,7 @@ pub enum S3ServerError {
 // Top-level Minio client error
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("S3 server error occurred")]
+    #[error("{0}")]
     S3Server(#[from] S3ServerError),
 
     #[error("Drive IO error occurred")]
@@ -358,8 +373,8 @@ pub enum Error {
     #[error("Validation error occurred")]
     Validation(#[from] ValidationErr),
 
-    #[error("Tables error occurred")]
-    TablesError(#[from] Box<dyn std::error::Error + Send + Sync>),
+    #[error("{0}")]
+    TablesError(#[from] crate::s3tables::error::TablesError),
 }
 
 // region message helpers
