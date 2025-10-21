@@ -164,6 +164,38 @@ pub(crate) fn sign_v4_s3(
     )
 }
 
+/// Signs and updates headers for given parameters for S3 Tables request
+pub(crate) fn sign_v4_s3tables(
+    method: &Method,
+    uri: &str,
+    region: &str,
+    headers: &mut Multimap,
+    query_params: &Multimap,
+    access_key: &str,
+    secret_key: &str,
+    body: Option<&Vec<u8>>,
+    date: UtcTime,
+) {
+    let content_sha256 = if let Some(body_data) = body {
+        sha256_hash(body_data)
+    } else {
+        crate::s3::utils::EMPTY_SHA256.to_string()
+    };
+
+    sign_v4(
+        "s3tables",
+        method,
+        uri,
+        region,
+        headers,
+        query_params,
+        access_key,
+        secret_key,
+        &content_sha256,
+        date,
+    )
+}
+
 /// Signs and updates headers for given parameters for pre-sign request
 pub(crate) fn presign_v4(
     method: &Method,

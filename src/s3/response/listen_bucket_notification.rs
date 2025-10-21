@@ -15,7 +15,7 @@
 
 use crate::impl_has_s3fields;
 use crate::s3::error::{Error, ValidationErr};
-use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
+use crate::s3::response_traits::{HasBucket, HasRegion};
 use crate::s3::types::{FromS3Response, NotificationRecords, S3Request};
 use async_std::stream::Stream;
 use bytes::Bytes;

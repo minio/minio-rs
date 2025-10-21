@@ -16,7 +16,7 @@
 use crate::impl_has_s3fields;
 use crate::s3::error::{Error, S3ServerError, ValidationErr};
 use crate::s3::minio_error_response::MinioErrorCode;
-use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
+use crate::s3::response_traits::{HasBucket, HasRegion};
 use crate::s3::types::{FromS3Response, S3Request, SseConfig};
 use crate::s3::utils::{get_text_option, get_text_result};
 use async_trait::async_trait;

@@ -33,7 +33,7 @@ impl MinioClient {
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketVersioningResponse;
     /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
-    /// use minio::s3::response::a_response_traits::HasBucket;
+    /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {

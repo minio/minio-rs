@@ -12,7 +12,7 @@
 
 use crate::impl_has_s3fields;
 use crate::s3::error::{Error, ValidationErr};
-use crate::s3::response::a_response_traits::HasS3Fields;
+
 use crate::s3::types::{FromS3Response, ListEntry, S3Request};
 use crate::s3::utils::xml::{Element, MergeXmlElements};
 use crate::s3::utils::{from_iso8601utc, parse_tags, url_decode};

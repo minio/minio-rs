@@ -18,12 +18,12 @@ use crate::s3::client::{MAX_MULTIPART_COUNT, MAX_PART_SIZE};
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
-use crate::s3::response::a_response_traits::HasEtagFromBody;
 use crate::s3::response::{
     AbortMultipartUploadResponse, CompleteMultipartUploadResponse, ComposeObjectResponse,
     CopyObjectInternalResponse, CopyObjectResponse, CreateMultipartUploadResponse,
     StatObjectResponse, UploadPartCopyResponse,
 };
+use crate::s3::response_traits::HasEtagFromBody;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{Directive, PartInfo, Retention, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{

@@ -18,18 +18,17 @@
 pub mod builders;
 pub mod client;
 pub mod creds;
-pub mod error;
-pub mod header_constants;
 pub mod http;
-pub mod lifecycle_config;
-pub mod minio_error_response;
 pub mod multimap_ext;
 mod object_content;
 pub mod response;
+#[macro_use]
+pub mod response_traits;
 pub mod segmented_bytes;
 pub mod signer;
-pub mod sse;
 pub mod types;
 pub mod utils;
 
+// Re-export types module contents for convenience
 pub use client::{MinioClient, MinioClientBuilder};
+pub use types::{error, header_constants, lifecycle_config, minio_error_response, sse};

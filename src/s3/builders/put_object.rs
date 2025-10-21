@@ -19,11 +19,11 @@ use crate::s3::client::MinioClient;
 use crate::s3::error::{Error, IoError, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
-use crate::s3::response::a_response_traits::HasEtagFromHeaders;
 use crate::s3::response::{
     AbortMultipartUploadResponse, CompleteMultipartUploadResponse, CreateMultipartUploadResponse,
     PutObjectContentResponse, PutObjectResponse, UploadPartResponse,
 };
+use crate::s3::response_traits::HasEtagFromHeaders;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::Sse;
 use crate::s3::types::{PartInfo, Retention, S3Api, S3Request, ToS3Request};
