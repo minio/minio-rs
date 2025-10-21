@@ -612,6 +612,86 @@ impl MinioClient {
         .await
     }
 
+    /// Execute a Tables API request with custom path routing
+    pub(crate) async fn execute_tables(
+        &self,
+        method: Method,
+        path: String,
+        headers: &mut Multimap,
+        query_params: &Multimap,
+        body: Option<Vec<u8>>,
+    ) -> Result<reqwest::Response, Error> {
+        let mut url = self
+            .shared
+            .base_url
+            .build_url(&method, "", &Multimap::new(), None, None)?;
+
+        url.path = path.clone();
+        url.query = query_params.clone();
+
+        headers.add(HOST, url.host_header_value());
+        headers.add(CONTENT_TYPE, "application/json");
+
+        if let Some(ref body_data) = body {
+            headers.add(CONTENT_LENGTH, body_data.len().to_string());
+        }
+
+        let date = utc_now();
+        headers.add(X_AMZ_DATE, to_amz_date(date));
+
+        if let Some(p) = &self.shared.provider {
+            let creds = p.fetch();
+            if let Some(token) = creds.session_token {
+                headers.add(X_AMZ_SECURITY_TOKEN, token);
+            }
+
+            crate::s3::signer::sign_v4_s3tables(
+                &method,
+                &path,
+                "",
+                headers,
+                query_params,
+                &creds.access_key,
+                &creds.secret_key,
+                body.as_ref(),
+                date,
+            );
+        }
+
+        let url_string = url.to_string();
+        let mut req = self.http_client.request(method.clone(), &url_string);
+
+        for (key, values) in headers.iter_all() {
+            for value in values {
+                req = req.header(key, value);
+            }
+        }
+
+        if let Some(body_data) = body {
+            req = req.body(body_data);
+        }
+
+        let response = req.send().await.map_err(NetworkError::ReqwestError)?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body_text = response.text().await.map_err(NetworkError::ReqwestError)?;
+
+            if let Ok(error_resp) =
+                serde_json::from_str::<crate::s3::tables::error::TablesErrorResponse>(&body_text)
+            {
+                return Err(Error::TablesError(error_resp.into()));
+            }
+
+            return Err(Error::S3Server(S3ServerError::HttpError(
+                status.as_u16(),
+                body_text,
+            )));
+        }
+
+        Ok(response)
+    }
+
     /// create an example client for testing on localhost
     #[cfg(feature = "localhost")]
     pub fn create_client_on_localhost()
