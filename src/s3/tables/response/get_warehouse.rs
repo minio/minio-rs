@@ -25,14 +25,13 @@ use serde::Deserialize;
 pub struct GetWarehouseResponse {
     /// Name of the warehouse
     pub name: String,
-    /// ARN of the warehouse
-    pub arn: String,
+    /// Underlying S3 bucket name
+    pub bucket: String,
+    /// Unique identifier for the warehouse
+    pub uuid: String,
     /// Creation timestamp
-    #[serde(rename = "createdAt")]
+    #[serde(rename = "created-at")]
     pub created_at: DateTime<Utc>,
-    /// Last modification timestamp
-    #[serde(rename = "lastModifiedAt")]
-    pub last_modified_at: DateTime<Utc>,
 }
 
 impl FromTablesResponse for GetWarehouseResponse {

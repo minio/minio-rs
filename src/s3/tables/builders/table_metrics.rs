@@ -69,7 +69,7 @@ impl ToTablesRequest for TableMetrics {
             client: self.client,
             method: Method::GET,
             path: format!(
-                "/warehouses/{}/namespaces/{}/tables/{}/metrics",
+                "/{}/namespaces/{}/tables/{}/metrics",
                 self.warehouse_name, namespace_path, self.table_name
             ),
             query_params: Default::default(),

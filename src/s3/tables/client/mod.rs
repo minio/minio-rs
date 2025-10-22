@@ -24,7 +24,7 @@ use crate::s3::client::MinioClient;
 ///
 /// # API Endpoint
 ///
-/// All Tables operations use the `/tables/v1` prefix, distinct from
+/// All Tables operations use the `/_iceberg/v1` prefix, distinct from
 /// standard S3 operations.
 ///
 /// # Authentication
@@ -83,7 +83,7 @@ impl TablesClient {
     pub fn new(client: MinioClient) -> Self {
         Self {
             inner: client,
-            base_path: "/tables/v1".to_string(),
+            base_path: "/_iceberg/v1".to_string(),
         }
     }
 
@@ -96,7 +96,7 @@ impl TablesClient {
 
     /// Get the base path for Tables API
     ///
-    /// Returns `/tables/v1` - the prefix for all Tables operations.
+    /// Returns `/_iceberg/v1` - the prefix for all Tables operations.
     pub fn base_path(&self) -> &str {
         &self.base_path
     }

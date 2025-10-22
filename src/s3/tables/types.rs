@@ -83,16 +83,6 @@ pub struct PaginationOpts {
     pub page_size: Option<u32>,
 }
 
-/// Response with warehouse pagination
-#[derive(Debug, Clone, Deserialize)]
-pub struct ListWarehousesResponse {
-    /// List of warehouses
-    pub warehouses: Vec<TablesWarehouse>,
-    /// Token for retrieving the next page of results
-    #[serde(rename = "next-page-token")]
-    pub next_page_token: Option<String>,
-}
-
 /// Response with namespace pagination
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListNamespacesResponse {

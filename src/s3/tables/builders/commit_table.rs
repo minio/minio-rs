@@ -196,7 +196,7 @@ impl ToTablesRequest for CommitTable {
             client: self.client,
             method: Method::POST,
             path: format!(
-                "/warehouses/{}/namespaces/{}/tables/{}/commits",
+                "/{}/namespaces/{}/tables/{}",
                 self.warehouse_name, namespace_path, self.table_name
             ),
             query_params: Default::default(),

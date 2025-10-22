@@ -105,7 +105,7 @@ impl ToTablesRequest for RenameTable {
         Ok(TablesRequest {
             client: self.client,
             method: Method::POST,
-            path: format!("/warehouses/{}/tables/rename", self.warehouse_name),
+            path: format!("/{}/tables/rename", self.warehouse_name),
             query_params: Default::default(),
             headers: Default::default(),
             body: Some(body),

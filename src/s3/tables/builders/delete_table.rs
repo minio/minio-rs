@@ -69,7 +69,7 @@ impl ToTablesRequest for DeleteTable {
             client: self.client,
             method: Method::DELETE,
             path: format!(
-                "/warehouses/{}/namespaces/{}/tables/{}",
+                "/{}/namespaces/{}/tables/{}",
                 self.warehouse_name, namespace_path, self.table_name
             ),
             query_params: Default::default(),

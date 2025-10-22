@@ -91,10 +91,7 @@ impl ToTablesRequest for DeleteNamespace {
         Ok(TablesRequest {
             client: self.client,
             method: Method::DELETE,
-            path: format!(
-                "/warehouses/{}/namespaces/{}",
-                self.warehouse_name, namespace_path
-            ),
+            path: format!("/{}/namespaces/{}", self.warehouse_name, namespace_path),
             query_params: Default::default(),
             headers: Default::default(),
             body: None,

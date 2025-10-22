@@ -632,9 +632,13 @@ impl MinioClient {
         headers.add(HOST, url.host_header_value());
         headers.add(CONTENT_TYPE, "application/json");
 
-        if let Some(ref body_data) = body {
+        let content_sha256 = if let Some(ref body_data) = body {
             headers.add(CONTENT_LENGTH, body_data.len().to_string());
-        }
+            crate::s3::utils::sha256_hash(body_data)
+        } else {
+            crate::s3::utils::EMPTY_SHA256.to_string()
+        };
+        headers.add(X_AMZ_CONTENT_SHA256, content_sha256);
 
         let date = utc_now();
         headers.add(X_AMZ_DATE, to_amz_date(date));
@@ -648,7 +652,7 @@ impl MinioClient {
             crate::s3::signer::sign_v4_s3tables(
                 &method,
                 &path,
-                "",
+                &self.shared.base_url.region,
                 headers,
                 query_params,
                 &creds.access_key,

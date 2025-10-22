@@ -213,41 +213,70 @@ impl From<TablesErrorResponse> for TablesError {
         let message = resp.error.message.clone();
 
         // Map error types to specific variants
+        // Support both AWS-style "Exception" suffix and Iceberg-style names
         match error_type {
-            "WarehouseNotFoundException" => TablesError::WarehouseNotFound {
-                warehouse: extract_resource_name(&message).unwrap_or_else(|| "unknown".to_string()),
-            },
-            "WarehouseAlreadyExistsException" => TablesError::WarehouseAlreadyExists {
-                warehouse: extract_resource_name(&message).unwrap_or_else(|| "unknown".to_string()),
-            },
-            "WarehouseNameInvalidException" => TablesError::WarehouseNameInvalid {
-                warehouse: extract_resource_name(&message).unwrap_or_else(|| "unknown".to_string()),
-                cause: message,
-            },
-            "NamespaceNotFoundException" => TablesError::NamespaceNotFound {
-                namespace: extract_resource_name(&message).unwrap_or_else(|| "unknown".to_string()),
-            },
-            "NamespaceAlreadyExistsException" => TablesError::NamespaceAlreadyExists {
-                namespace: extract_resource_name(&message).unwrap_or_else(|| "unknown".to_string()),
-            },
-            "NamespaceNameInvalidException" => TablesError::NamespaceNameInvalid {
-                namespace: extract_resource_name(&message).unwrap_or_else(|| "unknown".to_string()),
-                cause: message,
-            },
-            "TableNotFoundException" => TablesError::TableNotFound {
+            "WarehouseNotFoundException" | "IcebergWarehouseNotFound" => {
+                TablesError::WarehouseNotFound {
+                    warehouse: extract_resource_name(&message)
+                        .unwrap_or_else(|| "unknown".to_string()),
+                }
+            }
+            "WarehouseAlreadyExistsException" | "IcebergWarehouseAlreadyExists" => {
+                TablesError::WarehouseAlreadyExists {
+                    warehouse: extract_resource_name(&message)
+                        .unwrap_or_else(|| "unknown".to_string()),
+                }
+            }
+            "WarehouseNameInvalidException" | "IcebergWarehouseNameInvalid" => {
+                TablesError::WarehouseNameInvalid {
+                    warehouse: extract_resource_name(&message)
+                        .unwrap_or_else(|| "unknown".to_string()),
+                    cause: message,
+                }
+            }
+            "NamespaceNotFoundException" | "IcebergNamespaceNotFound" => {
+                TablesError::NamespaceNotFound {
+                    namespace: extract_resource_name(&message)
+                        .unwrap_or_else(|| "unknown".to_string()),
+                }
+            }
+            "NamespaceAlreadyExistsException" | "IcebergNamespaceAlreadyExists" => {
+                TablesError::NamespaceAlreadyExists {
+                    namespace: extract_resource_name(&message)
+                        .unwrap_or_else(|| "unknown".to_string()),
+                }
+            }
+            "NamespaceNameInvalidException" | "IcebergNamespaceNameInvalid" => {
+                TablesError::NamespaceNameInvalid {
+                    namespace: extract_resource_name(&message)
+                        .unwrap_or_else(|| "unknown".to_string()),
+                    cause: message,
+                }
+            }
+            "TableNotFoundException" | "IcebergTableNotFound" => TablesError::TableNotFound {
                 table: extract_resource_name(&message).unwrap_or_else(|| "unknown".to_string()),
             },
-            "TableAlreadyExistsException" => TablesError::TableAlreadyExists {
-                table: extract_resource_name(&message).unwrap_or_else(|| "unknown".to_string()),
-            },
-            "TableNameInvalidException" => TablesError::TableNameInvalid {
-                table: extract_resource_name(&message).unwrap_or_else(|| "unknown".to_string()),
-                cause: message,
-            },
-            "CommitFailedException" => TablesError::CommitFailed { message },
-            "CommitConflictException" => TablesError::CommitConflict { message },
-            "TransactionFailedException" => TablesError::TransactionFailed { message },
-            "BadRequestException" => TablesError::BadRequest { message },
+            "TableAlreadyExistsException" | "IcebergTableAlreadyExists" => {
+                TablesError::TableAlreadyExists {
+                    table: extract_resource_name(&message).unwrap_or_else(|| "unknown".to_string()),
+                }
+            }
+            "TableNameInvalidException" | "IcebergTableNameInvalid" => {
+                TablesError::TableNameInvalid {
+                    table: extract_resource_name(&message).unwrap_or_else(|| "unknown".to_string()),
+                    cause: message,
+                }
+            }
+            "CommitFailedException" | "IcebergCommitFailed" => {
+                TablesError::CommitFailed { message }
+            }
+            "CommitConflictException" | "IcebergCommitConflict" => {
+                TablesError::CommitConflict { message }
+            }
+            "TransactionFailedException" | "IcebergTransactionFailed" => {
+                TablesError::TransactionFailed { message }
+            }
+            "BadRequestException" | "IcebergBadRequest" => TablesError::BadRequest { message },
             _ => TablesError::Generic(message),
         }
     }

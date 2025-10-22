@@ -80,7 +80,7 @@ impl ToTablesRequest for ListTables {
             client: self.client,
             method: Method::GET,
             path: format!(
-                "/warehouses/{}/namespaces/{}/tables",
+                "/{}/namespaces/{}/tables",
                 self.warehouse_name, namespace_path
             ),
             query_params,

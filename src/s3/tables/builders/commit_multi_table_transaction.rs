@@ -89,7 +89,7 @@ impl ToTablesRequest for CommitMultiTableTransaction {
         Ok(TablesRequest {
             client: self.client,
             method: Method::POST,
-            path: format!("/warehouses/{}/transactions/commit", self.warehouse_name),
+            path: format!("/{}/transactions/commit", self.warehouse_name),
             query_params: Default::default(),
             headers: Default::default(),
             body: Some(body),

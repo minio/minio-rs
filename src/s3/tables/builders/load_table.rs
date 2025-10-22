@@ -68,7 +68,7 @@ impl ToTablesRequest for LoadTable {
             client: self.client,
             method: Method::GET,
             path: format!(
-                "/warehouses/{}/namespaces/{}/tables/{}",
+                "/{}/namespaces/{}/tables/{}",
                 self.warehouse_name, namespace_path, self.table_name
             ),
             query_params: Default::default(),

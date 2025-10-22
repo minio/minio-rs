@@ -46,11 +46,14 @@ impl ToTablesRequest for GetConfig {
             ));
         }
 
+        let mut query_params = crate::s3::multimap_ext::Multimap::new();
+        query_params.insert("warehouse".to_string(), self.warehouse_name);
+
         Ok(TablesRequest {
             client: self.client,
             method: Method::GET,
-            path: format!("/warehouses/{}/config", self.warehouse_name),
-            query_params: Default::default(),
+            path: "/config".to_string(),
+            query_params,
             headers: Default::default(),
             body: None,
         })

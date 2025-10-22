@@ -16,16 +16,16 @@
 //! Response type for ListWarehouses operation
 
 use crate::s3::error::Error;
-use crate::s3::tables::types::{FromTablesResponse, TablesRequest, TablesWarehouse};
+use crate::s3::tables::types::{FromTablesResponse, TablesRequest};
 use serde::Deserialize;
 
 /// Response from ListWarehouses operation
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListWarehousesResponse {
-    /// List of warehouses
-    pub warehouses: Vec<TablesWarehouse>,
+    /// List of warehouse names
+    pub warehouses: Vec<String>,
     /// Optional token for pagination
-    #[serde(rename = "nextToken")]
+    #[serde(rename = "next-page-token")]
     pub next_token: Option<String>,
 }
 

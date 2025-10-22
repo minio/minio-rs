@@ -102,7 +102,7 @@ impl ToTablesRequest for RegisterTable {
             client: self.client,
             method: Method::POST,
             path: format!(
-                "/warehouses/{}/namespaces/{}/tables/register",
+                "/{}/namespaces/{}/register",
                 self.warehouse_name, namespace_path
             ),
             query_params: Default::default(),

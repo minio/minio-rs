@@ -94,10 +94,7 @@ impl ToTablesRequest for GetNamespace {
         Ok(TablesRequest {
             client: self.client,
             method: Method::GET,
-            path: format!(
-                "/warehouses/{}/namespaces/{}",
-                self.warehouse_name, namespace_path
-            ),
+            path: format!("/{}/namespaces/{}", self.warehouse_name, namespace_path),
             query_params: Default::default(),
             headers: Default::default(),
             body: None,

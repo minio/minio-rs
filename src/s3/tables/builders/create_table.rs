@@ -167,7 +167,7 @@ impl ToTablesRequest for CreateTable {
             client: self.client,
             method: Method::POST,
             path: format!(
-                "/warehouses/{}/namespaces/{}/tables",
+                "/{}/namespaces/{}/tables",
                 self.warehouse_name, namespace_path
             ),
             query_params: Default::default(),

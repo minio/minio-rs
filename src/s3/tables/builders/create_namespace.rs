@@ -118,7 +118,7 @@ impl ToTablesRequest for CreateNamespace {
         Ok(TablesRequest {
             client: self.client,
             method: Method::POST,
-            path: format!("/warehouses/{}/namespaces", self.warehouse_name),
+            path: format!("/{}/namespaces", self.warehouse_name),
             query_params: Default::default(),
             headers: Default::default(),
             body: Some(body),

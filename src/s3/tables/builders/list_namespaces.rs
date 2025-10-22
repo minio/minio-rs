@@ -118,7 +118,7 @@ impl ToTablesRequest for ListNamespaces {
         Ok(TablesRequest {
             client: self.client,
             method: Method::GET,
-            path: format!("/warehouses/{}/namespaces", self.warehouse_name),
+            path: format!("/{}/namespaces", self.warehouse_name),
             query_params,
             headers: Default::default(),
             body: None,
