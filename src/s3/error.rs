@@ -236,6 +236,16 @@ pub enum ValidationErr {
 
     #[error("Content length is unknown")]
     ContentLengthUnknown,
+
+    // S3 Tables validation errors
+    #[error("Invalid warehouse name: {0}")]
+    InvalidWarehouseName(String),
+
+    #[error("Invalid namespace name: {0}")]
+    InvalidNamespaceName(String),
+
+    #[error("Invalid table name: {0}")]
+    InvalidTableName(String),
 }
 
 impl From<reqwest::header::ToStrError> for ValidationErr {
@@ -279,6 +289,9 @@ pub enum IoError {
 pub enum NetworkError {
     #[error("Server failed with HTTP status code {0}")]
     ServerError(u16),
+
+    #[error("Network request error: {0}")]
+    ReqwestError(#[from] reqwest::Error),
 }
 
 // Server response errors like bucket does not exist, etc.
@@ -297,6 +310,9 @@ pub enum S3ServerError {
         http_status_code: u16,
         content_type: String,
     },
+
+    #[error("HTTP error: status {0}, body: {1}")]
+    HttpError(u16, String),
 }
 
 // Top-level Minio client error
@@ -313,6 +329,9 @@ pub enum Error {
 
     #[error("Validation error occurred")]
     Validation(#[from] ValidationErr),
+
+    #[error("Tables API error: {0}")]
+    TablesError(#[from] crate::s3::tables::error::TablesError),
 }
 
 // region message helpers

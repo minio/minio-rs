@@ -80,7 +80,7 @@ impl TestContext {
             const DEFAULT_ENABLE_HTTPS: &str = "true";
             const DEFAULT_SSL_CERT_FILE: &str = "./tests/public.crt";
             const DEFAULT_IGNORE_CERT_CHECK: &str = "false";
-            const DEFAULT_SERVER_REGION: &str = "";
+            const DEFAULT_SERVER_REGION: &str = "us-east-1";
 
             let host: String =
                 std::env::var("SERVER_ENDPOINT").unwrap_or(DEFAULT_SERVER_ENDPOINT.to_string());

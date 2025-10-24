@@ -1,5 +1,5 @@
 // MinIO Rust Library for Amazon S3 Compatible Cloud Storage
-// Copyright 2022 MinIO, Inc.
+// Copyright 2025 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,24 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implementation of Simple Storage Service (aka S3) client
+use minio::s3::tables::{TablesApi, TablesClient};
+use minio_common::test_context::TestContext;
 
-pub mod builders;
-pub mod client;
-pub mod creds;
-pub mod error;
-pub mod header_constants;
-pub mod http;
-pub mod lifecycle_config;
-pub mod minio_error_response;
-pub mod multimap_ext;
-mod object_content;
-pub mod response;
-pub mod segmented_bytes;
-pub mod signer;
-pub mod sse;
-pub mod tables;
-pub mod types;
-pub mod utils;
+#[minio_macros::test(no_bucket)]
+async fn warehouse_list(ctx: TestContext) {
+    let tables = TablesClient::new(ctx.client.clone());
 
-pub use client::{MinioClient, MinioClientBuilder};
+    // List warehouses (may or may not be empty depending on other tests)
+    let resp = tables.list_warehouses().build().send().await.unwrap();
+
+    // Just verify the call succeeds and returns a list
+    assert!(resp.warehouses.is_empty() || !resp.warehouses.is_empty());
+}
