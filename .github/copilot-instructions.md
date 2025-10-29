@@ -249,6 +249,12 @@ async fn my_test(ctx: TestContext, bucket_name: String) {
    - Timeout: 5 minutes
    - Duration: ~90 seconds
 
+6. **label-checker** job:
+   - **REQUIRED**: All PRs must have at least one label
+   - Valid labels: `highlight`, `breaking-change`, `security-fix`, `enhancement`, `bug`, `cleanup-rewrite`, `regression-fix`, `codex`
+   - PRs without a label will fail the check
+   - The check runs on PR open, synchronize, label, and unlabel events
+
 ### Branches
 - Main development branch: `master`
 - PRs target: `master`
