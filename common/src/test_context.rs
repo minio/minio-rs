@@ -144,7 +144,7 @@ impl TestContext {
     /// - `CleanupGuard` - A guard that automatically deletes the bucket when dropped.
     ///
     /// # Example
-    /// ```ignore
+    /// ```no_run
     /// let (bucket_name, guard) = client.create_bucket_helper().await;
     /// println!("Created temporary bucket: {}", bucket_name);
     /// // The bucket will be removed when `guard` is dropped.

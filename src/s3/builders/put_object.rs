@@ -643,10 +643,10 @@ impl PutObjectContent {
                 return Err(ValidationErr::TooManyParts(part_number as u64).into());
             }
 
-            if let Some(exp) = object_size.value() {
-                if exp < total_read {
-                    return Err(ValidationErr::TooMuchData(exp).into());
-                }
+            if let Some(exp) = object_size.value()
+                && exp < total_read
+            {
+                return Err(ValidationErr::TooMuchData(exp).into());
             }
 
             // Upload the part now.
@@ -686,14 +686,14 @@ impl PutObjectContent {
         // Complete the multipart upload.
         let size = parts.iter().map(|p| p.size).sum();
 
-        if let Some(expected) = object_size.value() {
-            if expected != size {
-                return Err(ValidationErr::InsufficientData {
-                    expected,
-                    got: size,
-                }
-                .into());
+        if let Some(expected) = object_size.value()
+            && expected != size
+        {
+            return Err(ValidationErr::InsufficientData {
+                expected,
+                got: size,
             }
+            .into());
         }
 
         let resp: CompleteMultipartUploadResponse = CompleteMultipartUpload {

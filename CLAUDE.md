@@ -34,14 +34,14 @@ All source files that haven't been generated MUST include the following copyrigh
 
 ### Comments
 - **NO redundant comments** - Code should be self-documenting
-- Avoid obvious comments like `// Set x to 5` for `x := 5`
+- Avoid obvious comments like `// Set x to 5` for `let x = 5;`
 - Only add comments when they explain WHY, not WHAT
 - Document complex algorithms or non-obvious business logic
 
 ## Critical Code Patterns
 
 ### Builder Pattern
-All S3 API requests MUST use the builder pattern, with the following documentation but then for the appropriate API
+All S3 API requests MUST use the builder pattern, with documentation similar to the following example (adapted for each specific API)
 
 ```rust
 /// Argument builder for the [`AppendObject`](https://docs.aws.amazon.com/AmazonS3/latest/userguide/directory-buckets-objects-append.html) S3 API operation.
@@ -72,6 +72,33 @@ impl Client {
     }
 }
 ```
+
+### Rust-Specific Best Practices
+
+1. **Ownership and Borrowing**
+   - Prefer `&str` over `&String` in function parameters
+   - Use `AsRef<str>` or `Into<String>` for flexible string parameters
+   - Return owned types from functions unless lifetime annotations are clear
+
+2. **Type Safety**
+   - Use `#[must_use]` attribute for functions returning important values
+   - Prefer strong typing over primitive obsession
+   - Use newtypes for domain-specific values
+
+3. **Unsafe Code**
+   - Avoid `unsafe` code unless absolutely necessary
+   - Document all safety invariants when `unsafe` is required
+   - Isolate `unsafe` blocks and keep them minimal
+
+4. **Performance**
+   - Use `Cow<'_, str>` to avoid unnecessary allocations
+   - Prefer iterators over collecting into intermediate vectors
+   - Use `Box<dyn Trait>` sparingly; prefer generics when possible
+
+5. **Async Patterns**
+   - Use `tokio::select!` for concurrent operations
+   - Avoid blocking operations in async contexts
+   - Use `async-trait` for async trait methods
 
 ## Code Quality Principles
 
@@ -126,8 +153,9 @@ Complex distributed systems code must remain **human-readable**:
 ### Variables
 - Use meaningful variable names that reflect business concepts
 - Variable names should reflect usage frequency: frequent variables can be shorter
-- Constants should follow Rust patterns
-- Global variables should be clearly identified and documented for their system-wide purpose
+- Constants should use SCREAMING_SNAKE_CASE (e.g., `MAX_RETRIES`, `DEFAULT_TIMEOUT`)
+- Static variables should be clearly identified with proper safety documentation
+- Prefer `const` over `static` when possible for compile-time constants
 
 ### Developer Documentation
 
@@ -179,7 +207,7 @@ Claude will periodically analyze the codebase and suggest:
 Before any code changes:
 1. ✅ Run `cargo fmt --all` to check and fix code formatting
 2. ✅ Run `cargo test` to ensure all tests pass
-3. ✅ Run `cargo clippy` to check for common mistakes
+3. ✅ Run `cargo clippy --all-targets --all-features --workspace -- -D warnings` to check for common mistakes and ensure no warnings
 4. ✅ Ensure new code has appropriate test coverage
 5. ✅ Verify no redundant comments are added
 
@@ -222,6 +250,6 @@ fn operation() -> Result<Response, Error> {
 - **Fix formatting**: `cargo fmt --all`
 - **Run tests**: `cargo test`
 - **Run specific test**: `cargo test test_name`
-- **Check code**: `cargo clippy`
+- **Check code**: `cargo clippy --all-targets --all-features --workspace -- -D warnings`
 - **Build project**: `cargo build --release`
 - **Generate docs**: `cargo doc --open`
