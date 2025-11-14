@@ -13,15 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::{Error, ValidationErr};
-use crate::s3::response::a_response_traits::{
-    HasBucket, HasObject, HasRegion, HasS3Fields, HasVersion,
-};
-use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::response_traits::{HasBucket, HasObject, HasRegion, HasVersion};
+use crate::s3::types::S3Request;
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::Bytes;
 use http::HeaderMap;
-use std::mem;
 
 /// Response from the [`put_object_legal_hold`](crate::s3::client::MinioClient::put_object_legal_hold) API call,
 /// indicating that a legal hold has been successfully removed from a specific object version in an S3 bucket.

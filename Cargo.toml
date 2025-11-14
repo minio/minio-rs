@@ -38,7 +38,7 @@ async-recursion = "1.1"
 async-stream = "0.3"
 async-trait = "0.1"
 base64 = "0.22"
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 crc = "3.3"
 dashmap = "6.1.0"
 env_logger = "0.11"

@@ -36,7 +36,7 @@ impl MinioClient {
     /// use minio::s3::response::UploadPartCopyResponse;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     /// use minio::s3::types::S3Api;
-    /// use minio::s3::response::a_response_traits::HasObject;
+    /// use minio::s3::response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {    
@@ -107,7 +107,7 @@ impl MinioClient {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// use minio::s3::response::a_response_traits::HasVersion;
+    /// use minio::s3::response_traits::HasVersion;
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();

@@ -13,13 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::{Error, ValidationErr};
-use crate::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasS3Fields};
-use crate::s3::types::{FromS3Response, ObjectLockConfig, S3Request};
+use crate::s3::error::ValidationErr;
+use crate::s3::response_traits::{HasBucket, HasObject, HasRegion};
+use crate::s3::types::{ObjectLockConfig, S3Request};
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
-use std::mem;
 use xmltree::Element;
 
 /// Response from the [`get_object_lock_config`](crate::s3::client::MinioClient::get_object_lock_config) API call,

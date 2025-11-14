@@ -51,7 +51,7 @@
 //!
 //! ## Features
 //! - Request builder pattern for ergonomic API usage
-//! - Full async/await support via [`tokio`]
+//! - Full async/await support via [tokio](https://tokio.rs/)
 //! - Strongly-typed responses
 //! - Transparent error handling via `Result<T, Error>`
 //!
@@ -63,6 +63,7 @@
 #![allow(clippy::result_large_err)]
 #![allow(clippy::too_many_arguments)]
 pub mod s3;
+pub mod s3tables;
 
 #[cfg(test)]
 #[macro_use]

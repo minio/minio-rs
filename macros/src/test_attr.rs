@@ -127,7 +127,7 @@ pub(crate) fn expand_test_macro(
             use ::futures_util::FutureExt;
             use ::std::panic::AssertUnwindSafe;
             use ::minio::s3::types::S3Api;
-            use ::minio::s3::response::a_response_traits::HasBucket;
+            use ::minio::s3::response_traits::HasBucket;
 
             let ctx = ::minio_common::test_context::TestContext::new_from_env();
     );

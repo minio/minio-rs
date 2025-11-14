@@ -101,9 +101,9 @@ pub fn sha256_hash(data: &[u8]) -> String {
 /// This implementation uses `unsafe` code for performance reasons:
 /// - We call [`String::as_mut_vec`] to get direct access to the
 ///   underlying `Vec<u8>` backing the `String`.
-/// - We then use [`set_len`] to pre-allocate the final length without
+/// - We then use `Vec::set_len` to pre-allocate the final length without
 ///   initializing the contents first.
-/// - Finally, we use [`get_unchecked`] and [`get_unchecked_mut`] to
+/// - Finally, we use `slice::get_unchecked` and `slice::get_unchecked_mut` to
 ///   avoid bounds checking inside the tight encoding loop.
 ///
 /// # Why unsafe is needed
