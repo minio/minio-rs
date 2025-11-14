@@ -74,6 +74,14 @@ extern crate proc_macro;
 ///    // this test will not run if the MinIO server is NOT running in Express mode
 /// }
 /// ```
+/// - `ignore`: Mark the test as ignored (skipped by default). Run with `cargo test -- --ignored` to include.
+/// ```no_run
+/// use minio_common::test_context::TestContext;
+/// #[minio_macros::test(ignore = "Requires newer server version")]
+/// async fn my_test(ctx: TestContext, bucket_name: String) {
+///    // this test is skipped by default
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn test(
     args: proc_macro::TokenStream,

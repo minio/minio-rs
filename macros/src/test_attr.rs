@@ -32,6 +32,8 @@ pub(crate) struct MacroArgs {
     no_bucket: darling::util::Flag,
     object_lock: darling::util::Flag,
     no_cleanup: darling::util::Flag,
+    /// Mark test as ignored (skipped by default, run with `cargo test -- --ignored`)
+    ignore: Option<String>,
 }
 
 impl MacroArgs {
@@ -171,28 +173,33 @@ fn generate_tokio_test_header(args: &MacroArgs, sig: TokenStream) -> TokenStream
         .as_ref()
         .map(ToString::to_string)
         .or(std::env::var("MINIO_TEST_TOKIO_RUNTIME_FLAVOR").ok());
-    match (flavor, args.worker_threads) {
+
+    // Generate #[ignore = "reason"] if specified
+    let ignore_attr = args
+        .ignore
+        .as_ref()
+        .map(|reason| quote!(#[ignore = #reason]));
+
+    let tokio_attr = match (flavor, args.worker_threads) {
         (Some(flavor), None) => {
-            quote!(#[::tokio::test(flavor = #flavor)]
-            #sig
-                )
+            quote!(#[::tokio::test(flavor = #flavor)])
         }
         (None, Some(worker_threads)) => {
-            quote!(#[::tokio::test(worker_threads = #worker_threads)]
-            #sig
-                )
+            quote!(#[::tokio::test(worker_threads = #worker_threads)])
         }
         (None, None) => {
-            quote!(#[::tokio::test]
-            #sig
-                )
+            quote!(#[::tokio::test])
         }
         (Some(flavor), Some(worker_threads)) => {
-            quote!(#[::tokio::test(flavor = #flavor, worker_threads = #worker_threads)]
-            #sig
-                )
+            quote!(#[::tokio::test(flavor = #flavor, worker_threads = #worker_threads)])
         }
-    }
+    };
+
+    quote!(
+        #ignore_attr
+        #tokio_attr
+        #sig
+    )
 }
 
 fn generate_express_skip_logic(args: &MacroArgs, span: proc_macro2::Span) -> TokenStream {
