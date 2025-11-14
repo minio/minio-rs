@@ -22,6 +22,7 @@ use minio::s3tables::response::{CreateTableResponse, LoadTableResponse};
 use minio::s3tables::{HasTableResult, TablesApi, TablesClient};
 use minio_common::test_context::TestContext;
 
+#[allow(dead_code)]
 //#[minio_macros::test(no_bucket)]
 async fn advanced_multi_table_transaction(ctx: TestContext) {
     let tables = TablesClient::new(ctx.client.clone());

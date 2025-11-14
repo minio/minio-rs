@@ -51,7 +51,7 @@ use typed_builder::TypedBuilder;
 ///     println!("Warehouse: {}", warehouse);
 /// }
 /// # Ok(())
-/// # }\
+/// # }
 /// ```
 #[derive(Clone, Debug, TypedBuilder)]
 pub struct ListWarehouses {

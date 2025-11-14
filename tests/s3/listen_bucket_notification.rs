@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_std::stream::StreamExt;
-use async_std::task;
+use futures_util::stream::StreamExt;
 use minio::s3::builders::ObjectContent;
 use minio::s3::response::PutObjectContentResponse;
 use minio::s3::response_traits::{HasBucket, HasObject};
@@ -23,6 +22,7 @@ use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use tokio::sync::mpsc;
+use tokio::time::{sleep, Duration};
 
 /// This test maintains a long-lived notification stream and must run on a single-threaded runtime
 /// to avoid conflicts with parallel test execution. Multiple notification listeners attempting to
@@ -42,7 +42,7 @@ async fn listen_bucket_notification(ctx: TestContext, bucket_name: String) {
     let bucket_name2 = bucket_name.clone();
     let object_name2 = object_name.clone();
 
-    let spawned_listen_task = task::spawn(async move {
+    let spawned_listen_task = tokio::spawn(async move {
         let ctx2 = TestContext::new_from_env();
 
         let (_resp, mut event_stream) = ctx2
@@ -74,8 +74,8 @@ async fn listen_bucket_notification(ctx: TestContext, bucket_name: String) {
         }
     });
 
-    // wait a few ms to before we issue a put_object
-    task::sleep(std::time::Duration::from_millis(200)).await;
+    // wait for listener to fully connect to notification stream
+    sleep(Duration::from_millis(1000)).await;
 
     let size = 16_u64;
     let resp: PutObjectContentResponse = ctx
@@ -92,7 +92,7 @@ async fn listen_bucket_notification(ctx: TestContext, bucket_name: String) {
     assert_eq!(resp.bucket(), bucket_name);
     assert_eq!(resp.object(), object_name);
 
-    spawned_listen_task.await;
+    let _ = spawned_listen_task.await;
 
     let received_message: MessageType = receiver.recv().await.unwrap();
     assert_eq!(received_message, SECRET_MSG);

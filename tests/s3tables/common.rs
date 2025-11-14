@@ -172,6 +172,7 @@ pub async fn delete_namespace_helper<S1, S2>(
     assert!(resp.is_err(), "Namespace should not exist after deletion");
 }
 
+#[allow(dead_code)]
 pub async fn create_table_helper<S1, S2, S3>(
     warehouse_name: S1,
     namespace_name: S2,

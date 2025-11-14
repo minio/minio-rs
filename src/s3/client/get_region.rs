@@ -22,7 +22,7 @@ impl MinioClient {
     /// Creates a [`GetRegion`] request builder.
     ///
     /// To execute the request, call [`GetRegion::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`GetRegionResponse`].
+    /// which returns a [`Result`] containing a [`crate::s3::response::GetRegionResponse`].
     ///
     /// # Example
     ///

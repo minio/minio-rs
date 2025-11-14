@@ -189,6 +189,7 @@ async fn test_get_namespace_trait(ctx: TestContext) {
 // ============================================================================
 
 // #[minio_macros::test(no_bucket)]
+#[allow(dead_code)]
 async fn test_table_trait_accessors(ctx: TestContext) {
     let tables = TablesClient::new(ctx.client.clone());
     let warehouse_name = rand_warehouse_name();
@@ -309,6 +310,7 @@ async fn test_load_table_trait(ctx: TestContext) {
 // ============================================================================
 
 // #[minio_macros::test(no_bucket)]
+#[allow(dead_code)]
 async fn test_warehouse_list_trait(ctx: TestContext) {
     let tables = TablesClient::new(ctx.client.clone());
     let warehouse1 = rand_warehouse_name();

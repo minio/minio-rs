@@ -24,6 +24,7 @@ use minio::s3tables::{HasTableResult, HasWarehouseName, TablesApi, TablesClient}
 use minio_common::test_context::TestContext;
 
 // #[minio_macros::test(no_bucket)]
+#[allow(dead_code)]
 async fn multi_table_transaction_commit(ctx: TestContext) {
     let tables = TablesClient::new(ctx.client.clone());
     let warehouse_name = rand_warehouse_name();

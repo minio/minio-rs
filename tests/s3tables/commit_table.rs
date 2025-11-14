@@ -21,6 +21,7 @@ use minio::s3tables::response::{CommitTableResponse, CreateTableResponse, LoadTa
 use minio::s3tables::{HasTableMetadata, HasTableResult, LoadTableResult, TablesApi, TablesClient};
 use minio_common::test_context::TestContext;
 
+#[allow(dead_code)]
 //#[minio_macros::test(no_bucket)]
 async fn table_commit(ctx: TestContext) {
     let tables = TablesClient::new(ctx.client.clone());

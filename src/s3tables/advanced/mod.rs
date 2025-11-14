@@ -88,7 +88,7 @@
 //! - Iceberg specification concepts: snapshots, manifests, requirements, updates
 //! - REST catalog semantics: optimistic concurrency, transaction isolation
 //!
-//! See https://iceberg.apache.org/spec/ for Apache Iceberg specification details.
+//! See <https://iceberg.apache.org/spec/> for Apache Iceberg specification details.
 //!
 //! # Common Patterns
 //!
