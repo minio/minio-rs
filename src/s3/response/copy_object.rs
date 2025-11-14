@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::response_traits::{HasBucket, HasEtagFromBody, HasObject, HasRegion, HasVersion};
+use crate::s3::response_traits::{
+    HasBucket, HasChecksumHeaders, HasEtagFromBody, HasObject, HasRegion, HasVersion,
+};
 use crate::s3::types::S3Request;
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::Bytes;
@@ -35,6 +37,7 @@ impl HasObject for S3Response2 {}
 impl HasRegion for S3Response2 {}
 impl HasVersion for S3Response2 {}
 impl HasEtagFromBody for S3Response2 {}
+impl HasChecksumHeaders for S3Response2 {}
 
 /// Represents the response of the `upload_part_copy` API call.
 /// This struct contains metadata and information about the part being copied during a multipart upload.
