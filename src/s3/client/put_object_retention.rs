@@ -38,7 +38,7 @@ impl MinioClient {
     /// use minio::s3::builders::ObjectToDelete;
     /// use minio::s3::types::{S3Api, RetentionMode};
     /// use minio::s3::utils::utc_now;
-    /// use minio::s3::response::a_response_traits::HasObject;
+    /// use minio::s3::response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {

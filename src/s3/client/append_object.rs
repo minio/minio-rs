@@ -40,7 +40,7 @@ impl MinioClient {
     /// use minio::s3::response::{AppendObjectResponse, PutObjectResponse};
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     /// use minio::s3::types::S3Api;
-    /// use minio::s3::response::a_response_traits::HasObjectSize;
+    /// use minio::s3::response_traits::HasObjectSize;
     ///
     /// #[tokio::main]
     /// async fn main() {    
@@ -93,7 +93,7 @@ impl MinioClient {
     /// use minio::s3::builders::ObjectContent;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     /// use minio::s3::types::S3Api;
-    /// use minio::s3::response::a_response_traits::HasObjectSize;
+    /// use minio::s3::response_traits::HasObjectSize;
     ///
     /// #[tokio::main]
     /// async fn main() {    

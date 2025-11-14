@@ -27,7 +27,7 @@ use typed_builder::TypedBuilder;
 
 /// Argument builder for generating presigned POST policy for the [`POST Object`](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::get_presigned_policy_form_data`](crate::s3::client::Client::get_presigned_policy_form_data) method.
+/// This struct constructs the parameters required for the `get_presigned_policy_form_data` method.
 #[derive(Debug, Clone, TypedBuilder)]
 pub struct GetPresignedPolicyFormData {
     #[builder(!default)] // force required

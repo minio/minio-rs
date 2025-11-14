@@ -46,7 +46,7 @@ impl MinioClient {
     /// use minio::s3::response::PutObjectResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
-    /// use minio::s3::response::a_response_traits::HasObject;
+    /// use minio::s3::response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -168,7 +168,7 @@ impl MinioClient {
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::CompleteMultipartUploadResponse;
     /// use minio::s3::types::{S3Api, PartInfo};
-    /// use minio::s3::response::a_response_traits::HasObject;
+    /// use minio::s3::response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -213,7 +213,7 @@ impl MinioClient {
     /// use minio::s3::response::UploadPartResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
-    /// use minio::s3::response::a_response_traits::HasObject;
+    /// use minio::s3::response_traits::HasObject;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -259,7 +259,7 @@ impl MinioClient {
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::PutObjectContentResponse;
     /// use minio::s3::types::S3Api;
-    /// use minio::s3::response::a_response_traits::{HasObject, HasEtagFromHeaders};
+    /// use minio::s3::response_traits::{HasObject, HasEtagFromHeaders};
     ///
     /// #[tokio::main]
     /// async fn main() {

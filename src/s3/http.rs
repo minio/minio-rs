@@ -479,4 +479,19 @@ impl BaseUrl {
 
         Ok(url)
     }
+
+    /// Build URL with custom path for non-S3 APIs (e.g., admin APIs)
+    pub fn build_custom_url(
+        &self,
+        query: &Multimap,
+        custom_path: &str,
+    ) -> Result<Url, ValidationErr> {
+        Ok(Url {
+            https: self.https,
+            host: self.host.clone(),
+            port: self.port,
+            path: custom_path.to_string(),
+            query: query.clone(),
+        })
+    }
 }

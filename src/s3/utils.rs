@@ -101,9 +101,9 @@ pub fn sha256_hash(data: &[u8]) -> String {
 /// This implementation uses `unsafe` code for performance reasons:
 /// - We call [`String::as_mut_vec`] to get direct access to the
 ///   underlying `Vec<u8>` backing the `String`.
-/// - We then use [`set_len`] to pre-allocate the final length without
+/// - We then use `Vec::set_len` to pre-allocate the final length without
 ///   initializing the contents first.
-/// - Finally, we use [`get_unchecked`] and [`get_unchecked_mut`] to
+/// - Finally, we use `slice::get_unchecked` and `slice::get_unchecked_mut` to
 ///   avoid bounds checking inside the tight encoding loop.
 ///
 /// # Why unsafe is needed
@@ -170,16 +170,384 @@ pub fn sha256_hash_sb(sb: Arc<SegmentedBytes>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::s3::utils::SegmentedBytes;
-    use crate::s3::utils::sha256_hash_sb;
-    use std::sync::Arc;
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_url_decode_spaces() {
+        assert_eq!(url_decode("hello%20world"), "hello world");
+        assert_eq!(url_decode("hello+world"), "hello world");
+    }
+
+    #[test]
+    fn test_url_decode_plus_sign() {
+        assert_eq!(url_decode("a%2Bb"), "a+b");
+        assert_eq!(url_decode("a%2bb"), "a+b");
+    }
+
+    #[test]
+    fn test_url_decode_special_chars() {
+        assert_eq!(url_decode("a%26b"), "a&b");
+        assert_eq!(url_decode("a%3Db"), "a=b");
+        assert_eq!(url_decode("a%2Fb"), "a/b");
+    }
+
+    #[test]
+    fn test_url_encode_spaces() {
+        assert_eq!(url_encode("hello world"), "hello%20world");
+    }
+
+    #[test]
+    fn test_url_encode_plus_sign() {
+        assert_eq!(url_encode("a+b"), "a%2Bb");
+    }
+
+    #[test]
+    fn test_url_encode_special_chars() {
+        assert_eq!(url_encode("a&b=c"), "a%26b%3Dc");
+        assert_eq!(url_encode("a/b"), "a%2Fb");
+    }
+
+    #[test]
+    fn test_b64_encode() {
+        assert_eq!(b64_encode("hello"), "aGVsbG8=");
+        assert_eq!(b64_encode(""), "");
+        assert_eq!(b64_encode([0xFF, 0x00, 0xFF]), "/wD/");
+        assert_eq!(
+            b64_encode("The quick brown fox"),
+            "VGhlIHF1aWNrIGJyb3duIGZveA=="
+        );
+    }
+
+    #[test]
+    fn test_crc32() {
+        assert_eq!(crc32(b"hello"), 0x3610a686);
+        assert_eq!(crc32(b""), 0);
+        assert_eq!(crc32(b"123456789"), 0xcbf43926);
+    }
+
+    #[test]
+    fn test_uint32_valid() {
+        assert_eq!(uint32(&[0x00, 0x00, 0x00, 0x42]).unwrap(), 66);
+        assert_eq!(uint32(&[0xFF, 0xFF, 0xFF, 0xFF]).unwrap(), 4294967295);
+        assert_eq!(uint32(&[0x00, 0x00, 0x00, 0x00]).unwrap(), 0);
+        assert_eq!(uint32(&[0x12, 0x34, 0x56, 0x78]).unwrap(), 0x12345678);
+    }
+
+    #[test]
+    fn test_uint32_insufficient_bytes() {
+        assert!(uint32(&[]).is_err());
+        assert!(uint32(&[0x00]).is_err());
+        assert!(uint32(&[0x00, 0x01]).is_err());
+        assert!(uint32(&[0x00, 0x01, 0x02]).is_err());
+    }
+
+    #[test]
+    fn test_uint32_extra_bytes() {
+        assert_eq!(uint32(&[0x00, 0x00, 0x00, 0x42, 0xFF, 0xFF]).unwrap(), 66);
+    }
+
+    #[test]
+    fn test_sha256_hash() {
+        assert_eq!(sha256_hash(b""), EMPTY_SHA256);
+        assert_eq!(
+            sha256_hash(b"hello"),
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
+        assert_eq!(
+            sha256_hash(b"The quick brown fox jumps over the lazy dog"),
+            "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
+        );
+    }
+
+    #[test]
+    fn test_hex_encode() {
+        assert_eq!(hex_encode(&[]), "");
+        assert_eq!(hex_encode(&[0x00]), "00");
+        assert_eq!(hex_encode(&[0xFF]), "ff");
+        assert_eq!(hex_encode(&[0xDE, 0xAD, 0xBE, 0xEF]), "deadbeef");
+        assert_eq!(
+            hex_encode(&[0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC]),
+            "123456789abc"
+        );
+    }
 
     #[test]
     fn test_empty_sha256_segmented_bytes() {
         assert_eq!(
-            super::EMPTY_SHA256,
+            EMPTY_SHA256,
             sha256_hash_sb(Arc::new(SegmentedBytes::new()))
         );
+    }
+
+    #[test]
+    fn test_md5sum_hash() {
+        let hash = md5sum_hash(b"hello");
+        assert!(!hash.is_empty());
+        assert_eq!(hash, "XUFAKrxLKna5cZ2REBfFkg==");
+
+        let empty_hash = md5sum_hash(b"");
+        assert_eq!(empty_hash, "1B2M2Y8AsgTpgAmY7PhCfg==");
+    }
+
+    #[test]
+    fn test_parse_bool_true() {
+        assert!(parse_bool("true").unwrap());
+        assert!(parse_bool("True").unwrap());
+        assert!(parse_bool("TRUE").unwrap());
+        assert!(parse_bool("TrUe").unwrap());
+    }
+
+    #[test]
+    fn test_parse_bool_false() {
+        assert!(!parse_bool("false").unwrap());
+        assert!(!parse_bool("False").unwrap());
+        assert!(!parse_bool("FALSE").unwrap());
+        assert!(!parse_bool("FaLsE").unwrap());
+    }
+
+    #[test]
+    fn test_parse_bool_invalid() {
+        assert!(parse_bool("yes").is_err());
+        assert!(parse_bool("no").is_err());
+        assert!(parse_bool("1").is_err());
+        assert!(parse_bool("0").is_err());
+        assert!(parse_bool("").is_err());
+    }
+
+    #[test]
+    fn test_match_hostname_valid() {
+        assert!(match_hostname("example.com"));
+        assert!(match_hostname("sub.example.com"));
+        assert!(match_hostname("my-server"));
+        assert!(match_hostname("server123"));
+        assert!(match_hostname("a.b.c.d.example.com"));
+    }
+
+    #[test]
+    fn test_match_hostname_invalid() {
+        assert!(!match_hostname("-invalid"));
+        assert!(!match_hostname("invalid-"));
+        assert!(!match_hostname("_invalid"));
+        assert!(!match_hostname("invalid_"));
+        assert!(!match_hostname("in..valid"));
+    }
+
+    #[test]
+    fn test_check_bucket_name_valid() {
+        assert!(check_bucket_name("mybucket", false).is_ok());
+        assert!(check_bucket_name("my-bucket", true).is_ok());
+        assert!(check_bucket_name("my.bucket", true).is_ok());
+        assert!(check_bucket_name("bucket123", false).is_ok());
+        assert!(check_bucket_name("abc", false).is_ok());
+    }
+
+    #[test]
+    fn test_check_bucket_name_empty() {
+        assert!(check_bucket_name("", false).is_err());
+        assert!(check_bucket_name("  ", false).is_err());
+    }
+
+    #[test]
+    fn test_check_bucket_name_too_short() {
+        assert!(check_bucket_name("ab", false).is_err());
+        assert!(check_bucket_name("a", false).is_err());
+    }
+
+    #[test]
+    fn test_check_bucket_name_too_long() {
+        let long_name = "a".repeat(64);
+        assert!(check_bucket_name(&long_name, false).is_err());
+    }
+
+    #[test]
+    fn test_check_bucket_name_ip_address() {
+        assert!(check_bucket_name("192.168.1.1", false).is_err());
+        assert!(check_bucket_name("10.0.0.1", false).is_err());
+    }
+
+    #[test]
+    fn test_check_bucket_name_invalid_successive_chars() {
+        assert!(check_bucket_name("my..bucket", false).is_err());
+        assert!(check_bucket_name("my.-bucket", false).is_err());
+        assert!(check_bucket_name("my-.bucket", false).is_err());
+    }
+
+    #[test]
+    fn test_check_bucket_name_strict() {
+        assert!(check_bucket_name("My-Bucket", false).is_ok());
+        assert!(check_bucket_name("My-Bucket", true).is_err());
+        assert!(check_bucket_name("my_bucket", false).is_ok());
+        assert!(check_bucket_name("my_bucket", true).is_err());
+    }
+
+    #[test]
+    fn test_check_object_name_valid() {
+        assert!(check_object_name("myobject").is_ok());
+        assert!(check_object_name("my/object/path").is_ok());
+        assert!(check_object_name("object-with-dashes").is_ok());
+        assert!(check_object_name("a").is_ok());
+    }
+
+    #[test]
+    fn test_check_object_name_empty() {
+        assert!(check_object_name("").is_err());
+    }
+
+    #[test]
+    fn test_check_object_name_too_long() {
+        let long_name = "a".repeat(1025);
+        assert!(check_object_name(&long_name).is_err());
+    }
+
+    #[test]
+    fn test_trim_quotes() {
+        assert_eq!(trim_quotes("\"hello\"".to_string()), "hello");
+        assert_eq!(trim_quotes("\"\"".to_string()), "");
+        assert_eq!(trim_quotes("hello".to_string()), "hello");
+        assert_eq!(trim_quotes("\"hello".to_string()), "\"hello");
+        assert_eq!(trim_quotes("hello\"".to_string()), "hello\"");
+        assert_eq!(trim_quotes("\"".to_string()), "\"");
+    }
+
+    #[test]
+    fn test_copy_slice() {
+        let src = [1, 2, 3, 4, 5];
+        let mut dst = [0; 5];
+        let copied = copy_slice(&mut dst, &src);
+        assert_eq!(copied, 5);
+        assert_eq!(dst, [1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_copy_slice_partial() {
+        let src = [1, 2, 3, 4, 5];
+        let mut dst = [0; 3];
+        let copied = copy_slice(&mut dst, &src);
+        assert_eq!(copied, 3);
+        assert_eq!(dst, [1, 2, 3]);
+    }
+
+    #[test]
+    fn test_copy_slice_empty() {
+        let src: [u8; 0] = [];
+        let mut dst: [u8; 0] = [];
+        let copied = copy_slice(&mut dst, &src);
+        assert_eq!(copied, 0);
+    }
+
+    #[test]
+    fn test_encode_tags() {
+        let mut tags = HashMap::new();
+        tags.insert("key1".to_string(), "value1".to_string());
+        tags.insert("key2".to_string(), "value2".to_string());
+        let encoded = encode_tags(&tags);
+        assert!(encoded.contains("key1=value1"));
+        assert!(encoded.contains("key2=value2"));
+    }
+
+    #[test]
+    fn test_encode_tags_special_chars() {
+        let mut tags = HashMap::new();
+        tags.insert("key with spaces".to_string(), "value&special".to_string());
+        let encoded = encode_tags(&tags);
+        assert!(encoded.contains("key%20with%20spaces=value%26special"));
+    }
+
+    #[test]
+    fn test_parse_tags() {
+        let tags = parse_tags("key1=value1&key2=value2").unwrap();
+        assert_eq!(tags.get("key1"), Some(&"value1".to_string()));
+        assert_eq!(tags.get("key2"), Some(&"value2".to_string()));
+    }
+
+    #[test]
+    fn test_parse_tags_encoded() {
+        let tags = parse_tags("key%20one=value%26special").unwrap();
+        assert_eq!(tags.get("key one"), Some(&"value&special".to_string()));
+    }
+
+    #[test]
+    fn test_parse_tags_empty_value() {
+        let tags = parse_tags("key1=&key2=value2").unwrap();
+        assert_eq!(tags.get("key1"), Some(&"".to_string()));
+        assert_eq!(tags.get("key2"), Some(&"value2".to_string()));
+    }
+
+    #[test]
+    fn test_parse_tags_no_value() {
+        let tags = parse_tags("key1&key2=value2").unwrap();
+        assert_eq!(tags.get("key1"), Some(&"".to_string()));
+        assert_eq!(tags.get("key2"), Some(&"value2".to_string()));
+    }
+
+    #[test]
+    fn test_parse_tags_too_many_equals() {
+        assert!(parse_tags("key1=value1=extra").is_err());
+    }
+
+    #[test]
+    fn test_urlencode_object_key() {
+        assert_eq!(urlencode_object_key("file.txt"), "file.txt");
+        assert_eq!(urlencode_object_key("my/path/file.txt"), "my/path/file.txt");
+        assert_eq!(urlencode_object_key("file name.txt"), "file%20name.txt");
+        assert_eq!(urlencode_object_key("special&chars"), "special%26chars");
+    }
+
+    #[test]
+    fn test_insert_multimap() {
+        let result = insert(None, "key1");
+        assert!(result.contains_key("key1"));
+        assert_eq!(result.get_vec("key1"), Some(&vec!["".to_string()]));
+
+        let mut existing = Multimap::new();
+        existing.insert("existing".to_string(), "value".to_string());
+        let result = insert(Some(existing), "key2");
+        assert_eq!(result.get_vec("existing"), Some(&vec!["value".to_string()]));
+        assert_eq!(result.get_vec("key2"), Some(&vec!["".to_string()]));
+    }
+
+    #[test]
+    fn test_to_signer_date() {
+        let time = from_iso8601utc("2024-01-15T10:30:45.000Z").unwrap();
+        assert_eq!(to_signer_date(time), "20240115");
+    }
+
+    #[test]
+    fn test_to_amz_date() {
+        let time = from_iso8601utc("2024-01-15T10:30:45.000Z").unwrap();
+        assert_eq!(to_amz_date(time), "20240115T103045Z");
+    }
+
+    #[test]
+    fn test_to_iso8601utc() {
+        let time = from_iso8601utc("2024-01-15T10:30:45.123Z").unwrap();
+        let result = to_iso8601utc(time);
+        assert!(result.starts_with("2024-01-15T10:30:45"));
+    }
+
+    #[test]
+    fn test_from_iso8601utc_with_millis() {
+        let result = from_iso8601utc("2024-01-15T10:30:45.123Z");
+        assert!(result.is_ok());
+        let time = result.unwrap();
+        assert_eq!(time.year(), 2024);
+        assert_eq!(time.month(), 1);
+        assert_eq!(time.day(), 15);
+    }
+
+    #[test]
+    fn test_from_iso8601utc_without_millis() {
+        let result = from_iso8601utc("2024-01-15T10:30:45Z");
+        assert!(result.is_ok());
+        let time = result.unwrap();
+        assert_eq!(time.year(), 2024);
+    }
+
+    #[test]
+    fn test_from_iso8601utc_invalid() {
+        assert!(from_iso8601utc("invalid").is_err());
+        assert!(from_iso8601utc("2024-13-45T25:70:80Z").is_err());
     }
 }
 

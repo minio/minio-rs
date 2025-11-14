@@ -16,9 +16,7 @@
 use crate::impl_has_s3fields;
 use crate::s3::error::{Error, S3ServerError, ValidationErr};
 use crate::s3::minio_error_response::MinioErrorCode;
-use crate::s3::response::a_response_traits::{
-    HasBucket, HasObject, HasRegion, HasS3Fields, HasVersion,
-};
+use crate::s3::response_traits::{HasBucket, HasObject, HasRegion, HasVersion};
 use crate::s3::types::{FromS3Response, RetentionMode, S3Request};
 use crate::s3::utils::{UtcTime, from_iso8601utc, get_text_option};
 use async_trait::async_trait;
@@ -82,7 +80,7 @@ impl FromS3Response for GetObjectRetentionResponse {
             Ok(mut resp) => Ok(Self {
                 request,
                 headers: mem::take(resp.headers_mut()),
-                body: resp.bytes().await.map_err(ValidationErr::from)?,
+                body: resp.bytes().await.map_err(ValidationErr::HttpError)?,
             }),
             Err(Error::S3Server(S3ServerError::S3Error(mut e)))
                 if matches!(e.code(), MinioErrorCode::NoSuchObjectLockConfiguration) =>

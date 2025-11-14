@@ -17,7 +17,7 @@ use crate::impl_has_s3fields;
 use crate::s3::error::S3ServerError::S3Error;
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::minio_error_response::MinioErrorCode;
-use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
+use crate::s3::response_traits::{HasBucket, HasRegion};
 use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -49,7 +49,7 @@ impl FromS3Response for BucketExistsResponse {
             Ok(mut resp) => Ok(Self {
                 request,
                 headers: mem::take(resp.headers_mut()),
-                body: resp.bytes().await.map_err(ValidationErr::from)?,
+                body: resp.bytes().await.map_err(ValidationErr::HttpError)?,
                 exists: true,
             }),
             Err(Error::S3Server(S3Error(mut e)))

@@ -12,7 +12,7 @@
 
 use crate::impl_has_s3fields;
 use crate::s3::error::{Error, ValidationErr};
-use crate::s3::response::a_response_traits::HasS3Fields;
+
 use crate::s3::types::{FromS3Response, ListEntry, S3Request};
 use crate::s3::utils::xml::{Element, MergeXmlElements};
 use crate::s3::utils::{from_iso8601utc, parse_tags, url_decode};
@@ -209,7 +209,7 @@ impl FromS3Response for ListObjectsV1Response {
     ) -> Result<Self, Error> {
         let mut resp = response?;
         let headers: HeaderMap = mem::take(resp.headers_mut());
-        let body = resp.bytes().await.map_err(ValidationErr::from)?;
+        let body = resp.bytes().await.map_err(ValidationErr::HttpError)?;
 
         let xmltree_root =
             xmltree::Element::parse(body.clone().reader()).map_err(ValidationErr::from)?;
@@ -273,7 +273,7 @@ impl FromS3Response for ListObjectsV2Response {
     ) -> Result<Self, Error> {
         let mut resp = response?;
         let headers: HeaderMap = mem::take(resp.headers_mut());
-        let body = resp.bytes().await.map_err(ValidationErr::from)?;
+        let body = resp.bytes().await.map_err(ValidationErr::HttpError)?;
 
         let xmltree_root =
             xmltree::Element::parse(body.clone().reader()).map_err(ValidationErr::from)?;
@@ -342,7 +342,7 @@ impl FromS3Response for ListObjectVersionsResponse {
     ) -> Result<Self, Error> {
         let mut resp = response?;
         let headers: HeaderMap = mem::take(resp.headers_mut());
-        let body = resp.bytes().await.map_err(ValidationErr::from)?;
+        let body = resp.bytes().await.map_err(ValidationErr::HttpError)?;
 
         let xmltree_root =
             xmltree::Element::parse(body.clone().reader()).map_err(ValidationErr::from)?;

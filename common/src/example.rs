@@ -52,7 +52,7 @@ pub fn create_bucket_notification_config_example() -> NotificationConfig {
             suffix_filter_rule: Some(SuffixFilterRule {
                 value: String::from("pg"),
             }),
-            queue: String::from("arn:minio:sqs::miniojavatest:webhook"),
+            queue: String::from("arn:minio:sqs:us-east-1:miniojavatest:webhook"),
         }]),
         ..Default::default()
     }

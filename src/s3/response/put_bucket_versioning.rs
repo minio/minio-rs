@@ -13,13 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::{Error, ValidationErr};
-use crate::s3::response::a_response_traits::{HasBucket, HasRegion, HasS3Fields};
-use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::response_traits::{HasBucket, HasRegion};
+use crate::s3::types::S3Request;
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::Bytes;
 use http::HeaderMap;
-use std::mem;
 
 /// Response of [put_bucket_versioning()](crate::s3::client::MinioClient::put_bucket_versioning) API
 #[derive(Clone, Debug)]
