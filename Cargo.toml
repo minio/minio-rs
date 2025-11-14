@@ -64,6 +64,7 @@ regex = "1.12"
 ring = { version = "0.17", optional = true, default-features = false, features = ["alloc"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
 sha1 = "0.10"
 sha2 = { version = "0.10", optional = true }
 urlencoding = "2.1"
@@ -71,6 +72,10 @@ xmltree = "0.12"
 http = { workspace = true }
 thiserror = "2.0"
 typed-builder = "0.23"
+# Madmin encryption dependencies
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.9"
 
 [dev-dependencies]
 minio-common = { path = "./common" }
@@ -100,6 +105,74 @@ name = "append_object"
 
 [[example]]
 name = "load_balancing_with_hooks"
+
+[[example]]
+name = "madmin_server_info"
+path = "examples/madmin/madmin_server_info.rs"
+
+[[example]]
+name = "madmin_config_history"
+path = "examples/madmin/madmin_config_history.rs"
+
+[[example]]
+name = "madmin_monitoring"
+path = "examples/madmin/madmin_monitoring.rs"
+
+[[example]]
+name = "madmin_policy_entities"
+path = "examples/madmin/madmin_policy_entities.rs"
+
+[[example]]
+name = "madmin_policy_management"
+path = "examples/madmin/madmin_policy_management.rs"
+
+[[example]]
+name = "madmin_service_accounts"
+path = "examples/madmin/madmin_service_accounts.rs"
+
+[[example]]
+name = "madmin_user_management"
+path = "examples/madmin/madmin_user_management.rs"
+
+[[example]]
+name = "inventory_basic"
+path = "examples/s3inventory/inventory_basic.rs"
+
+[[example]]
+name = "inventory_monitoring"
+path = "examples/s3inventory/inventory_monitoring.rs"
+
+[[example]]
+name = "inventory_with_filters"
+path = "examples/s3inventory/inventory_with_filters.rs"
+
+[[example]]
+name = "inventory_benchmark_scan"
+path = "examples/s3inventory/inventory_benchmark_scan.rs"
+
+[[example]]
+name = "inventory_stress_performance"
+path = "examples/s3inventory/inventory_stress_performance.rs"
+
+[[example]]
+name = "inventory_stress_rapid_state_changes"
+path = "examples/s3inventory/inventory_stress_rapid_state_changes.rs"
+
+[[example]]
+name = "inventory_stress_concurrent_configs"
+path = "examples/s3inventory/inventory_stress_concurrent_configs.rs"
+
+[[example]]
+name = "inventory_stress_concurrent_reads"
+path = "examples/s3inventory/inventory_stress_concurrent_reads.rs"
+
+[[example]]
+name = "inventory_stress_write_during_scan"
+path = "examples/s3inventory/inventory_stress_write_during_scan.rs"
+
+[[example]]
+name = "inventory_stress_large_dataset"
+path = "examples/s3inventory/inventory_stress_large_dataset.rs"
 
 [[bench]]
 name = "s3-api"

@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use chrono::{DateTime, Utc};
+use minio::s3::bucket_policy_config::{BucketPolicy, BucketPolicyConfig};
 use minio::s3::builders::PostPolicy;
 use minio::s3::lifecycle_config::{LifecycleConfig, LifecycleRule};
 use minio::s3::types::{
@@ -58,9 +59,9 @@ pub fn create_bucket_notification_config_example() -> NotificationConfig {
         ..Default::default()
     }
 }
-pub fn create_bucket_policy_config_example(bucket: &BucketName) -> String {
-    let config = r#"
-{
+pub fn create_bucket_policy_config_example(bucket: &BucketName) -> BucketPolicyConfig {
+    let bucket_name = bucket.as_str();
+    let config = r#"{
     "Version": "2012-10-17",
     "Statement": [
         {
@@ -79,18 +80,22 @@ pub fn create_bucket_policy_config_example(bucket: &BucketName) -> String {
             "Sid": ""
         }
     ]
+}"#
+    .replace("<BUCKET>", bucket_name);
+
+    let policy = BucketPolicy::parse_from_json(config.as_bytes(), bucket_name)
+        .expect("Failed to create BucketPolicy");
+    BucketPolicyConfig {
+        rules: vec![policy],
+    }
 }
-"#
-    .replace("<BUCKET>", bucket.as_str());
-    config.to_string()
-}
-pub fn create_bucket_policy_config_example_for_replication() -> String {
-    let config = r#"
-{
+pub fn create_bucket_policy_config_example_for_replication() -> BucketPolicyConfig {
+    let config = r#"{
     "Version": "2012-10-17",
     "Statement": [
         {
             "Effect": "Allow",
+            "Principal": "*",
             "Action": [
                 "s3:GetReplicationConfiguration",
                 "s3:ListBucket",
@@ -107,6 +112,7 @@ pub fn create_bucket_policy_config_example_for_replication() -> String {
         },
         {
             "Effect": "Allow",
+            "Principal": "*",
             "Action": [
                 "s3:GetReplicationConfiguration",
                 "s3:ReplicateTags",
@@ -129,35 +135,72 @@ pub fn create_bucket_policy_config_example_for_replication() -> String {
         }
     ]
 }"#;
-    config.to_string()
+    let policy = BucketPolicy::parse_from_json(config.as_bytes(), "*")
+        .expect("Failed to create BucketPolicy");
+    BucketPolicyConfig {
+        rules: vec![policy],
+    }
 }
-pub fn create_bucket_replication_config_example(dst_bucket: &BucketName) -> ReplicationConfig {
+
+pub fn create_bucket_replication_config_example(
+    dst_bucket: &str,
+    remote_target_arn: &str,
+) -> ReplicationConfig {
     let mut tags: HashMap<String, String> = HashMap::new();
     tags.insert(String::from("key1"), String::from("value1"));
     tags.insert(String::from("key2"), String::from("value2"));
 
     ReplicationConfig {
-        role: Some("example1".to_string()),
+        role: Some(remote_target_arn.to_string()),
         rules: vec![ReplicationRule {
             id: Some(String::from("rule1")),
             destination: Destination {
+                // Use the full ARN format for the destination bucket
                 bucket_arn: String::from(&format!("arn:aws:s3:::{dst_bucket}")),
                 ..Default::default()
             },
             filter: Some(Filter {
                 and_operator: Some(AndOperator {
-                    prefix: Some(String::from("TaxDocs")),
+                    prefix: Some("TaxDocs".to_string()),
                     tags: Some(tags),
                 }),
                 ..Default::default()
             }),
             priority: Some(1),
-            delete_replication_status: Some(false),
-            status: true,
             ..Default::default()
         }],
     }
 }
+
+pub fn create_bucket_replication_config_example2() -> ReplicationConfig {
+    ReplicationConfig {
+        role: Some(
+            "arn:minio:replication::dadddae7-f1d7-440f-b5d6-651aa9a8c8a7:replication-dst"
+                .to_string(),
+        ),
+        rules: vec![ReplicationRule {
+            id: Some("d0ig8pbjloro3i7rb5b0".to_string()),
+            status: true, // enables this rule
+            priority: Some(0),
+            delete_marker_replication_status: Some(true),
+            delete_replication_status: Some(true),
+            destination: Destination {
+                bucket_arn:
+                    "arn:minio:replication::dadddae7-f1d7-440f-b5d6-651aa9a8c8a7:replication-dst"
+                        .to_string(),
+                ..Default::default()
+            },
+            // You can keep your filter as is if you specifically want to replicate only
+            // objects with prefix "TaxDocs" AND both tags, otherwise you might want to simplify
+            filter: Some(Filter {
+                ..Default::default()
+            }),
+            existing_object_replication_status: Some(true),
+            ..Default::default()
+        }],
+    }
+}
+
 pub fn create_tags_example() -> HashMap<String, String> {
     HashMap::from([
         (String::from("Project"), String::from("Project One")),

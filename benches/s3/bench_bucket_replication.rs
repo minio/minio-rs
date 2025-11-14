@@ -53,7 +53,10 @@ pub(crate) fn bench_put_bucket_replication(criterion: &mut Criterion) {
             ctx
         },
         |ctx| {
-            let config = create_bucket_replication_config_example(&ctx.aux_bucket.clone().unwrap());
+            let config = create_bucket_replication_config_example(
+                ctx.aux_bucket.clone().unwrap().as_str(),
+                "arn:minio:replication::default:remote-target",
+            );
             PutBucketReplication::builder()
                 .client(ctx.client.clone())
                 .bucket(&ctx.bucket)

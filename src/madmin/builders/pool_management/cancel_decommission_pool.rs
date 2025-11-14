@@ -1,0 +1,96 @@
+// MinIO Rust Library for Amazon S3 Compatible Cloud Storage
+// Copyright 2025 MinIO, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use crate::madmin::madmin_client::MadminClient;
+use crate::madmin::response::pool_management::CancelDecommissionPoolResponse;
+use crate::madmin::types::{MadminApi, MadminRequest, PoolName, ToMadminRequest};
+use crate::s3::error::Error;
+use crate::s3::multimap_ext::{Multimap, MultimapExt};
+use http::Method;
+use typed_builder::TypedBuilder;
+
+/// Argument builder for the [Cancel Decommission Pool](https://github.com/minio/madmin-go/blob/main/decommission-commands.go) admin API operation.
+///
+/// This struct constructs the parameters required for the [`MadminClient::cancel_decommission_pool`](crate::madmin::madmin_client::MadminClient::cancel_decommission_pool) method.
+///
+/// # Example
+///
+/// ```no_run
+/// use minio::s3::client::Client;
+/// use minio::s3::creds::StaticProvider;
+/// use minio::s3::http::BaseUrl;
+///
+/// #[tokio::main]
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let base_url = "http://localhost:9000".parse::<BaseUrl>()?;
+///     let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+///     let client = Client::new(base_url, Some(Box::new(provider)), None, None)?;
+///     let madmin = client.madmin();
+///
+///     // Cancel decommissioning
+///     madmin
+///         .cancel_decommission_pool("http://server{1...4}/disk{1...4}")?
+///         .send()
+///         .await?;
+///
+///     println!("Decommissioning canceled");
+///
+///     Ok(())
+/// }
+/// ```
+#[derive(Debug, Clone, TypedBuilder)]
+#[builder(doc)]
+pub struct CancelDecommissionPool {
+    #[builder(!default)]
+    client: MadminClient,
+    #[builder(
+        default,
+        setter(into, doc = "Optional extra HTTP headers to include in the request")
+    )]
+    extra_headers: Option<Multimap>,
+    #[builder(
+        default,
+        setter(
+            into,
+            doc = "Optional extra query parameters to include in the request"
+        )
+    )]
+    extra_query_params: Option<Multimap>,
+    #[builder(!default, setter(into, doc = "Pool definition to cancel decommissioning (e.g., \"http://server{1...4}/disk{1...4}\")"))]
+    pool: PoolName,
+}
+
+/// Builder type for [`CancelDecommissionPool`].
+pub type CancelDecommissionPoolBldr =
+    CancelDecommissionPoolBuilder<((MadminClient,), (), (), (PoolName,))>;
+
+impl ToMadminRequest for CancelDecommissionPool {
+    fn to_madmin_request(self) -> Result<MadminRequest, Error> {
+        let mut query_params = self.extra_query_params.unwrap_or_default();
+        query_params.add("pool", self.pool.into_inner());
+
+        Ok(MadminRequest::builder()
+            .client(self.client)
+            .method(Method::POST)
+            .path("/pools/cancel")
+            .query_params(query_params)
+            .headers(self.extra_headers.unwrap_or_default())
+            .build())
+    }
+}
+
+impl MadminApi for CancelDecommissionPool {
+    type MadminResponse = CancelDecommissionPoolResponse;
+}
