@@ -127,7 +127,7 @@ pub(crate) fn expand_test_macro(
             use ::futures_util::FutureExt;
             use ::std::panic::AssertUnwindSafe;
             use ::minio::s3::types::S3Api;
-            use ::minio::s3::response::a_response_traits::HasBucket;
+            use ::minio::s3::response_traits::HasBucket;
 
             let ctx = ::minio_common::test_context::TestContext::new_from_env();
     );
@@ -252,7 +252,7 @@ fn generate_with_bucket_body(
         quote! {}
     } else {
         quote! {
-            ::minio_common::cleanup_guard::cleanup(client_clone, resp.bucket()).await;
+            ::minio_common::cleanup_guard::cleanup(client_clone, bucket_name).await;
         }
     };
     quote_spanned!(span=> {
@@ -261,9 +261,22 @@ fn generate_with_bucket_body(
 
         let client_clone = ctx.client.clone();
         let bucket_name = #bucket_name;
-        let resp = client_clone.create_bucket(bucket_name)#maybe_lock.build().send().await.expect("Failed to create bucket");
-        assert_eq!(resp.bucket(), bucket_name);
-        let res = AssertUnwindSafe(#inner_fn_name(ctx, resp.bucket().to_string())).catch_unwind().await;
+        // Try to create bucket, but continue if it already exists (for no_cleanup tests)
+        match client_clone.create_bucket(bucket_name)#maybe_lock.build().send().await {
+            Ok(resp) => {
+                assert_eq!(resp.bucket(), bucket_name);
+            }
+            Err(e) => {
+                // If bucket already exists, that's ok for no_cleanup tests
+                let err_str = format!("{:?}", e);
+                if !err_str.contains("BucketAlreadyOwnedByYou") && !err_str.contains("BucketAlreadyExists") {
+                    panic!("Failed to create bucket: {:?}", e);
+                }
+                // Otherwise continue - bucket already exists from previous run
+                eprintln!("Note: Reusing existing bucket {} from previous test run", bucket_name);
+            }
+        };
+        let res = AssertUnwindSafe(#inner_fn_name(ctx, bucket_name.to_string())).catch_unwind().await;
         #maybe_cleanup
         if let Err(e) = res {
             ::std::panic::resume_unwind(e);

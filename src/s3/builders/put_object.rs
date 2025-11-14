@@ -19,11 +19,11 @@ use crate::s3::client::MinioClient;
 use crate::s3::error::{Error, IoError, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
-use crate::s3::response::a_response_traits::HasEtagFromHeaders;
 use crate::s3::response::{
     AbortMultipartUploadResponse, CompleteMultipartUploadResponse, CreateMultipartUploadResponse,
     PutObjectContentResponse, PutObjectResponse, UploadPartResponse,
 };
+use crate::s3::response_traits::HasEtagFromHeaders;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::Sse;
 use crate::s3::types::{PartInfo, Retention, S3Api, S3Request, ToS3Request};
@@ -398,7 +398,7 @@ impl ToS3Request for UploadPart {
 
 /// Argument builder for the [`PutObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::put_object`](crate::s3::client::Client::put_object) method.
+/// This struct constructs the parameters required for the `put_object` method.
 #[derive(Debug, Clone, TypedBuilder)]
 pub struct PutObject {
     pub(crate) inner: UploadPart,
@@ -425,7 +425,7 @@ impl ToS3Request for PutObject {
 
 /// Argument builder for the [`PutObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html) S3 API operation with streaming content.
 ///
-/// This struct constructs the parameters required for the [`Client::put_object_content`](crate::s3::client::Client::put_object_content) method.
+/// This struct constructs the parameters required for the `put_object_content` method.
 #[derive(TypedBuilder)]
 pub struct PutObjectContent {
     #[builder(!default)] // force required

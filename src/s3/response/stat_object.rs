@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::{Error, ValidationErr};
+use crate::s3::error::ValidationErr;
 use crate::s3::header_constants::*;
-use crate::s3::response::a_response_traits::{
+use crate::s3::response_traits::{
     HasBucket, HasEtagFromHeaders, HasIsDeleteMarker, HasObject, HasRegion, HasS3Fields,
 };
-use crate::s3::types::{FromS3Response, S3Request};
+use crate::s3::types::S3Request;
 use crate::s3::types::{RetentionMode, parse_legal_hold};
 use crate::s3::utils::{UtcTime, from_http_header_value, from_iso8601utc};
 use crate::{impl_from_s3response, impl_has_s3fields};
@@ -26,7 +26,6 @@ use bytes::Bytes;
 use http::HeaderMap;
 use http::header::LAST_MODIFIED;
 use std::collections::HashMap;
-use std::mem;
 
 #[derive(Clone, Debug)]
 /// Response from the [`stat_object`](crate::s3::client::MinioClient::stat_object) API call,

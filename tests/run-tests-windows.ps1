@@ -5,7 +5,7 @@ $Env:SECRET_KEY = if ($Env:MINIO_ROOT_PASSWORD) { $Env:MINIO_ROOT_PASSWORD } els
 $Env:ENABLE_HTTPS = "false"
 $Env:MINIO_SSL_CERT_FILE = "./tests/public.crt"
 $Env:IGNORE_CERT_CHECK = "false"
-$Env:SERVER_REGION = ""
+$Env:SERVER_REGION = "us-east-1"
 
 # Run tests
 cargo test -- --nocapture

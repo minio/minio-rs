@@ -30,7 +30,7 @@ impl MinioClient {
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::types::{NotificationConfig, PrefixFilterRule, QueueConfig, S3Api, SuffixFilterRule};
     /// use minio::s3::response::PutBucketNotificationResponse;
-    /// use minio::s3::response::a_response_traits::HasBucket;
+    /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -51,7 +51,7 @@ impl MinioClient {
     ///             suffix_filter_rule: Some(SuffixFilterRule {
     ///                 value: String::from("pg"),
     ///             }),
-    ///             queue: String::from("arn:minio:sqs::miniojavatest:webhook"),
+    ///             queue: String::from("arn:minio:sqs:us-east-1:miniojavatest:webhook"),
     ///         }]),
     ///         topic_config_list: None,
     ///     };

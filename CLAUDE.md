@@ -6,6 +6,22 @@
 - Do not use emojis.
 - Do not add a "feel good" section.
 
+## CRITICAL: Benchmark and Performance Data
+
+**NEVER fabricate, estimate, or make up benchmark results. EVER.**
+
+Rules:
+1. **ONLY report actual measured data** from running benchmarks with real code
+2. If you have NOT run a benchmark, explicitly state: "NO BENCHMARK RUN - THEORETICAL PROJECTION ONLY"
+3. Clearly distinguish between:
+   - **Measured**: Real data from `cargo bench` or timing measurements
+   - **Projected**: Theoretical calculations based on assumptions (MUST be labeled as such)
+4. If benchmarking is not possible (e.g., requires live S3), state that explicitly
+5. Never present theoretical speedups as if they were real measurements
+6. When in doubt, do NOT include performance numbers
+
+**Violation of this rule is lying and completely unacceptable.**
+
 ## Copyright Header
 
 All source files that haven't been generated MUST include the following copyright header:
@@ -204,12 +220,118 @@ Claude will periodically analyze the codebase and suggest:
 
 ### Pre-commit Checklist
 
+**MANDATORY: ALL steps must pass before submitting any PR. No warnings or errors are acceptable.**
+
 Before any code changes:
-1. ✅ Run `cargo fmt --all` to check and fix code formatting
-2. ✅ Run `cargo test` to ensure all tests pass
-3. ✅ Run `cargo clippy --all-targets --all-features --workspace -- -D warnings` to check for common mistakes and ensure no warnings
-4. ✅ Ensure new code has appropriate test coverage
-5. ✅ Verify no redundant comments are added
+1. ✅ **Format code**: Run `cargo fmt --all` to fix all formatting issues
+2. ✅ **Fix clippy warnings**: Run `cargo clippy --fix --allow-dirty --allow-staged --all-targets` to auto-fix lints
+3. ✅ **Verify clippy clean**: Run `cargo clippy --all-targets` and ensure **ZERO warnings**
+4. ✅ **Run all tests**: Run `cargo test` to ensure all tests pass
+5. ✅ **Build everything**: Run `cargo build --all-targets` to verify all code compiles
+6. ✅ **Test coverage**: Ensure new code has appropriate test coverage
+7. ✅ **No redundant comments**: Verify no redundant comments are added
+
+**Note:** If clippy shows warnings, you MUST fix them. Use `cargo clippy --fix` or fix manually.
+
+## MinIO Server Setup for Testing
+
+### Running a Local MinIO Server
+
+For testing S3 Tables / Iceberg features, you need a running MinIO AIStor server. You can start one using the MinIO source code.
+
+### Starting MinIO Server
+
+**Prerequisites:**
+- MinIO server source code at `C:\source\minio\eos`
+- Fresh data directory (recommended for clean tests)
+
+**Basic Server Start:**
+```bash
+cd C:\source\minio\eos
+MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./minio.exe server C:/minio-test-data --console-address ":9001"
+```
+
+**Server Start with Logging (for debugging):**
+```bash
+cd C:\source\minio\eos
+MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./minio.exe server C:/minio-test-data --console-address ":9001" 2>&1 | tee minio.log
+```
+
+### Background Server Management
+
+**Start in Background:**
+```bash
+# Using Bash tool with run_in_background parameter
+cd "C:\source\minio\eos" && MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./minio.exe server C:/minio-test-data --console-address ":9001" 2>&1
+```
+
+**Monitor Background Server:**
+```bash
+# Use BashOutput tool with the shell_id returned from background start
+# This shows server logs including errors and API calls
+```
+
+**Stop Background Server:**
+```bash
+# Use KillShell tool with the shell_id
+```
+
+### Server Configuration
+
+**Default Credentials:**
+- Access Key: `minioadmin`
+- Secret Key: `minioadmin`
+- API Endpoint: `http://localhost:9000`
+- Console: `http://localhost:9001`
+
+**Fresh Start (Clean Slate):**
+```bash
+# Remove old data and start fresh
+rm -rf C:/minio-test-data && mkdir C:/minio-test-data
+cd C:\source\minio\eos
+MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./minio.exe server C:/minio-test-data --console-address ":9001"
+```
+
+### Common Issues
+
+**Port Already in Use:**
+- Error: "bind: Only one usage of each socket address"
+- Solution: Close existing MinIO server (Ctrl+C) before starting new one
+- Use `netstat -ano | findstr :9000` to find processes using port 9000
+
+**Credential Errors:**
+- Error: "The Access Key Id you provided does not exist"
+- Solution: Ensure MINIO_ROOT_USER and MINIO_ROOT_PASSWORD are set correctly
+- Verify example code uses matching credentials
+
+### Testing S3 Tables Features
+
+**After Starting Server:**
+```bash
+# Run S3 Tables examples
+cd C:\Source\minio\minio-rs
+cargo run --example s3tables_complete --features data-access
+
+# Monitor server logs in the terminal where MinIO is running
+# Look for API calls like:
+# - POST /_iceberg/v1/warehouses
+# - POST /_iceberg/v1/{warehouse}/namespaces
+# - POST /_iceberg/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit
+```
+
+**Debugging Failed Commits:**
+1. Start MinIO with logging (see above)
+2. Run the Rust SDK test
+3. Check MinIO logs for error details
+4. Look for stack traces showing the exact failure point
+
+### Integration Test Setup
+
+For running integration tests against MinIO:
+1. Start MinIO server in background
+2. Run test suite: `cargo test --features data-access`
+3. Server logs will show all API interactions
+4. Stop server when tests complete
 
 ## Directory Structure Conventions
 
@@ -248,8 +370,10 @@ fn operation() -> Result<Response, Error> {
 ## Quick Reference
 
 - **Fix formatting**: `cargo fmt --all`
+- **Auto-fix clippy**: `cargo clippy --fix --allow-dirty --allow-staged --all-targets`
+- **Check clippy**: `cargo clippy --all-targets` (must show zero warnings)
 - **Run tests**: `cargo test`
 - **Run specific test**: `cargo test test_name`
-- **Check code**: `cargo clippy --all-targets --all-features --workspace -- -D warnings`
-- **Build project**: `cargo build --release`
+- **Build all**: `cargo build --all-targets`
+- **Build release**: `cargo build --release`
 - **Generate docs**: `cargo doc --open`

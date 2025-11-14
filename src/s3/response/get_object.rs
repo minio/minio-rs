@@ -16,9 +16,7 @@
 use crate::impl_has_s3fields;
 use crate::s3::builders::ObjectContent;
 use crate::s3::error::{Error, ValidationErr};
-use crate::s3::response::a_response_traits::{
-    HasBucket, HasEtagFromHeaders, HasObject, HasRegion, HasS3Fields, HasVersion,
-};
+use crate::s3::response_traits::{HasBucket, HasEtagFromHeaders, HasObject, HasRegion, HasVersion};
 use crate::s3::types::{FromS3Response, S3Request};
 use async_trait::async_trait;
 use bytes::Bytes;
