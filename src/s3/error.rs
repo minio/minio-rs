@@ -271,6 +271,9 @@ pub enum ValidationErr {
 
     #[error("Invalid table name: {0}")]
     InvalidTableName(String),
+
+    #[error("Invalid table name: {0}")]
+    InvalidTableName(String),
 }
 
 impl From<reqwest::header::ToStrError> for ValidationErr {

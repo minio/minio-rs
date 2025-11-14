@@ -15,3 +15,4 @@
 
 // Integration test entry point for all tests
 mod s3;
+mod inventory;

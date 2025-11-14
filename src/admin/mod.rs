@@ -1,5 +1,5 @@
 // MinIO Rust Library for Amazon S3 Compatible Cloud Storage
-// Copyright 2022 MinIO, Inc.
+// Copyright 2025 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,24 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implementation of Simple Storage Service (aka S3) client
+//! MinIO Admin API operations.
+//!
+//! This module provides administrative operations for MinIO server management,
+//! including inventory job control (cancel, suspend, resume).
 
-pub mod builders;
 pub mod client;
-pub mod creds;
-pub mod error;
-pub mod http;
-pub mod inventory;
-pub mod multimap_ext;
-mod object_content;
-pub mod response;
-#[macro_use]
-pub mod response_traits;
-pub mod segmented_bytes;
-pub mod signer;
 pub mod types;
-pub mod utils;
 
-// Re-export types module contents for convenience
-pub use client::{MinioClient, MinioClientBuilder};
-pub use types::{header_constants, lifecycle_config, minio_error_response, sse};
+pub use client::MinioAdminClient;
+pub use types::*;

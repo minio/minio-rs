@@ -56,9 +56,11 @@ mod delete_bucket_notification;
 mod delete_bucket_policy;
 mod delete_bucket_replication;
 mod delete_bucket_tagging;
+mod delete_inventory_config;
 mod delete_object_lock_config;
 mod delete_object_tagging;
 mod delete_objects;
+mod generate_inventory_config;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle;
 mod get_bucket_notification;
@@ -66,6 +68,8 @@ mod get_bucket_policy;
 mod get_bucket_replication;
 mod get_bucket_tagging;
 mod get_bucket_versioning;
+mod get_inventory_config;
+mod get_inventory_job_status;
 mod get_object;
 mod get_object_legal_hold;
 mod get_object_lock_config;
@@ -77,6 +81,7 @@ mod get_presigned_post_form_data;
 mod get_region;
 pub mod hooks;
 mod list_buckets;
+mod list_inventory_configs;
 mod list_objects;
 mod listen_bucket_notification;
 mod put_bucket_encryption;
@@ -86,6 +91,7 @@ mod put_bucket_policy;
 mod put_bucket_replication;
 mod put_bucket_tagging;
 mod put_bucket_versioning;
+mod put_inventory_config;
 mod put_object;
 mod put_object_legal_hold;
 mod put_object_lock_config;
@@ -293,6 +299,34 @@ impl MinioClient {
     /// Returns whether this client is configured to use HTTPS.
     pub fn is_secure(&self) -> bool {
         self.shared.base_url.https
+    }
+
+    /// Creates a MinIO Admin API client for administrative operations.
+    ///
+    /// This provides access to MinIO-specific admin operations such as
+    /// inventory job control (cancel, suspend, resume).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::MinioClient;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
+    /// use minio::admin::types::AdminApi;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+    ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
+    ///
+    ///     let admin = client.admin();
+    ///     let resp = admin.cancel_inventory_job("bucket", "job-id")
+    ///         .build().send().await.unwrap();
+    /// }
+    /// ```
+    pub fn admin(&self) -> crate::admin::MinioAdminClient {
+        crate::admin::MinioAdminClient::new(self.clone())
     }
 
     /// Returns whether this client is configured to use the express endpoint and is minio enterprise.
@@ -644,6 +678,109 @@ impl MinioClient {
             false,
         )
         .await
+    }
+
+    /// Execute request with custom path (for admin APIs)
+    pub(crate) async fn execute_with_custom_path(
+        &self,
+        method: Method,
+        region: &str,
+        headers: &mut Multimap,
+        query_params: &Multimap,
+        custom_path: &str,
+        data: Option<Arc<SegmentedBytes>>,
+    ) -> Result<reqwest::Response, Error> {
+        // Build URL with custom path instead of bucket/object
+        let url = self
+            .shared
+            .base_url
+            .build_custom_url(query_params, custom_path)?;
+
+        {
+            headers.add(HOST, url.host_header_value());
+            let sha256: String = match method {
+                Method::PUT | Method::POST => {
+                    // Only set Content-Type if there's actually a body
+                    // Empty body with Content-Type can cause some MinIO versions to expect XML
+                    if data.is_some() && !headers.contains_key(CONTENT_TYPE) {
+                        headers.add(CONTENT_TYPE, "application/octet-stream");
+                    }
+                    let len: usize = data.as_ref().map_or(0, |b| b.len());
+                    headers.add(CONTENT_LENGTH, len.to_string());
+                    match data {
+                        None => EMPTY_SHA256.into(),
+                        Some(ref v) => {
+                            let clone = v.clone();
+                            async_std::task::spawn_blocking(move || sha256_hash_sb(clone)).await
+                        }
+                    }
+                }
+                _ => EMPTY_SHA256.into(),
+            };
+            headers.add(X_AMZ_CONTENT_SHA256, sha256.clone());
+
+            let date = utc_now();
+            headers.add(X_AMZ_DATE, to_amz_date(date));
+            if let Some(p) = &self.shared.provider {
+                let creds = p.fetch();
+                if creds.session_token.is_some() {
+                    headers.add(X_AMZ_SECURITY_TOKEN, creds.session_token.unwrap());
+                }
+                sign_v4_s3(
+                    &method,
+                    &url.path,
+                    region,
+                    headers,
+                    query_params,
+                    &creds.access_key,
+                    &creds.secret_key,
+                    &sha256,
+                    date,
+                );
+            }
+        }
+
+        let mut req = self.http_client.request(method.clone(), url.to_string());
+
+        for (key, values) in headers.iter_all() {
+            for value in values {
+                req = req.header(key, value);
+            }
+        }
+
+        if (method == Method::PUT) || (method == Method::POST) {
+            let bytes_vec: Vec<Bytes> = match data {
+                Some(v) => v.iter().collect(),
+                None => Vec::new(),
+            };
+            let stream = futures_util::stream::iter(
+                bytes_vec.into_iter().map(|b| -> Result<_, Error> { Ok(b) }),
+            );
+            req = req.body(Body::wrap_stream(stream));
+        }
+
+        let resp: reqwest::Response = req.send().await.map_err(ValidationErr::from)?;
+        if resp.status().is_success() {
+            return Ok(resp);
+        }
+
+        let mut resp = resp;
+        let status_code = resp.status().as_u16();
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+        let body: Bytes = resp.bytes().await.map_err(ValidationErr::from)?;
+
+        let e: MinioErrorResponse = self.shared.create_minio_error_response(
+            body,
+            status_code,
+            headers,
+            &method,
+            &url.path,
+            None,  // No bucket for custom paths
+            None,  // No object for custom paths
+            false, // No retry for admin APIs
+        )?;
+
+        Err(Error::S3Server(S3ServerError::S3Error(Box::new(e))))
     }
 
     async fn run_after_execute_hooks(

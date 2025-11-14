@@ -62,6 +62,7 @@
 
 #![allow(clippy::result_large_err)]
 #![allow(clippy::too_many_arguments)]
+pub mod admin;
 pub mod s3;
 
 #[cfg(test)]
