@@ -13,14 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::error::{Error, ValidationErr};
-use crate::s3::response::a_response_traits::HasS3Fields;
-use crate::s3::types::{Bucket, FromS3Response, S3Request};
+use crate::s3::error::ValidationErr;
+use crate::s3::response_traits::HasS3Fields;
+use crate::s3::types::{Bucket, S3Request};
 use crate::s3::utils::{from_iso8601utc, get_text_result};
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
-use std::mem;
 use xmltree::Element;
 
 /// Response of [list_buckets()](crate::s3::client::MinioClient::list_buckets) API

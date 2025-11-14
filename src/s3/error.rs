@@ -242,6 +242,35 @@ pub enum ValidationErr {
         source: Box<dyn std::error::Error + Send + Sync>,
         name: String,
     },
+
+    #[error("Invalid UTF-8: {source} while {context}")]
+    InvalidUtf8 {
+        #[source]
+        source: std::string::FromUtf8Error,
+        context: String,
+    },
+
+    #[error("Invalid JSON: {source} while {context}")]
+    InvalidJson {
+        #[source]
+        source: serde_json::Error,
+        context: String,
+    },
+
+    #[error("Invalid YAML: {message}")]
+    InvalidYaml { message: String },
+
+    #[error("Invalid configuration: {message}")]
+    InvalidConfig { message: String },
+
+    #[error("Invalid warehouse name: {0}")]
+    InvalidWarehouseName(String),
+
+    #[error("Invalid namespace name: {0}")]
+    InvalidNamespaceName(String),
+
+    #[error("Invalid table name: {0}")]
+    InvalidTableName(String),
 }
 
 impl From<reqwest::header::ToStrError> for ValidationErr {
@@ -285,6 +314,9 @@ pub enum IoError {
 pub enum NetworkError {
     #[error("Server failed with HTTP status code {0}")]
     ServerError(u16),
+
+    #[error("Request error: {0}")]
+    ReqwestError(#[from] reqwest::Error),
 }
 
 // Server response errors like bucket does not exist, etc.
@@ -303,6 +335,9 @@ pub enum S3ServerError {
         http_status_code: u16,
         content_type: String,
     },
+
+    #[error("HTTP error: status={0}, body={1}")]
+    HttpError(u16, String),
 }
 
 // Top-level Minio client error
@@ -319,6 +354,9 @@ pub enum Error {
 
     #[error("Validation error occurred")]
     Validation(#[from] ValidationErr),
+
+    #[error("Tables error occurred")]
+    TablesError(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 // region message helpers

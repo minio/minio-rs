@@ -204,12 +204,18 @@ Claude will periodically analyze the codebase and suggest:
 
 ### Pre-commit Checklist
 
+**MANDATORY: ALL steps must pass before submitting any PR. No warnings or errors are acceptable.**
+
 Before any code changes:
-1. ✅ Run `cargo fmt --all` to check and fix code formatting
-2. ✅ Run `cargo test` to ensure all tests pass
-3. ✅ Run `cargo clippy --all-targets --all-features --workspace -- -D warnings` to check for common mistakes and ensure no warnings
-4. ✅ Ensure new code has appropriate test coverage
-5. ✅ Verify no redundant comments are added
+1. ✅ **Format code**: Run `cargo fmt --all` to fix all formatting issues
+2. ✅ **Fix clippy warnings**: Run `cargo clippy --fix --allow-dirty --allow-staged --all-targets` to auto-fix lints
+3. ✅ **Verify clippy clean**: Run `cargo clippy --all-targets` and ensure **ZERO warnings**
+4. ✅ **Run all tests**: Run `cargo test` to ensure all tests pass
+5. ✅ **Build everything**: Run `cargo build --all-targets` to verify all code compiles
+6. ✅ **Test coverage**: Ensure new code has appropriate test coverage
+7. ✅ **No redundant comments**: Verify no redundant comments are added
+
+**Note:** If clippy shows warnings, you MUST fix them. Use `cargo clippy --fix` or fix manually.
 
 ## Directory Structure Conventions
 
@@ -248,8 +254,10 @@ fn operation() -> Result<Response, Error> {
 ## Quick Reference
 
 - **Fix formatting**: `cargo fmt --all`
+- **Auto-fix clippy**: `cargo clippy --fix --allow-dirty --allow-staged --all-targets`
+- **Check clippy**: `cargo clippy --all-targets` (must show zero warnings)
 - **Run tests**: `cargo test`
 - **Run specific test**: `cargo test test_name`
-- **Check code**: `cargo clippy --all-targets --all-features --workspace -- -D warnings`
-- **Build project**: `cargo build --release`
+- **Build all**: `cargo build --all-targets`
+- **Build release**: `cargo build --release`
 - **Generate docs**: `cargo doc --open`

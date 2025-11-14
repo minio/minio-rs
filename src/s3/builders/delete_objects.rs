@@ -99,7 +99,7 @@ impl From<DeleteError> for ObjectToDelete {
 
 /// Argument builder for the [`DeleteObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::delete_object`](crate::s3::client::Client::delete_object) method.
+/// This struct constructs the parameters required for the `delete_object` method.
 #[derive(Debug, Clone, TypedBuilder)]
 pub struct DeleteObject {
     #[builder(!default)] // force required
@@ -159,7 +159,7 @@ impl ToS3Request for DeleteObject {
 
 /// Argument builder for the [`DeleteObjects`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::delete_objects`](crate::s3::client::Client::delete_objects) method.
+/// This struct constructs the parameters required for the `delete_objects` method.
 #[derive(Clone, Debug, TypedBuilder)]
 pub struct DeleteObjects {
     #[builder(!default)] // force required
@@ -283,7 +283,7 @@ where
 
 /// Argument builder for streaming multiple object deletions using the [`DeleteObjects`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html) S3 API operation.
 ///
-/// This struct constructs the parameters required for the [`Client::delete_objects_streaming`](crate::s3::client::Client::delete_objects_streaming) method.
+/// This struct constructs the parameters required for the `delete_objects_streaming` method.
 pub struct DeleteObjectsStreaming {
     //TODO
     client: MinioClient,

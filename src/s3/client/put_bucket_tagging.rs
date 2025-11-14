@@ -33,7 +33,7 @@ impl MinioClient {
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketTaggingResponse;
     /// use minio::s3::types::S3Api;
-    /// use minio::s3::response::a_response_traits::HasBucket;
+    /// use minio::s3::response_traits::HasBucket;
     /// use std::collections::HashMap;
     ///
     /// #[tokio::main]

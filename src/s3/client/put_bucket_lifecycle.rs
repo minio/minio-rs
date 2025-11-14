@@ -33,7 +33,7 @@ impl MinioClient {
     /// use minio::s3::response::PutBucketLifecycleResponse;
     /// use minio::s3::types::{Filter, S3Api};
     /// use minio::s3::lifecycle_config::{LifecycleRule, LifecycleConfig};
-    /// use minio::s3::response::a_response_traits::HasBucket;
+    /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
     /// async fn main() {
