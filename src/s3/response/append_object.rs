@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use crate::s3::response_traits::{
-    HasBucket, HasEtagFromHeaders, HasObject, HasObjectSize, HasRegion, HasVersion,
+    HasBucket, HasChecksumHeaders, HasEtagFromHeaders, HasObject, HasObjectSize, HasRegion,
+    HasVersion,
 };
 use crate::s3::types::S3Request;
 use crate::{impl_from_s3response, impl_has_s3fields};
@@ -40,3 +41,4 @@ impl HasRegion for AppendObjectResponse {}
 impl HasVersion for AppendObjectResponse {}
 impl HasEtagFromHeaders for AppendObjectResponse {}
 impl HasObjectSize for AppendObjectResponse {}
+impl HasChecksumHeaders for AppendObjectResponse {}

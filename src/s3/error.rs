@@ -148,6 +148,9 @@ pub enum ValidationErr {
         got: u32,
     },
 
+    #[error("Checksum mismatch; expected: {expected}, computed: {computed}")]
+    ChecksumMismatch { expected: String, computed: String },
+
     #[error("Unknown event type: {0}")]
     UnknownEventType(String),
 

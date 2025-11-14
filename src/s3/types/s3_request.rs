@@ -19,6 +19,7 @@ use super::super::client::{DEFAULT_REGION, MinioClient};
 use crate::s3::error::Error;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
+use crate::s3::utils::ChecksumAlgorithm;
 use http::Method;
 use std::sync::Arc;
 use typed_builder::TypedBuilder;
@@ -50,6 +51,20 @@ pub struct S3Request {
     #[builder(default, setter(into))]
     body: Option<Arc<SegmentedBytes>>,
 
+    /// Optional trailing checksum algorithm for streaming uploads.
+    ///
+    /// When set, the request body will be sent using aws-chunked encoding
+    /// with the checksum computed incrementally and appended as a trailer.
+    #[builder(default)]
+    pub(crate) trailing_checksum: Option<ChecksumAlgorithm>,
+
+    /// When true and trailing checksums are enabled, signs each chunk with AWS Signature V4.
+    ///
+    /// Uses STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER where each chunk is signed
+    /// and the trailer includes a trailer signature.
+    #[builder(default = false)]
+    pub(crate) use_signed_streaming: bool,
+
     /// region computed by [`S3Request::execute`]
     #[builder(default, setter(skip))]
     pub(crate) inner_region: String,
@@ -76,6 +91,8 @@ impl S3Request {
                 &self.bucket.as_deref(),
                 &self.object.as_deref(),
                 self.body.as_ref().map(Arc::clone),
+                self.trailing_checksum,
+                self.use_signed_streaming,
             )
             .await
     }
