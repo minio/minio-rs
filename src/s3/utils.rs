@@ -20,19 +20,35 @@ use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use base64::engine::Engine as _;
 use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
-use crc::{CRC_32_ISO_HDLC, Crc};
+use crc::{Algorithm, Crc};
+use crc32c::crc32c as crc32c_hash;
+use crc32fast::Hasher as Crc32Hasher;
 use lazy_static::lazy_static;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use regex::Regex;
 #[cfg(feature = "ring")]
 use ring::digest::{Context, SHA256};
+use sha1::{Digest as Sha1Digest, Sha1};
 #[cfg(not(feature = "ring"))]
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use xmltree::Element;
 
-/// Date and time with UTC timezone
+/// CRC-64/NVME algorithm parameters (used by S3/MinIO for checksums).
+pub(crate) const CRC_64_NVME: Algorithm<u64> = Algorithm {
+    width: 64,
+    poly: 0xAD93D23594C93659,
+    init: 0xFFFFFFFFFFFFFFFF,
+    refin: true,
+    refout: true,
+    xorout: 0xFFFFFFFFFFFFFFFF,
+    check: 0x0,
+    residue: 0x0,
+};
+
+/// Date and time with UTC timezone.
 pub type UtcTime = DateTime<Utc>;
 
 // Great stuff to get confused about.
@@ -55,18 +71,36 @@ pub fn url_encode(s: &str) -> String {
     urlencoding::encode(s).into_owned()
 }
 
-/// Encodes data using base64 algorithm
+/// Encodes data using base64 algorithm.
 pub fn b64_encode(input: impl AsRef<[u8]>) -> String {
     base64::engine::general_purpose::STANDARD.encode(input)
 }
 
-/// Computes CRC32 of given data.
-pub fn crc32(data: &[u8]) -> u32 {
-    //TODO creating a new Crc object is expensive, we should cache it
-    Crc::<u32>::new(&CRC_32_ISO_HDLC).checksum(data)
+lazy_static! {
+    /// Cached CRC64-NVME instance for performance (avoid recreating on every call)
+    static ref CRC64_NVME_INSTANCE: Crc<u64> = Crc::<u64>::new(&CRC_64_NVME);
 }
 
-/// Converts data array into 32 bit BigEndian unsigned int
+/// Computes CRC32 of given data using hardware-accelerated implementation.
+///
+/// Uses crc32fast which provides hardware acceleration via pclmulqdq instruction
+/// on modern CPUs, falling back to optimized software implementation otherwise.
+///
+/// Note: Unlike `Crc<u64>` from the `crc` crate (used for CRC64-NVME), creating a new
+/// `crc32fast::Hasher` is cheap - it only initializes a u32 state value. The lookup
+/// tables are compiled into the crate, so no caching is needed here.
+pub fn crc32(data: &[u8]) -> u32 {
+    let mut hasher = Crc32Hasher::new();
+    hasher.update(data);
+    hasher.finalize()
+}
+
+/// Computes CRC64-NVME of given data using cached instance for optimal performance.
+pub fn crc64nvme(data: &[u8]) -> u64 {
+    CRC64_NVME_INSTANCE.checksum(data)
+}
+
+/// Converts data array into 32-bit BigEndian unsigned int.
 pub fn uint32(data: &[u8]) -> Result<u32, ValidationErr> {
     if data.len() < 4 {
         return Err(ValidationErr::InvalidIntegerValue {
@@ -80,10 +114,10 @@ pub fn uint32(data: &[u8]) -> Result<u32, ValidationErr> {
     Ok(u32::from_be_bytes(data[..4].try_into().unwrap()))
 }
 
-/// sha256 hash of empty data
+/// SHA256 hash of empty data.
 pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-/// Gets hex encoded SHA256 hash of given data
+/// Gets hex-encoded SHA256 hash of given data.
 pub fn sha256_hash(data: &[u8]) -> String {
     #[cfg(feature = "ring")]
     {
@@ -168,9 +202,236 @@ pub fn sha256_hash_sb(sb: Arc<SegmentedBytes>) -> String {
     }
 }
 
+/// S3 checksum algorithms supported by the API
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChecksumAlgorithm {
+    CRC32,
+    CRC32C,
+    SHA1,
+    SHA256,
+    CRC64NVME,
+}
+
+impl ChecksumAlgorithm {
+    /// Returns the AWS header value for this checksum algorithm.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ChecksumAlgorithm::CRC32 => "CRC32",
+            ChecksumAlgorithm::CRC32C => "CRC32C",
+            ChecksumAlgorithm::SHA1 => "SHA1",
+            ChecksumAlgorithm::SHA256 => "SHA256",
+            ChecksumAlgorithm::CRC64NVME => "CRC64NVME",
+        }
+    }
+}
+
+/// Parses a checksum algorithm name from a string.
+///
+/// Case-insensitive parsing of S3 checksum algorithm names. Useful for parsing
+/// header values or configuration strings.
+///
+/// # Supported Values
+///
+/// - `"CRC32"` / `"crc32"` - Standard CRC32 checksum
+/// - `"CRC32C"` / `"crc32c"` - CRC32C (Castagnoli) checksum
+/// - `"SHA1"` / `"sha1"` - SHA-1 hash
+/// - `"SHA256"` / `"sha256"` - SHA-256 hash
+/// - `"CRC64NVME"` / `"crc64nvme"` - CRC-64/NVME checksum
+///
+/// # Errors
+///
+/// Returns an error string if the algorithm name is not recognized.
+impl FromStr for ChecksumAlgorithm {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "CRC32" => Ok(ChecksumAlgorithm::CRC32),
+            "CRC32C" => Ok(ChecksumAlgorithm::CRC32C),
+            "SHA1" => Ok(ChecksumAlgorithm::SHA1),
+            "SHA256" => Ok(ChecksumAlgorithm::SHA256),
+            "CRC64NVME" => Ok(ChecksumAlgorithm::CRC64NVME),
+            _ => Err(format!("Unknown checksum algorithm: {}", s)),
+        }
+    }
+}
+
+/// Computes CRC32C checksum (Castagnoli polynomial) and returns base64-encoded value
+pub fn crc32c(data: &[u8]) -> String {
+    b64_encode(crc32c_hash(data).to_be_bytes())
+}
+
+/// Computes SHA1 hash and returns base64-encoded value
+pub fn sha1_hash(data: &[u8]) -> String {
+    let mut hasher = Sha1::new();
+    hasher.update(data);
+    let result = hasher.finalize();
+    b64_encode(&result[..])
+}
+
+/// Computes SHA256 hash and returns base64-encoded value (for checksums, not authentication)
+pub fn sha256_checksum(data: &[u8]) -> String {
+    #[cfg(feature = "ring")]
+    {
+        b64_encode(ring::digest::digest(&SHA256, data).as_ref())
+    }
+    #[cfg(not(feature = "ring"))]
+    {
+        let result = Sha256::new_with_prefix(data).finalize();
+        b64_encode(&result[..])
+    }
+}
+
+/// Computes CRC32 checksum and returns base64-encoded value
+pub fn crc32_checksum(data: &[u8]) -> String {
+    b64_encode(crc32(data).to_be_bytes())
+}
+
+/// Computes CRC64-NVME checksum and returns base64-encoded value
+pub fn crc64nvme_checksum(data: &[u8]) -> String {
+    b64_encode(crc64nvme(data).to_be_bytes())
+}
+
+/// Computes checksum based on the specified algorithm for contiguous byte slices.
+///
+/// This function computes checksums on already-materialized `&[u8]` data. Use this when:
+/// - Data is already in a contiguous buffer (e.g., from `reqwest::Response::bytes()`)
+/// - Working with small byte arrays in tests
+/// - Data comes from sources other than `SegmentedBytes`
+///
+/// **Performance Note**: If you have data in `SegmentedBytes`, use [`compute_checksum_sb`]
+/// instead to avoid copying. Calling `.to_bytes()` on `SegmentedBytes` creates a full copy
+/// of all segments, which is expensive for large objects (up to 5GB per part).
+///
+/// # Arguments
+///
+/// * `algorithm` - The checksum algorithm to use (CRC32, CRC32C, CRC64NVME, SHA1, SHA256)
+/// * `data` - The contiguous byte slice to compute checksum over
+///
+/// # Returns
+///
+/// Base64-encoded checksum string suitable for S3 headers
+///
+/// # Example
+///
+/// ```
+/// use minio::s3::utils::{compute_checksum, ChecksumAlgorithm};
+///
+/// let data = b"hello world";
+/// let checksum = compute_checksum(ChecksumAlgorithm::CRC32C, data);
+/// println!("CRC32C: {}", checksum);
+/// ```
+pub fn compute_checksum(algorithm: ChecksumAlgorithm, data: &[u8]) -> String {
+    match algorithm {
+        ChecksumAlgorithm::CRC32 => crc32_checksum(data),
+        ChecksumAlgorithm::CRC32C => crc32c(data),
+        ChecksumAlgorithm::SHA1 => sha1_hash(data),
+        ChecksumAlgorithm::SHA256 => sha256_checksum(data),
+        ChecksumAlgorithm::CRC64NVME => crc64nvme_checksum(data),
+    }
+}
+
+/// Computes checksum for `SegmentedBytes` without copying data (zero-copy streaming).
+///
+/// This function computes checksums by iterating over segments incrementally, avoiding
+/// the need to materialize the entire buffer in contiguous memory. This is critical for
+/// performance when working with large objects (up to 5GB per part in multipart uploads).
+///
+/// **Always use this function for `SegmentedBytes` data** instead of calling `.to_bytes()`
+/// followed by `compute_checksum()`, which would create an expensive full copy.
+///
+/// # Performance Characteristics
+///
+/// - **Memory**: Only allocates hasher state (~64 bytes for SHA256, ~4-8 bytes for CRC)
+/// - **CPU**: Hardware-accelerated where available (CRC32C with SSE 4.2)
+/// - **Streaming**: Processes data incrementally without buffering
+///
+/// # Arguments
+///
+/// * `algorithm` - The checksum algorithm to use (CRC32, CRC32C, CRC64NVME, SHA1, SHA256)
+/// * `sb` - The segmented bytes to compute checksum over (passed by reference, not consumed)
+///
+/// # Returns
+///
+/// Base64-encoded checksum string suitable for S3 headers
+///
+/// # Example
+///
+/// ```
+/// use minio::s3::utils::{compute_checksum_sb, ChecksumAlgorithm};
+/// use minio::s3::segmented_bytes::SegmentedBytes;
+/// use std::sync::Arc;
+/// use bytes::Bytes;
+///
+/// let mut sb = SegmentedBytes::new();
+/// sb.append(Bytes::from("hello "));
+/// sb.append(Bytes::from("world"));
+/// let sb = Arc::new(sb);
+///
+/// let checksum = compute_checksum_sb(ChecksumAlgorithm::CRC32C, &sb);
+/// println!("CRC32C: {}", checksum);
+/// ```
+///
+/// # See Also
+///
+/// - [`compute_checksum`] - For already-contiguous `&[u8]` data
+pub fn compute_checksum_sb(algorithm: ChecksumAlgorithm, sb: &Arc<SegmentedBytes>) -> String {
+    match algorithm {
+        ChecksumAlgorithm::CRC32 => {
+            let mut hasher = Crc32Hasher::new();
+            for data in sb.iter() {
+                hasher.update(data.as_ref());
+            }
+            b64_encode(hasher.finalize().to_be_bytes())
+        }
+        ChecksumAlgorithm::CRC32C => {
+            let mut sum = 0u32;
+            for data in sb.iter() {
+                sum = crc32c::crc32c_append(sum, data.as_ref());
+            }
+            b64_encode(sum.to_be_bytes())
+        }
+        ChecksumAlgorithm::SHA1 => {
+            let mut hasher = Sha1::new();
+            for data in sb.iter() {
+                hasher.update(data.as_ref());
+            }
+            let result = hasher.finalize();
+            b64_encode(&result[..])
+        }
+        ChecksumAlgorithm::SHA256 => {
+            #[cfg(feature = "ring")]
+            {
+                let mut context = Context::new(&SHA256);
+                for data in sb.iter() {
+                    context.update(data.as_ref());
+                }
+                b64_encode(context.finish().as_ref())
+            }
+            #[cfg(not(feature = "ring"))]
+            {
+                let mut hasher = Sha256::new();
+                for data in sb.iter() {
+                    hasher.update(data.as_ref());
+                }
+                let result = hasher.finalize();
+                b64_encode(&result[..])
+            }
+        }
+        ChecksumAlgorithm::CRC64NVME => {
+            let mut digest = CRC64_NVME_INSTANCE.digest();
+            for data in sb.iter() {
+                digest.update(data.as_ref());
+            }
+            b64_encode(digest.finalize().to_be_bytes())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::Bytes;
     use std::collections::HashMap;
 
     #[test]
@@ -288,6 +549,93 @@ mod tests {
 
         let empty_hash = md5sum_hash(b"");
         assert_eq!(empty_hash, "1B2M2Y8AsgTpgAmY7PhCfg==");
+    }
+
+    #[test]
+    fn test_crc32c() {
+        let checksum = crc32c(b"hello");
+        assert!(!checksum.is_empty());
+        let checksum_empty = crc32c(b"");
+        assert!(!checksum_empty.is_empty());
+        let checksum_standard = crc32c(b"123456789");
+        assert!(!checksum_standard.is_empty());
+    }
+
+    #[test]
+    fn test_sha1_hash() {
+        let hash = sha1_hash(b"hello");
+        assert!(!hash.is_empty());
+        let hash_empty = sha1_hash(b"");
+        assert!(!hash_empty.is_empty());
+        let hash_fox = sha1_hash(b"The quick brown fox jumps over the lazy dog");
+        assert!(!hash_fox.is_empty());
+    }
+
+    #[test]
+    fn test_sha256_checksum() {
+        let checksum = sha256_checksum(b"hello");
+        assert!(!checksum.is_empty());
+        let checksum_empty = sha256_checksum(b"");
+        assert!(!checksum_empty.is_empty());
+    }
+
+    #[test]
+    fn test_crc32_checksum() {
+        let checksum = crc32_checksum(b"hello");
+        assert!(!checksum.is_empty());
+        let checksum_empty = crc32_checksum(b"");
+        assert_eq!(checksum_empty, "AAAAAA==");
+        let checksum_standard = crc32_checksum(b"123456789");
+        assert!(!checksum_standard.is_empty());
+    }
+
+    #[test]
+    fn test_checksum_algorithm_as_str() {
+        assert_eq!(ChecksumAlgorithm::CRC32.as_str(), "CRC32");
+        assert_eq!(ChecksumAlgorithm::CRC32C.as_str(), "CRC32C");
+        assert_eq!(ChecksumAlgorithm::SHA1.as_str(), "SHA1");
+        assert_eq!(ChecksumAlgorithm::SHA256.as_str(), "SHA256");
+    }
+
+    #[test]
+    fn test_checksum_algorithm_from_str() {
+        assert_eq!(
+            "CRC32".parse::<ChecksumAlgorithm>().unwrap(),
+            ChecksumAlgorithm::CRC32
+        );
+        assert_eq!(
+            "crc32c".parse::<ChecksumAlgorithm>().unwrap(),
+            ChecksumAlgorithm::CRC32C
+        );
+        assert_eq!(
+            "SHA1".parse::<ChecksumAlgorithm>().unwrap(),
+            ChecksumAlgorithm::SHA1
+        );
+        assert_eq!(
+            "sha256".parse::<ChecksumAlgorithm>().unwrap(),
+            ChecksumAlgorithm::SHA256
+        );
+        assert!("invalid".parse::<ChecksumAlgorithm>().is_err());
+    }
+
+    #[test]
+    fn test_compute_checksum() {
+        let data = b"hello world";
+
+        let crc32_result = compute_checksum(ChecksumAlgorithm::CRC32, data);
+        assert!(!crc32_result.is_empty());
+
+        let crc32c_result = compute_checksum(ChecksumAlgorithm::CRC32C, data);
+        assert!(!crc32c_result.is_empty());
+
+        let sha1_result = compute_checksum(ChecksumAlgorithm::SHA1, data);
+        assert!(!sha1_result.is_empty());
+
+        let sha256_result = compute_checksum(ChecksumAlgorithm::SHA256, data);
+        assert!(!sha256_result.is_empty());
+
+        assert_ne!(crc32_result, crc32c_result);
+        assert_ne!(sha1_result, sha256_result);
     }
 
     #[test]
@@ -564,6 +912,7 @@ mod tests {
     #[test]
     fn test_match_region_basic() {
         let _result = match_region("us-east-1");
+        // TODO consider fixing or removing this test
         // Test that match_region returns a boolean (always true)
     }
 
@@ -647,29 +996,59 @@ mod tests {
         let tags = parse_tags("Environment=Production").unwrap();
         assert!(!tags.is_empty());
     }
+
+    #[test]
+    fn test_compute_checksum_sb_matches_compute_checksum() {
+        // Test data
+        let test_data = b"The quick brown fox jumps over the lazy dog";
+
+        // Create SegmentedBytes with multiple segments to test incremental computation
+        let mut sb = SegmentedBytes::new();
+        sb.append(Bytes::from(&test_data[0..10]));
+        sb.append(Bytes::from(&test_data[10..25]));
+        sb.append(Bytes::from(&test_data[25..]));
+        let sb = Arc::new(sb);
+
+        // Test all algorithms
+        for algo in [
+            ChecksumAlgorithm::CRC32,
+            ChecksumAlgorithm::CRC32C,
+            ChecksumAlgorithm::CRC64NVME,
+            ChecksumAlgorithm::SHA1,
+            ChecksumAlgorithm::SHA256,
+        ] {
+            let from_bytes = compute_checksum(algo, test_data);
+            let from_sb = compute_checksum_sb(algo, &sb);
+            assert_eq!(
+                from_bytes, from_sb,
+                "Mismatch for {:?}: bytes='{}' vs sb='{}'",
+                algo, from_bytes, from_sb
+            );
+        }
+    }
 }
 
-/// Gets bas64 encoded MD5 hash of given data
+/// Gets base64-encoded MD5 hash of given data.
 pub fn md5sum_hash(data: &[u8]) -> String {
     b64_encode(md5::compute(data).as_slice())
 }
 
-/// Gets current UTC time
+/// Gets current UTC time.
 pub fn utc_now() -> UtcTime {
     chrono::offset::Utc::now()
 }
 
-/// Gets signer date value of given time
+/// Gets signer date value of given time.
 pub fn to_signer_date(time: UtcTime) -> String {
     time.format("%Y%m%d").to_string()
 }
 
-/// Gets AMZ date value of given time
+/// Gets AMZ date value of given time.
 pub fn to_amz_date(time: UtcTime) -> String {
     time.format("%Y%m%dT%H%M%SZ").to_string()
 }
 
-/// Gets HTTP header value of given time
+/// Gets HTTP header value of given time.
 pub fn to_http_header_value(time: UtcTime) -> String {
     format!(
         "{}, {} {} {} GMT",
@@ -694,12 +1073,12 @@ pub fn to_http_header_value(time: UtcTime) -> String {
     )
 }
 
-/// Gets ISO8601 UTC formatted value of given time
+/// Gets ISO8601 UTC formatted value of given time.
 pub fn to_iso8601utc(time: UtcTime) -> String {
     time.format("%Y-%m-%dT%H:%M:%S.%3fZ").to_string()
 }
 
-/// Parses ISO8601 UTC formatted value to time
+/// Parses ISO8601 UTC formatted value to time.
 pub fn from_iso8601utc(s: &str) -> Result<UtcTime, ValidationErr> {
     let dt = NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S.%3fZ")
         .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%SZ"))?;
@@ -747,13 +1126,13 @@ pub fn parse_bool(value: &str) -> Result<bool, ValidationErr> {
     }
 }
 
-/// Parses HTTP header value to time
+/// Parses HTTP header value to time.
 pub fn from_http_header_value(s: &str) -> Result<UtcTime, ValidationErr> {
     let dt = NaiveDateTime::parse_from_str(s, "%a, %d %b %Y %H:%M:%S GMT")?;
     Ok(DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
 }
 
-/// Checks if given hostname is valid or not
+/// Checks if given hostname is valid or not.
 pub fn match_hostname(value: &str) -> bool {
     lazy_static! {
         static ref HOSTNAME_REGEX: Regex =
@@ -777,7 +1156,7 @@ pub fn match_hostname(value: &str) -> bool {
     true
 }
 
-/// Checks if given region is valid or not
+/// Checks if given region is valid or not.
 pub fn match_region(value: &str) -> bool {
     lazy_static! {
         static ref REGION_REGEX: Regex = Regex::new(r"^([a-z_\d-]{1,63})$").unwrap();
@@ -790,7 +1169,8 @@ pub fn match_region(value: &str) -> bool {
         || value.ends_with('_')
 }
 
-/// Validates given bucket name. TODO S3Express has slightly different rules for bucket names
+/// Validates given bucket name.
+// TODO: S3Express has slightly different rules for bucket names
 pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(), ValidationErr> {
     let bucket_name: &str = bucket_name.as_ref().trim();
     let bucket_name_len = bucket_name.len();
@@ -858,7 +1238,8 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
     Ok(())
 }
 
-/// Validates given object name. TODO S3Express has slightly different rules for object names
+/// Validates given object name.
+// TODO: S3Express has slightly different rules for object names
 pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), ValidationErr> {
     let name = object_name.as_ref();
     match name.len() {
@@ -894,7 +1275,7 @@ pub fn check_ssec(
     Ok(())
 }
 
-/// Validates SSE-C (Server-Side Encryption with Customer-Provided Keys) settings and logs an error
+/// Validates SSE-C (Server-Side Encryption with Customer-Provided Keys) settings and logs an error.
 pub fn check_ssec_with_log(
     ssec: &Option<SseCustomerKey>,
     client: &MinioClient,
@@ -939,7 +1320,7 @@ pub fn get_text_option(element: &Element, tag: &str) -> Option<String> {
         .and_then(|v| v.get_text().map(|s| s.to_string()))
 }
 
-/// Trim leading and trailing quotes from a string. It consumes the
+/// Trims leading and trailing quotes from a string. Note: consumes the input string.
 pub fn trim_quotes(mut s: String) -> String {
     if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
         s.drain(0..1); // remove the leading quote
@@ -948,7 +1329,7 @@ pub fn trim_quotes(mut s: String) -> String {
     s
 }
 
-/// Copies source byte slice into destination byte slice
+/// Copies source byte slice into destination byte slice.
 pub fn copy_slice(dst: &mut [u8], src: &[u8]) -> usize {
     let mut c = 0;
     for (d, s) in dst.iter_mut().zip(src.iter()) {
@@ -1035,8 +1416,8 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, ValidationErr> {
     Ok(tags)
 }
 
-#[must_use]
 /// Returns the consumed data and inserts a key into it with an empty value.
+#[must_use]
 pub fn insert(data: Option<Multimap>, key: impl Into<String>) -> Multimap {
     let mut result: Multimap = data.unwrap_or_default();
     result.insert(key.into(), String::new());
