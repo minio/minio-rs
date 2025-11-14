@@ -14,7 +14,9 @@
 // limitations under the License.
 
 use crate::s3::error::ValidationErr;
-use crate::s3::response_traits::{HasBucket, HasEtagFromHeaders, HasObject, HasRegion, HasVersion};
+use crate::s3::response_traits::{
+    HasBucket, HasChecksumHeaders, HasEtagFromHeaders, HasObject, HasRegion, HasVersion,
+};
 use crate::s3::types::S3Request;
 use crate::s3::utils::get_text_result;
 use crate::{impl_from_s3response, impl_from_s3response_with_size, impl_has_s3fields};
@@ -40,6 +42,7 @@ impl HasObject for S3Response1 {}
 impl HasRegion for S3Response1 {}
 impl HasVersion for S3Response1 {}
 impl HasEtagFromHeaders for S3Response1 {}
+impl HasChecksumHeaders for S3Response1 {}
 
 /// Extended response struct for operations that need additional data like object size
 #[derive(Clone, Debug)]
