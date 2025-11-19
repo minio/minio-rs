@@ -16,7 +16,7 @@
 use crate::impl_has_s3fields;
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
-use crate::s3::response::a_response_traits::{HasBucket, HasObject, HasRegion, HasS3Fields};
+use crate::s3::response_traits::{HasBucket, HasObject, HasRegion};
 use crate::s3::types::{FromS3Response, S3Request, SelectProgress};
 use crate::s3::utils::{copy_slice, crc32, get_text_result, uint32};
 use async_trait::async_trait;

@@ -242,6 +242,35 @@ pub enum ValidationErr {
         source: Box<dyn std::error::Error + Send + Sync>,
         name: String,
     },
+
+    #[error("Invalid UTF-8: {source} while {context}")]
+    InvalidUtf8 {
+        #[source]
+        source: std::string::FromUtf8Error,
+        context: String,
+    },
+
+    #[error("Invalid JSON: {source} while {context}")]
+    InvalidJson {
+        #[source]
+        source: serde_json::Error,
+        context: String,
+    },
+
+    #[error("Invalid YAML: {message}")]
+    InvalidYaml { message: String },
+
+    #[error("Invalid configuration: {message}")]
+    InvalidConfig { message: String },
+
+    #[error("Invalid warehouse name: {0}")]
+    InvalidWarehouseName(String),
+
+    #[error("Invalid namespace name: {0}")]
+    InvalidNamespaceName(String),
+
+    #[error("Invalid table name: {0}")]
+    InvalidTableName(String),
 }
 
 impl From<reqwest::header::ToStrError> for ValidationErr {
@@ -285,6 +314,9 @@ pub enum IoError {
 pub enum NetworkError {
     #[error("Server failed with HTTP status code {0}")]
     ServerError(u16),
+
+    #[error("Request error: {0}")]
+    ReqwestError(#[from] reqwest::Error),
 }
 
 // Server response errors like bucket does not exist, etc.
@@ -303,6 +335,9 @@ pub enum S3ServerError {
         http_status_code: u16,
         content_type: String,
     },
+
+    #[error("HTTP error: status={0}, body={1}")]
+    HttpError(u16, String),
 }
 
 // Top-level Minio client error
@@ -319,6 +354,9 @@ pub enum Error {
 
     #[error("Validation error occurred")]
     Validation(#[from] ValidationErr),
+
+    #[error("Tables error occurred")]
+    TablesError(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 // region message helpers
@@ -346,3 +384,511 @@ fn format_s3_object_error(
 }
 
 // endregion message helpers
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validation_err_invalid_bucket_name() {
+        let err = ValidationErr::InvalidBucketName {
+            name: "My Bucket".to_string(),
+            reason: "contains spaces".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "Invalid bucket name: 'My Bucket' - contains spaces"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_missing_bucket_name() {
+        let err = ValidationErr::MissingBucketName;
+        assert_eq!(err.to_string(), "No bucket name provided");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_object_name() {
+        let err = ValidationErr::InvalidObjectName("invalid\0name".to_string());
+        assert_eq!(err.to_string(), "Invalid object name: invalid\0name");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_upload_id() {
+        let err = ValidationErr::InvalidUploadId("bad_upload_id".to_string());
+        assert_eq!(err.to_string(), "Invalid upload ID: bad_upload_id");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_part_number() {
+        let err = ValidationErr::InvalidPartNumber("0".to_string());
+        assert_eq!(err.to_string(), "Invalid part number: 0");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_user_metadata() {
+        let err = ValidationErr::InvalidUserMetadata("x-amz-meta-\0".to_string());
+        assert_eq!(err.to_string(), "Invalid user metadata: x-amz-meta-\0");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_boolean_value() {
+        let err = ValidationErr::InvalidBooleanValue("maybe".to_string());
+        assert_eq!(err.to_string(), "Invalid boolean value: maybe");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_min_part_size() {
+        let err = ValidationErr::InvalidMinPartSize(1024);
+        assert_eq!(
+            err.to_string(),
+            "Part size 1024 is not supported; minimum allowed 5MiB"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_invalid_max_part_size() {
+        let err = ValidationErr::InvalidMaxPartSize(6_000_000_000);
+        assert_eq!(
+            err.to_string(),
+            "Part size 6000000000 is not supported; maximum allowed 5GiB"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_invalid_object_size() {
+        let err = ValidationErr::InvalidObjectSize(10_000_000_000_000_000);
+        assert_eq!(
+            err.to_string(),
+            "Object size 10000000000000000 is not supported; maximum allowed 5TiB"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_missing_part_size() {
+        let err = ValidationErr::MissingPartSize;
+        assert_eq!(
+            err.to_string(),
+            "Valid part size must be provided when object size is unknown"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_invalid_part_count() {
+        let err = ValidationErr::InvalidPartCount {
+            object_size: 100_000_000,
+            part_size: 1_000_000,
+            part_count: 10000,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("100000000"));
+        assert!(msg.contains("1000000"));
+        assert!(msg.contains("10000"));
+    }
+
+    #[test]
+    fn test_validation_err_too_many_parts() {
+        let err = ValidationErr::TooManyParts(20000);
+        assert!(err.to_string().contains("20000"));
+        assert!(err.to_string().contains("maximum allowed"));
+    }
+
+    #[test]
+    fn test_validation_err_sse_tls_required_no_prefix() {
+        let err = ValidationErr::SseTlsRequired(None);
+        assert_eq!(
+            err.to_string(),
+            "SSE operation must be performed over a secure connection"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_sse_tls_required_with_prefix() {
+        let err = ValidationErr::SseTlsRequired(Some("Server-side encryption".to_string()));
+        let msg = err.to_string();
+        assert!(msg.contains("Server-side encryption"));
+        assert!(msg.contains("SSE operation"));
+    }
+
+    #[test]
+    fn test_validation_err_too_much_data() {
+        let err = ValidationErr::TooMuchData(5_000_000_000);
+        assert_eq!(
+            err.to_string(),
+            "Too much data in the stream - exceeds 5000000000 bytes"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_insufficient_data() {
+        let err = ValidationErr::InsufficientData {
+            expected: 1000,
+            got: 500,
+        };
+        assert_eq!(
+            err.to_string(),
+            "Not enough data in the stream; expected: 1000, got: 500 bytes"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_invalid_legal_hold() {
+        let err = ValidationErr::InvalidLegalHold("MAYBE".to_string());
+        assert_eq!(err.to_string(), "Invalid legal hold: MAYBE");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_select_expression() {
+        let err = ValidationErr::InvalidSelectExpression("SELECT * FORM s3object".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Invalid select expression: SELECT * FORM s3object"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_invalid_header_value_type() {
+        let err = ValidationErr::InvalidHeaderValueType(42);
+        assert_eq!(err.to_string(), "Invalid header value type: 42");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_base_url() {
+        let err = ValidationErr::InvalidBaseUrl("not a url".to_string());
+        assert_eq!(err.to_string(), "Invalid base URL: not a url");
+    }
+
+    #[test]
+    fn test_validation_err_url_build_error() {
+        let err = ValidationErr::UrlBuildError("missing scheme".to_string());
+        assert_eq!(err.to_string(), "URL build error: missing scheme");
+    }
+
+    #[test]
+    fn test_validation_err_region_mismatch() {
+        let err = ValidationErr::RegionMismatch {
+            bucket_region: "us-west-2".to_string(),
+            region: "us-east-1".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("us-west-2"));
+        assert!(msg.contains("us-east-1"));
+    }
+
+    #[test]
+    fn test_validation_err_crc_mismatch() {
+        let err = ValidationErr::CrcMismatch {
+            crc_type: "CRC32".to_string(),
+            expected: 0x12345678,
+            got: 0x87654321,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("CRC32"));
+        assert!(msg.contains("expected"));
+        assert!(msg.contains("got"));
+    }
+
+    #[test]
+    fn test_validation_err_unknown_event_type() {
+        let err = ValidationErr::UnknownEventType("s3:ObjectCreated:Complex".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Unknown event type: s3:ObjectCreated:Complex"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_select_error() {
+        let err = ValidationErr::SelectError {
+            error_code: "InvalidSQL".to_string(),
+            error_message: "Syntax error in SELECT".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("InvalidSQL"));
+        assert!(msg.contains("Syntax error"));
+    }
+
+    #[test]
+    fn test_validation_err_unsupported_aws_api() {
+        let err = ValidationErr::UnsupportedAwsApi("AppendObject".to_string());
+        assert!(err.to_string().contains("AppendObject"));
+        assert!(err.to_string().contains("Amazon AWS S3"));
+    }
+
+    #[test]
+    fn test_validation_err_invalid_directive() {
+        let err = ValidationErr::InvalidDirective("COPY-ALL".to_string());
+        assert_eq!(err.to_string(), "Invalid directive: COPY-ALL");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_copy_directive() {
+        let err = ValidationErr::InvalidCopyDirective("REPLACE-METADATA".to_string());
+        assert_eq!(err.to_string(), "Invalid copy directive: REPLACE-METADATA");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_filter() {
+        let err = ValidationErr::InvalidFilter("And and Prefix both provided".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Only one of And, Prefix or Tag must be provided: And and Prefix both provided"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_invalid_versioning_status() {
+        let err = ValidationErr::InvalidVersioningStatus("PAUSED".to_string());
+        assert_eq!(err.to_string(), "Invalid versioning status: PAUSED");
+    }
+
+    #[test]
+    fn test_validation_err_post_policy_error() {
+        let err = ValidationErr::PostPolicyError("Missing required field: bucket".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Post policy error: Missing required field: bucket"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_invalid_object_lock_config() {
+        let err = ValidationErr::InvalidObjectLockConfig("Retention without Mode".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Invalid object lock config: Retention without Mode"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_tag_decoding_error() {
+        let err = ValidationErr::TagDecodingError {
+            input: "invalid%ZZtag".to_string(),
+            error_message: "Invalid percent encoding".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("invalid%ZZtag"));
+        assert!(msg.contains("Invalid percent encoding"));
+    }
+
+    #[test]
+    fn test_validation_err_content_length_unknown() {
+        let err = ValidationErr::ContentLengthUnknown;
+        assert_eq!(err.to_string(), "Content length is unknown");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_utf8() {
+        let invalid_bytes = vec![0xFF, 0xFE];
+        let err = ValidationErr::InvalidUtf8 {
+            source: String::from_utf8(invalid_bytes).unwrap_err(),
+            context: "parsing header value".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("Invalid UTF-8"));
+        assert!(msg.contains("parsing header value"));
+    }
+
+    #[test]
+    fn test_validation_err_invalid_json() {
+        let json_err = serde_json::from_str::<serde_json::Value>("{invalid").unwrap_err();
+        let err = ValidationErr::InvalidJson {
+            source: json_err,
+            context: "deserializing response".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("Invalid JSON"));
+        assert!(msg.contains("deserializing response"));
+    }
+
+    #[test]
+    fn test_validation_err_invalid_yaml() {
+        let err = ValidationErr::InvalidYaml {
+            message: "Unexpected token at line 5".to_string(),
+        };
+        assert_eq!(err.to_string(), "Invalid YAML: Unexpected token at line 5");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_config() {
+        let err = ValidationErr::InvalidConfig {
+            message: "Missing required parameter 'endpoint'".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "Invalid configuration: Missing required parameter 'endpoint'"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_invalid_warehouse_name() {
+        let err = ValidationErr::InvalidWarehouseName("warehouse-1!".to_string());
+        assert_eq!(err.to_string(), "Invalid warehouse name: warehouse-1!");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_namespace_name() {
+        let err = ValidationErr::InvalidNamespaceName("default ".to_string());
+        assert_eq!(err.to_string(), "Invalid namespace name: default ");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_table_name() {
+        let err = ValidationErr::InvalidTableName("my_table?".to_string());
+        assert_eq!(err.to_string(), "Invalid table name: my_table?");
+    }
+
+    #[test]
+    fn test_validation_err_empty_parts() {
+        let err = ValidationErr::EmptyParts("No parts provided for compose".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Empty parts: No parts provided for compose"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_invalid_retention_mode() {
+        let err = ValidationErr::InvalidRetentionMode("PERMANENT".to_string());
+        assert_eq!(err.to_string(), "Invalid retention mode: PERMANENT");
+    }
+
+    #[test]
+    fn test_validation_err_invalid_retention_config() {
+        let err = ValidationErr::InvalidRetentionConfig(
+            "Retain until must be specified with retention mode".to_string(),
+        );
+        assert!(err.to_string().contains("Retain until"));
+    }
+
+    #[test]
+    fn test_validation_err_compose_source_offset() {
+        let err = ValidationErr::InvalidComposeSourceOffset {
+            bucket: "mybucket".to_string(),
+            object: "myobject".to_string(),
+            version: Some("v123".to_string()),
+            offset: 5000,
+            object_size: 4000,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("mybucket"));
+        assert!(msg.contains("myobject"));
+        assert!(msg.contains("5000"));
+    }
+
+    #[test]
+    fn test_validation_err_compose_source_length() {
+        let err = ValidationErr::InvalidComposeSourceLength {
+            bucket: "mybucket".to_string(),
+            object: "myobject".to_string(),
+            version: None,
+            length: 3000,
+            object_size: 2000,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("mybucket"));
+        assert!(msg.contains("myobject"));
+        assert!(!msg.contains("versionId"));
+    }
+
+    #[test]
+    fn test_validation_err_compose_source_size() {
+        let err = ValidationErr::InvalidComposeSourceSize {
+            bucket: "b1".to_string(),
+            object: "o1".to_string(),
+            version: None,
+            compose_size: 10_000,
+            object_size: 5000,
+        };
+        assert!(err.to_string().contains("b1/o1"));
+    }
+
+    #[test]
+    fn test_validation_err_compose_source_part_size() {
+        let err = ValidationErr::InvalidComposeSourcePartSize {
+            bucket: "b".to_string(),
+            object: "o".to_string(),
+            version: None,
+            size: 1_000_000,
+            expected_size: 5_242_880,
+        };
+        assert!(err.to_string().contains("b/o"));
+    }
+
+    #[test]
+    fn test_validation_err_compose_source_multipart() {
+        let err = ValidationErr::InvalidComposeSourceMultipart {
+            bucket: "b".to_string(),
+            object: "o".to_string(),
+            version: None,
+            size: 100_000_000,
+            expected_size: 5_242_880,
+        };
+        assert!(err.to_string().contains("b/o"));
+    }
+
+    #[test]
+    fn test_validation_err_invalid_multipart_count() {
+        let err = ValidationErr::InvalidMultipartCount(11000);
+        assert!(err.to_string().contains("11000"));
+        assert!(err.to_string().contains("multipart count"));
+    }
+
+    #[test]
+    fn test_io_error_creation() {
+        let std_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let io_err = IoError::IOError(std_err);
+        assert!(io_err.to_string().contains("file not found"));
+    }
+
+    #[test]
+    fn test_network_error_server_error() {
+        let err = NetworkError::ServerError(500);
+        assert_eq!(err.to_string(), "Server failed with HTTP status code 500");
+    }
+
+    #[test]
+    fn test_validation_err_xml_error() {
+        let err = ValidationErr::xml_error("Missing required element 'Bucket'");
+        let msg = err.to_string();
+        assert!(msg.contains("XML error"));
+        assert!(msg.contains("Missing required element"));
+    }
+
+    #[test]
+    fn test_validation_err_str_error() {
+        let err = ValidationErr::StrError {
+            message: "Connection refused".to_string(),
+            source: None,
+        };
+        assert_eq!(err.to_string(), "String error: Connection refused");
+    }
+
+    #[test]
+    fn test_error_hierarchy() {
+        let validation_err = ValidationErr::MissingBucketName;
+        let error: Error = validation_err.into();
+        assert!(matches!(error, Error::Validation(_)));
+    }
+
+    #[test]
+    fn test_format_s3_object_error_without_version() {
+        let msg = format_s3_object_error("mybucket", "myobject", None, "TestError", "test details");
+        assert_eq!(msg, "source mybucket/myobject: TestError test details");
+    }
+
+    #[test]
+    fn test_format_s3_object_error_with_version() {
+        let msg = format_s3_object_error(
+            "mybucket",
+            "myobject",
+            Some("v123"),
+            "TestError",
+            "test details",
+        );
+        assert_eq!(
+            msg,
+            "source mybucket/myobject?versionId=v123: TestError test details"
+        );
+    }
+}

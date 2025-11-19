@@ -51,7 +51,7 @@
 //!
 //! ## Features
 //! - Request builder pattern for ergonomic API usage
-//! - Full async/await support via [`tokio`]
+//! - Full async/await support via [tokio](https://tokio.rs/)
 //! - Strongly-typed responses
 //! - Transparent error handling via `Result<T, Error>`
 //!
