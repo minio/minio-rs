@@ -105,3 +105,17 @@ pub const X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY: &str =
 
 pub const X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5: &str =
     "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5";
+
+pub const X_AMZ_CHECKSUM_ALGORITHM: &str = "X-Amz-Checksum-Algorithm";
+
+pub const X_AMZ_CHECKSUM_CRC32: &str = "X-Amz-Checksum-CRC32";
+
+pub const X_AMZ_CHECKSUM_CRC32C: &str = "X-Amz-Checksum-CRC32C";
+
+pub const X_AMZ_CHECKSUM_SHA1: &str = "X-Amz-Checksum-SHA1";
+
+pub const X_AMZ_CHECKSUM_SHA256: &str = "X-Amz-Checksum-SHA256";
+
+pub const X_AMZ_CHECKSUM_CRC64NVME: &str = "X-Amz-Checksum-CRC64NVME";
+
+pub const X_AMZ_CHECKSUM_TYPE: &str = "X-Amz-Checksum-Type";

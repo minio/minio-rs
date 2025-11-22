@@ -23,12 +23,13 @@ use crate::s3::response::{
     CopyObjectInternalResponse, CopyObjectResponse, CreateMultipartUploadResponse,
     StatObjectResponse, UploadPartCopyResponse,
 };
+use crate::s3::response_traits::HasChecksumHeaders;
 use crate::s3::response_traits::HasEtagFromBody;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{Directive, PartInfo, Retention, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{
-    UtcTime, check_bucket_name, check_object_name, check_sse, check_ssec, to_http_header_value,
-    to_iso8601utc, url_encode,
+    ChecksumAlgorithm, UtcTime, check_bucket_name, check_object_name, check_sse, check_ssec,
+    to_http_header_value, to_iso8601utc, url_encode,
 };
 use async_recursion::async_recursion;
 use http::Method;
@@ -59,6 +60,13 @@ pub struct UploadPartCopy {
     part_number: u16,
     #[builder(default)]
     headers: Multimap,
+    /// Optional checksum algorithm for data integrity verification during part copy.
+    ///
+    /// When specified, the server computes a checksum of the copied part data using
+    /// this algorithm. Use the same algorithm for all parts in a multipart upload.
+    /// Supported algorithms: CRC32, CRC32C, SHA1, SHA256, CRC64NVME.
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<crate::s3::utils::ChecksumAlgorithm>,
 }
 
 impl S3Api for UploadPartCopy {
@@ -76,6 +84,7 @@ pub type UploadPartCopyBldr = UploadPartCopyBuilder<(
     (String,),
     (String,),
     (String,),
+    (),
     (),
     (),
 )>;
@@ -99,6 +108,10 @@ impl ToS3Request for UploadPartCopy {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         headers.add_multimap(self.headers);
+
+        if let Some(algorithm) = self.checksum_algorithm {
+            headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
+        }
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         {
@@ -150,6 +163,8 @@ pub struct CopyObjectInternal {
     metadata_directive: Option<Directive>,
     #[builder(default, setter(into))]
     tagging_directive: Option<Directive>,
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<crate::s3::utils::ChecksumAlgorithm>,
 }
 
 impl S3Api for CopyObjectInternal {
@@ -166,6 +181,7 @@ pub type CopyObjectInternalBldr = CopyObjectInternalBuilder<(
     (),
     (String,),
     (String,),
+    (),
     (),
     (),
     (),
@@ -261,6 +277,10 @@ impl ToS3Request for CopyObjectInternal {
             if let Some(v) = self.source.ssec {
                 headers.add_multimap(v.copy_headers());
             }
+
+            if let Some(algorithm) = self.checksum_algorithm {
+                headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
+            }
         };
 
         Ok(S3Request::builder()
@@ -310,6 +330,13 @@ pub struct CopyObject {
     metadata_directive: Option<Directive>,
     #[builder(default, setter(into))]
     tagging_directive: Option<Directive>,
+    /// Optional checksum algorithm for data integrity verification during copy.
+    ///
+    /// When specified, the server computes a checksum of the destination object using
+    /// this algorithm during the copy operation. Supported algorithms: CRC32, CRC32C,
+    /// SHA1, SHA256, CRC64NVME. The checksum value is included in response headers for verification.
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<crate::s3::utils::ChecksumAlgorithm>,
 }
 
 /// Builder type for [`CopyObject`] that is returned by [`MinioClient::copy_object`](crate::s3::client::MinioClient::copy_object).
@@ -322,6 +349,7 @@ pub type CopyObjectBldr = CopyObjectBuilder<(
     (),
     (String,),
     (String,),
+    (),
     (),
     (),
     (),
@@ -434,6 +462,7 @@ impl CopyObject {
                 .source(self.source)
                 .metadata_directive(self.metadata_directive)
                 .tagging_directive(self.tagging_directive)
+                .checksum_algorithm(self.checksum_algorithm)
                 .build()
                 .send()
                 .await?;
@@ -472,6 +501,8 @@ pub struct ComposeObjectInternal {
     legal_hold: bool,
     #[builder(default)]
     sources: Vec<ComposeSource>,
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 /// Builder type for [`ComposeObjectInternal`] that is returned by `compose_object_internal` method.
@@ -484,6 +515,7 @@ pub type ComposeObjectInternalBldr = ComposeObjectInternalBuilder<(
     (),
     (String,),
     (String,),
+    (),
     (),
     (),
     (),
@@ -554,6 +586,7 @@ impl ComposeObjectInternal {
                 .extra_query_params(self.extra_query_params.clone())
                 .region(self.region.clone())
                 .extra_headers(Some(headers))
+                .checksum_algorithm(self.checksum_algorithm)
                 .build()
                 .send()
                 .await
@@ -625,11 +658,10 @@ impl ComposeObjectInternal {
                         Err(e) => return (Err(e.into()), upload_id),
                     };
 
-                    parts.push(PartInfo {
-                        number: part_number,
-                        etag,
-                        size,
-                    });
+                    let checksum = self
+                        .checksum_algorithm
+                        .and_then(|alg| resp.get_checksum(alg).map(|v| (alg, v)));
+                    parts.push(PartInfo::new(part_number, etag, size, checksum));
                 } else {
                     while size > 0 {
                         part_number += 1;
@@ -665,11 +697,10 @@ impl ComposeObjectInternal {
                             Err(e) => return (Err(e.into()), upload_id),
                         };
 
-                        parts.push(PartInfo {
-                            number: part_number,
-                            etag,
-                            size,
-                        });
+                        let checksum = self
+                            .checksum_algorithm
+                            .and_then(|alg| resp.get_checksum(alg).map(|v| (alg, v)));
+                        parts.push(PartInfo::new(part_number, etag, size, checksum));
 
                         offset += length;
                         size -= length;
@@ -732,6 +763,8 @@ pub struct ComposeObject {
     legal_hold: bool,
     #[builder(default)]
     sources: Vec<ComposeSource>,
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 /// Builder type for [`ComposeObject`] that is returned by [`MinioClient::compose_object`](crate::s3::client::MinioClient::compose_object).
@@ -751,6 +784,7 @@ pub type ComposeObjectBldr = ComposeObjectBuilder<(
     (),
     (),
     (Vec<ComposeSource>,),
+    (),
 )>;
 
 impl ComposeObject {
@@ -773,6 +807,7 @@ impl ComposeObject {
             .retention(self.retention)
             .legal_hold(self.legal_hold)
             .sources(self.sources)
+            .checksum_algorithm(self.checksum_algorithm)
             .build()
             .send()
             .await;
