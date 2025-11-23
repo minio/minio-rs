@@ -30,6 +30,12 @@ use typed_builder::TypedBuilder;
 /// Argument builder for the [`HeadObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html) S3 API operation.
 ///
 /// This struct constructs the parameters required for the [`Client::stat_object`](crate::s3::client::MinioClient::stat_object) method.
+///
+/// # HTTP Method
+///
+/// This operation uses the HTTP HEAD method, which retrieves object metadata
+/// without transferring the object body. This is more efficient than GET when
+/// you only need metadata (size, ETag, Content-Type, Last-Modified, etc.).
 #[derive(Debug, Clone, TypedBuilder)]
 pub struct StatObject {
     #[builder(!default)] // force required
@@ -115,7 +121,7 @@ impl ToS3Request for StatObject {
 
         Ok(S3Request::builder()
             .client(self.client)
-            .method(Method::GET)
+            .method(Method::HEAD)
             .region(self.region)
             .bucket(self.bucket)
             .object(self.object)

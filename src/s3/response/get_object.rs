@@ -23,6 +23,13 @@ use bytes::Bytes;
 use futures_util::TryStreamExt;
 use http::HeaderMap;
 use std::mem;
+use std::pin::Pin;
+
+/// Type alias for a boxed byte stream with size, used by [`GetObjectResponse::into_boxed_stream`].
+pub type BoxedByteStream = (
+    Pin<Box<dyn futures_util::Stream<Item = std::io::Result<Bytes>> + Send>>,
+    u64,
+);
 
 pub struct GetObjectResponse {
     request: S3Request,
@@ -45,6 +52,30 @@ impl GetObjectResponse {
         let content_length: u64 = self.object_size()?;
         let body = self.resp.bytes_stream().map_err(std::io::Error::other);
         Ok(ObjectContent::new_from_stream(body, Some(content_length)))
+    }
+
+    /// Returns the content as a boxed stream for direct streaming access.
+    ///
+    /// This is more efficient than `content().to_stream().await` for scenarios
+    /// requiring minimal overhead, as it bypasses the async wrapper entirely.
+    /// Use this for high-throughput scenarios like DataFusion queries.
+    pub fn into_boxed_stream(self) -> Result<BoxedByteStream, Error> {
+        let content_length = self.object_size()?;
+        let stream = Box::pin(self.resp.bytes_stream().map_err(std::io::Error::other));
+        Ok((stream, content_length))
+    }
+
+    /// Consumes the response and returns all content as bytes.
+    ///
+    /// **Memory usage**: This loads the entire object into memory. For objects
+    /// larger than available RAM, this may cause out-of-memory errors. For large
+    /// objects, use [`into_boxed_stream`](Self::into_boxed_stream) to process
+    /// data incrementally.
+    pub async fn into_bytes(self) -> Result<Bytes, Error> {
+        self.resp
+            .bytes()
+            .await
+            .map_err(|e| ValidationErr::HttpError(e).into())
     }
 
     /// Returns the content size (in Bytes) of the object.

@@ -52,11 +52,19 @@ impl MinioClient {
     /// Retrieves the region for the specified bucket name from the cache.
     /// If the region is not found in the cache, it is fetched via a call to S3 or MinIO
     /// and then stored in the cache for future lookups.
+    ///
+    /// If `skip_region_lookup` is enabled on the client, this method returns
+    /// the default region immediately without making any network calls.
     pub async fn get_region_cached<S: Into<String>>(
         &self,
         bucket: S,
         region: &Option<String>, // the region as provided by the S3Request
     ) -> Result<String, Error> {
+        // If skip_region_lookup is enabled (for MinIO servers), return default region immediately
+        if self.shared.skip_region_lookup {
+            return Ok(DEFAULT_REGION.to_owned());
+        }
+
         // If a region is provided, validate it against the base_url region
         if let Some(requested_region) = region {
             if !self.shared.base_url.region.is_empty()
@@ -107,5 +115,119 @@ impl MinioClient {
             .insert(bucket, resolved_region.clone());
 
         Ok(resolved_region)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::s3::client::MinioClientBuilder;
+    use crate::s3::creds::StaticProvider;
+    use crate::s3::http::BaseUrl;
+
+    fn create_test_client(skip_region_lookup: bool) -> MinioClient {
+        let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
+        MinioClientBuilder::new(base_url)
+            .provider(Some(StaticProvider::new("test", "test", None)))
+            .skip_region_lookup(skip_region_lookup)
+            .build()
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_skip_region_lookup_returns_default_region() {
+        let client = create_test_client(true);
+
+        // With skip_region_lookup enabled, should return default region immediately
+        let region = client.get_region_cached("any-bucket", &None).await.unwrap();
+
+        assert_eq!(region, DEFAULT_REGION);
+    }
+
+    #[tokio::test]
+    async fn test_skip_region_lookup_ignores_provided_region() {
+        let client = create_test_client(true);
+
+        // Even with a provided region, skip_region_lookup should return default
+        let region = client
+            .get_region_cached("any-bucket", &Some("eu-west-1".to_string()))
+            .await
+            .unwrap();
+
+        // skip_region_lookup takes precedence and returns default region
+        assert_eq!(region, DEFAULT_REGION);
+    }
+
+    #[tokio::test]
+    async fn test_skip_region_lookup_multiple_calls_return_same_region() {
+        let client = create_test_client(true);
+
+        // Multiple calls should consistently return the default region
+        for bucket in ["bucket1", "bucket2", "bucket3"] {
+            let region = client.get_region_cached(bucket, &None).await.unwrap();
+            assert_eq!(region, DEFAULT_REGION);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_without_skip_region_lookup_uses_provided_region() {
+        let client = create_test_client(false);
+
+        // Without skip_region_lookup, provided region should be used
+        let region = client
+            .get_region_cached("any-bucket", &Some("eu-west-1".to_string()))
+            .await
+            .unwrap();
+
+        assert_eq!(region, "eu-west-1");
+    }
+
+    #[tokio::test]
+    async fn test_without_skip_region_lookup_empty_bucket_returns_default() {
+        let client = create_test_client(false);
+
+        // Empty bucket name should return default region
+        let region = client.get_region_cached("", &None).await.unwrap();
+
+        assert_eq!(region, DEFAULT_REGION);
+    }
+
+    #[test]
+    fn test_skip_region_lookup_builder_default_is_false() {
+        let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
+        let client = MinioClientBuilder::new(base_url)
+            .provider(Some(StaticProvider::new("test", "test", None)))
+            .build()
+            .unwrap();
+
+        // Default should be false (region lookup enabled)
+        assert!(!client.shared.skip_region_lookup);
+    }
+
+    #[test]
+    fn test_skip_region_lookup_builder_can_be_enabled() {
+        let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
+        let client = MinioClientBuilder::new(base_url)
+            .provider(Some(StaticProvider::new("test", "test", None)))
+            .skip_region_lookup(true)
+            .build()
+            .unwrap();
+
+        assert!(client.shared.skip_region_lookup);
+    }
+
+    #[test]
+    fn test_skip_region_lookup_builder_can_be_toggled() {
+        let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
+
+        // Enable then disable
+        let client = MinioClientBuilder::new(base_url)
+            .provider(Some(StaticProvider::new("test", "test", None)))
+            .skip_region_lookup(true)
+            .skip_region_lookup(false)
+            .build()
+            .unwrap();
+
+        assert!(!client.shared.skip_region_lookup);
     }
 }
