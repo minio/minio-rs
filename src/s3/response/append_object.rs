@@ -21,8 +21,9 @@ use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::Bytes;
 use http::HeaderMap;
 
-/// Represents the response of the `append_object` API call.
-/// This struct contains metadata and information about the object being appended.
+/// Response from the `append_object` API.
+///
+/// Contains metadata about the object being appended.
 #[derive(Clone, Debug)]
 pub struct AppendObjectResponse {
     request: S3Request,

@@ -82,8 +82,9 @@ impl Arbitrary for Size {
 }
 // endregion: Size
 
-/// Object content that can be uploaded or downloaded. Can be constructed from a stream of `Bytes`,
-/// a file path, or a `Bytes` object.
+/// Object content that can be uploaded or downloaded.
+///
+/// Can be constructed from a stream of `Bytes`, a file path, or a `Bytes` object.
 pub struct ObjectContent(ObjectContentInner);
 
 enum ObjectContentInner {

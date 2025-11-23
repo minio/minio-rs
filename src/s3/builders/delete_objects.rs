@@ -37,15 +37,16 @@ impl ValidKey for String {}
 impl ValidKey for &str {}
 impl ValidKey for &String {}
 
-/// Specify an object to be deleted. The object can be specified by key or by
-/// key and version_id via the From trait.
+/// Specifies an object to be deleted.
+///
+/// The object can be specified by key or by key and version_id via the `From` trait.
 #[derive(Debug, Clone, Default)]
 pub struct ObjectToDelete {
     key: String,
     version_id: Option<String>,
 }
 
-/// A key can be converted into a DeleteObject. The version_id is set to None.
+/// A key can be converted into a `DeleteObject` with `version_id` set to `None`.
 impl<K: ValidKey> From<K> for ObjectToDelete {
     fn from(key: K) -> Self {
         Self {
@@ -55,7 +56,7 @@ impl<K: ValidKey> From<K> for ObjectToDelete {
     }
 }
 
-/// A tuple of key and version_id can be converted into a DeleteObject.
+/// A tuple of key and version_id can be converted into a `DeleteObject`.
 impl<K: ValidKey> From<(K, &str)> for ObjectToDelete {
     fn from((key, version_id): (K, &str)) -> Self {
         Self {
@@ -65,7 +66,7 @@ impl<K: ValidKey> From<(K, &str)> for ObjectToDelete {
     }
 }
 
-/// A tuple of key and option version_id can be converted into a DeleteObject.
+/// A tuple of key and optional version_id can be converted into a `DeleteObject`.
 impl<K: ValidKey> From<(K, Option<&str>)> for ObjectToDelete {
     fn from((key, version_id): (K, Option<&str>)) -> Self {
         Self {
@@ -178,9 +179,10 @@ pub struct DeleteObjects {
     #[builder(default)]
     bypass_governance_mode: bool,
 
-    /// Enable verbose mode (defaults to false). If enabled, the response will
-    /// include the keys of objects that were successfully deleted. Otherwise,
-    /// only objects that encountered an error are returned.
+    /// Enables verbose mode (defaults to false).
+    ///
+    /// If enabled, the response will include the keys of objects that were successfully
+    /// deleted. Otherwise, only objects that encountered an error are returned.
     #[builder(default)]
     verbose_mode: bool,
 }
@@ -320,9 +322,10 @@ impl DeleteObjectsStreaming {
         self
     }
 
-    /// Enable verbose mode (defaults to false). If enabled, the response will
-    /// include the keys of objects that were successfully deleted. Otherwise
-    /// only objects that encountered an error are returned.
+    /// Enables verbose mode (defaults to false).
+    ///
+    /// If enabled, the response will include the keys of objects that were successfully
+    /// deleted. Otherwise, only objects that encountered an error are returned.
     pub fn verbose_mode(mut self, verbose_mode: bool) -> Self {
         self.verbose_mode = verbose_mode;
         self
@@ -338,7 +341,7 @@ impl DeleteObjectsStreaming {
         self
     }
 
-    /// Sets the region for the request
+    /// Sets the region for the request.
     pub fn region(mut self, region: Option<String>) -> Self {
         self.region = region;
         self

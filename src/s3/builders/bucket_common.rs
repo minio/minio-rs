@@ -18,7 +18,7 @@ use crate::s3::multimap_ext::Multimap;
 use std::marker::PhantomData;
 use typed_builder::TypedBuilder;
 
-/// Common parameters for bucket operations
+/// Common parameters for bucket operations.
 #[derive(Clone, Debug, TypedBuilder)]
 pub struct BucketCommon<T> {
     #[builder(!default)] // force required
