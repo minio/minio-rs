@@ -61,8 +61,8 @@ pub struct AppendObject {
     #[builder(!default)] // force required
     data: Arc<SegmentedBytes>,
 
+    /// Value of `x-amz-write-offset-bytes`.
     #[builder(!default)] // force required
-    /// value of x-amz-write-offset-bytes
     offset_bytes: u64,
 }
 
@@ -141,7 +141,7 @@ pub struct AppendObjectContent {
     content_stream: ContentStream,
     #[builder(default)]
     part_count: Option<u16>,
-    /// Value of x-amz-write-offset-bytes
+    /// Value of `x-amz-write-offset-bytes`.
     #[builder(default)]
     offset_bytes: u64,
 }
@@ -243,7 +243,7 @@ impl AppendObjectContent {
         }
     }
 
-    /// multipart append
+    /// Performs multipart append.
     async fn send_mpa(
         &mut self,
         part_size: u64,

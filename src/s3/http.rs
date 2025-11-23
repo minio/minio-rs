@@ -33,8 +33,8 @@ lazy_static! {
     static ref AWS_S3_PREFIX_REGEX: Regex = Regex::new(AWS_S3_PREFIX).unwrap();
 }
 
+/// Represents HTTP URL.
 #[derive(Clone, Debug)]
-/// Represents HTTP URL
 pub struct Url {
     pub https: bool,
     pub host: String,
@@ -212,8 +212,8 @@ fn get_aws_info(
     Ok(())
 }
 
+/// Represents base URL of S3 endpoint.
 #[derive(Clone, Debug)]
-/// Represents Base URL of S3 endpoint
 pub struct BaseUrl {
     pub https: bool,
     host: String,

@@ -51,5 +51,5 @@ async fn bucket_exists(ctx: TestContext, bucket_name: String) {
         .unwrap();
     assert!(!resp.exists());
     assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), ""); // TODO this should probably be DEFAULT_REGION
+    assert_eq!(resp.region(), DEFAULT_REGION);
 }

@@ -26,7 +26,7 @@ use ring::hmac;
 #[cfg(not(feature = "ring"))]
 use sha2::Sha256;
 
-/// Returns HMAC hash for given key and data
+/// Returns HMAC hash for given key and data.
 fn hmac_hash(key: &[u8], data: &[u8]) -> Vec<u8> {
     #[cfg(feature = "ring")]
     {
@@ -42,12 +42,12 @@ fn hmac_hash(key: &[u8], data: &[u8]) -> Vec<u8> {
     }
 }
 
-/// Returns hex encoded HMAC hash for given key and data
+/// Returns hex-encoded HMAC hash for given key and data.
 fn hmac_hash_hex(key: &[u8], data: &[u8]) -> String {
     hex_encode(hmac_hash(key, data).as_slice())
 }
 
-/// Returns scope value of given date, region and service name
+/// Returns scope value of given date, region and service name.
 fn get_scope(date: UtcTime, region: &str, service_name: &str) -> String {
     format!(
         "{}/{region}/{service_name}/aws4_request",
@@ -55,7 +55,7 @@ fn get_scope(date: UtcTime, region: &str, service_name: &str) -> String {
     )
 }
 
-/// Returns hex encoded SHA256 hash of canonical request
+/// Returns hex-encoded SHA256 hash of canonical request.
 fn get_canonical_request_hash(
     method: &Method,
     uri: &str,
@@ -70,7 +70,7 @@ fn get_canonical_request_hash(
     sha256_hash(canonical_request.as_bytes())
 }
 
-/// Returns string-to-sign value of given date, scope and canonical request hash
+/// Returns string-to-sign value of given date, scope and canonical request hash.
 fn get_string_to_sign(date: UtcTime, scope: &str, canonical_request_hash: &str) -> String {
     format!(
         "AWS4-HMAC-SHA256\n{}\n{scope}\n{canonical_request_hash}",
@@ -78,7 +78,7 @@ fn get_string_to_sign(date: UtcTime, scope: &str, canonical_request_hash: &str) 
     )
 }
 
-/// Returns signing key of given secret key, date, region and service name
+/// Returns signing key of given secret key, date, region and service name.
 fn get_signing_key(secret_key: &str, date: UtcTime, region: &str, service_name: &str) -> Vec<u8> {
     let mut key: Vec<u8> = b"AWS4".to_vec();
     key.extend(secret_key.as_bytes());
@@ -89,12 +89,12 @@ fn get_signing_key(secret_key: &str, date: UtcTime, region: &str, service_name: 
     hmac_hash(date_region_service_key.as_slice(), b"aws4_request")
 }
 
-/// Returns signature value for given signing key and string-to-sign
+/// Returns signature value for given signing key and string-to-sign.
 fn get_signature(signing_key: &[u8], string_to_sign: &[u8]) -> String {
     hmac_hash_hex(signing_key, string_to_sign)
 }
 
-/// Returns authorization value for given access key, scope, signed headers and signature
+/// Returns authorization value for given access key, scope, signed headers and signature.
 fn get_authorization(
     access_key: &str,
     scope: &str,
@@ -106,7 +106,7 @@ fn get_authorization(
     )
 }
 
-/// Signs and updates headers for given parameters
+/// Signs and updates headers for given parameters.
 fn sign_v4(
     service_name: &str,
     method: &Method,
@@ -138,7 +138,7 @@ fn sign_v4(
     headers.add(AUTHORIZATION, authorization);
 }
 
-/// Signs and updates headers for given parameters for S3 request
+/// Signs and updates headers for the given S3 request parameters.
 pub(crate) fn sign_v4_s3(
     method: &Method,
     uri: &str,
@@ -164,7 +164,7 @@ pub(crate) fn sign_v4_s3(
     )
 }
 
-/// Signs and updates headers for given parameters for pre-sign request
+/// Signs and updates query parameters for the given presigned request.
 pub(crate) fn presign_v4(
     method: &Method,
     host: &str,
@@ -202,7 +202,7 @@ pub(crate) fn presign_v4(
     query_params.add(X_AMZ_SIGNATURE, signature);
 }
 
-/// Signs and updates headers for given parameters for pre-sign POST request
+/// Returns signature for the given presigned POST request parameters.
 pub(crate) fn post_presign_v4(
     string_to_sign: &str,
     secret_key: &str,

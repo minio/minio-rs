@@ -55,7 +55,7 @@ pub fn url_encode(s: &str) -> String {
     urlencoding::encode(s).into_owned()
 }
 
-/// Encodes data using base64 algorithm
+/// Encodes data using base64 algorithm.
 pub fn b64_encode(input: impl AsRef<[u8]>) -> String {
     base64::engine::general_purpose::STANDARD.encode(input)
 }
@@ -66,7 +66,7 @@ pub fn crc32(data: &[u8]) -> u32 {
     Crc::<u32>::new(&CRC_32_ISO_HDLC).checksum(data)
 }
 
-/// Converts data array into 32 bit BigEndian unsigned int
+/// Converts data array into 32-bit BigEndian unsigned int.
 pub fn uint32(data: &[u8]) -> Result<u32, ValidationErr> {
     if data.len() < 4 {
         return Err(ValidationErr::InvalidIntegerValue {
@@ -80,10 +80,10 @@ pub fn uint32(data: &[u8]) -> Result<u32, ValidationErr> {
     Ok(u32::from_be_bytes(data[..4].try_into().unwrap()))
 }
 
-/// sha256 hash of empty data
+/// SHA256 hash of empty data.
 pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-/// Gets hex encoded SHA256 hash of given data
+/// Gets hex-encoded SHA256 hash of given data.
 pub fn sha256_hash(data: &[u8]) -> String {
     #[cfg(feature = "ring")]
     {
@@ -649,27 +649,27 @@ mod tests {
     }
 }
 
-/// Gets bas64 encoded MD5 hash of given data
+/// Gets base64-encoded MD5 hash of given data.
 pub fn md5sum_hash(data: &[u8]) -> String {
     b64_encode(md5::compute(data).as_slice())
 }
 
-/// Gets current UTC time
+/// Gets current UTC time.
 pub fn utc_now() -> UtcTime {
     chrono::offset::Utc::now()
 }
 
-/// Gets signer date value of given time
+/// Gets signer date value of given time.
 pub fn to_signer_date(time: UtcTime) -> String {
     time.format("%Y%m%d").to_string()
 }
 
-/// Gets AMZ date value of given time
+/// Gets AMZ date value of given time.
 pub fn to_amz_date(time: UtcTime) -> String {
     time.format("%Y%m%dT%H%M%SZ").to_string()
 }
 
-/// Gets HTTP header value of given time
+/// Gets HTTP header value of given time.
 pub fn to_http_header_value(time: UtcTime) -> String {
     format!(
         "{}, {} {} {} GMT",
@@ -694,12 +694,12 @@ pub fn to_http_header_value(time: UtcTime) -> String {
     )
 }
 
-/// Gets ISO8601 UTC formatted value of given time
+/// Gets ISO8601 UTC formatted value of given time.
 pub fn to_iso8601utc(time: UtcTime) -> String {
     time.format("%Y-%m-%dT%H:%M:%S.%3fZ").to_string()
 }
 
-/// Parses ISO8601 UTC formatted value to time
+/// Parses ISO8601 UTC formatted value to time.
 pub fn from_iso8601utc(s: &str) -> Result<UtcTime, ValidationErr> {
     let dt = NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S.%3fZ")
         .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%SZ"))?;
@@ -747,13 +747,13 @@ pub fn parse_bool(value: &str) -> Result<bool, ValidationErr> {
     }
 }
 
-/// Parses HTTP header value to time
+/// Parses HTTP header value to time.
 pub fn from_http_header_value(s: &str) -> Result<UtcTime, ValidationErr> {
     let dt = NaiveDateTime::parse_from_str(s, "%a, %d %b %Y %H:%M:%S GMT")?;
     Ok(DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
 }
 
-/// Checks if given hostname is valid or not
+/// Checks if given hostname is valid or not.
 pub fn match_hostname(value: &str) -> bool {
     lazy_static! {
         static ref HOSTNAME_REGEX: Regex =
@@ -777,7 +777,7 @@ pub fn match_hostname(value: &str) -> bool {
     true
 }
 
-/// Checks if given region is valid or not
+/// Checks if given region is valid or not.
 pub fn match_region(value: &str) -> bool {
     lazy_static! {
         static ref REGION_REGEX: Regex = Regex::new(r"^([a-z_\d-]{1,63})$").unwrap();
@@ -790,7 +790,8 @@ pub fn match_region(value: &str) -> bool {
         || value.ends_with('_')
 }
 
-/// Validates given bucket name. TODO S3Express has slightly different rules for bucket names
+/// Validates given bucket name.
+// TODO: S3Express has slightly different rules for bucket names
 pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(), ValidationErr> {
     let bucket_name: &str = bucket_name.as_ref().trim();
     let bucket_name_len = bucket_name.len();
@@ -858,7 +859,8 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
     Ok(())
 }
 
-/// Validates given object name. TODO S3Express has slightly different rules for object names
+/// Validates given object name.
+// TODO: S3Express has slightly different rules for object names
 pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), ValidationErr> {
     let name = object_name.as_ref();
     match name.len() {
@@ -894,7 +896,7 @@ pub fn check_ssec(
     Ok(())
 }
 
-/// Validates SSE-C (Server-Side Encryption with Customer-Provided Keys) settings and logs an error
+/// Validates SSE-C (Server-Side Encryption with Customer-Provided Keys) settings and logs an error.
 pub fn check_ssec_with_log(
     ssec: &Option<SseCustomerKey>,
     client: &MinioClient,
@@ -939,7 +941,7 @@ pub fn get_text_option(element: &Element, tag: &str) -> Option<String> {
         .and_then(|v| v.get_text().map(|s| s.to_string()))
 }
 
-/// Trim leading and trailing quotes from a string. It consumes the
+/// Trims leading and trailing quotes from a string. Note: consumes the input string.
 pub fn trim_quotes(mut s: String) -> String {
     if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
         s.drain(0..1); // remove the leading quote
@@ -948,7 +950,7 @@ pub fn trim_quotes(mut s: String) -> String {
     s
 }
 
-/// Copies source byte slice into destination byte slice
+/// Copies source byte slice into destination byte slice.
 pub fn copy_slice(dst: &mut [u8], src: &[u8]) -> usize {
     let mut c = 0;
     for (d, s) in dst.iter_mut().zip(src.iter()) {
@@ -1035,8 +1037,8 @@ pub fn parse_tags(s: &str) -> Result<HashMap<String, String>, ValidationErr> {
     Ok(tags)
 }
 
-#[must_use]
 /// Returns the consumed data and inserts a key into it with an empty value.
+#[must_use]
 pub fn insert(data: Option<Multimap>, key: impl Into<String>) -> Multimap {
     let mut result: Multimap = data.unwrap_or_default();
     result.insert(key.into(), String::new());

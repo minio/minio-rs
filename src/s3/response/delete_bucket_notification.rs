@@ -19,8 +19,9 @@ use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::Bytes;
 use http::HeaderMap;
 
-/// Represents the response of the [delete_bucket_notification()](crate::s3::client::MinioClient::delete_bucket_notification) API call.
-/// This struct contains metadata and information about the bucket whose notifications were removed.
+/// Response from the [`delete_bucket_notification()`](crate::s3::client::MinioClient::delete_bucket_notification) API.
+///
+/// Contains metadata about the bucket whose notifications were removed.
 #[derive(Clone, Debug)]
 pub struct DeleteBucketNotificationResponse {
     request: S3Request,

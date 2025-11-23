@@ -61,10 +61,10 @@ impl GetPresignedPolicyFormData {
 pub type GetPresignedPolicyFormDataBldr =
     GetPresignedPolicyFormDataBuilder<((MinioClient,), (PostPolicy,))>;
 
-/// Post policy information for presigned post policy form-data
+/// Post policy information for presigned POST policy form-data.
 ///
-/// Condition elements and respective condition for Post policy is available <a
-/// href="https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html#sigv4-PolicyConditions">here</a>.
+/// See [Post Policy Conditions](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html#sigv4-PolicyConditions)
+/// for condition elements and their usage.
 #[derive(Clone, Debug)]
 pub struct PostPolicy {
     pub region: Option<String>,
@@ -82,7 +82,7 @@ impl PostPolicy {
     const STARTS_WITH: &'static str = "starts-with";
     const ALGORITHM: &'static str = "AWS4-HMAC-SHA256";
 
-    /// Returns post policy with given bucket name and expiration
+    /// Returns a post policy with given bucket name and expiration.
     ///
     /// # Examples
     ///
