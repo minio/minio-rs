@@ -22,9 +22,7 @@ use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
-/// Response of
-/// [create_bucket()](crate::s3::client::MinioClient::create_bucket)
-/// API
+/// Response from the [`create_bucket()`](crate::s3::client::MinioClient::create_bucket) API.
 #[derive(Clone, Debug)]
 pub struct CreateBucketResponse {
     request: S3Request,

@@ -15,27 +15,27 @@
 
 //! Credential providers
 
+/// Credentials containing access key, secret key, and optional session token.
 #[derive(Clone, Debug)]
-/// Credentials contain access key, secret key and session token optionally
 pub struct Credentials {
     pub access_key: String,
     pub secret_key: String,
     pub session_token: Option<String>,
 }
 
-/// Provider trait to fetch credentials
+/// Provider trait to fetch credentials.
 pub trait Provider: std::fmt::Debug {
     fn fetch(&self) -> Credentials;
 }
 
+/// Static credential provider.
 #[derive(Clone, Debug)]
-/// Static credential provider
 pub struct StaticProvider {
     creds: Credentials,
 }
 
 impl StaticProvider {
-    /// Returns a static provider with given access key, secret key and optional session token
+    /// Returns a static provider with given access key, secret key, and optional session token.
     ///
     /// # Examples
     ///

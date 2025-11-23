@@ -126,7 +126,7 @@ async fn bucket_delete(ctx: TestContext) {
         .unwrap();
     assert!(!resp.exists());
     assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), ""); //TODO this ought to be DEFAULT_REGION
+    assert_eq!(resp.region(), DEFAULT_REGION);
 }
 
 async fn test_bucket_delete_and_purge(ctx: &TestContext, bucket_name: &str, object_name: &str) {

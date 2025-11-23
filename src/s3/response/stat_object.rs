@@ -16,7 +16,8 @@
 use crate::s3::error::ValidationErr;
 use crate::s3::header_constants::*;
 use crate::s3::response_traits::{
-    HasBucket, HasEtagFromHeaders, HasIsDeleteMarker, HasObject, HasRegion, HasS3Fields,
+    HasBucket, HasEtagFromHeaders, HasIsDeleteMarker, HasObject, HasObjectSize, HasRegion,
+    HasS3Fields, HasVersion,
 };
 use crate::s3::types::S3Request;
 use crate::s3::types::{RetentionMode, parse_legal_hold};
@@ -27,9 +28,10 @@ use http::HeaderMap;
 use http::header::LAST_MODIFIED;
 use std::collections::HashMap;
 
+/// Response from the [`stat_object`](crate::s3::client::MinioClient::stat_object) API.
+///
+/// Provides metadata about an object stored in S3 or a compatible service.
 #[derive(Clone, Debug)]
-/// Response from the [`stat_object`](crate::s3::client::MinioClient::stat_object) API call,
-/// providing metadata about an object stored in S3 or a compatible service.
 pub struct StatObjectResponse {
     request: S3Request,
     headers: HeaderMap,
@@ -44,6 +46,8 @@ impl HasRegion for StatObjectResponse {}
 impl HasObject for StatObjectResponse {}
 impl HasEtagFromHeaders for StatObjectResponse {}
 impl HasIsDeleteMarker for StatObjectResponse {}
+impl HasVersion for StatObjectResponse {}
+impl HasObjectSize for StatObjectResponse {}
 
 impl StatObjectResponse {
     /// Returns the size of the object (header-value of `Content-Length`).
@@ -55,7 +59,7 @@ impl StatObjectResponse {
         Ok(size)
     }
 
-    /// Return the last modified time of the object (header-value of `Last-Modified`).
+    /// Returns the last modified time of the object (header-value of `Last-Modified`).
     pub fn last_modified(&self) -> Result<Option<UtcTime>, ValidationErr> {
         match self.headers().get(LAST_MODIFIED) {
             Some(v) => Ok(Some(from_http_header_value(v.to_str()?)?)),
@@ -63,7 +67,7 @@ impl StatObjectResponse {
         }
     }
 
-    /// Return the retention mode of the object (header-value of `x-amz-object-lock-mode`).
+    /// Returns the retention mode of the object (header-value of `x-amz-object-lock-mode`).
     pub fn retention_mode(&self) -> Result<Option<RetentionMode>, ValidationErr> {
         match self.headers().get(X_AMZ_OBJECT_LOCK_MODE) {
             Some(v) => Ok(Some(RetentionMode::parse(v.to_str()?)?)),
@@ -71,7 +75,7 @@ impl StatObjectResponse {
         }
     }
 
-    /// Return the retention date of the object (header-value of `x-amz-object-lock-retain-until-date`).
+    /// Returns the retention date of the object (header-value of `x-amz-object-lock-retain-until-date`).
     pub fn retention_retain_until_date(&self) -> Result<Option<UtcTime>, ValidationErr> {
         match self.headers().get(X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE) {
             Some(v) => Ok(Some(from_iso8601utc(v.to_str()?)?)),
@@ -79,7 +83,7 @@ impl StatObjectResponse {
         }
     }
 
-    /// Return the legal hold status of the object (header-value of `x-amz-object-lock-legal-hold`).
+    /// Returns the legal hold status of the object (header-value of `x-amz-object-lock-legal-hold`).
     pub fn legal_hold(&self) -> Result<Option<bool>, ValidationErr> {
         match self.headers().get(X_AMZ_OBJECT_LOCK_LEGAL_HOLD) {
             Some(v) => Ok(Some(parse_legal_hold(v.to_str()?)?)),
