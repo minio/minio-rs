@@ -22,8 +22,37 @@ use minio::s3::types::{NotificationConfig, S3Api};
 use minio_common::example::create_bucket_notification_config_example;
 use minio_common::test_context::TestContext;
 
-const SQS_ARN: &str = "arn:minio:sqs::miniojavatest:webhook";
+const SQS_ARN: &str = "arn:minio:sqs:us-east-1:miniojavatest:webhook";
 
+/// Tests bucket notification configuration.
+///
+/// ## Prerequisites (MinIO Admin Configuration Required)
+///
+/// This test requires notification targets to be configured via MinIO admin before it can run.
+/// Bucket notifications cannot be configured via the S3 API alone - the notification targets
+/// (webhooks, Kafka, NATS, AMQP, etc.) must first be set up using MinIO admin commands.
+///
+/// ### Example: Configure a webhook notification target
+///
+/// ```bash
+/// # Configure webhook target with ARN "miniojavatest"
+/// mc admin config set myminio notify_webhook:miniojavatest \
+///    endpoint="http://example.com/webhook" \
+///    queue_limit="10"
+///
+/// # Restart MinIO to apply changes
+/// mc admin service restart myminio
+///
+/// # Verify the ARN is available
+/// mc admin info myminio --json | jq '.info.services.notifications'
+/// # Should show: arn:minio:sqs:us-east-1:miniojavatest:webhook
+/// ```
+///
+/// ### Test Behavior
+///
+/// - If notification targets are properly configured, the test runs normally
+/// - If targets are not configured, the test gracefully skips (not a failure)
+/// - This allows the test suite to pass in development environments without notification infrastructure
 #[minio_macros::test(skip_if_express)]
 async fn test_bucket_notification(ctx: TestContext, bucket_name: String) {
     let config: NotificationConfig = create_bucket_notification_config_example();

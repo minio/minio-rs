@@ -22,9 +22,7 @@ use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
-/// Response of
-/// [delete_bucket()](crate::s3::client::MinioClient::delete_bucket)
-/// API
+/// Response from the [`delete_bucket()`](crate::s3::client::MinioClient::delete_bucket) API.
 #[derive(Clone, Debug)]
 pub struct DeleteBucketResponse {
     pub(crate) request: S3Request,

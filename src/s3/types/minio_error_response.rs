@@ -254,6 +254,30 @@ impl MinioErrorResponse {
         }
     }
 
+    /// Create a minimal error response from status code and message.
+    ///
+    /// Used for fast-path operations where full error details aren't available.
+    pub fn from_status_and_message(status_code: u16, message: String) -> Self {
+        let code = match status_code {
+            404 => MinioErrorCode::NoSuchKey,
+            403 => MinioErrorCode::AccessDenied,
+            401 => MinioErrorCode::AccessDenied,
+            400 => MinioErrorCode::BadRequest,
+            409 => MinioErrorCode::ResourceConflict,
+            _ => MinioErrorCode::OtherError(format!("HTTP {}", status_code)),
+        };
+        Self {
+            headers: HeaderMap::new(),
+            code,
+            message: Some(message),
+            resource: String::new(),
+            request_id: String::new(),
+            host_id: String::new(),
+            bucket_name: None,
+            object_name: None,
+        }
+    }
+
     pub fn new_from_body(body: Bytes, headers: HeaderMap) -> Result<Self, Error> {
         let root = Element::parse(body.reader()).map_err(ValidationErr::from)?;
         Ok(Self {

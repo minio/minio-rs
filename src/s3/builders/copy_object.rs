@@ -23,12 +23,13 @@ use crate::s3::response::{
     CopyObjectInternalResponse, CopyObjectResponse, CreateMultipartUploadResponse,
     StatObjectResponse, UploadPartCopyResponse,
 };
+use crate::s3::response_traits::HasChecksumHeaders;
 use crate::s3::response_traits::HasEtagFromBody;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{Directive, PartInfo, Retention, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{
-    UtcTime, check_bucket_name, check_object_name, check_sse, check_ssec, to_http_header_value,
-    to_iso8601utc, url_encode,
+    ChecksumAlgorithm, UtcTime, check_bucket_name, check_object_name, check_sse, check_ssec,
+    to_http_header_value, to_iso8601utc, url_encode,
 };
 use async_recursion::async_recursion;
 use http::Method;
@@ -59,6 +60,13 @@ pub struct UploadPartCopy {
     part_number: u16,
     #[builder(default)]
     headers: Multimap,
+    /// Optional checksum algorithm for data integrity verification during part copy.
+    ///
+    /// When specified, the server computes a checksum of the copied part data using
+    /// this algorithm. Use the same algorithm for all parts in a multipart upload.
+    /// Supported algorithms: CRC32, CRC32C, SHA1, SHA256, CRC64NVME.
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<crate::s3::utils::ChecksumAlgorithm>,
 }
 
 impl S3Api for UploadPartCopy {
@@ -76,6 +84,7 @@ pub type UploadPartCopyBldr = UploadPartCopyBuilder<(
     (String,),
     (String,),
     (String,),
+    (),
     (),
     (),
 )>;
@@ -99,6 +108,10 @@ impl ToS3Request for UploadPartCopy {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         headers.add_multimap(self.headers);
+
+        if let Some(algorithm) = self.checksum_algorithm {
+            headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
+        }
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         {
@@ -150,6 +163,8 @@ pub struct CopyObjectInternal {
     metadata_directive: Option<Directive>,
     #[builder(default, setter(into))]
     tagging_directive: Option<Directive>,
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<crate::s3::utils::ChecksumAlgorithm>,
 }
 
 impl S3Api for CopyObjectInternal {
@@ -166,6 +181,7 @@ pub type CopyObjectInternalBldr = CopyObjectInternalBuilder<(
     (),
     (String,),
     (String,),
+    (),
     (),
     (),
     (),
@@ -261,6 +277,10 @@ impl ToS3Request for CopyObjectInternal {
             if let Some(v) = self.source.ssec {
                 headers.add_multimap(v.copy_headers());
             }
+
+            if let Some(algorithm) = self.checksum_algorithm {
+                headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
+            }
         };
 
         Ok(S3Request::builder()
@@ -310,6 +330,13 @@ pub struct CopyObject {
     metadata_directive: Option<Directive>,
     #[builder(default, setter(into))]
     tagging_directive: Option<Directive>,
+    /// Optional checksum algorithm for data integrity verification during copy.
+    ///
+    /// When specified, the server computes a checksum of the destination object using
+    /// this algorithm during the copy operation. Supported algorithms: CRC32, CRC32C,
+    /// SHA1, SHA256, CRC64NVME. The checksum value is included in response headers for verification.
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<crate::s3::utils::ChecksumAlgorithm>,
 }
 
 /// Builder type for [`CopyObject`] that is returned by [`MinioClient::copy_object`](crate::s3::client::MinioClient::copy_object).
@@ -322,6 +349,7 @@ pub type CopyObjectBldr = CopyObjectBuilder<(
     (),
     (String,),
     (String,),
+    (),
     (),
     (),
     (),
@@ -434,6 +462,7 @@ impl CopyObject {
                 .source(self.source)
                 .metadata_directive(self.metadata_directive)
                 .tagging_directive(self.tagging_directive)
+                .checksum_algorithm(self.checksum_algorithm)
                 .build()
                 .send()
                 .await?;
@@ -472,6 +501,8 @@ pub struct ComposeObjectInternal {
     legal_hold: bool,
     #[builder(default)]
     sources: Vec<ComposeSource>,
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 /// Builder type for [`ComposeObjectInternal`] that is returned by `compose_object_internal` method.
@@ -484,6 +515,7 @@ pub type ComposeObjectInternalBldr = ComposeObjectInternalBuilder<(
     (),
     (String,),
     (String,),
+    (),
     (),
     (),
     (),
@@ -554,6 +586,7 @@ impl ComposeObjectInternal {
                 .extra_query_params(self.extra_query_params.clone())
                 .region(self.region.clone())
                 .extra_headers(Some(headers))
+                .checksum_algorithm(self.checksum_algorithm)
                 .build()
                 .send()
                 .await
@@ -587,7 +620,7 @@ impl ComposeObjectInternal {
                     size -= o;
                 }
 
-                let mut offset = source.offset.unwrap_or_default();
+                let offset = source.offset.unwrap_or_default();
 
                 let mut headers = source.get_headers();
                 headers.add_multimap(ssec_headers.clone());
@@ -625,25 +658,20 @@ impl ComposeObjectInternal {
                         Err(e) => return (Err(e.into()), upload_id),
                     };
 
-                    parts.push(PartInfo {
-                        number: part_number,
-                        etag,
-                        size,
-                    });
+                    let checksum = self
+                        .checksum_algorithm
+                        .and_then(|alg| resp.get_checksum(alg).map(|v| (alg, v)));
+                    parts.push(PartInfo::new(part_number, etag, size, checksum));
                 } else {
-                    while size > 0 {
+                    let part_ranges = calculate_part_ranges(offset, size, MAX_PART_SIZE);
+                    for (part_offset, length) in part_ranges {
                         part_number += 1;
-
-                        let mut length = size;
-                        if length > MAX_PART_SIZE {
-                            length = MAX_PART_SIZE;
-                        }
-                        let end_bytes = offset + length - 1;
+                        let end_bytes = part_offset + length - 1;
 
                         let mut headers_copy = headers.clone();
                         headers_copy.add(
                             X_AMZ_COPY_SOURCE_RANGE,
-                            format!("bytes={offset}-{end_bytes}"),
+                            format!("bytes={part_offset}-{end_bytes}"),
                         );
 
                         let resp: UploadPartCopyResponse = match self
@@ -665,14 +693,10 @@ impl ComposeObjectInternal {
                             Err(e) => return (Err(e.into()), upload_id),
                         };
 
-                        parts.push(PartInfo {
-                            number: part_number,
-                            etag,
-                            size,
-                        });
-
-                        offset += length;
-                        size -= length;
+                        let checksum = self
+                            .checksum_algorithm
+                            .and_then(|alg| resp.get_checksum(alg).map(|v| (alg, v)));
+                        parts.push(PartInfo::new(part_number, etag, length, checksum));
                     }
                 }
             }
@@ -732,6 +756,8 @@ pub struct ComposeObject {
     legal_hold: bool,
     #[builder(default)]
     sources: Vec<ComposeSource>,
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 /// Builder type for [`ComposeObject`] that is returned by [`MinioClient::compose_object`](crate::s3::client::MinioClient::compose_object).
@@ -751,6 +777,7 @@ pub type ComposeObjectBldr = ComposeObjectBuilder<(
     (),
     (),
     (Vec<ComposeSource>,),
+    (),
 )>;
 
 impl ComposeObject {
@@ -773,6 +800,7 @@ impl ComposeObject {
             .retention(self.retention)
             .legal_hold(self.legal_hold)
             .sources(self.sources)
+            .checksum_algorithm(self.checksum_algorithm)
             .build()
             .send()
             .await;
@@ -796,8 +824,8 @@ impl ComposeObject {
 
 // region: misc
 
+/// Source object information for [`compose_object`](MinioClient::compose_object).
 #[derive(Clone, Debug, Default)]
-/// Source object information for [compose_object](MinioClient::compose_object)
 pub struct ComposeSource {
     pub extra_headers: Option<Multimap>,
     pub extra_query_params: Option<Multimap>,
@@ -818,7 +846,7 @@ pub struct ComposeSource {
 }
 
 impl ComposeSource {
-    /// Returns a compose source with given bucket name and object name
+    /// Returns a compose source with given bucket name and object name.
     ///
     /// # Examples
     ///
@@ -927,8 +955,8 @@ impl ComposeSource {
     }
 }
 
+/// Base argument for object conditional read APIs.
 #[derive(Clone, Debug, TypedBuilder)]
-/// Base argument for object conditional read APIs
 pub struct CopySource {
     #[builder(default, setter(into))]
     pub extra_headers: Option<Multimap>,
@@ -1036,4 +1064,122 @@ fn into_headers_copy_object(
 
     map
 }
+
+/// Calculates part ranges (offset, length) for multipart copy operations.
+///
+/// Given a starting offset, total size, and maximum part size, returns a vector of
+/// (offset, length) tuples for each part. This is extracted as a separate function
+/// to enable unit testing without requiring actual S3 operations or multi-gigabyte files.
+///
+/// # Arguments
+/// * `start_offset` - Starting byte offset
+/// * `total_size` - Total bytes to copy
+/// * `max_part_size` - Maximum size per part (typically MAX_PART_SIZE = 5GB)
+///
+/// # Returns
+/// Vector of (offset, length) tuples for each part
+fn calculate_part_ranges(
+    start_offset: u64,
+    total_size: u64,
+    max_part_size: u64,
+) -> Vec<(u64, u64)> {
+    let mut ranges = Vec::new();
+    let mut offset = start_offset;
+    let mut remaining = total_size;
+
+    while remaining > 0 {
+        let length = remaining.min(max_part_size);
+        ranges.push((offset, length));
+        offset += length;
+        remaining -= length;
+    }
+
+    ranges
+}
+
 // endregion: misc
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_part_ranges_single_part() {
+        // Size <= max_part_size should return single part
+        let ranges = calculate_part_ranges(0, 1000, 5000);
+        assert_eq!(ranges, vec![(0, 1000)]);
+    }
+
+    #[test]
+    fn test_calculate_part_ranges_exact_multiple() {
+        // Size exactly divisible by max_part_size
+        let ranges = calculate_part_ranges(0, 10000, 5000);
+        assert_eq!(ranges, vec![(0, 5000), (5000, 5000)]);
+    }
+
+    #[test]
+    fn test_calculate_part_ranges_with_remainder() {
+        // Size with remainder
+        let ranges = calculate_part_ranges(0, 12000, 5000);
+        assert_eq!(ranges, vec![(0, 5000), (5000, 5000), (10000, 2000)]);
+    }
+
+    #[test]
+    fn test_calculate_part_ranges_with_start_offset() {
+        // Starting from non-zero offset
+        let ranges = calculate_part_ranges(1000, 12000, 5000);
+        assert_eq!(ranges, vec![(1000, 5000), (6000, 5000), (11000, 2000)]);
+    }
+
+    #[test]
+    fn test_calculate_part_ranges_zero_size() {
+        // Zero size edge case - returns empty
+        let ranges = calculate_part_ranges(0, 0, 5000);
+        assert!(ranges.is_empty());
+    }
+
+    #[test]
+    fn test_calculate_part_ranges_realistic() {
+        // Simulate 12GB file with 5GB max part size
+        let total_size: u64 = 12 * 1024 * 1024 * 1024; // 12 GB
+        let max_part_size: u64 = 5 * 1024 * 1024 * 1024; // 5 GB
+
+        let ranges = calculate_part_ranges(0, total_size, max_part_size);
+
+        assert_eq!(ranges.len(), 3);
+        assert_eq!(ranges[0], (0, max_part_size)); // 0-5GB
+        assert_eq!(ranges[1], (max_part_size, max_part_size)); // 5GB-10GB
+        assert_eq!(ranges[2], (2 * max_part_size, 2 * 1024 * 1024 * 1024)); // 10GB-12GB
+
+        // Verify total size matches
+        let total: u64 = ranges.iter().map(|(_, len)| len).sum();
+        assert_eq!(total, total_size);
+
+        // Verify offsets are contiguous
+        let mut expected_offset = 0;
+        for (offset, length) in &ranges {
+            assert_eq!(*offset, expected_offset);
+            expected_offset += length;
+        }
+    }
+
+    #[test]
+    fn test_calculate_part_ranges_each_part_correct_length() {
+        // This test catches the bug where `size` (remaining) was used instead of `length`
+        let ranges = calculate_part_ranges(0, 17000, 5000);
+
+        // Should be [(0,5000), (5000,5000), (10000,5000), (15000,2000)]
+        // NOT [(0,17000), (17000,12000), ...] which the buggy code would produce
+        assert_eq!(
+            ranges,
+            vec![(0, 5000), (5000, 5000), (10000, 5000), (15000, 2000)]
+        );
+
+        // Each non-final part should be exactly max_part_size
+        for (i, (_, length)) in ranges.iter().enumerate() {
+            if i < ranges.len() - 1 {
+                assert_eq!(*length, 5000, "Part {} should be max_part_size", i);
+            }
+        }
+    }
+}

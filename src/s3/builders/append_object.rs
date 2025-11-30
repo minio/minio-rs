@@ -26,7 +26,9 @@ use crate::s3::response_traits::HasObjectSize;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::Sse;
 use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, check_object_name, check_sse};
+use crate::s3::utils::{
+    ChecksumAlgorithm, check_bucket_name, check_object_name, check_sse, compute_checksum_sb,
+};
 use http::Method;
 use std::sync::Arc;
 use typed_builder::TypedBuilder;
@@ -61,9 +63,17 @@ pub struct AppendObject {
     #[builder(!default)] // force required
     data: Arc<SegmentedBytes>,
 
+    /// Value of `x-amz-write-offset-bytes`.
     #[builder(!default)] // force required
-    /// value of x-amz-write-offset-bytes
     offset_bytes: u64,
+
+    /// Optional checksum algorithm for data integrity verification during append.
+    ///
+    /// When specified, computes a checksum of the appended data using the selected algorithm
+    /// (CRC32, CRC32C, SHA1, SHA256, or CRC64NVME). The checksum is sent with the append
+    /// operation and verified by the server.
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 impl S3Api for AppendObject {
@@ -83,6 +93,7 @@ pub type AppendObjectBldr = AppendObjectBuilder<(
     (),
     (Arc<SegmentedBytes>,),
     (u64,),
+    (),
 )>;
 
 impl ToS3Request for AppendObject {
@@ -93,6 +104,21 @@ impl ToS3Request for AppendObject {
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         headers.add(X_AMZ_WRITE_OFFSET_BYTES, self.offset_bytes.to_string());
+
+        if let Some(algorithm) = self.checksum_algorithm {
+            let checksum_value = compute_checksum_sb(algorithm, &self.data);
+            headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
+
+            match algorithm {
+                ChecksumAlgorithm::CRC32 => headers.add(X_AMZ_CHECKSUM_CRC32, checksum_value),
+                ChecksumAlgorithm::CRC32C => headers.add(X_AMZ_CHECKSUM_CRC32C, checksum_value),
+                ChecksumAlgorithm::SHA1 => headers.add(X_AMZ_CHECKSUM_SHA1, checksum_value),
+                ChecksumAlgorithm::SHA256 => headers.add(X_AMZ_CHECKSUM_SHA256, checksum_value),
+                ChecksumAlgorithm::CRC64NVME => {
+                    headers.add(X_AMZ_CHECKSUM_CRC64NVME, checksum_value)
+                }
+            }
+        }
 
         Ok(S3Request::builder()
             .client(self.client)
@@ -141,9 +167,16 @@ pub struct AppendObjectContent {
     content_stream: ContentStream,
     #[builder(default)]
     part_count: Option<u16>,
-    /// Value of x-amz-write-offset-bytes
+    /// Value of `x-amz-write-offset-bytes`.
     #[builder(default)]
     offset_bytes: u64,
+    /// Optional checksum algorithm for data integrity verification during append.
+    ///
+    /// When specified, computes checksums for appended data using the selected algorithm
+    /// (CRC32, CRC32C, SHA1, SHA256, or CRC64NVME). The checksum is computed for each
+    /// chunk and sent with the append operation.
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 /// Builder type for [`AppendObjectContent`] that is returned by [`MinioClient::append_object_content`](crate::s3::client::MinioClient::append_object_content).
@@ -159,6 +192,7 @@ pub type AppendObjectContentBldr = AppendObjectContentBuilder<(
     (),
     (),
     (ObjectContent,),
+    (),
     (),
     (),
     (),
@@ -229,6 +263,7 @@ impl AppendObjectContent {
                 offset_bytes: current_file_size,
                 sse: self.sse,
                 data: Arc::new(seg_bytes),
+                checksum_algorithm: self.checksum_algorithm,
             };
             ao.send().await
         } else if let Some(expected) = object_size.value()
@@ -243,7 +278,7 @@ impl AppendObjectContent {
         }
     }
 
-    /// multipart append
+    /// Performs multipart append.
     async fn send_mpa(
         &mut self,
         part_size: u64,
@@ -296,6 +331,7 @@ impl AppendObjectContent {
                 sse: self.sse.clone(),
                 data: Arc::new(part_content),
                 offset_bytes: next_offset_bytes,
+                checksum_algorithm: self.checksum_algorithm,
             };
             let resp: AppendObjectResponse = append_object.send().await?;
             //println!("AppendObjectResponse: object_size={:?}", resp.object_size);

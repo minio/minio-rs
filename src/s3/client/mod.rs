@@ -158,6 +158,8 @@ pub struct MinioClientBuilder {
     ignore_cert_check: Option<bool>,
     /// Set the app info as an Option of (app_name, app_version) pair. This will show up in the client's user-agent.
     app_info: Option<(String, String)>,
+    /// Skip region lookup for MinIO servers (region is not used by MinIO).
+    skip_region_lookup: bool,
 }
 
 impl MinioClientBuilder {
@@ -171,6 +173,7 @@ impl MinioClientBuilder {
             ssl_cert_file: None,
             ignore_cert_check: None,
             app_info: None,
+            skip_region_lookup: false,
         }
     }
 
@@ -208,9 +211,48 @@ impl MinioClientBuilder {
         self
     }
 
+    /// Skip region lookup for MinIO servers.
+    ///
+    /// MinIO does not use AWS regions, so region lookup is unnecessary overhead.
+    /// When enabled, the client will use the default region ("us-east-1") for
+    /// all requests without making network calls to determine the bucket region.
+    ///
+    /// This improves performance by eliminating the first-request latency penalty
+    /// caused by region discovery.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::client::MinioClientBuilder;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
+    ///
+    /// let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
+    /// let client = MinioClientBuilder::new(base_url)
+    ///     .provider(Some(StaticProvider::new("minioadmin", "minioadmin", None)))
+    ///     .skip_region_lookup(true)
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    pub fn skip_region_lookup(mut self, skip: bool) -> Self {
+        self.skip_region_lookup = skip;
+        self
+    }
+
     /// Build the Client.
     pub fn build(self) -> Result<MinioClient, Error> {
-        let mut builder = reqwest::Client::builder().no_gzip();
+        let mut builder = reqwest::Client::builder()
+            .no_gzip()
+            // Enable HTTP/2 with adaptive window size for better throughput
+            .http2_adaptive_window(true)
+            // Enable TCP_NODELAY for lower latency (disable Nagle's algorithm)
+            .tcp_nodelay(true)
+            // Keep connections alive for reuse (critical for performance)
+            .tcp_keepalive(std::time::Duration::from_secs(60))
+            // Allow more idle connections per host for parallel requests
+            .pool_max_idle_per_host(32)
+            // Keep idle connections longer to avoid reconnection overhead
+            .pool_idle_timeout(std::time::Duration::from_secs(90));
 
         let mut user_agent = String::from("MinIO (")
             + std::env::consts::OS
@@ -257,6 +299,7 @@ impl MinioClientBuilder {
                 client_hooks: self.client_hooks,
                 region_map: Default::default(),
                 express: Default::default(),
+                skip_region_lookup: self.skip_region_lookup,
             }),
         })
     }
@@ -729,6 +772,96 @@ impl MinioClient {
         Ok(())
     }
 
+    /// Fast-path GET request that bypasses the general S3 API overhead.
+    ///
+    /// This method is optimized for high-performance object retrieval scenarios
+    /// like DataFusion/ObjectStore integration. It skips hooks, region lookup,
+    /// and extra abstraction layers for minimal latency.
+    ///
+    /// Returns the raw reqwest Response for direct stream access.
+    ///
+    /// # Arguments
+    /// * `bucket` - The bucket name
+    /// * `object` - The object key
+    /// * `range` - Optional byte range as (offset, length). If length is 0 or None, reads from offset to end.
+    pub async fn get_object_fast(
+        &self,
+        bucket: &str,
+        object: &str,
+        range: Option<(u64, Option<u64>)>,
+    ) -> Result<reqwest::Response, Error> {
+        // Use default region (skip region lookup for performance)
+        let region = DEFAULT_REGION;
+
+        // Build URL directly (no query params for GET)
+        let url = self.shared.base_url.build_url(
+            &Method::GET,
+            region,
+            &Multimap::new(),
+            Some(bucket),
+            Some(object),
+        )?;
+
+        // Build headers in Multimap (single source of truth)
+        let date = utc_now();
+        let mut headers = Multimap::new();
+        headers.add(HOST, url.host_header_value());
+        headers.add(X_AMZ_DATE, to_amz_date(date));
+        headers.add(X_AMZ_CONTENT_SHA256, EMPTY_SHA256);
+
+        // Add range header if specified
+        if let Some((offset, length)) = range {
+            let range_str = match length {
+                Some(len) if len > 0 => format!("bytes={}-{}", offset, offset + len - 1),
+                _ => format!("bytes={}-", offset),
+            };
+            headers.add("Range", range_str);
+        }
+
+        // Sign the request if we have credentials
+        if let Some(provider) = &self.shared.provider {
+            let creds = provider.fetch();
+            if let Some(token) = &creds.session_token {
+                headers.add(X_AMZ_SECURITY_TOKEN, token);
+            }
+
+            sign_v4_s3(
+                &Method::GET,
+                &url.path,
+                region,
+                &mut headers,
+                &Multimap::new(),
+                &creds.access_key,
+                &creds.secret_key,
+                EMPTY_SHA256,
+                date,
+            );
+        }
+
+        // Build reqwest request and transfer all headers
+        let mut req = self.http_client.get(url.to_string());
+        for (key, values) in headers.iter_all() {
+            for value in values {
+                req = req.header(key, value);
+            }
+        }
+
+        // Send request
+        let resp = req.send().await.map_err(ValidationErr::from)?;
+
+        if resp.status().is_success() {
+            return Ok(resp);
+        }
+
+        // Handle error response
+        Err(Error::S3Server(S3ServerError::S3Error(Box::new(
+            MinioErrorResponse::from_status_and_message(
+                resp.status().as_u16(),
+                format!("GET object failed: {}/{}", bucket, object),
+            ),
+        ))))
+    }
+
     /// create an example client for testing on localhost
     #[cfg(feature = "localhost")]
     pub fn create_client_on_localhost()
@@ -752,6 +885,7 @@ pub(crate) struct SharedClientItems {
     client_hooks: Vec<Arc<dyn RequestHooks + Send + Sync + 'static>>,
     region_map: DashMap<String, String>,
     express: OnceLock<bool>,
+    pub(crate) skip_region_lookup: bool,
 }
 
 impl SharedClientItems {
