@@ -14,6 +14,10 @@
 // limitations under the License.
 
 //! Signature V4 for S3 API
+//!
+//! Includes signing key caching for performance optimization.
+//! The signing key only depends on (secret_key, date, region, service),
+//! so it can be cached for an entire day.
 
 use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
@@ -25,6 +29,62 @@ use hyper::http::Method;
 use ring::hmac;
 #[cfg(not(feature = "ring"))]
 use sha2::Sha256;
+use std::sync::Mutex;
+
+/// Cache for signing keys to avoid repeated HMAC computations.
+/// The signing key only changes when date, region, service, or credentials change.
+/// This saves 4 HMAC operations per request when cached.
+struct SigningKeyCache {
+    /// The cached signing key
+    key: Vec<u8>,
+    /// The secret key this was computed for (for comparison)
+    secret_key: String,
+    /// The date string (YYYYMMDD) this key was computed for
+    date_str: String,
+    /// The region this key was computed for
+    region: String,
+    /// The service name this key was computed for
+    service: String,
+}
+
+impl SigningKeyCache {
+    fn new() -> Self {
+        Self {
+            key: Vec::new(),
+            secret_key: String::new(),
+            date_str: String::new(),
+            region: String::new(),
+            service: String::new(),
+        }
+    }
+
+    #[inline]
+    fn matches(&self, secret_key: &str, date_str: &str, region: &str, service: &str) -> bool {
+        // Check most likely to change first (date changes daily)
+        self.date_str == date_str
+            && self.region == region
+            && self.service == service
+            && self.secret_key == secret_key
+    }
+
+    fn update(
+        &mut self,
+        key: Vec<u8>,
+        secret_key: String,
+        date_str: String,
+        region: String,
+        service: String,
+    ) {
+        self.key = key;
+        self.secret_key = secret_key;
+        self.date_str = date_str;
+        self.region = region;
+        self.service = service;
+    }
+}
+
+/// Global signing key cache (thread-safe)
+static SIGNING_KEY_CACHE: Mutex<Option<SigningKeyCache>> = Mutex::new(None);
 
 /// Returns HMAC hash for given key and data.
 fn hmac_hash(key: &[u8], data: &[u8]) -> Vec<u8> {
@@ -78,15 +138,56 @@ fn get_string_to_sign(date: UtcTime, scope: &str, canonical_request_hash: &str) 
     )
 }
 
-/// Returns signing key of given secret key, date, region and service name.
-fn get_signing_key(secret_key: &str, date: UtcTime, region: &str, service_name: &str) -> Vec<u8> {
+/// Computes the signing key (uncached) for given secret key, date, region and service name.
+fn compute_signing_key(
+    secret_key: &str,
+    date_str: &str,
+    region: &str,
+    service_name: &str,
+) -> Vec<u8> {
     let mut key: Vec<u8> = b"AWS4".to_vec();
     key.extend(secret_key.as_bytes());
 
-    let date_key = hmac_hash(key.as_slice(), to_signer_date(date).as_bytes());
+    let date_key = hmac_hash(key.as_slice(), date_str.as_bytes());
     let date_region_key = hmac_hash(date_key.as_slice(), region.as_bytes());
     let date_region_service_key = hmac_hash(date_region_key.as_slice(), service_name.as_bytes());
     hmac_hash(date_region_service_key.as_slice(), b"aws4_request")
+}
+
+/// Returns signing key of given secret key, date, region and service name.
+/// Uses caching to avoid recomputing the signing key for every request.
+/// The signing key only changes when the date (YYYYMMDD), region, service, or credentials change.
+/// This saves 4 HMAC operations per request when cached.
+fn get_signing_key(secret_key: &str, date: UtcTime, region: &str, service_name: &str) -> Vec<u8> {
+    let date_str = to_signer_date(date);
+
+    // Try to get from cache (fast path)
+    {
+        let cache_guard = SIGNING_KEY_CACHE.lock().unwrap();
+        if let Some(ref cache) = *cache_guard
+            && cache.matches(secret_key, &date_str, region, service_name)
+        {
+            return cache.key.clone();
+        }
+    }
+
+    // Cache miss - compute the signing key (4 HMAC operations)
+    let signing_key = compute_signing_key(secret_key, &date_str, region, service_name);
+
+    // Update cache
+    {
+        let mut cache_guard = SIGNING_KEY_CACHE.lock().unwrap();
+        let cache = cache_guard.get_or_insert_with(SigningKeyCache::new);
+        cache.update(
+            signing_key.clone(),
+            secret_key.to_string(),
+            date_str,
+            region.to_string(),
+            service_name.to_string(),
+        );
+    }
+
+    signing_key
 }
 
 /// Returns signature value for given signing key and string-to-sign.
@@ -152,6 +253,32 @@ pub(crate) fn sign_v4_s3(
 ) {
     sign_v4(
         "s3",
+        method,
+        uri,
+        region,
+        headers,
+        query_params,
+        access_key,
+        secret_key,
+        content_sha256,
+        date,
+    )
+}
+
+/// Signs and updates headers for given parameters for S3 Tables request
+pub(crate) fn sign_v4_s3tables(
+    method: &Method,
+    uri: &str,
+    region: &str,
+    headers: &mut Multimap,
+    query_params: &Multimap,
+    access_key: &str,
+    secret_key: &str,
+    content_sha256: &str,
+    date: UtcTime,
+) {
+    sign_v4(
+        "s3tables",
         method,
         uri,
         region,

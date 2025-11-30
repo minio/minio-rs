@@ -115,7 +115,7 @@ impl ToS3Request for StatObject {
 
         Ok(S3Request::builder()
             .client(self.client)
-            .method(Method::GET)
+            .method(Method::HEAD)
             .region(self.region)
             .bucket(self.bucket)
             .object(self.object)

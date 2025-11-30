@@ -52,11 +52,19 @@ impl MinioClient {
     /// Retrieves the region for the specified bucket name from the cache.
     /// If the region is not found in the cache, it is fetched via a call to S3 or MinIO
     /// and then stored in the cache for future lookups.
+    ///
+    /// If `skip_region_lookup` is enabled on the client, this method returns
+    /// the default region immediately without making any network calls.
     pub async fn get_region_cached<S: Into<String>>(
         &self,
         bucket: S,
         region: &Option<String>, // the region as provided by the S3Request
     ) -> Result<String, Error> {
+        // If skip_region_lookup is enabled (for MinIO servers), return default region immediately
+        if self.shared.skip_region_lookup {
+            return Ok(DEFAULT_REGION.to_owned());
+        }
+
         // If a region is provided, validate it against the base_url region
         if let Some(requested_region) = region {
             if !self.shared.base_url.region.is_empty()

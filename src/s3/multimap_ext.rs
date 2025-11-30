@@ -14,12 +14,33 @@
 // limitations under the License.
 
 use crate::s3::utils::url_encode;
-use lazy_static::lazy_static;
-use regex::Regex;
 use std::collections::BTreeMap;
 
 /// Multimap for string key and string value
 pub type Multimap = multimap::MultiMap<String, String>;
+
+/// Collapses multiple spaces into a single space (avoids regex overhead)
+#[inline]
+fn collapse_spaces(s: &str) -> String {
+    let trimmed = s.trim();
+    if !trimmed.contains("  ") {
+        return trimmed.to_string();
+    }
+    let mut result = String::with_capacity(trimmed.len());
+    let mut prev_space = false;
+    for c in trimmed.chars() {
+        if c == ' ' {
+            if !prev_space {
+                result.push(' ');
+                prev_space = true;
+            }
+        } else {
+            result.push(c);
+            prev_space = false;
+        }
+    }
+    result
+}
 
 pub trait MultimapExt {
     /// Adds a key-value pair to the multimap
@@ -76,60 +97,75 @@ impl MultimapExt for Multimap {
     }
 
     fn get_canonical_query_string(&self) -> String {
-        let mut keys: Vec<String> = Vec::new();
-        for (key, _) in self.iter() {
-            keys.push(key.to_string());
-        }
-        keys.sort();
+        // Use BTreeMap for automatic sorting (avoids explicit sort)
+        let mut sorted: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        let mut total_len = 0usize;
 
-        let mut query = String::new();
-        for key in keys {
-            match self.get_vec(key.as_str()) {
-                Some(values) => {
-                    for value in values {
-                        if !query.is_empty() {
-                            query.push('&');
-                        }
-                        query.push_str(&url_encode(key.as_str()));
-                        query.push('=');
-                        query.push_str(&url_encode(value));
-                    }
+        for (key, values) in self.iter_all() {
+            let key_encoded_len = key.len() * 3; // worst case URL encoding
+            for value in values {
+                total_len += key_encoded_len + 1 + value.len() * 3 + 1;
+            }
+            sorted
+                .entry(key.as_str())
+                .or_default()
+                .extend(values.iter().map(|s| s.as_str()));
+        }
+
+        let mut query = String::with_capacity(total_len);
+        for (key, values) in sorted {
+            for value in values {
+                if !query.is_empty() {
+                    query.push('&');
                 }
-                None => todo!(), // This never happens.
-            };
+                query.push_str(&url_encode(key));
+                query.push('=');
+                query.push_str(&url_encode(value));
+            }
         }
 
         query
     }
 
     fn get_canonical_headers(&self) -> (String, String) {
-        lazy_static! {
-            static ref MULTI_SPACE_REGEX: Regex = Regex::new("( +)").unwrap();
-        }
+        // Use BTreeMap for automatic sorting (avoids explicit sort)
         let mut btmap: BTreeMap<String, String> = BTreeMap::new();
+
+        // Pre-calculate sizes for better allocation
+        let mut key_bytes = 0usize;
+        let mut value_bytes = 0usize;
 
         for (k, values) in self.iter_all() {
             let key = k.to_lowercase();
-            if "authorization" == key || "user-agent" == key {
+            if key == "authorization" || key == "user-agent" {
                 continue;
             }
 
-            let mut vs = values.clone();
+            // Sort values in place if needed
+            let mut vs: Vec<&String> = values.iter().collect();
             vs.sort();
 
-            let mut value = String::new();
+            let mut value =
+                String::with_capacity(vs.iter().map(|v| v.len()).sum::<usize>() + vs.len());
             for v in vs {
                 if !value.is_empty() {
                     value.push(',');
                 }
-                let s: String = MULTI_SPACE_REGEX.replace_all(&v, " ").trim().to_string();
-                value.push_str(&s);
+                // Use optimized collapse_spaces instead of regex
+                value.push_str(&collapse_spaces(v));
             }
-            btmap.insert(key.clone(), value.clone());
+
+            key_bytes += key.len();
+            value_bytes += value.len();
+            btmap.insert(key, value);
         }
 
-        let mut signed_headers = String::new();
-        let mut canonical_headers = String::new();
+        // Pre-allocate output strings
+        let header_count = btmap.len();
+        let mut signed_headers = String::with_capacity(key_bytes + header_count);
+        let mut canonical_headers =
+            String::with_capacity(key_bytes + value_bytes + header_count * 2);
+
         let mut add_delim = false;
         for (key, value) in &btmap {
             if add_delim {
