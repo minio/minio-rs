@@ -100,6 +100,7 @@ impl GetPresignedObjectUrl {
             };
 
             presign_v4(
+                &self.client.shared.signing_key_cache,
                 &self.method,
                 &url.host_header_value(),
                 &url.path,

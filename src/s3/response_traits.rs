@@ -1,3 +1,69 @@
+//! Response traits for accessing S3 metadata from HTTP response headers.
+//!
+//! This module provides a collection of traits that enable typed, ergonomic access to
+//! metadata from S3 API responses. These traits extract data from HTTP headers and response
+//! bodies returned by various S3 operations.
+//!
+//! # Design Philosophy
+//!
+//! Rather than exposing raw headers directly, these traits provide:
+//! - **Type-safe access**: Automatic parsing and type conversion
+//! - **Consistent API**: Uniform method names across different response types
+//! - **Composability**: Mix and match traits based on what metadata is available
+//!
+//! # Metadata Sources
+//!
+//! Metadata is available from two primary sources:
+//!
+//! ## 1. HEAD Requests (Metadata Only)
+//!
+//! Operations like [`stat_object`](crate::s3::client::MinioClient::stat_object) use HEAD requests
+//! to retrieve object metadata without downloading the object body. These responses typically
+//! implement traits like:
+//! - [`HasVersion`]: Object version ID (via `x-amz-version-id` header)
+//! - [`HasObjectSize`]: Object size in bytes (via `x-amz-object-size` or `Content-Length` header)
+//! - [`HasEtagFromHeaders`]: Object ETag/hash (via `ETag` header)
+//! - [`HasChecksumHeaders`]: Object checksum values (via `x-amz-checksum-*` headers)
+//! - [`HasIsDeleteMarker`]: Whether the object is a delete marker (via `x-amz-delete-marker` header)
+//!
+//! ## 2. GET Requests (Metadata + Body)
+//!
+//! Operations like [`get_object`](crate::s3::client::MinioClient::get_object) return both
+//! metadata headers AND the object body. These responses can implement both header-based
+//! traits (above) and body-parsing traits like:
+//! - [`HasEtagFromBody`]: ETag parsed from XML response body
+//!
+//! # Example: StatObjectResponse
+//!
+//! The [`StatObjectResponse`](crate::s3::response::StatObjectResponse) demonstrates how
+//! multiple traits compose together. It uses a HEAD request and provides:
+//!
+//! ```rust,ignore
+//! impl HasBucket for StatObjectResponse {}
+//! impl HasRegion for StatObjectResponse {}
+//! impl HasObject for StatObjectResponse {}
+//! impl HasEtagFromHeaders for StatObjectResponse {}
+//! impl HasIsDeleteMarker for StatObjectResponse {}
+//! impl HasChecksumHeaders for StatObjectResponse {}
+//! impl HasVersion for StatObjectResponse {}       // Version ID from header
+//! impl HasObjectSize for StatObjectResponse {}    // Size from header
+//! ```
+//!
+//! This allows users to access metadata uniformly:
+//!
+//! ```rust,ignore
+//! let response = client.stat_object(&args).await?;
+//! let size = response.object_size();           // From HasObjectSize trait
+//! let version = response.version_id();          // From HasVersion trait
+//! let checksum = response.checksum_crc32c()?;  // From HasChecksumHeaders trait
+//! ```
+//!
+//! # Performance Considerations
+//!
+//! - **HEAD vs GET**: HEAD requests are faster when you only need metadata (no body transfer)
+//! - **Header parsing**: Trait methods use `#[inline]` for zero-cost abstractions
+//! - **Lazy evaluation**: Metadata is parsed on-demand, not upfront
+
 use crate::s3::error::ValidationErr;
 use crate::s3::header_constants::*;
 use crate::s3::types::S3Request;

@@ -941,7 +941,10 @@ pub fn get_text_option(element: &Element, tag: &str) -> Option<String> {
         .and_then(|v| v.get_text().map(|s| s.to_string()))
 }
 
-/// Trims leading and trailing quotes from a string. Note: consumes the input string.
+/// Trims leading and trailing quotes from a string.
+///
+/// Takes ownership of and potentially modifies the input string in place
+/// (via `drain` and `pop`). The original string is not preserved.
 pub fn trim_quotes(mut s: String) -> String {
     if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
         s.drain(0..1); // remove the leading quote
