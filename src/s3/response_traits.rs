@@ -1,7 +1,73 @@
+//! Response traits for accessing S3 metadata from HTTP response headers.
+//!
+//! This module provides a collection of traits that enable typed, ergonomic access to
+//! metadata from S3 API responses. These traits extract data from HTTP headers and response
+//! bodies returned by various S3 operations.
+//!
+//! # Design Philosophy
+//!
+//! Rather than exposing raw headers directly, these traits provide:
+//! - **Type-safe access**: Automatic parsing and type conversion
+//! - **Consistent API**: Uniform method names across different response types
+//! - **Composability**: Mix and match traits based on what metadata is available
+//!
+//! # Metadata Sources
+//!
+//! Metadata is available from two primary sources:
+//!
+//! ## 1. HEAD Requests (Metadata Only)
+//!
+//! Operations like [`stat_object`](crate::s3::client::MinioClient::stat_object) use HEAD requests
+//! to retrieve object metadata without downloading the object body. These responses typically
+//! implement traits like:
+//! - [`HasVersion`]: Object version ID (via `x-amz-version-id` header)
+//! - [`HasObjectSize`]: Object size in bytes (via `x-amz-object-size` or `Content-Length` header)
+//! - [`HasEtagFromHeaders`]: Object ETag/hash (via `ETag` header)
+//! - [`HasChecksumHeaders`]: Object checksum values (via `x-amz-checksum-*` headers)
+//! - [`HasIsDeleteMarker`]: Whether the object is a delete marker (via `x-amz-delete-marker` header)
+//!
+//! ## 2. GET Requests (Metadata + Body)
+//!
+//! Operations like [`get_object`](crate::s3::client::MinioClient::get_object) return both
+//! metadata headers AND the object body. These responses can implement both header-based
+//! traits (above) and body-parsing traits like:
+//! - [`HasEtagFromBody`]: ETag parsed from XML response body
+//!
+//! # Example: StatObjectResponse
+//!
+//! The [`StatObjectResponse`](crate::s3::response::StatObjectResponse) demonstrates how
+//! multiple traits compose together. It uses a HEAD request and provides:
+//!
+//! ```rust,ignore
+//! impl HasBucket for StatObjectResponse {}
+//! impl HasRegion for StatObjectResponse {}
+//! impl HasObject for StatObjectResponse {}
+//! impl HasEtagFromHeaders for StatObjectResponse {}
+//! impl HasIsDeleteMarker for StatObjectResponse {}
+//! impl HasChecksumHeaders for StatObjectResponse {}
+//! impl HasVersion for StatObjectResponse {}       // Version ID from header
+//! impl HasObjectSize for StatObjectResponse {}    // Size from header
+//! ```
+//!
+//! This allows users to access metadata uniformly:
+//!
+//! ```rust,ignore
+//! let response = client.stat_object(&args).await?;
+//! let size = response.object_size();           // From HasObjectSize trait
+//! let version = response.version_id();          // From HasVersion trait
+//! let checksum = response.checksum_crc32c()?;  // From HasChecksumHeaders trait
+//! ```
+//!
+//! # Performance Considerations
+//!
+//! - **HEAD vs GET**: HEAD requests are faster when you only need metadata (no body transfer)
+//! - **Header parsing**: Trait methods use `#[inline]` for zero-cost abstractions
+//! - **Lazy evaluation**: Metadata is parsed on-demand, not upfront
+
 use crate::s3::error::ValidationErr;
 use crate::s3::header_constants::*;
 use crate::s3::types::S3Request;
-use crate::s3::utils::{get_text_result, parse_bool, trim_quotes};
+use crate::s3::utils::{ChecksumAlgorithm, get_text_result, parse_bool, trim_quotes};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use std::collections::HashMap;
@@ -207,5 +273,92 @@ pub trait HasTagging: HasS3Fields {
             tags.insert(get_text_result(&v, "Key")?, get_text_result(&v, "Value")?);
         }
         Ok(tags)
+    }
+}
+
+/// Provides checksum-related methods for S3 responses with headers.
+///
+/// This trait provides default implementations for extracting and detecting checksums
+/// from S3 response headers. Implement this trait for any response type that has
+/// `HeaderMap` access via `HasS3Fields`.
+pub trait HasChecksumHeaders: HasS3Fields {
+    /// Extracts the checksum value from response headers for the specified algorithm.
+    ///
+    /// Retrieves the base64-encoded checksum value from the appropriate S3 response header
+    /// (x-amz-checksum-crc32, x-amz-checksum-crc32c, x-amz-checksum-crc64nvme,
+    /// x-amz-checksum-sha1, or x-amz-checksum-sha256).
+    ///
+    /// # Arguments
+    ///
+    /// * `algorithm` - The checksum algorithm to retrieve
+    ///
+    /// # Returns
+    ///
+    /// - `Some(checksum)` if the header is present, containing the base64-encoded checksum value
+    /// - `None` if the header is not found
+    ///
+    /// # Use Cases
+    ///
+    /// - Compare with locally computed checksums for manual verification
+    /// - Store checksum values for audit or compliance records
+    /// - Verify integrity after downloading to disk
+    #[inline]
+    fn get_checksum(&self, algorithm: ChecksumAlgorithm) -> Option<String> {
+        let header_name = match algorithm {
+            ChecksumAlgorithm::CRC32 => X_AMZ_CHECKSUM_CRC32,
+            ChecksumAlgorithm::CRC32C => X_AMZ_CHECKSUM_CRC32C,
+            ChecksumAlgorithm::SHA1 => X_AMZ_CHECKSUM_SHA1,
+            ChecksumAlgorithm::SHA256 => X_AMZ_CHECKSUM_SHA256,
+            ChecksumAlgorithm::CRC64NVME => X_AMZ_CHECKSUM_CRC64NVME,
+        };
+
+        self.headers()
+            .get(header_name)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string())
+    }
+
+    /// Returns the checksum type from response headers.
+    ///
+    /// The checksum type indicates whether the checksum represents:
+    /// - `FULL_OBJECT` - A checksum computed over the entire object
+    /// - `COMPOSITE` - A checksum-of-checksums for multipart uploads
+    ///
+    /// # Returns
+    ///
+    /// - `Some(type_string)` if the `x-amz-checksum-type` header is present
+    /// - `None` if the header is not found
+    #[inline]
+    fn checksum_type(&self) -> Option<String> {
+        self.headers()
+            .get(X_AMZ_CHECKSUM_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string())
+    }
+
+    /// Detects which checksum algorithm was used by the server (if any).
+    ///
+    /// Examines response headers to determine if the server computed a checksum
+    /// for this operation.
+    ///
+    /// # Returns
+    ///
+    /// - `Some(algorithm)` if a checksum header is found (CRC32, CRC32C, CRC64NVME, SHA1, or SHA256)
+    /// - `None` if no checksum headers are present
+    #[inline]
+    fn detect_checksum_algorithm(&self) -> Option<ChecksumAlgorithm> {
+        if self.headers().contains_key(X_AMZ_CHECKSUM_CRC32) {
+            Some(ChecksumAlgorithm::CRC32)
+        } else if self.headers().contains_key(X_AMZ_CHECKSUM_CRC32C) {
+            Some(ChecksumAlgorithm::CRC32C)
+        } else if self.headers().contains_key(X_AMZ_CHECKSUM_CRC64NVME) {
+            Some(ChecksumAlgorithm::CRC64NVME)
+        } else if self.headers().contains_key(X_AMZ_CHECKSUM_SHA1) {
+            Some(ChecksumAlgorithm::SHA1)
+        } else if self.headers().contains_key(X_AMZ_CHECKSUM_SHA256) {
+            Some(ChecksumAlgorithm::SHA256)
+        } else {
+            None
+        }
     }
 }
