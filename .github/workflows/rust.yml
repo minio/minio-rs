@@ -36,6 +36,7 @@ jobs:
           export ACCESS_KEY=minioadmin
           export SECRET_KEY=minioadmin
           export ENABLE_HTTPS=1
+          export SERVER_REGION=us-east-1
           export MINIO_SSL_CERT_FILE=./tests/public.crt
           MINIO_TEST_TOKIO_RUNTIME_FLAVOR="multi_thread" cargo test -- --nocapture
   test-current-thread:
@@ -49,6 +50,7 @@ jobs:
           export ACCESS_KEY=minioadmin
           export SECRET_KEY=minioadmin
           export ENABLE_HTTPS=1
+          export SERVER_REGION=us-east-1
           export MINIO_SSL_CERT_FILE=./tests/public.crt
           MINIO_TEST_TOKIO_RUNTIME_FLAVOR="current_thread" cargo test -- --nocapture
 

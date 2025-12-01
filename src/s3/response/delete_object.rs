@@ -80,11 +80,11 @@ impl DeleteResult {
     }
 }
 
-/// Response of
-/// [delete_objects()](crate::s3::client::MinioClient::delete_objects)
-/// S3 API. It is also returned by the
-/// [remove_objects()](crate::s3::client::MinioClient::delete_objects_streaming) API in the
-/// form of a stream.
+/// Response of the [`delete_objects()`](crate::s3::client::MinioClient::delete_objects) S3 API.
+///
+/// It is also returned by the
+/// [`delete_objects_streaming()`](crate::s3::client::MinioClient::delete_objects_streaming) API
+/// in the form of a stream.
 #[derive(Clone, Debug)]
 pub struct DeleteObjectsResponse {
     request: S3Request,
@@ -94,6 +94,9 @@ pub struct DeleteObjectsResponse {
 
 impl_from_s3response!(DeleteObjectsResponse);
 impl_has_s3fields!(DeleteObjectsResponse);
+
+impl HasBucket for DeleteObjectsResponse {}
+impl HasRegion for DeleteObjectsResponse {}
 
 impl DeleteObjectsResponse {
     /// Returns the bucket name for which the delete operation was performed.

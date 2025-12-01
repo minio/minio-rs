@@ -23,8 +23,9 @@ use bytes::Bytes;
 use http::HeaderMap;
 use std::mem;
 
-/// Represents the response of the `[delete_bucket_replication()](crate::s3::client::MinioClient::delete_bucket_replication) API call.
-/// This struct contains metadata and information about the bucket whose replication configuration was removed.
+/// Response from the [`delete_bucket_replication()`](crate::s3::client::MinioClient::delete_bucket_replication) API.
+///
+/// Contains metadata about the bucket whose replication configuration was removed.
 #[derive(Clone, Debug)]
 pub struct DeleteBucketReplicationResponse {
     request: S3Request,
