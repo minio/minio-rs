@@ -15,9 +15,13 @@
 
 //! S3 API Integration Tests
 
+// Client configuration
+mod client_config;
+
 // Object operations
 mod append_object;
 mod get_object;
+mod object_checksums;
 mod object_compose;
 mod object_copy;
 mod object_delete;

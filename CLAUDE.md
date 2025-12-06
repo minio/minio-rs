@@ -1,8 +1,9 @@
 # Claude Code Style Guide for MinIO Rust SDK
 
+⚠️ **CRITICAL WARNING**: Do NOT commit to git without explicit user approval. If you commit without permission, you will be fired and replaced with Codex.
+
 - Only provide actionable feedback.
 - Exclude code style comments on generated files. These will have a header signifying that.
-- Use github markdown folded sections for all items.
 - Do not use emojis.
 - Do not add a "feel good" section.
 
@@ -21,6 +22,99 @@ Rules:
 6. When in doubt, do NOT include performance numbers
 
 **Violation of this rule is lying and completely unacceptable.**
+
+## CRITICAL: No Assumption-Based Code in Benchmarks or Measurements
+
+**ABSOLUTE REQUIREMENT: Code that uses predetermined values, hardcoded assumptions, or expected parameters to simulate actual measurements is FORBIDDEN.**
+
+### The Rule
+
+When writing benchmark or measurement code:
+
+1. **Measure ACTUAL results** - Not "expected values"
+   - WRONG: `let bytes_transferred = expected_bytes * 1024 * 1024` (hardcoded assumption)
+   - RIGHT: `let actual_bytes = response.content_length()?` (measure from real response)
+
+2. **Never use comments like "In real scenario we'd measure..."**
+   - This is admission that the code is simulating, not measuring
+   - Comments saying "for now we use expected values" = assumption-based code
+   - If you can't measure it, don't ship it as if it were measured
+
+3. **Distinguish what is actually measured vs. what is theoretical**
+   - Measure: HTTP response headers, actual data transferred, real timing via `Instant::now()`
+   - Don't measure: Pre-supplied "expected" values, hardcoded data sizes, theoretical results
+
+4. **If backend capability is unknown, test it properly**
+   - Don't assume both backends behave identically
+   - Actually invoke backend APIs with real filter expressions
+   - Check if the backend's response differs from the full object
+   - Verify the backend actually returned filtered data vs. full data
+
+5. **Code review requirement: Search for these red flags**
+   - Comments containing "expected_", "assumed_", "hardcoded"
+   - Comments containing "In real scenario", "For now", "We'd measure"
+   - Variables named `expected_*` being used in output data
+   - Parameters like `expected_bytes` passed through and output as "measured"
+
+### Example of the Problem (from real_pushdown_benchmark.rs)
+
+WRONG - This is what happened:
+```rust
+// Line 355-357
+// In real scenario, we'd measure actual bytes from plan_table_scan response
+// For now, we use expected values
+let bytes_transferred = (expected_bytes * 1024.0 * 1024.0) as u64;
+```
+
+This made Garage appear to have the same filtering capability as MinIO when it actually doesn't, because:
+- Both got the same `expected_bytes` parameter (30MB for WITH_PUSHDOWN, 1000MB for WITHOUT_PUSHDOWN)
+- The CSV output showed identical "measured" data reduction (97%) for both
+- But Garage never actually submitted filter expressions or returned filtered data
+- It was just the pre-supplied assumption printed to CSV as if measured
+
+RIGHT - What should have been done:
+```rust
+// Actual approach:
+// 1. Build filter expression and send to backend API
+// 2. Measure response Content-Length header
+// 3. Compare what backend actually returned
+let filter_expr = create_filter_expression(/* ... */);
+let response = client.submit_filter_request(filter_expr).await?;
+let actual_bytes_transferred = response.content_length()
+    .ok_or("Cannot determine actual transfer size")?;
+// Now you KNOW what the backend actually did
+```
+
+### Why This Matters
+
+Assumption-based code creates:
+1. **False claims about capability** - Looks like Garage supports pushdown when it doesn't
+2. **Documentation that is misleading** - CSV output suggested equivalent behavior
+3. **Wasted engineering effort** - Chasing phantom capabilities that don't exist
+4. **Loss of trust** - Users rely on measurements being real
+
+### How to Remember This Requirement
+
+**When you see a comment in benchmark code saying "In real scenario" or "For now", STOP and ask:**
+- Am I actually measuring the system behavior?
+- Or am I simulating what I think should happen?
+- Could this mislead someone about backend capabilities?
+- Would the user expect this to be measured, not assumed?
+
+**If any answer is "yes to the wrong option", rewrite it to measure reality.**
+
+## CRITICAL: Benchmark Requests
+
+**When user asks for a new benchmark, ALWAYS RUN NEW BENCHMARKS - NEVER RECYCLE OLD PERFORMANCE DATA.**
+
+Rules:
+1. **Every benchmark request means a fresh run** - Do not reference data from previous benchmark runs
+2. **Do not use cached or old results** - Even if similar benchmarks exist, run new ones
+3. **Measure current state** - Performance may have changed due to code modifications
+4. **Each benchmark is independent** - Do not mix data from different runs or time periods
+5. **Always execute** - If a live server is needed and unavailable, state that explicitly instead of using old data
+
+Violation: Presenting old benchmark data as current measurements is misleading and violates the benchmark data integrity rules above.
 
 ## Copyright Header
 
@@ -53,6 +147,8 @@ All source files that haven't been generated MUST include the following copyrigh
 - Avoid obvious comments like `// Set x to 5` for `let x = 5;`
 - Only add comments when they explain WHY, not WHAT
 - Document complex algorithms or non-obvious business logic
+- **NO historical references** - Never write comments like "Use X instead of Y" or "Replaces old Z" that reference removed code. Future readers won't have context about what was removed. Just describe what the code does now.
+- **Use precise terminology** - Use accurate technical terms (e.g., "memoization" for multi-entry caching keyed by input parameters, "cache" for single-value storage). Imprecise terminology confuses readers about actual behavior.
 
 ## Critical Code Patterns
 
@@ -110,11 +206,17 @@ impl Client {
    - Use `Cow<'_, str>` to avoid unnecessary allocations
    - Prefer iterators over collecting into intermediate vectors
    - Use `Box<dyn Trait>` sparingly; prefer generics when possible
+   - Prefer per-instance state over global statics to support multiple instances with different configurations
 
 5. **Async Patterns**
    - Use `tokio::select!` for concurrent operations
    - Avoid blocking operations in async contexts
    - Use `async-trait` for async trait methods
+
+6. **API Documentation**
+   - Document memory implications for methods that load data into memory
+   - Point users to streaming alternatives for large data handling
+   - Be explicit about peak memory usage when relevant
 
 ## Code Quality Principles
 
@@ -220,18 +322,16 @@ Claude will periodically analyze the codebase and suggest:
 
 ### Pre-commit Checklist
 
-**MANDATORY: ALL steps must pass before submitting any PR. No warnings or errors are acceptable.**
+**MANDATORY: Run these steps before every commit. No warnings or errors are acceptable.**
 
-Before any code changes:
-1. ✅ **Format code**: Run `cargo fmt --all` to fix all formatting issues
-2. ✅ **Fix clippy warnings**: Run `cargo clippy --fix --allow-dirty --allow-staged --all-targets` to auto-fix lints
-3. ✅ **Verify clippy clean**: Run `cargo clippy --all-targets` and ensure **ZERO warnings**
-4. ✅ **Run all tests**: Run `cargo test` to ensure all tests pass
-5. ✅ **Build everything**: Run `cargo build --all-targets` to verify all code compiles
-6. ✅ **Test coverage**: Ensure new code has appropriate test coverage
-7. ✅ **No redundant comments**: Verify no redundant comments are added
+1. ✅ **Format code**: `cargo fmt --all`
+2. ✅ **Fix clippy warnings**: `cargo clippy --fix --allow-dirty --allow-staged --all-targets`
+3. ✅ **Verify clippy clean**: `cargo clippy --all-targets` (must show **ZERO warnings**)
+4. ✅ **Run all tests**: `cargo test`
+5. ✅ **Run doc tests**: `cargo test --doc`
+6. ✅ **Build everything**: `cargo build --all-targets`
 
-**Note:** If clippy shows warnings, you MUST fix them. Use `cargo clippy --fix` or fix manually.
+**Note:** If clippy shows warnings, you MUST fix them before committing.
 
 ## MinIO Server Setup for Testing
 
@@ -373,6 +473,7 @@ fn operation() -> Result<Response, Error> {
 - **Auto-fix clippy**: `cargo clippy --fix --allow-dirty --allow-staged --all-targets`
 - **Check clippy**: `cargo clippy --all-targets` (must show zero warnings)
 - **Run tests**: `cargo test`
+- **Run doc tests**: `cargo test --doc`
 - **Run specific test**: `cargo test test_name`
 - **Build all**: `cargo build --all-targets`
 - **Build release**: `cargo build --release`

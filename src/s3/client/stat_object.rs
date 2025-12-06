@@ -17,10 +17,15 @@ use crate::s3::builders::{StatObject, StatObjectBldr};
 use crate::s3::client::MinioClient;
 
 impl MinioClient {
-    /// Creates a [`StatObject`] request builder. Given a bucket and object name, return some statistics.
+    /// Creates a [`StatObject`] request builder to retrieve object metadata.
+    ///
+    /// This operation uses the HTTP HEAD method (S3 HeadObject API) to efficiently
+    /// retrieve object metadata without downloading the object body. This is the
+    /// standard and most efficient way to check if an object exists and get its
+    /// metadata (size, ETag, Content-Type, user metadata, etc.).
     ///
     /// To execute the request, call [`StatObject::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`StatObjectResponse`](crate::s3::response::StatObjectResponse).    
+    /// which returns a [`Result`] containing a [`StatObjectResponse`](crate::s3::response::StatObjectResponse).
     ///
     /// # Example
     ///
