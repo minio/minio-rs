@@ -31,5 +31,5 @@ pub mod types;
 pub mod utils;
 
 // Re-export types module contents for convenience
-pub use client::{MinioClient, MinioClientBuilder};
+pub use client::{ConnectionPoolConfig, MinioClient, MinioClientBuilder};
 pub use types::{header_constants, lifecycle_config, minio_error_response, sse};

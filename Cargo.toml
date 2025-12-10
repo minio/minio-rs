@@ -11,12 +11,16 @@ keywords = ["object-storage", "minio", "s3"]
 categories = ["api-bindings", "web-programming::http-client"]
 
 [features]
-default = ["default-tls", "default-crypto"]
+default = ["default-tls", "default-crypto", "http2"]
 default-tls = ["reqwest/default-tls"]
 native-tls = ["reqwest/native-tls"]
 rustls-tls = ["reqwest/rustls-tls"]
 default-crypto = ["dep:sha2", "dep:hmac"]
+# ring provides faster crypto using assembly optimizations
 ring = ["dep:ring"]
+# HTTP/2 support for improved throughput via multiplexing.
+# Gracefully falls back to HTTP/1.1 when the server doesn't support it.
+http2 = ["reqwest/http2"]
 localhost = []
 
 [workspace.dependencies]
@@ -60,7 +64,6 @@ regex = "1.12"
 ring = { version = "0.17", optional = true, default-features = false, features = ["alloc"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_yaml = "0.9"
 sha2 = { version = "0.10", optional = true }
 urlencoding = "2.1"
 xmltree = "0.12"

@@ -13,7 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! S3 client to perform bucket and object operations
+//! S3 client to perform bucket and object operations.
+//!
+//! # HTTP Version Support
+//!
+//! The client supports both HTTP/1.1 and HTTP/2. When connecting over TLS,
+//! the client will negotiate HTTP/2 via ALPN if the server supports it,
+//! otherwise it falls back to HTTP/1.1 gracefully. HTTP/2 provides better
+//! throughput for parallel requests through multiplexing.
+//!
+//! HTTP/2 support is enabled by default via the `http2` feature flag. For
+//! HTTP/1.1-only legacy S3-compatible services, you can disable it:
+//!
+//! ```toml
+//! [dependencies]
+//! minio = { version = "0.3", default-features = false, features = ["default-tls", "default-crypto"] }
+//! ```
 
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -26,7 +41,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use uuid::Uuid;
 
 use crate::s3::builders::{BucketExists, ComposeSource};
@@ -42,7 +57,7 @@ use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::*;
 use crate::s3::response_traits::{HasEtagFromHeaders, HasS3Fields};
 use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::signer::sign_v4_s3;
+use crate::s3::signer::{SigningKeyCache, sign_v4_s3};
 use crate::s3::utils::{EMPTY_SHA256, check_ssec_with_log, sha256_hash_sb, to_amz_date, utc_now};
 
 mod append_object;
@@ -143,6 +158,103 @@ impl Iterator for BodyIterator {
 /// exceeds this count, each part must be larger to remain within the limit.
 pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 
+/// Configuration for the HTTP connection pool.
+///
+/// These settings allow tuning the client for different workloads:
+/// - **High-throughput**: Increase `max_idle_per_host` and `idle_timeout`
+/// - **Low-latency**: Enable `tcp_nodelay` (default)
+/// - **Resource-constrained**: Reduce `max_idle_per_host` and `idle_timeout`
+///
+/// # Example
+///
+/// ```
+/// use minio::s3::client::ConnectionPoolConfig;
+/// use std::time::Duration;
+///
+/// // High-throughput configuration
+/// let config = ConnectionPoolConfig::default()
+///     .max_idle_per_host(64)
+///     .idle_timeout(Duration::from_secs(120));
+///
+/// // Resource-constrained configuration
+/// let config = ConnectionPoolConfig::default()
+///     .max_idle_per_host(4)
+///     .idle_timeout(Duration::from_secs(30));
+/// ```
+#[derive(Debug, Clone)]
+pub struct ConnectionPoolConfig {
+    /// Maximum number of idle connections per host.
+    ///
+    /// Higher values allow more parallel requests but consume more memory.
+    /// Default: 32 (optimized for parallel S3 operations)
+    pub max_idle_per_host: usize,
+
+    /// How long idle connections are kept in the pool.
+    ///
+    /// Longer timeouts reduce reconnection overhead but increase memory usage.
+    /// Default: 90 seconds
+    pub idle_timeout: std::time::Duration,
+
+    /// TCP keepalive interval.
+    ///
+    /// Helps detect dead connections and keeps connections alive through NAT/firewalls.
+    /// Default: 60 seconds
+    pub tcp_keepalive: std::time::Duration,
+
+    /// Enable TCP_NODELAY (disable Nagle's algorithm).
+    ///
+    /// Reduces latency for small requests but may reduce throughput on
+    /// high-bandwidth, high-latency links. Default: true
+    pub tcp_nodelay: bool,
+}
+
+impl Default for ConnectionPoolConfig {
+    fn default() -> Self {
+        Self {
+            max_idle_per_host: 32,
+            idle_timeout: std::time::Duration::from_secs(90),
+            tcp_keepalive: std::time::Duration::from_secs(60),
+            tcp_nodelay: true,
+        }
+    }
+}
+
+impl ConnectionPoolConfig {
+    /// Set the maximum number of idle connections per host.
+    ///
+    /// Higher values allow more parallel requests but consume more memory.
+    /// Typical values: 2-8 for light usage, 16-64 for heavy parallel workloads.
+    pub fn max_idle_per_host(mut self, max: usize) -> Self {
+        self.max_idle_per_host = max;
+        self
+    }
+
+    /// Set how long idle connections are kept in the pool.
+    ///
+    /// Longer timeouts reduce reconnection overhead but increase memory usage.
+    pub fn idle_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.idle_timeout = timeout;
+        self
+    }
+
+    /// Set the TCP keepalive interval.
+    ///
+    /// Helps detect dead connections and keeps connections alive through NAT/firewalls.
+    pub fn tcp_keepalive(mut self, interval: std::time::Duration) -> Self {
+        self.tcp_keepalive = interval;
+        self
+    }
+
+    /// Enable or disable TCP_NODELAY (Nagle's algorithm).
+    ///
+    /// When enabled (default), reduces latency for small requests.
+    /// Disable for better throughput on high-bandwidth, high-latency links.
+    pub fn tcp_nodelay(mut self, enable: bool) -> Self {
+        self.tcp_nodelay = enable;
+        self
+    }
+}
+
 /// Client Builder manufactures a Client using given parameters.
 /// Creates a builder given a base URL for the MinIO service or other AWS S3
 /// compatible object storage service.
@@ -158,6 +270,10 @@ pub struct MinioClientBuilder {
     ignore_cert_check: Option<bool>,
     /// Set the app info as an Option of (app_name, app_version) pair. This will show up in the client's user-agent.
     app_info: Option<(String, String)>,
+    /// Skip region lookup for MinIO servers (region is not used by MinIO).
+    skip_region_lookup: bool,
+    /// HTTP connection pool configuration.
+    connection_pool_config: ConnectionPoolConfig,
 }
 
 impl MinioClientBuilder {
@@ -171,6 +287,8 @@ impl MinioClientBuilder {
             ssl_cert_file: None,
             ignore_cert_check: None,
             app_info: None,
+            skip_region_lookup: false,
+            connection_pool_config: ConnectionPoolConfig::default(),
         }
     }
 
@@ -208,9 +326,81 @@ impl MinioClientBuilder {
         self
     }
 
+    /// Skip region lookup for MinIO servers.
+    ///
+    /// MinIO does not use AWS regions, so region lookup is unnecessary overhead.
+    /// When enabled, the client will use the default region ("us-east-1") for
+    /// all requests without making network calls to determine the bucket region.
+    ///
+    /// This improves performance by eliminating the first-request latency penalty
+    /// caused by region discovery.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::client::MinioClientBuilder;
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
+    ///
+    /// let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
+    /// let client = MinioClientBuilder::new(base_url)
+    ///     .provider(Some(StaticProvider::new("minioadmin", "minioadmin", None)))
+    ///     .skip_region_lookup(true)
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    pub fn skip_region_lookup(mut self, skip: bool) -> Self {
+        self.skip_region_lookup = skip;
+        self
+    }
+
+    /// Configure the HTTP connection pool settings.
+    ///
+    /// Allows tuning the client for different workloads (high-throughput,
+    /// low-latency, or resource-constrained environments).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use minio::s3::client::{MinioClientBuilder, ConnectionPoolConfig};
+    /// use minio::s3::creds::StaticProvider;
+    /// use minio::s3::http::BaseUrl;
+    /// use std::time::Duration;
+    ///
+    /// let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
+    ///
+    /// // High-throughput configuration for parallel uploads
+    /// let client = MinioClientBuilder::new(base_url)
+    ///     .provider(Some(StaticProvider::new("minioadmin", "minioadmin", None)))
+    ///     .connection_pool_config(
+    ///         ConnectionPoolConfig::default()
+    ///             .max_idle_per_host(64)
+    ///             .idle_timeout(Duration::from_secs(120))
+    ///     )
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    pub fn connection_pool_config(mut self, config: ConnectionPoolConfig) -> Self {
+        self.connection_pool_config = config;
+        self
+    }
+
     /// Build the Client.
     pub fn build(self) -> Result<MinioClient, Error> {
-        let mut builder = reqwest::Client::builder().no_gzip();
+        let pool_config = &self.connection_pool_config;
+        let mut builder = reqwest::Client::builder()
+            .no_gzip()
+            .tcp_nodelay(pool_config.tcp_nodelay)
+            .tcp_keepalive(pool_config.tcp_keepalive)
+            .pool_max_idle_per_host(pool_config.max_idle_per_host)
+            .pool_idle_timeout(pool_config.idle_timeout);
+
+        // HTTP/2 adaptive window improves throughput when server supports HTTP/2.
+        // Has no effect with HTTP/1.1-only servers (graceful fallback).
+        #[cfg(feature = "http2")]
+        {
+            builder = builder.http2_adaptive_window(true);
+        }
 
         let mut user_agent = String::from("MinIO (")
             + std::env::consts::OS
@@ -257,6 +447,8 @@ impl MinioClientBuilder {
                 client_hooks: self.client_hooks,
                 region_map: Default::default(),
                 express: Default::default(),
+                skip_region_lookup: self.skip_region_lookup,
+                signing_key_cache: RwLock::new(SigningKeyCache::new()),
             }),
         })
     }
@@ -537,6 +729,7 @@ impl MinioClient {
                 headers.add(X_AMZ_SECURITY_TOKEN, creds.session_token.unwrap());
             }
             sign_v4_s3(
+                &self.shared.signing_key_cache,
                 method,
                 &url.path,
                 region,
@@ -729,6 +922,145 @@ impl MinioClient {
         Ok(())
     }
 
+    /// Fast-path GET request that bypasses the general S3 API overhead.
+    ///
+    /// This method is optimized for high-performance object retrieval scenarios
+    /// like DataFusion/ObjectStore integration where minimal latency is critical.
+    ///
+    /// Returns the raw reqwest Response for direct stream access.
+    ///
+    /// # Arguments
+    /// * `bucket` - The bucket name (validated)
+    /// * `object` - The object key (validated)
+    /// * `range` - Optional byte range as (offset, length). If length is 0 or None, reads from offset to end.
+    ///
+    /// # Important Limitations
+    ///
+    /// This method bypasses several standard client features for performance:
+    ///
+    /// - **No hooks**: Client hooks registered via [`MinioClientBuilder::hook`] are NOT called.
+    ///   This means custom authentication, logging, metrics, or request modification will not apply.
+    /// - **ALWAYS skips region lookup**: Unconditionally uses the default region ("us-east-1"),
+    ///   **ignoring** the client's [`skip_region_lookup`](MinioClientBuilder::skip_region_lookup) setting.
+    ///   This is correct for MinIO servers but **WILL FAIL** for AWS S3 buckets in non-default regions.
+    ///   If your client is configured with `skip_region_lookup(false)` expecting region lookups to work,
+    ///   this method will silently bypass that configuration and use "us-east-1" anyway.
+    /// - **No extra headers**: Does not add custom headers that might be configured elsewhere.
+    ///
+    /// # When to Use
+    ///
+    /// Use this method when:
+    /// - You need maximum throughput for bulk data retrieval
+    /// - You're integrating with systems like Apache Arrow/DataFusion
+    /// - You've already validated bucket/object names upstream
+    /// - You don't need hook functionality (logging, metrics, custom auth)
+    ///
+    /// # When NOT to Use
+    ///
+    /// Use the standard [`get_object`](MinioClient::get_object) API when:
+    /// - You need hook support for authentication, logging, or monitoring
+    /// - You're working with AWS S3 buckets that may be in non-default regions
+    /// - Your client has `skip_region_lookup(false)` and expects region lookups to work
+    /// - You want the full feature set of the SDK
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Bucket name is invalid (same validation as standard API)
+    /// - Object name is invalid (same validation as standard API)
+    /// - The server returns a non-success status code
+    pub async fn get_object_fast(
+        &self,
+        bucket: &str,
+        object: &str,
+        range: Option<(u64, Option<u64>)>,
+    ) -> Result<reqwest::Response, Error> {
+        use crate::s3::utils::{check_bucket_name, check_object_name};
+
+        // Validate inputs (same as standard API)
+        check_bucket_name(bucket, true)?;
+        check_object_name(object)?;
+
+        // Use default region (skip region lookup for performance)
+        let region = DEFAULT_REGION;
+
+        // Build URL directly (no query params for GET)
+        let url = self.shared.base_url.build_url(
+            &Method::GET,
+            region,
+            &Multimap::new(),
+            Some(bucket),
+            Some(object),
+        )?;
+
+        // Build headers in Multimap (single source of truth)
+        let date = utc_now();
+        let mut headers = Multimap::new();
+        headers.add(HOST, url.host_header_value());
+        headers.add(X_AMZ_DATE, to_amz_date(date));
+        headers.add(X_AMZ_CONTENT_SHA256, EMPTY_SHA256);
+
+        // Add range header if specified
+        if let Some((offset, length)) = range {
+            let range_str = match length {
+                Some(len) if len > 0 => format!("bytes={}-{}", offset, offset + len - 1),
+                _ => format!("bytes={}-", offset),
+            };
+            headers.add(RANGE, range_str);
+        }
+
+        // Sign the request if we have credentials
+        if let Some(provider) = &self.shared.provider {
+            let creds = provider.fetch();
+            if let Some(token) = &creds.session_token {
+                headers.add(X_AMZ_SECURITY_TOKEN, token);
+            }
+
+            sign_v4_s3(
+                &self.shared.signing_key_cache,
+                &Method::GET,
+                &url.path,
+                region,
+                &mut headers,
+                &Multimap::new(),
+                &creds.access_key,
+                &creds.secret_key,
+                EMPTY_SHA256,
+                date,
+            );
+        }
+
+        // Build reqwest request and transfer all headers
+        let mut req = self.http_client.get(url.to_string());
+        for (key, values) in headers.iter_all() {
+            for value in values {
+                req = req.header(key, value);
+            }
+        }
+
+        // Send request
+        let resp = req.send().await.map_err(ValidationErr::from)?;
+
+        if resp.status().is_success() {
+            return Ok(resp);
+        }
+
+        // Handle error response
+        let status = resp.status();
+        Err(Error::S3Server(S3ServerError::S3Error(Box::new(
+            MinioErrorResponse::from_status_and_message(
+                status.as_u16(),
+                format!(
+                    "GET object failed with status {} ({}): {}/{}",
+                    status.as_u16(),
+                    status.canonical_reason().unwrap_or("Unknown"),
+                    bucket,
+                    object
+                ),
+            ),
+        ))))
+    }
+
     /// create an example client for testing on localhost
     #[cfg(feature = "localhost")]
     pub fn create_client_on_localhost()
@@ -745,13 +1077,18 @@ impl MinioClient {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct SharedClientItems {
     pub(crate) base_url: BaseUrl,
     pub(crate) provider: Option<Arc<dyn Provider + Send + Sync + 'static>>,
     client_hooks: Vec<Arc<dyn RequestHooks + Send + Sync + 'static>>,
     region_map: DashMap<String, String>,
     express: OnceLock<bool>,
+    pub(crate) skip_region_lookup: bool,
+    /// Cached precomputation of AWS Signature V4 signing keys.
+    /// Stored per-client to support multiple clients with different credentials
+    /// in the same process.
+    pub(crate) signing_key_cache: RwLock<SigningKeyCache>,
 }
 
 impl SharedClientItems {

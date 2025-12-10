@@ -14,12 +14,37 @@
 // limitations under the License.
 
 use crate::s3::utils::url_encode;
-use lazy_static::lazy_static;
-use regex::Regex;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 /// Multimap for string key and string value
 pub type Multimap = multimap::MultiMap<String, String>;
+
+/// Collapses multiple spaces into a single space (avoids regex overhead).
+///
+/// Returns `Cow::Borrowed` when no transformation is needed (common case),
+/// avoiding allocation for header values that don't contain consecutive spaces.
+#[inline]
+fn collapse_spaces(s: &str) -> Cow<'_, str> {
+    let trimmed = s.trim();
+    if !trimmed.contains("  ") {
+        return Cow::Borrowed(trimmed);
+    }
+    let mut result = String::with_capacity(trimmed.len());
+    let mut prev_space = false;
+    for c in trimmed.chars() {
+        if c == ' ' {
+            if !prev_space {
+                result.push(' ');
+                prev_space = true;
+            }
+        } else {
+            result.push(c);
+            prev_space = false;
+        }
+    }
+    Cow::Owned(result)
+}
 
 pub trait MultimapExt {
     /// Adds a key-value pair to the multimap
@@ -76,60 +101,77 @@ impl MultimapExt for Multimap {
     }
 
     fn get_canonical_query_string(&self) -> String {
-        let mut keys: Vec<String> = Vec::new();
-        for (key, _) in self.iter() {
-            keys.push(key.to_string());
-        }
-        keys.sort();
+        // Use BTreeMap for automatic sorting (avoids explicit sort)
+        let mut sorted: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        let mut total_len = 0usize;
 
-        let mut query = String::new();
-        for key in keys {
-            match self.get_vec(key.as_str()) {
-                Some(values) => {
-                    for value in values {
-                        if !query.is_empty() {
-                            query.push('&');
-                        }
-                        query.push_str(&url_encode(key.as_str()));
-                        query.push('=');
-                        query.push_str(&url_encode(value));
-                    }
+        for (key, values) in self.iter_all() {
+            for value in values {
+                // Pre-calculate total length to avoid reallocations.
+                // Most S3 query params are alphanumeric (uploadId, partNumber, versionId)
+                // so we use actual length + 20% buffer for occasional URL encoding.
+                total_len += key.len() + 1 + value.len() + 2; // key=value&
+            }
+            sorted
+                .entry(key.as_str())
+                .or_default()
+                .extend(values.iter().map(|s| s.as_str()));
+        }
+
+        // Add 20% buffer for URL encoding overhead
+        let mut query = String::with_capacity(total_len + total_len / 5);
+        for (key, values) in sorted {
+            for value in values {
+                if !query.is_empty() {
+                    query.push('&');
                 }
-                None => todo!(), // This never happens.
-            };
+                query.push_str(&url_encode(key));
+                query.push('=');
+                query.push_str(&url_encode(value));
+            }
         }
 
         query
     }
 
     fn get_canonical_headers(&self) -> (String, String) {
-        lazy_static! {
-            static ref MULTI_SPACE_REGEX: Regex = Regex::new("( +)").unwrap();
-        }
+        // Use BTreeMap for automatic sorting (avoids explicit sort)
         let mut btmap: BTreeMap<String, String> = BTreeMap::new();
+
+        // Pre-calculate sizes for better allocation
+        let mut key_bytes = 0usize;
+        let mut value_bytes = 0usize;
 
         for (k, values) in self.iter_all() {
             let key = k.to_lowercase();
-            if "authorization" == key || "user-agent" == key {
+            if key == "authorization" || key == "user-agent" {
                 continue;
             }
 
-            let mut vs = values.clone();
+            // Sort values in place if needed
+            let mut vs: Vec<&String> = values.iter().collect();
             vs.sort();
 
-            let mut value = String::new();
+            let mut value =
+                String::with_capacity(vs.iter().map(|v| v.len()).sum::<usize>() + vs.len());
             for v in vs {
                 if !value.is_empty() {
                     value.push(',');
                 }
-                let s: String = MULTI_SPACE_REGEX.replace_all(&v, " ").trim().to_string();
-                value.push_str(&s);
+                value.push_str(&collapse_spaces(v));
             }
-            btmap.insert(key.clone(), value.clone());
+
+            key_bytes += key.len();
+            value_bytes += value.len();
+            btmap.insert(key, value);
         }
 
-        let mut signed_headers = String::new();
-        let mut canonical_headers = String::new();
+        // Pre-allocate output strings
+        let header_count = btmap.len();
+        let mut signed_headers = String::with_capacity(key_bytes + header_count);
+        let mut canonical_headers =
+            String::with_capacity(key_bytes + value_bytes + header_count * 2);
+
         let mut add_delim = false;
         for (key, value) in &btmap {
             if add_delim {
@@ -147,5 +189,105 @@ impl MultimapExt for Multimap {
         }
 
         (signed_headers, canonical_headers)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_collapse_spaces_no_consecutive_spaces() {
+        // Should return Cow::Borrowed (no allocation)
+        let result = collapse_spaces("hello world");
+        assert_eq!(result, "hello world");
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_collapse_spaces_with_consecutive_spaces() {
+        // Should return Cow::Owned with spaces collapsed
+        let result = collapse_spaces("hello  world");
+        assert_eq!(result, "hello world");
+        assert!(matches!(result, Cow::Owned(_)));
+
+        let result = collapse_spaces("hello   world");
+        assert_eq!(result, "hello world");
+
+        let result = collapse_spaces("a  b  c  d");
+        assert_eq!(result, "a b c d");
+    }
+
+    #[test]
+    fn test_collapse_spaces_multiple_groups() {
+        let result = collapse_spaces("hello  world  foo   bar");
+        assert_eq!(result, "hello world foo bar");
+    }
+
+    #[test]
+    fn test_collapse_spaces_leading_trailing() {
+        // Leading and trailing spaces should be trimmed
+        let result = collapse_spaces("  hello world  ");
+        assert_eq!(result, "hello world");
+        assert!(matches!(result, Cow::Borrowed(_)));
+
+        let result = collapse_spaces("  hello  world  ");
+        assert_eq!(result, "hello world");
+        assert!(matches!(result, Cow::Owned(_)));
+    }
+
+    #[test]
+    fn test_collapse_spaces_only_spaces() {
+        let result = collapse_spaces("   ");
+        assert_eq!(result, "");
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_collapse_spaces_empty_string() {
+        let result = collapse_spaces("");
+        assert_eq!(result, "");
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_collapse_spaces_single_space() {
+        let result = collapse_spaces(" ");
+        assert_eq!(result, "");
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_collapse_spaces_no_spaces() {
+        let result = collapse_spaces("helloworld");
+        assert_eq!(result, "helloworld");
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_collapse_spaces_tabs_not_collapsed() {
+        // Only spaces are collapsed, not tabs
+        let result = collapse_spaces("hello\t\tworld");
+        assert_eq!(result, "hello\t\tworld");
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_collapse_spaces_mixed_whitespace() {
+        // Tabs and spaces mixed - only consecutive spaces collapsed
+        let result = collapse_spaces("hello  \t  world");
+        assert_eq!(result, "hello \t world");
+    }
+
+    #[test]
+    fn test_collapse_spaces_realistic_header_value() {
+        // Realistic header value that should not need modification
+        let result = collapse_spaces("application/json");
+        assert_eq!(result, "application/json");
+        assert!(matches!(result, Cow::Borrowed(_)));
+
+        let result = collapse_spaces("bytes=0-1023");
+        assert_eq!(result, "bytes=0-1023");
+        assert!(matches!(result, Cow::Borrowed(_)));
     }
 }

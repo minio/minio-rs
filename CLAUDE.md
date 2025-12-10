@@ -2,7 +2,6 @@
 
 - Only provide actionable feedback.
 - Exclude code style comments on generated files. These will have a header signifying that.
-- Use github markdown folded sections for all items.
 - Do not use emojis.
 - Do not add a "feel good" section.
 
@@ -53,6 +52,8 @@ All source files that haven't been generated MUST include the following copyrigh
 - Avoid obvious comments like `// Set x to 5` for `let x = 5;`
 - Only add comments when they explain WHY, not WHAT
 - Document complex algorithms or non-obvious business logic
+- **NO historical references** - Never write comments like "Use X instead of Y" or "Replaces old Z" that reference removed code. Future readers won't have context about what was removed. Just describe what the code does now.
+- **Use precise terminology** - Use accurate technical terms (e.g., "memoization" for multi-entry caching keyed by input parameters, "cache" for single-value storage). Imprecise terminology confuses readers about actual behavior.
 
 ## Critical Code Patterns
 
@@ -110,11 +111,17 @@ impl Client {
    - Use `Cow<'_, str>` to avoid unnecessary allocations
    - Prefer iterators over collecting into intermediate vectors
    - Use `Box<dyn Trait>` sparingly; prefer generics when possible
+   - Prefer per-instance state over global statics to support multiple instances with different configurations
 
 5. **Async Patterns**
    - Use `tokio::select!` for concurrent operations
    - Avoid blocking operations in async contexts
    - Use `async-trait` for async trait methods
+
+6. **API Documentation**
+   - Document memory implications for methods that load data into memory
+   - Point users to streaming alternatives for large data handling
+   - Be explicit about peak memory usage when relevant
 
 ## Code Quality Principles
 
@@ -220,18 +227,16 @@ Claude will periodically analyze the codebase and suggest:
 
 ### Pre-commit Checklist
 
-**MANDATORY: ALL steps must pass before submitting any PR. No warnings or errors are acceptable.**
+**MANDATORY: Run these steps before every commit. No warnings or errors are acceptable.**
 
-Before any code changes:
-1. ✅ **Format code**: Run `cargo fmt --all` to fix all formatting issues
-2. ✅ **Fix clippy warnings**: Run `cargo clippy --fix --allow-dirty --allow-staged --all-targets` to auto-fix lints
-3. ✅ **Verify clippy clean**: Run `cargo clippy --all-targets` and ensure **ZERO warnings**
-4. ✅ **Run all tests**: Run `cargo test` to ensure all tests pass
-5. ✅ **Build everything**: Run `cargo build --all-targets` to verify all code compiles
-6. ✅ **Test coverage**: Ensure new code has appropriate test coverage
-7. ✅ **No redundant comments**: Verify no redundant comments are added
+1. ✅ **Format code**: `cargo fmt --all`
+2. ✅ **Fix clippy warnings**: `cargo clippy --fix --allow-dirty --allow-staged --all-targets`
+3. ✅ **Verify clippy clean**: `cargo clippy --all-targets` (must show **ZERO warnings**)
+4. ✅ **Run all tests**: `cargo test`
+5. ✅ **Run doc tests**: `cargo test --doc`
+6. ✅ **Build everything**: `cargo build --all-targets`
 
-**Note:** If clippy shows warnings, you MUST fix them. Use `cargo clippy --fix` or fix manually.
+**Note:** If clippy shows warnings, you MUST fix them before committing.
 
 ## MinIO Server Setup for Testing
 
@@ -373,6 +378,7 @@ fn operation() -> Result<Response, Error> {
 - **Auto-fix clippy**: `cargo clippy --fix --allow-dirty --allow-staged --all-targets`
 - **Check clippy**: `cargo clippy --all-targets` (must show zero warnings)
 - **Run tests**: `cargo test`
+- **Run doc tests**: `cargo test --doc`
 - **Run specific test**: `cargo test test_name`
 - **Build all**: `cargo build --all-targets`
 - **Build release**: `cargo build --release`
