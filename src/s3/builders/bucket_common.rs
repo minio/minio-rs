@@ -15,6 +15,7 @@
 
 use crate::s3::client::MinioClient;
 use crate::s3::multimap_ext::Multimap;
+use crate::s3::types::{BucketName, Region};
 use std::marker::PhantomData;
 use typed_builder::TypedBuilder;
 
@@ -28,10 +29,10 @@ pub struct BucketCommon<T> {
     pub(crate) extra_headers: Option<Multimap>,
     #[builder(default, setter(into))]
     pub(crate) extra_query_params: Option<Multimap>,
-    #[builder(default, setter(into))]
-    pub(crate) region: Option<String>,
-    #[builder(setter(into))] // force required + accept Into<String>
-    pub(crate) bucket: String,
+    #[builder(default)]
+    pub(crate) region: Option<Region>,
+    #[builder(!default)] // force required
+    pub(crate) bucket: BucketName,
 
     #[builder(default)]
     _operation: PhantomData<T>,

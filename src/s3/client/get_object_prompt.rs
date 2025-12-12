@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use crate::s3::builders::{GetObjectPrompt, GetObjectPromptBldr};
-
 use crate::s3::client::MinioClient;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`GetObjectPrompt`] request builder. Prompt an object using natural language.
@@ -30,7 +30,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::GetObjectPromptResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -38,16 +38,16 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetObjectPromptResponse = client
-    ///         .get_object_prompt("bucket-name", "object-name", "What is it about?")
+    ///         .get_object_prompt(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap(), "What is it about?")
     ///         .build().send().await.unwrap();
     ///     println!("the prompt response is: '{:?}'", resp.prompt_response());
     /// }
     /// ```
-    pub fn get_object_prompt<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
+    pub fn get_object_prompt<S: Into<String>>(
         &self,
-        bucket: S1,
-        object: S2,
-        prompt: S3,
+        bucket: BucketName,
+        object: ObjectKey,
+        prompt: S,
     ) -> GetObjectPromptBldr {
         GetObjectPrompt::builder()
             .client(self.clone())

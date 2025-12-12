@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{ListObjectBldr, ListObjects};
 use crate::s3::client::MinioClient;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`ListObjects`] request builder.
@@ -32,7 +33,7 @@ impl MinioClient {
     /// use minio::s3::MinioClient;
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
-    /// use minio::s3::types::{ToStream, S3Api};
+    /// use minio::s3::types::{BucketName, ToStream, S3Api};
     /// use futures_util::StreamExt;
     ///
     /// #[tokio::main]
@@ -42,7 +43,7 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///
     ///     let mut resp = client
-    ///         .list_objects("bucket-name")
+    ///         .list_objects(BucketName::new("bucket-name").unwrap())
     ///         .recursive(true)
     ///         .use_api_v1(false) // use v2
     ///         .include_versions(true)
@@ -61,7 +62,7 @@ impl MinioClient {
     ///     }
     /// }
     /// ```
-    pub fn list_objects<S: Into<String>>(&self, bucket: S) -> ListObjectBldr {
+    pub fn list_objects(&self, bucket: BucketName) -> ListObjectBldr {
         ListObjects::builder().client(self.clone()).bucket(bucket)
     }
 }

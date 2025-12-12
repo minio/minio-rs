@@ -44,7 +44,7 @@ pub(crate) async fn bench_object_append(criterion: &mut Criterion) {
                     tokio::runtime::Runtime::new().map_err(|e| Error::DriveIo(e.into()))?;
                 runtime.block_on(
                     ctx.client
-                        .stat_object(&ctx.bucket, &ctx.object)
+                        .stat_object(ctx.bucket_name(), ctx.object_key())
                         .build()
                         .send(),
                 )
@@ -54,8 +54,8 @@ pub(crate) async fn bench_object_append(criterion: &mut Criterion) {
             let offset_bytes: u64 = resp.size().unwrap();
             AppendObject::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
-                .object(ctx.object.clone())
+                .bucket(ctx.bucket_name())
+                .object(ctx.object_key())
                 .data(Arc::new(data1))
                 .offset_bytes(offset_bytes)
                 .build()

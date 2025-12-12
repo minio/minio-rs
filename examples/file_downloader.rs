@@ -18,7 +18,7 @@ mod common;
 use crate::common::{create_bucket_if_not_exists, create_client_on_play};
 use minio::s3::MinioClient;
 use minio::s3::builders::ObjectContent;
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, ObjectKey, S3Api};
 use std::path::Path;
 
 #[tokio::main]
@@ -44,7 +44,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let content = ObjectContent::from(filename);
     client
-        .put_object_content(bucket_name, object_name, content)
+        .put_object_content(
+            BucketName::new(bucket_name)?,
+            ObjectKey::new(object_name)?,
+            content,
+        )
         .build()
         .send()
         .await?;
@@ -55,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     let get_object = client
-        .get_object(bucket_name, object_name)
+        .get_object(BucketName::new(bucket_name)?, ObjectKey::new(object_name)?)
         .build()
         .send()
         .await?;

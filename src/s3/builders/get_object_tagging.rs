@@ -17,8 +17,8 @@ use crate::s3::client::MinioClient;
 use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::GetObjectTaggingResponse;
-use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, check_object_name, insert};
+use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId};
+use crate::s3::utils::insert;
 use http::Method;
 use typed_builder::TypedBuilder;
 
@@ -34,17 +34,19 @@ pub struct GetObjectTagging {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
     #[builder(default, setter(into))]
-    version_id: Option<String>,
+    version_id: Option<VersionId>,
 }
 
 pub type GetObjectTaggingBldr =
-    GetObjectTaggingBuilder<((MinioClient,), (), (), (), (String,), (String,), ())>;
+    GetObjectTaggingBuilder<((MinioClient,), (), (), (), (BucketName,), (ObjectKey,), ())>;
 
 impl S3Api for GetObjectTagging {
     type S3Response = GetObjectTaggingResponse;
@@ -52,9 +54,6 @@ impl S3Api for GetObjectTagging {
 
 impl ToS3Request for GetObjectTagging {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-        check_object_name(&self.object)?;
-
         let mut query_params: Multimap = insert(self.extra_query_params, "tagging");
         query_params.add_version(self.version_id);
 

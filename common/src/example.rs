@@ -17,9 +17,10 @@ use chrono::{DateTime, Utc};
 use minio::s3::builders::PostPolicy;
 use minio::s3::lifecycle_config::{LifecycleConfig, LifecycleRule};
 use minio::s3::types::{
-    AndOperator, CsvInputSerialization, CsvOutputSerialization, Destination, FileHeaderInfo,
-    Filter, NotificationConfig, ObjectLockConfig, PrefixFilterRule, QueueConfig, QuoteFields,
-    ReplicationConfig, ReplicationRule, RetentionMode, SelectRequest, SuffixFilterRule,
+    AndOperator, BucketName, CsvInputSerialization, CsvOutputSerialization, Destination,
+    FileHeaderInfo, Filter, NotificationConfig, ObjectLockConfig, PrefixFilterRule, QueueConfig,
+    QuoteFields, ReplicationConfig, ReplicationRule, RetentionMode, SelectRequest,
+    SuffixFilterRule,
 };
 use minio::s3::utils::utc_now;
 use std::collections::HashMap;
@@ -170,7 +171,8 @@ pub fn create_object_lock_config_example() -> ObjectLockConfig {
 pub fn create_post_policy_example(bucket_name: &str, object_name: &str) -> PostPolicy {
     let expiration: DateTime<Utc> = utc_now() + chrono::Duration::days(5);
 
-    let mut policy = PostPolicy::new(bucket_name, expiration).unwrap();
+    let mut policy =
+        PostPolicy::new(BucketName::try_from(bucket_name).unwrap(), expiration).unwrap();
     policy.add_equals_condition("key", object_name).unwrap();
     policy
         .add_content_length_range_condition(1024 * 1024, 4 * 1024 * 1024)

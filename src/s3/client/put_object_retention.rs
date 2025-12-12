@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{PutObjectRetention, PutObjectRetentionBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`PutObjectRetention`] request builder.
@@ -36,7 +37,7 @@ impl MinioClient {
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::PutObjectRetentionResponse;
     /// use minio::s3::builders::ObjectToDelete;
-    /// use minio::s3::types::{S3Api, RetentionMode};
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api, RetentionMode};
     /// use minio::s3::utils::utc_now;
     /// use minio::s3::response_traits::HasObject;
     ///
@@ -47,17 +48,17 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let retain_until_date = utc_now() + chrono::Duration::days(1);
     ///     let resp: PutObjectRetentionResponse = client
-    ///         .put_object_retention("bucket-name", "object-name")
+    ///         .put_object_retention(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap())
     ///         .retention_mode(RetentionMode::GOVERNANCE)
     ///         .retain_until_date(Some(retain_until_date))
     ///         .build().send().await.unwrap();
     ///     println!("set the object retention for object '{}'", resp.object());
     /// }
     /// ```
-    pub fn put_object_retention<S1: Into<String>, S2: Into<String>>(
+    pub fn put_object_retention(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
     ) -> PutObjectRetentionBldr {
         PutObjectRetention::builder()
             .client(self.clone())

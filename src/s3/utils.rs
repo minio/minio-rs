@@ -18,6 +18,7 @@ use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::{Sse, SseCustomerKey};
+use crate::s3::types::{BucketName, ObjectKey};
 use base64::engine::Engine as _;
 use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
 use crc::{Algorithm, Crc};
@@ -85,10 +86,6 @@ lazy_static! {
 ///
 /// Uses crc32fast which provides hardware acceleration via pclmulqdq instruction
 /// on modern CPUs, falling back to optimized software implementation otherwise.
-///
-/// Note: Unlike `Crc<u64>` from the `crc` crate (used for CRC64-NVME), creating a new
-/// `crc32fast::Hasher` is cheap - it only initializes a u32 state value. The lookup
-/// tables are compiled into the crate, so no caching is needed here.
 pub fn crc32(data: &[u8]) -> u32 {
     let mut hasher = Crc32Hasher::new();
     hasher.update(data);
@@ -1279,8 +1276,8 @@ pub fn check_ssec(
 pub fn check_ssec_with_log(
     ssec: &Option<SseCustomerKey>,
     client: &MinioClient,
-    bucket: &str,
-    object: &str,
+    bucket: &BucketName,
+    object: &ObjectKey,
     version: &Option<String>,
 ) -> Result<(), ValidationErr> {
     if ssec.is_some() && !client.is_secure() {

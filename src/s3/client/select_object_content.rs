@@ -15,7 +15,7 @@
 
 use crate::s3::builders::{SelectObjectContent, SelectObjectContentBldr};
 use crate::s3::client::MinioClient;
-use crate::s3::types::SelectRequest;
+use crate::s3::types::{BucketName, ObjectKey, SelectRequest};
 
 impl MinioClient {
     /// Creates a [`SelectObjectContent`] request builder.
@@ -32,7 +32,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::SelectObjectContentResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
     /// use minio::s3::types::{SelectRequest, CsvInputSerialization, CsvOutputSerialization, FileHeaderInfo, QuoteFields};
     ///
     /// #[tokio::main]
@@ -62,15 +62,15 @@ impl MinioClient {
     ///     ).unwrap();
     ///
     ///     let resp: SelectObjectContentResponse = client
-    ///         .select_object_content("bucket-name", "object-name", request)
+    ///         .select_object_content(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap(), request)
     ///         .build().send().await.unwrap();
     ///     println!("the progress: '{:?}'", resp.progress);
     /// }
     /// ```
-    pub fn select_object_content<S1: Into<String>, S2: Into<String>>(
+    pub fn select_object_content(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
         request: SelectRequest,
     ) -> SelectObjectContentBldr {
         SelectObjectContent::builder()

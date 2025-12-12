@@ -19,15 +19,18 @@ use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::GetObjectPromptResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::SseCustomerKey;
-use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, check_object_name, check_ssec};
+use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId};
+use crate::s3::utils::check_ssec;
 use bytes::Bytes;
 use http::Method;
 use serde_json::json;
 use std::sync::Arc;
 use typed_builder::TypedBuilder;
 
-/// Argument builder for the `GetObjectPrompt` operation.
+/// Argument builder for the `GetObjectPrompt` operation (MinIO extension).
+///
+/// This is a MinIO-specific extension that uses S3 Select to process objects with AI/LLM prompts.
+/// See: <https://min.io/docs/minio/linux/developers/minio-drivers.html>
 ///
 /// This struct constructs the parameters required for the [`Client::get_object_prompt`](crate::s3::client::MinioClient::get_object_prompt) method.
 #[derive(Debug, Clone, TypedBuilder)]
@@ -39,17 +42,19 @@ pub struct GetObjectPrompt {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
     #[builder(setter(into))] // force required + accept Into<String>
     prompt: String,
     #[builder(default, setter(into))]
     lambda_arn: Option<String>,
     #[builder(default, setter(into))]
-    version_id: Option<String>,
+    version_id: Option<VersionId>,
     #[builder(default, setter(into))]
     ssec: Option<SseCustomerKey>,
 }
@@ -59,8 +64,8 @@ pub type GetObjectPromptBldr = GetObjectPromptBuilder<(
     (),
     (),
     (),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
     (String,),
     (),
     (),
@@ -74,8 +79,6 @@ impl S3Api for GetObjectPrompt {
 impl ToS3Request for GetObjectPrompt {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         {
-            check_bucket_name(&self.bucket, true)?;
-            check_object_name(&self.object)?;
             check_ssec(&self.ssec, &self.client)?;
             if self.client.is_aws_host() {
                 return Err(ValidationErr::UnsupportedAwsApi("ObjectPrompt".into()));

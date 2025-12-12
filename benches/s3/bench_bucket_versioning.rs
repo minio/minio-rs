@@ -29,7 +29,7 @@ pub(crate) async fn bench_get_bucket_versioning(criterion: &mut Criterion) {
         |ctx| {
             GetBucketVersioning::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(ctx.bucket_name())
                 .build()
         },
     )
@@ -45,7 +45,7 @@ pub(crate) async fn bench_put_bucket_versioning(criterion: &mut Criterion) {
         |ctx| {
             PutBucketVersioning::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(ctx.bucket_name())
                 .versioning_status(VersioningStatus::Enabled)
                 .build()
         },

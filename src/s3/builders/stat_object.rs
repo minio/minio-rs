@@ -19,10 +19,8 @@ use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::StatObjectResponse;
 use crate::s3::sse::{Sse, SseCustomerKey};
-use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{
-    UtcTime, check_bucket_name, check_object_name, check_ssec, to_http_header_value,
-};
+use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId};
+use crate::s3::utils::{UtcTime, check_ssec, to_http_header_value};
 use async_trait::async_trait;
 use http::Method;
 use typed_builder::TypedBuilder;
@@ -46,14 +44,16 @@ pub struct StatObject {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
 
     #[builder(default, setter(into))]
-    version_id: Option<String>,
+    version_id: Option<VersionId>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(default, setter(into))]
     ssec: Option<SseCustomerKey>,
 
@@ -75,8 +75,8 @@ pub type StatObjectBldr = StatObjectBuilder<(
     (MinioClient,),
     (),
     (),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
     (),
     (),
     (),
@@ -93,8 +93,6 @@ impl S3Api for StatObject {
 #[async_trait]
 impl ToS3Request for StatObject {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-        check_object_name(&self.object)?;
         check_ssec(&self.ssec, &self.client)?;
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();

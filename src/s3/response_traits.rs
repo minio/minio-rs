@@ -160,24 +160,32 @@ pub trait HasS3Fields {
 pub trait HasBucket: HasS3Fields {
     /// Returns the name of the S3 bucket.
     #[inline]
-    fn bucket(&self) -> &str {
-        self.request().bucket.as_deref().unwrap_or_default()
+    fn bucket(&self) -> &str { //TODO consider using BucketName type
+        self.request()
+            .bucket
+            .as_ref()
+            .map(|b| b.as_str())
+            .unwrap_or_default()
     }
 }
 /// Returns the object key (name) of the S3 object.
 pub trait HasObject: HasS3Fields {
     /// Returns the object key (name) of the S3 object.
     #[inline]
-    fn object(&self) -> &str {
-        self.request().object.as_deref().unwrap_or_default()
+    fn object(&self) -> &str { //TODO consider using ObjectKey type
+        self.request()
+            .object
+            .as_ref()
+            .map(|o| o.as_str())
+            .unwrap_or_default()
     }
 }
 /// Returns the region of the S3 bucket.
 pub trait HasRegion: HasS3Fields {
     /// Returns the region of the S3 bucket.
     #[inline]
-    fn region(&self) -> &str {
-        &self.request().inner_region
+    fn region(&self) -> &str { // TODO consider using Region type
+        self.request().inner_region.as_str()
     }
 }
 
@@ -185,7 +193,7 @@ pub trait HasRegion: HasS3Fields {
 pub trait HasVersion: HasS3Fields {
     /// Returns the version ID of the object (`x-amz-version-id`), if versioning is enabled for the bucket.
     #[inline]
-    fn version_id(&self) -> Option<&str> {
+    fn version_id(&self) -> Option<&str> { // TODO consider using VersionId type
         self.headers()
             .get(X_AMZ_VERSION_ID)
             .and_then(|v| v.to_str().ok())
@@ -200,7 +208,7 @@ pub trait HasEtagFromHeaders: HasS3Fields {
     #[inline]
     fn etag(&self) -> Result<String, ValidationErr> {
         // Retrieve the ETag from the response headers.
-        let etag = self
+        let etag: String = self // TODO create an etag struct
             .headers()
             .get("etag")
             .and_then(|v| v.to_str().ok())

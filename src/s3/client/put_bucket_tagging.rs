@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{PutBucketTagging, PutBucketTaggingBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`PutBucketTagging`] request builder.
@@ -32,7 +33,7 @@ impl MinioClient {
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketTaggingResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, S3Api};
     /// use minio::s3::response_traits::HasBucket;
     /// use std::collections::HashMap;
     ///
@@ -47,13 +48,13 @@ impl MinioClient {
     ///     tags.insert(String::from("User"), String::from("jsmith"));
     ///
     ///     let resp: PutBucketTaggingResponse = client
-    ///         .put_bucket_tagging("bucket-name")
+    ///         .put_bucket_tagging(BucketName::new("bucket-name").unwrap())
     ///         .tags(tags)
     ///         .build().send().await.unwrap();
     ///     println!("set tags on bucket '{}'", resp.bucket());
     /// }
     /// ```
-    pub fn put_bucket_tagging<S: Into<String>>(&self, bucket: S) -> PutBucketTaggingBldr {
+    pub fn put_bucket_tagging(&self, bucket: BucketName) -> PutBucketTaggingBldr {
         PutBucketTagging::builder()
             .client(self.clone())
             .bucket(bucket)

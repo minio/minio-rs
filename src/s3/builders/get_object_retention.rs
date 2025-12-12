@@ -17,8 +17,8 @@ use crate::s3::client::MinioClient;
 use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::GetObjectRetentionResponse;
-use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, check_object_name, insert};
+use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId};
+use crate::s3::utils::insert;
 use http::Method;
 use typed_builder::TypedBuilder;
 
@@ -34,20 +34,22 @@ pub struct GetObjectRetention {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
     #[builder(default, setter(into))]
-    version_id: Option<String>,
+    version_id: Option<VersionId>,
 }
 
 /// Builder type alias for [`GetObjectRetention`].
 ///
 /// Constructed via [`GetObjectRetention::builder()`](GetObjectRetention::builder) and used to build a [`GetObjectRetention`] instance.
 pub type GetObjectRetentionBldr =
-    GetObjectRetentionBuilder<((MinioClient,), (), (), (), (String,), (String,), ())>;
+    GetObjectRetentionBuilder<((MinioClient,), (), (), (), (BucketName,), (ObjectKey,), ())>;
 
 impl S3Api for GetObjectRetention {
     type S3Response = GetObjectRetentionResponse;
@@ -55,9 +57,6 @@ impl S3Api for GetObjectRetention {
 
 impl ToS3Request for GetObjectRetention {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-        check_object_name(&self.object)?;
-
         let mut query_params: Multimap = insert(self.extra_query_params, "retention");
         query_params.add_version(self.version_id);
 

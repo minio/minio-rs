@@ -18,8 +18,8 @@ use crate::s3::client::MinioClient;
 use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::response::GetRegionResponse;
-use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, insert};
+use crate::s3::types::{BucketName, S3Api, S3Request, ToS3Request};
+use crate::s3::utils::insert;
 use http::Method;
 use typed_builder::TypedBuilder;
 
@@ -35,13 +35,14 @@ pub struct GetRegion {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
 }
 
 /// Builder type alias for [`GetRegion`].
 ///
 /// Constructed via [`GetRegion::builder()`](GetRegion::builder) and used to build a [`GetRegion`] instance.
-pub type GetRegionBldr = GetRegionBuilder<((MinioClient,), (), (), (String,))>;
+pub type GetRegionBldr = GetRegionBuilder<((MinioClient,), (), (), (BucketName,))>;
 
 #[doc(hidden)]
 #[derive(Default, Debug)]
@@ -53,12 +54,10 @@ impl S3Api for GetRegion {
 
 impl ToS3Request for GetRegion {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-
         Ok(S3Request::builder()
             .client(self.client)
             .method(Method::GET)
-            .region(DEFAULT_REGION.to_string())
+            .region(Some(DEFAULT_REGION.clone()))
             .bucket(self.bucket)
             .query_params(insert(self.extra_query_params, "location"))
             .headers(self.extra_headers.unwrap_or_default())

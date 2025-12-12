@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{PutBucketEncryption, PutBucketEncryptionBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`PutBucketEncryption`] request builder.
@@ -32,7 +33,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::PutBucketEncryptionResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, S3Api};
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
@@ -42,13 +43,13 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let config = SseConfig::default();
     ///     let resp: PutBucketEncryptionResponse = client
-    ///         .put_bucket_encryption("bucket-name")
+    ///         .put_bucket_encryption(BucketName::new("bucket-name").unwrap())
     ///         .sse_config(config)
     ///         .build().send().await.unwrap();
     ///     println!("set encryption on bucket '{}'", resp.bucket());
     /// }
     /// ```
-    pub fn put_bucket_encryption<S: Into<String>>(&self, bucket: S) -> PutBucketEncryptionBldr {
+    pub fn put_bucket_encryption(&self, bucket: BucketName) -> PutBucketEncryptionBldr {
         PutBucketEncryption::builder()
             .client(self.clone())
             .bucket(bucket)

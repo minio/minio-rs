@@ -29,7 +29,7 @@ pub(crate) fn bench_put_bucket_policy(criterion: &mut Criterion) {
             let config = create_bucket_policy_config_example(&ctx.bucket);
             PutBucketPolicy::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(ctx.bucket_name())
                 .config(config)
                 .build()
         },
@@ -44,7 +44,7 @@ pub(crate) fn bench_get_bucket_policy(criterion: &mut Criterion) {
             let config = create_bucket_policy_config_example(&ctx.bucket);
             PutBucketPolicy::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(ctx.bucket_name())
                 .config(config)
                 .build()
                 .send()
@@ -55,7 +55,7 @@ pub(crate) fn bench_get_bucket_policy(criterion: &mut Criterion) {
         |ctx| {
             GetBucketPolicy::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(ctx.bucket_name())
                 .build()
         },
     )
@@ -68,7 +68,7 @@ pub(crate) fn bench_delete_bucket_policy(criterion: &mut Criterion) {
         |ctx| {
             DeleteBucketPolicy::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(ctx.bucket_name())
                 .build()
         },
     )

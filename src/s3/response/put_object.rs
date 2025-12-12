@@ -17,7 +17,7 @@ use crate::s3::error::ValidationErr;
 use crate::s3::response_traits::{
     HasBucket, HasChecksumHeaders, HasEtagFromHeaders, HasObject, HasRegion, HasVersion,
 };
-use crate::s3::types::S3Request;
+use crate::s3::types::{S3Request, UploadId};
 use crate::s3::utils::get_text_result;
 use crate::{impl_from_s3response, impl_from_s3response_with_size, impl_has_s3fields};
 use bytes::{Buf, Bytes};
@@ -101,10 +101,11 @@ impl HasChecksumHeaders for S3MultipartResponse {}
 
 impl S3MultipartResponse {
     /// Returns the upload ID for the multipart upload, while consuming the response.
-    pub async fn upload_id(&self) -> Result<String, ValidationErr> {
+    pub async fn upload_id(&self) -> Result<UploadId, ValidationErr> {
         let root = Element::parse(self.body.clone().reader())?;
-        get_text_result(&root, "UploadId")
-            .map_err(|e| ValidationErr::InvalidUploadId(e.to_string()))
+        let s: String = get_text_result(&root, "UploadId")
+            .map_err(|e| ValidationErr::InvalidUploadId(e.to_string()))?; // TODO can this be improved?
+        UploadId::new(s)
     }
 }
 

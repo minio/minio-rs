@@ -19,61 +19,61 @@ use minio::s3::error::{Error, S3ServerError};
 use minio::s3::minio_error_response::MinioErrorCode;
 use minio::s3::response::{GetBucketVersioningResponse, PutBucketVersioningResponse};
 use minio::s3::response_traits::{HasBucket, HasRegion};
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, S3Api};
 use minio_common::test_context::TestContext;
 
 #[minio_macros::test(skip_if_express)]
-async fn bucket_versioning_s3(ctx: TestContext, bucket_name: String) {
+async fn bucket_versioning_s3(ctx: TestContext, bucket_name: BucketName) {
     let resp: PutBucketVersioningResponse = ctx
         .client
-        .put_bucket_versioning(&bucket_name)
+        .put_bucket_versioning(bucket_name.clone())
         .versioning_status(VersioningStatus::Enabled)
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: GetBucketVersioningResponse = ctx
         .client
-        .get_bucket_versioning(&bucket_name)
+        .get_bucket_versioning(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     assert_eq!(resp.status().unwrap(), Some(VersioningStatus::Enabled));
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: PutBucketVersioningResponse = ctx
         .client
-        .put_bucket_versioning(&bucket_name)
+        .put_bucket_versioning(bucket_name.clone())
         .versioning_status(VersioningStatus::Suspended)
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: GetBucketVersioningResponse = ctx
         .client
-        .get_bucket_versioning(&bucket_name)
+        .get_bucket_versioning(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     assert_eq!(resp.status().unwrap(), Some(VersioningStatus::Suspended));
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 }
 
 #[minio_macros::test(skip_if_not_express)]
-async fn bucket_versioning_s3express(ctx: TestContext, bucket_name: String) {
+async fn bucket_versioning_s3express(ctx: TestContext, bucket_name: BucketName) {
     let resp: Result<PutBucketVersioningResponse, Error> = ctx
         .client
-        .put_bucket_versioning(&bucket_name)
+        .put_bucket_versioning(bucket_name.clone())
         .versioning_status(VersioningStatus::Enabled)
         .build()
         .send()
@@ -87,7 +87,7 @@ async fn bucket_versioning_s3express(ctx: TestContext, bucket_name: String) {
 
     let resp: Result<GetBucketVersioningResponse, Error> = ctx
         .client
-        .get_bucket_versioning(&bucket_name)
+        .get_bucket_versioning(bucket_name.clone())
         .build()
         .send()
         .await;
