@@ -388,6 +388,9 @@ pub enum Error {
 
     #[error("Validation error occurred")]
     Validation(#[from] ValidationErr),
+
+    #[error("{0}")]
+    TablesError(#[from] crate::s3tables::error::TablesError),
 }
 
 // region message helpers

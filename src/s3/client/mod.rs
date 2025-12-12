@@ -93,6 +93,7 @@ mod get_presigned_object_url;
 mod get_presigned_post_form_data;
 mod get_region;
 pub mod hooks;
+mod is_warehouse_bucket;
 mod list_buckets;
 mod list_objects;
 mod listen_bucket_notification;

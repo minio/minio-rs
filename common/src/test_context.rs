@@ -137,7 +137,7 @@ impl TestContext {
     /// Creates a temporary bucket with an automatic cleanup guard.
     ///
     /// This function creates a new bucket and returns both its name and a `CleanupGuard`
-    /// that ensures the bucket is deleted when it goes out of scope.  
+    /// that ensures the bucket is deleted when it goes out of scope.
     ///
     /// # Returns
     /// A tuple containing:
