@@ -29,12 +29,13 @@ extern crate proc_macro;
 /// By default, it requires the test function to have two parameters:
 ///
 /// - `ctx: TestContext` - The test context which will give you access to a minio-client.
-/// - `bucket_name: String` - The name of the bucket to be used in the test.
+/// - `bucket_name: BucketName` - The typed bucket name to be used in the test.
 ///
 /// ```no_run
 /// use minio_common::test_context::TestContext;
+/// use minio::s3::types::BucketName;
 /// #[minio_macros::test]
-/// async fn my_test(ctx: TestContext, bucket_name: String) {
+/// async fn my_test(ctx: TestContext, bucket_name: BucketName) {
 ///    // Your test code here
 /// }
 /// ```
@@ -77,8 +78,9 @@ extern crate proc_macro;
 /// - `ignore`: Mark the test as ignored (skipped by default). Run with `cargo test -- --ignored` to include.
 /// ```no_run
 /// use minio_common::test_context::TestContext;
+/// use minio::s3::types::BucketName;
 /// #[minio_macros::test(ignore = "Requires newer server version")]
-/// async fn my_test(ctx: TestContext, bucket_name: String) {
+/// async fn my_test(ctx: TestContext, bucket_name: BucketName) {
 ///    // this test is skipped by default
 /// }
 /// ```

@@ -18,29 +18,29 @@ use minio::s3::response::{
     DeleteObjectLockConfigResponse, GetObjectLockConfigResponse, PutObjectLockConfigResponse,
 };
 use minio::s3::response_traits::{HasBucket, HasRegion};
-use minio::s3::types::{ObjectLockConfig, RetentionMode, S3Api};
+use minio::s3::types::{BucketName, ObjectLockConfig, RetentionMode, S3Api};
 use minio_common::test_context::TestContext;
 
 #[minio_macros::test(skip_if_express, object_lock)]
-async fn object_lock_config(ctx: TestContext, bucket_name: String) {
+async fn object_lock_config(ctx: TestContext, bucket_name: BucketName) {
     const DURATION_DAYS: i32 = 7;
     let config =
         ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();
 
     let resp: PutObjectLockConfigResponse = ctx
         .client
-        .put_object_lock_config(&bucket_name)
+        .put_object_lock_config(bucket_name.clone())
         .config(config)
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: GetObjectLockConfigResponse = ctx
         .client
-        .get_object_lock_config(&bucket_name)
+        .get_object_lock_config(bucket_name.clone())
         .build()
         .send()
         .await
@@ -50,28 +50,28 @@ async fn object_lock_config(ctx: TestContext, bucket_name: String) {
     assert_eq!(config.retention_mode.unwrap(), RetentionMode::GOVERNANCE);
     assert_eq!(config.retention_duration_days, Some(DURATION_DAYS));
     assert!(config.retention_duration_years.is_none());
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: DeleteObjectLockConfigResponse = ctx
         .client
-        .delete_object_lock_config(&bucket_name)
+        .delete_object_lock_config(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: GetObjectLockConfigResponse = ctx
         .client
-        .get_object_lock_config(&bucket_name)
+        .get_object_lock_config(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     let config = resp.config().unwrap();
     assert!(config.retention_mode.is_none());
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 }

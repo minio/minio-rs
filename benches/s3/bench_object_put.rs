@@ -29,7 +29,7 @@ pub(crate) fn bench_object_put(criterion: &mut Criterion) {
         criterion,
         || async { Ctx2::new().await },
         |ctx| {
-            let object_name: String = rand_object_name();
+            let object_name = rand_object_name();
             let size = 1024 * 1024_u64; // 1MB
             let object_content = ObjectContent::new_from_stream(RandSrc::new(size), Some(size));
 

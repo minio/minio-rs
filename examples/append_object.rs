@@ -22,7 +22,7 @@ use minio::s3::http::BaseUrl;
 use minio::s3::response::{AppendObjectResponse, StatObjectResponse};
 use minio::s3::response_traits::HasObjectSize;
 use minio::s3::segmented_bytes::SegmentedBytes;
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, ObjectKey, S3Api};
 use rand::Rng;
 use rand::distr::Alphanumeric;
 
@@ -39,10 +39,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         return Ok(());
     }
 
-    let bucket_name: &str = "append-test-bucket";
-    create_bucket_if_not_exists(bucket_name, &client).await?;
+    let bucket_name = BucketName::new("append-test-bucket").unwrap();
+    create_bucket_if_not_exists(bucket_name.as_str(), &client).await?;
 
-    let object_name: &str = "append-test-object";
+    let object_name = ObjectKey::new("append-test-object").unwrap();
 
     let n_segments = 1000;
     let segment_size = 1024 * 1024; // 1 KB
@@ -55,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let data: SegmentedBytes = SegmentedBytes::from(rand_str);
 
         let resp: AppendObjectResponse = client
-            .append_object(bucket_name, object_name, data, offset_bytes)
+            .append_object(bucket_name.clone(), object_name.clone(), data, offset_bytes)
             .build()
             .send()
             .await?;
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         //println!("Append response: {resp:#?}");
 
         let resp: StatObjectResponse = client
-            .stat_object(bucket_name, object_name)
+            .stat_object(bucket_name.clone(), object_name.clone())
             .build()
             .send()
             .await?;

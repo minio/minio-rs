@@ -34,7 +34,7 @@ pub(crate) fn bench_put_bucket_replication(criterion: &mut Criterion) {
 
             let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .put_bucket_versioning(&ctx.bucket)
+                .put_bucket_versioning(ctx.bucket.clone())
                 .versioning_status(VersioningStatus::Enabled)
                 .build()
                 .send()
@@ -53,8 +53,7 @@ pub(crate) fn bench_put_bucket_replication(criterion: &mut Criterion) {
             ctx
         },
         |ctx| {
-            let config =
-                create_bucket_replication_config_example(ctx.aux_bucket.clone().unwrap().as_str());
+            let config = create_bucket_replication_config_example(&ctx.aux_bucket.clone().unwrap());
             PutBucketReplication::builder()
                 .client(ctx.client.clone())
                 .bucket(ctx.bucket.clone())
@@ -74,7 +73,7 @@ pub(crate) fn bench_get_bucket_replication(criterion: &mut Criterion) {
 
             let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .put_bucket_versioning(&ctx.bucket)
+                .put_bucket_versioning(ctx.bucket.clone())
                 .versioning_status(VersioningStatus::Enabled)
                 .build()
                 .send()
@@ -111,7 +110,7 @@ pub(crate) fn bench_delete_bucket_replication(criterion: &mut Criterion) {
 
             let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .put_bucket_versioning(&ctx.bucket)
+                .put_bucket_versioning(ctx.bucket.clone())
                 .versioning_status(VersioningStatus::Enabled)
                 .build()
                 .send()

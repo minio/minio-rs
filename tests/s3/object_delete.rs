@@ -19,33 +19,38 @@ use minio::s3::response::{
     DeleteObjectResponse, DeleteObjectsResponse, DeleteResult, PutObjectContentResponse,
 };
 use minio::s3::response_traits::{HasBucket, HasObject};
-use minio::s3::types::{S3Api, ToStream};
+use minio::s3::types::{BucketName, ObjectKey, S3Api, ToStream};
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name_utf8;
 
 async fn create_object_helper(
     ctx: &TestContext,
     bucket_name: &str,
-    object_name: &str,
+    object_name: ObjectKey,
 ) -> PutObjectContentResponse {
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(bucket_name, object_name, "hello world")
+        .put_object_content(
+            BucketName::try_from(bucket_name).unwrap(),
+            object_name.clone(),
+            "hello world",
+        )
         .build()
         .send()
         .await
         .unwrap();
     assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.object(), object_name.as_str());
     resp
 }
 
 async fn test_delete_object(ctx: &TestContext, bucket_name: &str, object_name: &str) {
-    let _resp = create_object_helper(ctx, bucket_name, object_name).await;
+    let _resp =
+        create_object_helper(ctx, bucket_name, ObjectKey::try_from(object_name).unwrap()).await;
 
     let resp: DeleteObjectResponse = ctx
         .client
-        .delete_object(bucket_name, object_name)
+        .delete_object(BucketName::try_from(bucket_name).unwrap(), object_name)
         .build()
         .send()
         .await
@@ -56,23 +61,24 @@ async fn test_delete_object(ctx: &TestContext, bucket_name: &str, object_name: &
 
 /// Test deleting an object with a name that contains utf-8 characters.
 #[minio_macros::test]
-async fn delete_object_1(ctx: TestContext, bucket_name: String) {
-    test_delete_object(&ctx, &bucket_name, &rand_object_name_utf8(20)).await;
+async fn delete_object_1(ctx: TestContext, bucket_name: BucketName) {
+    let object_name = rand_object_name_utf8(20);
+    test_delete_object(&ctx, bucket_name.as_str(), object_name.as_str()).await;
 }
 
 /// Test deleting an object with a name that contains white space characters.
 #[minio_macros::test]
-async fn delete_object_2(ctx: TestContext, bucket_name: String) {
-    test_delete_object(&ctx, &bucket_name, "a b+c").await;
+async fn delete_object_2(ctx: TestContext, bucket_name: BucketName) {
+    test_delete_object(&ctx, bucket_name.as_str(), "a b+c").await;
 }
 
 #[minio_macros::test]
-async fn delete_objects(ctx: TestContext, bucket_name: String) {
+async fn delete_objects(ctx: TestContext, bucket_name: BucketName) {
     const OBJECT_COUNT: usize = 3;
-    let mut names: Vec<String> = Vec::new();
+    let mut names: Vec<ObjectKey> = Vec::new();
     for _ in 1..=OBJECT_COUNT {
         let object_name = rand_object_name_utf8(20);
-        let _resp = create_object_helper(&ctx, &bucket_name, &object_name).await;
+        let _resp = create_object_helper(&ctx, bucket_name.as_str(), object_name.clone()).await;
         names.push(object_name);
     }
     let del_items: Vec<ObjectToDelete> = names
@@ -82,7 +88,7 @@ async fn delete_objects(ctx: TestContext, bucket_name: String) {
 
     let resp: DeleteObjectsResponse = ctx
         .client
-        .delete_objects::<&String>(&bucket_name, del_items)
+        .delete_objects(bucket_name.clone(), del_items)
         .verbose_mode(true) // Enable verbose mode to get detailed response
         .build()
         .send()
@@ -97,12 +103,12 @@ async fn delete_objects(ctx: TestContext, bucket_name: String) {
 }
 
 #[minio_macros::test]
-async fn delete_objects_streaming(ctx: TestContext, bucket_name: String) {
+async fn delete_objects_streaming(ctx: TestContext, bucket_name: BucketName) {
     const OBJECT_COUNT: usize = 3;
-    let mut names: Vec<String> = Vec::new();
+    let mut names: Vec<ObjectKey> = Vec::new();
     for _ in 1..=OBJECT_COUNT {
         let object_name = rand_object_name_utf8(20);
-        let _resp = create_object_helper(&ctx, &bucket_name, &object_name).await;
+        let _resp = create_object_helper(&ctx, bucket_name.as_str(), object_name.clone()).await;
         names.push(object_name);
     }
     let del_items: Vec<ObjectToDelete> = names
@@ -112,7 +118,7 @@ async fn delete_objects_streaming(ctx: TestContext, bucket_name: String) {
 
     let mut resp = ctx
         .client
-        .delete_objects_streaming(&bucket_name, del_items.into_iter())
+        .delete_objects_streaming(bucket_name.clone(), del_items.into_iter())
         .verbose_mode(true)
         .to_stream()
         .await;

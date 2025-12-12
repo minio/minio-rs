@@ -46,9 +46,10 @@ impl FromS3Response for CreateBucketResponse {
         let mut request = request;
         let bucket = request
             .bucket
-            .as_deref()
+            .as_ref()
+            .map(|b| b.as_str())
             .ok_or(ValidationErr::MissingBucketName)?;
-        let region: &str = &request.inner_region;
+        let region: &str = request.inner_region.as_str();
         request.client.add_bucket_region(bucket, region);
 
         Ok(Self {

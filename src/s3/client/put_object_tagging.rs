@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{PutObjectTagging, PutObjectTaggingBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`PutObjectTagging`] request builder.
@@ -32,7 +33,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::PutObjectTaggingResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
     /// use minio::s3::response_traits::HasObject;
     ///
     /// #[tokio::main]
@@ -45,16 +46,16 @@ impl MinioClient {
     ///         (String::from("User"), String::from("jsmith")),
     ///     ]);
     ///     let resp: PutObjectTaggingResponse = client
-    ///         .put_object_tagging("bucket-name", "object-name")
+    ///         .put_object_tagging(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap())
     ///         .tags(tags)
     ///         .build().send().await.unwrap();
     ///     println!("set the object tags for object '{}'", resp.object());
     /// }
     /// ```
-    pub fn put_object_tagging<S: Into<String>>(
+    pub fn put_object_tagging(
         &self,
-        bucket: S,
-        object: S,
+        bucket: BucketName,
+        object: ObjectKey,
     ) -> PutObjectTaggingBldr {
         PutObjectTagging::builder()
             .client(self.clone())

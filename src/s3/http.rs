@@ -17,6 +17,7 @@ use super::utils::urlencode_object_key;
 use crate::s3::client::DEFAULT_REGION;
 use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
+use crate::s3::types::Region;
 use crate::s3::utils::match_hostname;
 use hyper::Uri;
 use hyper::http::Method;
@@ -190,7 +191,7 @@ fn get_aws_info(
     let domain_suffix = tokens.join(".");
 
     if host.eq_ignore_ascii_case("s3-external-1.amazonaws.com") {
-        region_in_host = DEFAULT_REGION.to_string();
+        region_in_host = DEFAULT_REGION.as_str().to_string();
     }
     if host.eq_ignore_ascii_case("s3-us-gov-west-1.amazonaws.com")
         || host.eq_ignore_ascii_case("s3-fips-us-gov-west-1.amazonaws.com")
@@ -218,7 +219,7 @@ pub struct BaseUrl {
     pub https: bool,
     host: String,
     port: u16,
-    pub region: String,
+    pub region: Region,
     aws_s3_prefix: String,
     aws_domain_suffix: String,
     pub dualstack: bool,
@@ -231,7 +232,7 @@ impl Default for BaseUrl {
             https: true,
             host: "127.0.0.1".to_string(),
             port: 9000,
-            region: "".to_string(),
+            region: DEFAULT_REGION.clone(),
             aws_s3_prefix: "".to_string(),
             aws_domain_suffix: "".to_string(),
             dualstack: false,
@@ -254,10 +255,10 @@ impl FromStr for BaseUrl {
     /// use std::str::FromStr;
     ///
     /// // Get base URL from host name
-    /// let base_url = "play.min.io".parse::<BaseUrl>().unwrap();
-    /// let base_url = BaseUrl::from_str("play.min.io").unwrap();
+    /// let base_url = "minio.example.com".parse::<BaseUrl>().unwrap();
+    /// let base_url = BaseUrl::from_str("minio.example.com").unwrap();
     /// // Get base URL from host:port
-    /// let base_url: BaseUrl = "play.minio.io:9000".parse().unwrap();
+    /// let base_url: BaseUrl = "minio.example.com:9000".parse().unwrap();
     /// // Get base URL from IPv4 address
     /// let base_url: BaseUrl = "http://192.168.124.63:9000".parse().unwrap();
     /// // Get base URL from IPv6 address
@@ -332,7 +333,11 @@ impl FromStr for BaseUrl {
             https,
             host: host.to_string(),
             port,
-            region,
+            region: if region.is_empty() {
+                Region::new_empty()
+            } else {
+                Region::new(region)?
+            },
             aws_s3_prefix,
             aws_domain_suffix,
             dualstack,
@@ -347,12 +352,22 @@ impl BaseUrl {
         !self.aws_domain_suffix.is_empty()
     }
 
+    /// Returns the base URL as a string (e.g., "http://localhost:9000" or "https://minio.example.com")
+    pub fn to_url_string(&self) -> String {
+        let scheme = if self.https { "https" } else { "http" };
+        if self.port > 0 {
+            format!("{}://{}:{}", scheme, self.host, self.port)
+        } else {
+            format!("{}://{}", scheme, self.host)
+        }
+    }
+
     fn build_aws_url(
         &self,
         url: &mut Url,
         bucket_name: &str,
         enforce_path_style: bool,
-        region: &str,
+        region: &Region,
     ) -> Result<(), ValidationErr> {
         let mut host = String::from(&self.aws_s3_prefix);
         host.push_str(&self.aws_domain_suffix);
@@ -381,7 +396,7 @@ impl BaseUrl {
             host.push_str("dualstack.");
         }
         if !self.aws_s3_prefix.contains("s3-accelerate") {
-            host.push_str(region);
+            host.push_str(region.as_str());
             host.push('.');
         }
         host.push_str(&self.aws_domain_suffix);
@@ -391,7 +406,7 @@ impl BaseUrl {
         Ok(())
     }
 
-    fn build_list_buckets_url(&self, url: &mut Url, region: &str) {
+    fn build_list_buckets_url(&self, url: &mut Url, region: &Region) {
         if self.aws_domain_suffix.is_empty() {
             return;
         }
@@ -415,17 +430,17 @@ impl BaseUrl {
                 domain_suffix.push_str(".cn");
             }
         }
-        url.host = s3_prefix + region + "." + &domain_suffix;
+        url.host = s3_prefix + region.as_str() + "." + &domain_suffix;
     }
 
     /// Builds URL from base URL for given parameters for S3 operation
     pub fn build_url(
         &self,
         method: &Method,
-        region: &str,
+        region: &Region,
         query: &Multimap,
-        bucket_name: Option<&str>,
-        object_name: Option<&str>,
+        bucket_name: Option<&str>, //TODO change to &BucketName
+        object_name: Option<&str>, //TODO change to &ObjectKey
     ) -> Result<Url, ValidationErr> {
         let mut url = Url {
             https: self.https,
@@ -529,12 +544,12 @@ mod tests {
     fn test_url_display_https() {
         let url = Url {
             https: true,
-            host: "play.min.io".to_string(),
+            host: "minio.example.com".to_string(),
             port: 0,
             path: "/bucket/object".to_string(),
             query: Multimap::default(),
         };
-        assert_eq!(url.to_string(), "https://play.min.io/bucket/object");
+        assert_eq!(url.to_string(), "https://minio.example.com/bucket/object");
     }
 
     #[test]
@@ -611,7 +626,7 @@ mod tests {
 
     #[test]
     fn test_match_aws_endpoint_non_aws() {
-        assert!(!match_aws_endpoint("play.min.io"));
+        assert!(!match_aws_endpoint("minio.example.com"));
         assert!(!match_aws_endpoint("s3.example.com"));
         assert!(!match_aws_endpoint("localhost"));
     }
@@ -691,24 +706,24 @@ mod tests {
         assert!(base.https);
         assert_eq!(base.host, "127.0.0.1");
         assert_eq!(base.port, 9000);
-        assert!(base.region.is_empty());
+        assert_eq!(base.region, DEFAULT_REGION.clone());
         assert!(!base.dualstack);
         assert!(!base.virtual_style);
     }
 
     #[test]
     fn test_baseurl_from_str_simple_host() {
-        let base: BaseUrl = "play.min.io".parse().unwrap();
+        let base: BaseUrl = "minio.example.com".parse().unwrap();
         assert!(base.https);
-        assert_eq!(base.host, "play.min.io");
+        assert_eq!(base.host, "minio.example.com");
         assert_eq!(base.port, 0);
     }
 
     #[test]
     fn test_baseurl_from_str_with_port() {
-        let base: BaseUrl = "play.min.io:9000".parse().unwrap();
+        let base: BaseUrl = "minio.example.com:9000".parse().unwrap();
         assert!(base.https);
-        assert_eq!(base.host, "play.min.io");
+        assert_eq!(base.host, "minio.example.com");
         assert_eq!(base.port, 9000);
     }
 
@@ -722,9 +737,9 @@ mod tests {
 
     #[test]
     fn test_baseurl_from_str_https_scheme() {
-        let base: BaseUrl = "https://play.min.io".parse().unwrap();
+        let base: BaseUrl = "https://minio.example.com".parse().unwrap();
         assert!(base.https);
-        assert_eq!(base.host, "play.min.io");
+        assert_eq!(base.host, "minio.example.com");
         assert_eq!(base.port, 0);
     }
 
@@ -754,14 +769,14 @@ mod tests {
 
     #[test]
     fn test_baseurl_from_str_default_https_port() {
-        let base: BaseUrl = "https://play.min.io:443".parse().unwrap();
+        let base: BaseUrl = "https://minio.example.com:443".parse().unwrap();
         assert!(base.https);
         assert_eq!(base.port, 0);
     }
 
     #[test]
     fn test_baseurl_from_str_default_http_port() {
-        let base: BaseUrl = "http://play.min.io:80".parse().unwrap();
+        let base: BaseUrl = "http://minio.example.com:80".parse().unwrap();
         assert!(!base.https);
         assert_eq!(base.port, 0);
     }
@@ -771,7 +786,7 @@ mod tests {
         let base: BaseUrl = "s3.amazonaws.com".parse().unwrap();
         assert!(base.https);
         assert_eq!(base.host, "s3.amazonaws.com");
-        assert_eq!(base.region, "");
+        assert_eq!(base.region, Region::new_empty());
         assert!(base.is_aws_host());
         assert!(base.virtual_style);
     }
@@ -780,7 +795,7 @@ mod tests {
     fn test_baseurl_from_str_aws_s3_regional() {
         let base: BaseUrl = "s3.us-west-2.amazonaws.com".parse().unwrap();
         assert!(base.https);
-        assert_eq!(base.region, "us-west-2");
+        assert_eq!(base.region, Region::new("us-west-2").unwrap());
         assert!(base.is_aws_host());
         assert!(base.virtual_style);
     }
@@ -789,7 +804,7 @@ mod tests {
     fn test_baseurl_from_str_aws_s3_dualstack() {
         let base: BaseUrl = "s3.dualstack.us-east-1.amazonaws.com".parse().unwrap();
         assert!(base.https);
-        assert_eq!(base.region, "us-east-1");
+        assert_eq!(base.region, Region::new("us-east-1").unwrap());
         assert!(base.dualstack);
         assert!(base.is_aws_host());
     }
@@ -824,13 +839,13 @@ mod tests {
 
     #[test]
     fn test_baseurl_from_str_with_path() {
-        let result = "https://play.min.io/bucket".parse::<BaseUrl>();
+        let result = "https://minio.example.com/bucket".parse::<BaseUrl>();
         assert!(result.is_err());
     }
 
     #[test]
     fn test_baseurl_from_str_with_query() {
-        let result = "https://play.min.io?key=value".parse::<BaseUrl>();
+        let result = "https://minio.example.com?key=value".parse::<BaseUrl>();
         assert!(result.is_err());
     }
 
@@ -840,14 +855,15 @@ mod tests {
 
     #[test]
     fn test_baseurl_build_url_list_buckets() {
-        let base: BaseUrl = "play.min.io".parse().unwrap();
+        let base: BaseUrl = "minio.example.com".parse().unwrap();
         let query = Multimap::default();
+        let region = Region::new("us-east-1").unwrap();
 
         let url = base
-            .build_url(&Method::GET, "us-east-1", &query, None, None)
+            .build_url(&Method::GET, &region, &query, None, None)
             .unwrap();
 
-        assert_eq!(url.host, "play.min.io");
+        assert_eq!(url.host, "minio.example.com");
         assert_eq!(url.path, "/");
     }
 
@@ -855,9 +871,10 @@ mod tests {
     fn test_baseurl_build_url_bucket_path_style() {
         let base: BaseUrl = "localhost:9000".parse().unwrap();
         let query = Multimap::default();
+        let region = Region::new("us-east-1").unwrap();
 
         let url = base
-            .build_url(&Method::GET, "us-east-1", &query, Some("mybucket"), None)
+            .build_url(&Method::GET, &region, &query, Some("mybucket"), None)
             .unwrap();
 
         assert_eq!(url.host, "localhost");
@@ -869,9 +886,10 @@ mod tests {
     fn test_baseurl_build_url_bucket_virtual_style() {
         let base: BaseUrl = "s3.amazonaws.com".parse().unwrap();
         let query = Multimap::default();
+        let region = Region::new("us-east-1").unwrap();
 
         let url = base
-            .build_url(&Method::GET, "us-east-1", &query, Some("mybucket"), None)
+            .build_url(&Method::GET, &region, &query, Some("mybucket"), None)
             .unwrap();
 
         assert_eq!(url.host, "mybucket.s3.us-east-1.amazonaws.com");
@@ -882,11 +900,12 @@ mod tests {
     fn test_baseurl_build_url_object_path_style() {
         let base: BaseUrl = "localhost:9000".parse().unwrap();
         let query = Multimap::default();
+        let region = Region::new("us-east-1").unwrap();
 
         let url = base
             .build_url(
                 &Method::GET,
-                "us-east-1",
+                &region,
                 &query,
                 Some("mybucket"),
                 Some("myobject"),
@@ -900,11 +919,12 @@ mod tests {
     fn test_baseurl_build_url_object_virtual_style() {
         let base: BaseUrl = "s3.amazonaws.com".parse().unwrap();
         let query = Multimap::default();
+        let region = Region::new("us-east-1").unwrap();
 
         let url = base
             .build_url(
                 &Method::GET,
-                "us-east-1",
+                &region,
                 &query,
                 Some("mybucket"),
                 Some("myobject"),
@@ -923,7 +943,7 @@ mod tests {
         let url = base
             .build_url(
                 &Method::GET,
-                "us-east-1",
+                &Region::default(),
                 &query,
                 Some("mybucket"),
                 Some("/path/to/object"),
@@ -939,7 +959,13 @@ mod tests {
         let query = Multimap::default();
 
         let url = base
-            .build_url(&Method::PUT, "us-east-1", &query, Some("mybucket"), None)
+            .build_url(
+                &Method::PUT,
+                &Region::default(),
+                &query,
+                Some("mybucket"),
+                None,
+            )
             .unwrap();
 
         assert_eq!(url.host, "s3.us-east-1.amazonaws.com");
@@ -953,7 +979,13 @@ mod tests {
         query.insert("location".to_string(), String::new());
 
         let url = base
-            .build_url(&Method::GET, "us-east-1", &query, Some("mybucket"), None)
+            .build_url(
+                &Method::GET,
+                &Region::default(),
+                &query,
+                Some("mybucket"),
+                None,
+            )
             .unwrap();
 
         assert_eq!(url.host, "s3.us-east-1.amazonaws.com");
@@ -968,7 +1000,7 @@ mod tests {
         let url = base
             .build_url(
                 &Method::GET,
-                "us-east-1",
+                &Region::default(),
                 &query,
                 Some("my.bucket.name"),
                 None,
@@ -987,7 +1019,7 @@ mod tests {
         let url = base
             .build_url(
                 &Method::GET,
-                "us-east-1",
+                &Region::default(),
                 &query,
                 Some("mybucket"),
                 Some("object"),
@@ -1004,7 +1036,7 @@ mod tests {
 
         let result = base.build_url(
             &Method::GET,
-            "us-east-1",
+            &Region::default(),
             &query,
             Some("my.bucket"),
             Some("object"),
@@ -1017,9 +1049,9 @@ mod tests {
     fn test_baseurl_build_url_dualstack() {
         let base: BaseUrl = "s3.dualstack.us-west-2.amazonaws.com".parse().unwrap();
         let query = Multimap::default();
-
+        let region2 = Region::new("us-west-2").unwrap();
         let url = base
-            .build_url(&Method::GET, "us-west-2", &query, Some("mybucket"), None)
+            .build_url(&Method::GET, &region2, &query, Some("mybucket"), None)
             .unwrap();
 
         assert!(url.host.contains("dualstack"));
@@ -1029,11 +1061,13 @@ mod tests {
     fn test_baseurl_build_url_with_query_parameters() {
         let base: BaseUrl = "localhost:9000".parse().unwrap();
         let mut query = Multimap::default();
+        let region2 = Region::new("us-east-1").unwrap();
+
         query.insert("prefix".to_string(), "test/".to_string());
         query.insert("max-keys".to_string(), "1000".to_string());
 
         let url = base
-            .build_url(&Method::GET, "us-east-1", &query, Some("mybucket"), None)
+            .build_url(&Method::GET, &region2, &query, Some("mybucket"), None)
             .unwrap();
 
         assert!(url.query.contains_key("prefix"));
@@ -1045,7 +1079,7 @@ mod tests {
         let aws_base: BaseUrl = "s3.amazonaws.com".parse().unwrap();
         assert!(aws_base.is_aws_host());
 
-        let non_aws_base: BaseUrl = "play.min.io".parse().unwrap();
+        let non_aws_base: BaseUrl = "minio.example.com".parse().unwrap();
         assert!(!non_aws_base.is_aws_host());
     }
 
@@ -1057,11 +1091,12 @@ mod tests {
     fn test_baseurl_build_url_special_characters_in_object() {
         let base: BaseUrl = "localhost:9000".parse().unwrap();
         let query = Multimap::default();
+        let region1 = Region::new("us-east-1").unwrap();
 
         let url = base
             .build_url(
                 &Method::GET,
-                "us-east-1",
+                &region1,
                 &query,
                 Some("mybucket"),
                 Some("path/to/file with spaces.txt"),
@@ -1075,15 +1110,10 @@ mod tests {
     fn test_baseurl_build_url_empty_object_name() {
         let base: BaseUrl = "localhost:9000".parse().unwrap();
         let query = Multimap::default();
+        let region1 = Region::new("us-east-1").unwrap();
 
         let url = base
-            .build_url(
-                &Method::GET,
-                "us-east-1",
-                &query,
-                Some("mybucket"),
-                Some(""),
-            )
+            .build_url(&Method::GET, &region1, &query, Some("mybucket"), Some(""))
             .unwrap();
 
         assert_eq!(url.path, "/mybucket/");

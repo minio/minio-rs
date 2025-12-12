@@ -116,7 +116,7 @@ cargo run --example file_uploader
 cargo run --example file_downloader
 cargo run --example object_prompt
 ```
-- Examples require network access to MinIO (defaults to play.min.io)
+- Examples require network access to MinIO (defaults to localhost:9000)
 - Will fail if network is unavailable
 - Located in `examples/` directory (10 examples)
 
@@ -194,7 +194,7 @@ use minio::s3::{MinioClient, MinioClientBuilder};
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 
-let base_url = "play.min.io".parse::<BaseUrl>()?;
+let base_url = "http://localhost:9000".parse::<BaseUrl>()?;
 let provider = StaticProvider::new("access_key", "secret_key", None);
 let client = MinioClientBuilder::new(base_url)
     .provider(Some(provider))
@@ -278,7 +278,7 @@ async fn my_test(ctx: TestContext, bucket_name: String) {
 **Solution**: These warnings are acceptable and don't need to be fixed for PRs
 
 ### Test Environment Variables
-When running tests locally without CI=true, tests use play.min.io by default. To use local MinIO:
+When running tests locally without CI=true, tests use localhost:9000 by default. To use a different MinIO server:
 ```bash
 export CI=true
 export SERVER_ENDPOINT=localhost:9000

@@ -15,6 +15,7 @@
 
 use crate::s3::client::MinioClient;
 use crate::s3::segmented_bytes::SegmentedBytes;
+use crate::s3::types::{BucketName, ObjectKey, UploadId};
 use crate::s3::{
     builders::{
         AbortMultipartUpload, AbortMultipartUploadBldr, CompleteMultipartUpload,
@@ -44,7 +45,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::PutObjectResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     /// use minio::s3::response_traits::HasObject;
     ///
@@ -55,15 +56,15 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let data = SegmentedBytes::from("Hello world".to_string());
     ///     let resp: PutObjectResponse = client
-    ///         .put_object("bucket-name", "object-name", data)
+    ///         .put_object(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap(), data)
     ///         .build().send().await.unwrap();
     ///     println!("successfully put object '{}'", resp.object());
     /// }
     /// ```
-    pub fn put_object<S1: Into<String>, S2: Into<String>>(
+    pub fn put_object(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
         data: SegmentedBytes,
     ) -> PutObjectBldr {
         let inner = UploadPart::builder()
@@ -89,7 +90,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::CreateMultipartUploadResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -97,15 +98,15 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: CreateMultipartUploadResponse = client
-    ///         .create_multipart_upload("bucket-name", "large-object")
+    ///         .create_multipart_upload(BucketName::new("bucket-name").unwrap(), ObjectKey::new("large-object").unwrap())
     ///         .build().send().await.unwrap();
     ///     println!("Initiated multipart upload with UploadId '{:?}'", resp.upload_id().await);
     /// }
     /// ```
-    pub fn create_multipart_upload<S1: Into<String>, S2: Into<String>>(
+    pub fn create_multipart_upload(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
     ) -> CreateMultipartUploadBldr {
         CreateMultipartUpload::builder()
             .client(self.clone())
@@ -127,7 +128,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::AbortMultipartUploadResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, UploadId, S3Api};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -135,16 +136,16 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: AbortMultipartUploadResponse = client
-    ///         .abort_multipart_upload("bucket-name", "object-name", "upload-id-123")
+    ///         .abort_multipart_upload(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap(), UploadId::new("upload-id-123").unwrap())
     ///         .build().send().await.unwrap();
     ///     println!("Aborted multipart upload for '{}', upload id '{}'", "object-name", "upload-id-123");
     /// }
     /// ```
-    pub fn abort_multipart_upload<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
+    pub fn abort_multipart_upload(
         &self,
-        bucket: S1,
-        object: S2,
-        upload_id: S3,
+        bucket: BucketName,
+        object: ObjectKey,
+        upload_id: UploadId,
     ) -> AbortMultipartUploadBldr {
         AbortMultipartUpload::builder()
             .client(self.clone())
@@ -167,7 +168,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::CompleteMultipartUploadResponse;
-    /// use minio::s3::types::{S3Api, PartInfo};
+    /// use minio::s3::types::{BucketName, ObjectKey, UploadId, S3Api, PartInfo};
     /// use minio::s3::response_traits::HasObject;
     ///
     /// #[tokio::main]
@@ -177,16 +178,16 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let parts: Vec<PartInfo> = vec![]; // fill with your uploaded part info
     ///     let resp: CompleteMultipartUploadResponse = client
-    ///         .complete_multipart_upload("bucket-name", "object-name", "upload-id-123", parts)
+    ///         .complete_multipart_upload(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap(), UploadId::new("upload-id-123").unwrap(), parts)
     ///         .build().send().await.unwrap();
     ///     println!("Completed multipart upload for '{}'", resp.object());
     /// }
     /// ```
-    pub fn complete_multipart_upload<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
+    pub fn complete_multipart_upload(
         &self,
-        bucket: S1,
-        object: S2,
-        upload_id: S3,
+        bucket: BucketName,
+        object: ObjectKey,
+        upload_id: UploadId,
         parts: Vec<PartInfo>,
     ) -> CompleteMultipartUploadBldr {
         CompleteMultipartUpload::builder()
@@ -211,7 +212,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::UploadPartResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, UploadId, S3Api};
     /// use minio::s3::segmented_bytes::SegmentedBytes;
     /// use minio::s3::response_traits::HasObject;
     ///
@@ -222,16 +223,16 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let data = SegmentedBytes::from("Some part data".to_string());
     ///     let resp: UploadPartResponse = client
-    ///         .upload_part("bucket-name", "object-name", "upload-id", 1, data)
+    ///         .upload_part(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap(), UploadId::new("upload-id").unwrap(), 1, data)
     ///         .build().send().await.unwrap();
     ///     println!("Uploaded object: {}", resp.object());
     /// }
     /// ```
-    pub fn upload_part<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
+    pub fn upload_part(
         &self,
-        bucket: S1,
-        object: S2,
-        upload_id: S3,
+        bucket: BucketName,
+        object: ObjectKey,
+        upload_id: UploadId,
         part_number: u16,
         data: SegmentedBytes,
     ) -> UploadPartBldr {
@@ -239,7 +240,7 @@ impl MinioClient {
             .client(self.clone())
             .bucket(bucket)
             .object(object)
-            .upload_id(upload_id.into())
+            .upload_id(upload_id.to_string())
             .part_number(part_number)
             .data(Arc::new(data))
     }
@@ -258,7 +259,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::PutObjectContentResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
     /// use minio::s3::response_traits::{HasObject, HasEtagFromHeaders};
     ///
     /// #[tokio::main]
@@ -268,15 +269,15 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let content = "Hello, world!".to_string();
     ///     let resp: PutObjectContentResponse = client
-    ///         .put_object_content("bucket", "object", content)
+    ///         .put_object_content(BucketName::new("bucket").unwrap(), ObjectKey::new("object").unwrap(), content)
     ///         .build().send().await.unwrap();
     ///     println!("Uploaded object '{}' with ETag '{:?}'", resp.object(), resp.etag());
     /// }
     /// ```
-    pub fn put_object_content<S1: Into<String>, S2: Into<String>, C: Into<ObjectContent>>(
+    pub fn put_object_content<C: Into<ObjectContent>>(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
         content: C,
     ) -> PutObjectContentBldr {
         PutObjectContent::builder()

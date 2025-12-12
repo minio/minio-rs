@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{DeleteObjectLockConfig, DeleteObjectLockConfigBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`DeleteObjectLockConfig`] request builder.
@@ -31,18 +32,18 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::{DeleteObjectLockConfigResponse, CreateBucketResponse, PutObjectLockConfigResponse};
-    /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
+    /// use minio::s3::types::{BucketName, S3Api, ObjectLockConfig, RetentionMode};
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
-    ///     let bucket_name = "bucket-name";
+    ///     let bucket_name = BucketName::new("bucket-name").unwrap();
     ///
     ///     let resp: CreateBucketResponse = client
-    ///         .create_bucket(bucket_name).object_lock(true)
+    ///         .create_bucket(bucket_name.clone()).object_lock(true)
     ///         .build().send().await.unwrap();
     ///     println!("created bucket '{}' with object locking enabled", resp.bucket());
     ///
@@ -51,7 +52,7 @@ impl MinioClient {
     ///     let config = ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();
     ///
     ///     let resp: PutObjectLockConfigResponse = client
-    ///         .put_object_lock_config(bucket_name).config(config)
+    ///         .put_object_lock_config(bucket_name.clone()).config(config)
     ///         .build().send().await.unwrap();
     ///     println!("configured object locking for bucket '{}'", resp.bucket());
     ///
@@ -61,10 +62,7 @@ impl MinioClient {
     ///     println!("object locking of bucket '{}' is deleted", resp.bucket());
     /// }
     /// ```
-    pub fn delete_object_lock_config<S: Into<String>>(
-        &self,
-        bucket: S,
-    ) -> DeleteObjectLockConfigBldr {
+    pub fn delete_object_lock_config(&self, bucket: BucketName) -> DeleteObjectLockConfigBldr {
         DeleteObjectLockConfig::builder()
             .client(self.clone())
             .bucket(bucket)

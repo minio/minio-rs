@@ -17,7 +17,7 @@ use bytes::Bytes;
 use futures_util::TryStreamExt;
 use minio::s3::response::{GetObjectResponse, PutObjectContentResponse};
 use minio::s3::response_traits::{HasBucket, HasObject};
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, ObjectKey, S3Api};
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name_utf8;
 
@@ -25,7 +25,11 @@ async fn test_get_object(ctx: &TestContext, bucket_name: &str, object_name: &str
     let data: Bytes = Bytes::from("hello, world".to_string().into_bytes());
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(bucket_name, object_name, data.clone())
+        .put_object_content(
+            BucketName::try_from(bucket_name).unwrap(),
+            ObjectKey::try_from(object_name).unwrap(),
+            data.clone(),
+        )
         .build()
         .send()
         .await
@@ -36,7 +40,10 @@ async fn test_get_object(ctx: &TestContext, bucket_name: &str, object_name: &str
 
     let resp: GetObjectResponse = ctx
         .client
-        .get_object(bucket_name, object_name)
+        .get_object(
+            BucketName::try_from(bucket_name).unwrap(),
+            ObjectKey::try_from(object_name).unwrap(),
+        )
         .build()
         .send()
         .await
@@ -57,25 +64,26 @@ async fn test_get_object(ctx: &TestContext, bucket_name: &str, object_name: &str
 
 /// Test getting an object with a name that contains utf-8 characters.
 #[minio_macros::test]
-async fn get_object_1(ctx: TestContext, bucket_name: String) {
-    test_get_object(&ctx, &bucket_name, &rand_object_name_utf8(20)).await;
+async fn get_object_1(ctx: TestContext, bucket_name: BucketName) {
+    let object_name = rand_object_name_utf8(20);
+    test_get_object(&ctx, bucket_name.as_str(), object_name.as_str()).await;
 }
 
 /// Test getting an object with a name that contains white space characters.
 #[minio_macros::test]
-async fn get_object_2(ctx: TestContext, bucket_name: String) {
-    test_get_object(&ctx, &bucket_name, "a b+c").await;
+async fn get_object_2(ctx: TestContext, bucket_name: BucketName) {
+    test_get_object(&ctx, bucket_name.as_str(), "a b+c").await;
 }
 
 /// Test into_bytes method for direct byte retrieval.
 #[minio_macros::test]
-async fn get_object_into_bytes(ctx: TestContext, bucket_name: String) {
+async fn get_object_into_bytes(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name_utf8(20);
     let data: Bytes = Bytes::from("test data for into_bytes method");
 
     // Upload test object
     ctx.client
-        .put_object_content(&bucket_name, &object_name, data.clone())
+        .put_object_content(bucket_name.clone(), object_name.clone(), data.clone())
         .build()
         .send()
         .await
@@ -84,7 +92,7 @@ async fn get_object_into_bytes(ctx: TestContext, bucket_name: String) {
     // Retrieve using into_bytes
     let resp: GetObjectResponse = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -100,13 +108,13 @@ async fn get_object_into_bytes(ctx: TestContext, bucket_name: String) {
 
 /// Test into_boxed_stream method for streaming access.
 #[minio_macros::test]
-async fn get_object_into_boxed_stream(ctx: TestContext, bucket_name: String) {
+async fn get_object_into_boxed_stream(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name_utf8(20);
     let data: Bytes = Bytes::from("test data for into_boxed_stream method");
 
     // Upload test object
     ctx.client
-        .put_object_content(&bucket_name, &object_name, data.clone())
+        .put_object_content(bucket_name.clone(), object_name.clone(), data.clone())
         .build()
         .send()
         .await
@@ -115,7 +123,7 @@ async fn get_object_into_boxed_stream(ctx: TestContext, bucket_name: String) {
     // Retrieve using into_boxed_stream
     let resp: GetObjectResponse = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -133,14 +141,14 @@ async fn get_object_into_boxed_stream(ctx: TestContext, bucket_name: String) {
 
 /// Test into_boxed_stream with larger content to verify chunked streaming.
 #[minio_macros::test]
-async fn get_object_into_boxed_stream_large(ctx: TestContext, bucket_name: String) {
+async fn get_object_into_boxed_stream_large(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name_utf8(20);
     // Create larger test data (1MB) to ensure multiple chunks
     let data: Bytes = Bytes::from(vec![0xABu8; 1024 * 1024]);
 
     // Upload test object
     ctx.client
-        .put_object_content(&bucket_name, &object_name, data.clone())
+        .put_object_content(bucket_name.clone(), object_name.clone(), data.clone())
         .build()
         .send()
         .await
@@ -149,7 +157,7 @@ async fn get_object_into_boxed_stream_large(ctx: TestContext, bucket_name: Strin
     // Retrieve using into_boxed_stream
     let resp: GetObjectResponse = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -167,13 +175,13 @@ async fn get_object_into_boxed_stream_large(ctx: TestContext, bucket_name: Strin
 
 /// Test into_bytes with empty content.
 #[minio_macros::test]
-async fn get_object_into_bytes_empty(ctx: TestContext, bucket_name: String) {
+async fn get_object_into_bytes_empty(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name_utf8(20);
     let data: Bytes = Bytes::new();
 
     // Upload empty object
     ctx.client
-        .put_object_content(&bucket_name, &object_name, data.clone())
+        .put_object_content(bucket_name.clone(), object_name.clone(), data.clone())
         .build()
         .send()
         .await
@@ -182,7 +190,7 @@ async fn get_object_into_bytes_empty(ctx: TestContext, bucket_name: String) {
     // Retrieve using into_bytes
     let resp: GetObjectResponse = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await

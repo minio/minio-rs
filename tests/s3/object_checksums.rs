@@ -21,7 +21,7 @@ use minio::s3::response::{
 };
 use minio::s3::response_traits::{HasBucket, HasChecksumHeaders, HasObject, HasObjectSize};
 use minio::s3::segmented_bytes::SegmentedBytes;
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, ObjectKey, S3Api};
 use minio::s3::utils::ChecksumAlgorithm;
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
@@ -31,15 +31,15 @@ use std::sync::Arc;
 /// Helper function to upload an object with a specific checksum algorithm
 async fn upload_with_checksum(
     ctx: &TestContext,
-    bucket: &str,
-    object: &str,
+    bucket: BucketName,
+    object: ObjectKey,
     data: &[u8],
     algorithm: ChecksumAlgorithm,
 ) -> PutObjectResponse {
     let inner = UploadPart::builder()
         .client(ctx.client.clone())
-        .bucket(bucket.to_string())
-        .object(object.to_string())
+        .bucket(bucket)
+        .object(object)
         .data(Arc::new(SegmentedBytes::from(Bytes::from(data.to_vec()))))
         .checksum_algorithm(algorithm)
         .build();
@@ -54,14 +54,14 @@ async fn upload_with_checksum(
 
 /// Test uploading an object with CRC32 checksum
 #[minio_macros::test]
-async fn upload_with_crc32_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_with_crc32_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Hello, MinIO! Testing CRC32 checksum.";
 
     let resp = upload_with_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::CRC32,
     )
@@ -71,7 +71,7 @@ async fn upload_with_crc32_checksum(ctx: TestContext, bucket_name: String) {
     assert_eq!(resp.object(), object_name.as_str());
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -80,14 +80,14 @@ async fn upload_with_crc32_checksum(ctx: TestContext, bucket_name: String) {
 
 /// Test uploading an object with CRC32C checksum
 #[minio_macros::test]
-async fn upload_with_crc32c_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_with_crc32c_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Hello, MinIO! Testing CRC32C checksum.";
 
     let resp = upload_with_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::CRC32C,
     )
@@ -97,7 +97,7 @@ async fn upload_with_crc32c_checksum(ctx: TestContext, bucket_name: String) {
     assert_eq!(resp.object(), object_name.as_str());
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -106,14 +106,14 @@ async fn upload_with_crc32c_checksum(ctx: TestContext, bucket_name: String) {
 
 /// Test uploading an object with SHA1 checksum
 #[minio_macros::test]
-async fn upload_with_sha1_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_with_sha1_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Hello, MinIO! Testing SHA1 checksum.";
 
     let resp = upload_with_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::SHA1,
     )
@@ -123,7 +123,7 @@ async fn upload_with_sha1_checksum(ctx: TestContext, bucket_name: String) {
     assert_eq!(resp.object(), object_name.as_str());
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -132,14 +132,14 @@ async fn upload_with_sha1_checksum(ctx: TestContext, bucket_name: String) {
 
 /// Test uploading an object with SHA256 checksum
 #[minio_macros::test]
-async fn upload_with_sha256_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_with_sha256_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Hello, MinIO! Testing SHA256 checksum.";
 
     let resp = upload_with_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::SHA256,
     )
@@ -149,7 +149,7 @@ async fn upload_with_sha256_checksum(ctx: TestContext, bucket_name: String) {
     assert_eq!(resp.object(), object_name.as_str());
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -158,14 +158,14 @@ async fn upload_with_sha256_checksum(ctx: TestContext, bucket_name: String) {
 
 /// Test uploading an object with CRC64NVME checksum
 #[minio_macros::test]
-async fn upload_with_crc64nvme_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_with_crc64nvme_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Hello, MinIO! Testing CRC64NVME checksum.";
 
     let resp = upload_with_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::CRC64NVME,
     )
@@ -175,7 +175,7 @@ async fn upload_with_crc64nvme_checksum(ctx: TestContext, bucket_name: String) {
     assert_eq!(resp.object(), object_name.as_str());
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -184,14 +184,14 @@ async fn upload_with_crc64nvme_checksum(ctx: TestContext, bucket_name: String) {
 
 /// Test round-trip: upload with checksum and download with verification
 #[minio_macros::test]
-async fn upload_download_with_crc32c_verification(ctx: TestContext, bucket_name: String) {
+async fn upload_download_with_crc32c_verification(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Round-trip test with CRC32C checksum verification.";
 
     upload_with_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::CRC32C,
     )
@@ -199,7 +199,7 @@ async fn upload_download_with_crc32c_verification(ctx: TestContext, bucket_name:
 
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -220,7 +220,7 @@ async fn upload_download_with_crc32c_verification(ctx: TestContext, bucket_name:
     }
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -229,14 +229,14 @@ async fn upload_download_with_crc32c_verification(ctx: TestContext, bucket_name:
 
 /// Test round-trip with SHA256
 #[minio_macros::test]
-async fn upload_download_with_sha256_verification(ctx: TestContext, bucket_name: String) {
+async fn upload_download_with_sha256_verification(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Round-trip test with SHA256 checksum verification.";
 
     upload_with_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::SHA256,
     )
@@ -244,7 +244,7 @@ async fn upload_download_with_sha256_verification(ctx: TestContext, bucket_name:
 
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -265,7 +265,7 @@ async fn upload_download_with_sha256_verification(ctx: TestContext, bucket_name:
     }
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -274,14 +274,14 @@ async fn upload_download_with_sha256_verification(ctx: TestContext, bucket_name:
 
 /// Test round-trip with CRC64NVME
 #[minio_macros::test]
-async fn upload_download_with_crc64nvme_verification(ctx: TestContext, bucket_name: String) {
+async fn upload_download_with_crc64nvme_verification(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Round-trip test with CRC64NVME checksum verification.";
 
     upload_with_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::CRC64NVME,
     )
@@ -289,7 +289,7 @@ async fn upload_download_with_crc64nvme_verification(ctx: TestContext, bucket_na
 
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -310,7 +310,7 @@ async fn upload_download_with_crc64nvme_verification(ctx: TestContext, bucket_na
     }
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -319,14 +319,14 @@ async fn upload_download_with_crc64nvme_verification(ctx: TestContext, bucket_na
 
 /// Test that downloading without checksum still works
 #[minio_macros::test]
-async fn upload_download_without_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_download_without_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Upload without checksum, should work fine.";
 
     ctx.client
         .put_object(
-            &bucket_name,
-            &object_name,
+            bucket_name.clone(),
+            object_name.clone(),
             SegmentedBytes::from(String::from_utf8_lossy(data).to_string()),
         )
         .build()
@@ -336,7 +336,7 @@ async fn upload_download_without_checksum(ctx: TestContext, bucket_name: String)
 
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -352,7 +352,7 @@ async fn upload_download_without_checksum(ctx: TestContext, bucket_name: String)
     assert_eq!(downloaded.as_ref(), data);
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -361,14 +361,14 @@ async fn upload_download_without_checksum(ctx: TestContext, bucket_name: String)
 
 /// Test checksum with larger data
 #[minio_macros::test]
-async fn upload_download_large_data_with_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_download_large_data_with_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = vec![0xAB; 1024 * 100]; // 100KB of data
 
     upload_with_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         &data,
         ChecksumAlgorithm::CRC32C,
     )
@@ -376,7 +376,7 @@ async fn upload_download_large_data_with_checksum(ctx: TestContext, bucket_name:
 
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -387,7 +387,7 @@ async fn upload_download_large_data_with_checksum(ctx: TestContext, bucket_name:
     assert_eq!(downloaded.as_ref(), data.as_slice());
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -396,7 +396,7 @@ async fn upload_download_large_data_with_checksum(ctx: TestContext, bucket_name:
 
 /// Test all checksum algorithms in sequence
 #[minio_macros::test]
-async fn test_all_checksum_algorithms(ctx: TestContext, bucket_name: String) {
+async fn test_all_checksum_algorithms(ctx: TestContext, bucket_name: BucketName) {
     let algorithms = vec![
         ChecksumAlgorithm::CRC32,
         ChecksumAlgorithm::CRC32C,
@@ -406,14 +406,22 @@ async fn test_all_checksum_algorithms(ctx: TestContext, bucket_name: String) {
     ];
 
     for algo in algorithms {
-        let object_name = format!("checksum-test-{:?}-{}", algo, rand_object_name());
+        let object_name =
+            ObjectKey::new(format!("checksum-test-{:?}-{}", algo, rand_object_name())).unwrap();
         let data = format!("Testing {:?} checksum algorithm", algo);
 
-        upload_with_checksum(&ctx, &bucket_name, &object_name, data.as_bytes(), algo).await;
+        upload_with_checksum(
+            &ctx,
+            bucket_name.clone(),
+            object_name.clone(),
+            data.as_bytes(),
+            algo,
+        )
+        .await;
 
         let get_resp = ctx
             .client
-            .get_object(&bucket_name, &object_name)
+            .get_object(bucket_name.clone(), object_name.clone())
             .build()
             .send()
             .await
@@ -434,7 +442,7 @@ async fn test_all_checksum_algorithms(ctx: TestContext, bucket_name: String) {
         }
 
         ctx.client
-            .delete_object(&bucket_name, &object_name)
+            .delete_object(bucket_name.clone(), object_name.as_str())
             .build()
             .send()
             .await
@@ -448,14 +456,14 @@ async fn test_all_checksum_algorithms(ctx: TestContext, bucket_name: String) {
 
 /// Test round-trip with CRC32
 #[minio_macros::test]
-async fn upload_download_with_crc32_verification(ctx: TestContext, bucket_name: String) {
+async fn upload_download_with_crc32_verification(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Round-trip test with CRC32 checksum verification.";
 
     upload_with_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::CRC32,
     )
@@ -463,7 +471,7 @@ async fn upload_download_with_crc32_verification(ctx: TestContext, bucket_name: 
 
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -481,7 +489,7 @@ async fn upload_download_with_crc32_verification(ctx: TestContext, bucket_name: 
     }
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -490,14 +498,14 @@ async fn upload_download_with_crc32_verification(ctx: TestContext, bucket_name: 
 
 /// Test round-trip with SHA1
 #[minio_macros::test]
-async fn upload_download_with_sha1_verification(ctx: TestContext, bucket_name: String) {
+async fn upload_download_with_sha1_verification(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Round-trip test with SHA1 checksum verification.";
 
     upload_with_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::SHA1,
     )
@@ -505,7 +513,7 @@ async fn upload_download_with_sha1_verification(ctx: TestContext, bucket_name: S
 
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -523,7 +531,7 @@ async fn upload_download_with_sha1_verification(ctx: TestContext, bucket_name: S
     }
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -536,7 +544,7 @@ async fn upload_download_with_sha1_verification(ctx: TestContext, bucket_name: S
 
 /// Test AppendObject with CRC32C checksum
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_with_crc32c_checksum(ctx: TestContext, bucket_name: String) {
+async fn append_object_with_crc32c_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let content1 = "Initial content for append test.";
     let content2 = "Appended content with checksum.";
@@ -544,7 +552,11 @@ async fn append_object_with_crc32c_checksum(ctx: TestContext, bucket_name: Strin
     // Create initial object
     let _resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &object_name, content1)
+        .put_object_content(
+            bucket_name.clone(),
+            ObjectKey::try_from(object_name.as_str()).unwrap(),
+            content1,
+        )
         .build()
         .send()
         .await
@@ -555,19 +567,24 @@ async fn append_object_with_crc32c_checksum(ctx: TestContext, bucket_name: Strin
     let offset = content1.len() as u64;
     let resp: AppendObjectResponse = ctx
         .client
-        .append_object(&bucket_name, &object_name, data2, offset)
+        .append_object(
+            bucket_name.clone(),
+            ObjectKey::try_from(object_name.as_str()).unwrap(),
+            data2,
+            offset,
+        )
         .checksum_algorithm(ChecksumAlgorithm::CRC32C)
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size(), (content1.len() + content2.len()) as u64);
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -576,7 +593,7 @@ async fn append_object_with_crc32c_checksum(ctx: TestContext, bucket_name: Strin
 
 /// Test AppendObject with all checksum algorithms
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_all_checksum_algorithms(ctx: TestContext, bucket_name: String) {
+async fn append_object_all_checksum_algorithms(ctx: TestContext, bucket_name: BucketName) {
     let algorithms = vec![
         ChecksumAlgorithm::CRC32,
         ChecksumAlgorithm::CRC32C,
@@ -594,7 +611,11 @@ async fn append_object_all_checksum_algorithms(ctx: TestContext, bucket_name: St
         let content1_len = content1.len();
         let _resp: PutObjectContentResponse = ctx
             .client
-            .put_object_content(&bucket_name, &object_name, content1)
+            .put_object_content(
+                bucket_name.clone(),
+                ObjectKey::try_from(object_name.as_str()).unwrap(),
+                content1,
+            )
             .build()
             .send()
             .await
@@ -605,15 +626,20 @@ async fn append_object_all_checksum_algorithms(ctx: TestContext, bucket_name: St
         let offset = content1_len as u64;
         let resp: AppendObjectResponse = ctx
             .client
-            .append_object(&bucket_name, &object_name, data2, offset)
+            .append_object(
+                bucket_name.clone(),
+                ObjectKey::try_from(object_name.as_str()).unwrap(),
+                data2,
+                offset,
+            )
             .checksum_algorithm(algo)
             .build()
             .send()
             .await
             .unwrap();
 
-        assert_eq!(resp.bucket(), bucket_name);
-        assert_eq!(resp.object(), object_name);
+        assert_eq!(resp.bucket(), bucket_name.as_str());
+        assert_eq!(resp.object(), object_name.as_str());
         assert_eq!(
             resp.object_size(),
             (content1_len + content2.len()) as u64,
@@ -622,7 +648,7 @@ async fn append_object_all_checksum_algorithms(ctx: TestContext, bucket_name: St
         );
 
         ctx.client
-            .delete_object(&bucket_name, &object_name)
+            .delete_object(bucket_name.clone(), object_name.as_str())
             .build()
             .send()
             .await
@@ -632,7 +658,7 @@ async fn append_object_all_checksum_algorithms(ctx: TestContext, bucket_name: St
 
 /// Test AppendObjectContent with checksum
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_content_with_checksum(ctx: TestContext, bucket_name: String) {
+async fn append_object_content_with_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let content1 = "Initial content.";
     let content2 = "Appended content with SHA256.";
@@ -640,7 +666,11 @@ async fn append_object_content_with_checksum(ctx: TestContext, bucket_name: Stri
     // Create initial object
     let _resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &object_name, content1)
+        .put_object_content(
+            bucket_name.clone(),
+            ObjectKey::try_from(object_name.as_str()).unwrap(),
+            content1,
+        )
         .build()
         .send()
         .await
@@ -649,19 +679,19 @@ async fn append_object_content_with_checksum(ctx: TestContext, bucket_name: Stri
     // Append content with checksum
     let resp: AppendObjectResponse = ctx
         .client
-        .append_object_content(&bucket_name, &object_name, content2)
+        .append_object_content(bucket_name.clone(), object_name.clone(), content2)
         .checksum_algorithm(ChecksumAlgorithm::SHA256)
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size(), (content1.len() + content2.len()) as u64);
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -674,7 +704,7 @@ async fn append_object_content_with_checksum(ctx: TestContext, bucket_name: Stri
 
 /// Test CopyObject with CRC32C checksum
 #[minio_macros::test(skip_if_express)]
-async fn copy_object_with_crc32c_checksum(ctx: TestContext, bucket_name: String) {
+async fn copy_object_with_crc32c_checksum(ctx: TestContext, bucket_name: BucketName) {
     let src_object = rand_object_name();
     let dst_object = rand_object_name();
     let data = b"Content to copy with checksum verification.";
@@ -682,7 +712,11 @@ async fn copy_object_with_crc32c_checksum(ctx: TestContext, bucket_name: String)
     // Create source object
     let _resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &src_object, Bytes::from_static(data))
+        .put_object_content(
+            bucket_name.clone(),
+            src_object.clone(),
+            Bytes::from_static(data),
+        )
         .build()
         .send()
         .await
@@ -691,11 +725,11 @@ async fn copy_object_with_crc32c_checksum(ctx: TestContext, bucket_name: String)
     // Copy with checksum
     let resp: CopyObjectResponse = ctx
         .client
-        .copy_object(&bucket_name, &dst_object)
+        .copy_object(bucket_name.clone(), dst_object.clone())
         .source(
             CopySource::builder()
-                .bucket(&bucket_name)
-                .object(&src_object)
+                .bucket(bucket_name.clone())
+                .object(src_object.clone())
                 .build(),
         )
         .checksum_algorithm(ChecksumAlgorithm::CRC32C)
@@ -704,13 +738,13 @@ async fn copy_object_with_crc32c_checksum(ctx: TestContext, bucket_name: String)
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), dst_object);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), dst_object.as_str());
 
     // Verify the copy
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &dst_object)
+        .get_object(bucket_name.clone(), dst_object.clone())
         .build()
         .send()
         .await
@@ -722,13 +756,13 @@ async fn copy_object_with_crc32c_checksum(ctx: TestContext, bucket_name: String)
 
     // Cleanup
     ctx.client
-        .delete_object(&bucket_name, &src_object)
+        .delete_object(bucket_name.clone(), src_object.as_str())
         .build()
         .send()
         .await
         .unwrap();
     ctx.client
-        .delete_object(&bucket_name, &dst_object)
+        .delete_object(bucket_name, dst_object.as_str())
         .build()
         .send()
         .await
@@ -737,7 +771,7 @@ async fn copy_object_with_crc32c_checksum(ctx: TestContext, bucket_name: String)
 
 /// Test CopyObject with all checksum algorithms
 #[minio_macros::test(skip_if_express)]
-async fn copy_object_all_checksum_algorithms(ctx: TestContext, bucket_name: String) {
+async fn copy_object_all_checksum_algorithms(ctx: TestContext, bucket_name: BucketName) {
     let algorithms = vec![
         ChecksumAlgorithm::CRC32,
         ChecksumAlgorithm::CRC32C,
@@ -754,7 +788,11 @@ async fn copy_object_all_checksum_algorithms(ctx: TestContext, bucket_name: Stri
         // Create source object
         let _resp: PutObjectContentResponse = ctx
             .client
-            .put_object_content(&bucket_name, &src_object, data)
+            .put_object_content(
+                bucket_name.clone(),
+                ObjectKey::try_from(src_object.as_str()).unwrap(),
+                data,
+            )
             .build()
             .send()
             .await
@@ -763,11 +801,14 @@ async fn copy_object_all_checksum_algorithms(ctx: TestContext, bucket_name: Stri
         // Copy with checksum
         let resp: CopyObjectResponse = ctx
             .client
-            .copy_object(&bucket_name, &dst_object)
+            .copy_object(
+                bucket_name.clone(),
+                ObjectKey::try_from(dst_object.as_str()).unwrap(),
+            )
             .source(
                 CopySource::builder()
-                    .bucket(&bucket_name)
-                    .object(&src_object)
+                    .bucket(bucket_name.clone())
+                    .object(ObjectKey::try_from(src_object.as_str()).unwrap())
                     .build(),
             )
             .checksum_algorithm(algo)
@@ -776,18 +817,28 @@ async fn copy_object_all_checksum_algorithms(ctx: TestContext, bucket_name: Stri
             .await
             .unwrap();
 
-        assert_eq!(resp.bucket(), bucket_name, "Bucket mismatch for {:?}", algo);
-        assert_eq!(resp.object(), dst_object, "Object mismatch for {:?}", algo);
+        assert_eq!(
+            resp.bucket(),
+            bucket_name.as_str(),
+            "Bucket mismatch for {:?}",
+            algo
+        );
+        assert_eq!(
+            resp.object(),
+            dst_object.as_str(),
+            "Object mismatch for {:?}",
+            algo
+        );
 
         // Cleanup
         ctx.client
-            .delete_object(&bucket_name, &src_object)
+            .delete_object(bucket_name.clone(), src_object.as_str())
             .build()
             .send()
             .await
             .unwrap();
         ctx.client
-            .delete_object(&bucket_name, &dst_object)
+            .delete_object(bucket_name.clone(), dst_object.as_str())
             .build()
             .send()
             .await
@@ -801,7 +852,7 @@ async fn copy_object_all_checksum_algorithms(ctx: TestContext, bucket_name: Stri
 
 /// Test ComposeObject with CRC32C checksum
 #[minio_macros::test]
-async fn compose_object_with_crc32c_checksum(ctx: TestContext, bucket_name: String) {
+async fn compose_object_with_crc32c_checksum(ctx: TestContext, bucket_name: BucketName) {
     let src_object = rand_object_name();
     let dst_object = rand_object_name();
     let data = b"Content to compose with checksum verification.";
@@ -809,31 +860,35 @@ async fn compose_object_with_crc32c_checksum(ctx: TestContext, bucket_name: Stri
     // Create source object
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &src_object, Bytes::from_static(data))
+        .put_object_content(
+            bucket_name.clone(),
+            src_object.clone(),
+            Bytes::from_static(data),
+        )
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
 
     // Compose with checksum
-    let sources = vec![ComposeSource::new(&bucket_name, &src_object).unwrap()];
+    let sources = vec![ComposeSource::new(bucket_name.clone(), src_object.clone())];
     let resp: ComposeObjectResponse = ctx
         .client
-        .compose_object(&bucket_name, &dst_object, sources)
+        .compose_object(bucket_name.clone(), dst_object.clone(), sources)
         .checksum_algorithm(ChecksumAlgorithm::CRC32C)
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), dst_object);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), dst_object.as_str());
 
     // Verify the composed object
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &dst_object)
+        .get_object(bucket_name.clone(), dst_object.clone())
         .build()
         .send()
         .await
@@ -845,13 +900,13 @@ async fn compose_object_with_crc32c_checksum(ctx: TestContext, bucket_name: Stri
 
     // Cleanup
     ctx.client
-        .delete_object(&bucket_name, &src_object)
+        .delete_object(bucket_name.clone(), src_object.as_str())
         .build()
         .send()
         .await
         .unwrap();
     ctx.client
-        .delete_object(&bucket_name, &dst_object)
+        .delete_object(bucket_name, dst_object.as_str())
         .build()
         .send()
         .await
@@ -860,7 +915,7 @@ async fn compose_object_with_crc32c_checksum(ctx: TestContext, bucket_name: Stri
 
 /// Test ComposeObject with all checksum algorithms
 #[minio_macros::test]
-async fn compose_object_all_checksum_algorithms(ctx: TestContext, bucket_name: String) {
+async fn compose_object_all_checksum_algorithms(ctx: TestContext, bucket_name: BucketName) {
     let algorithms = vec![
         ChecksumAlgorithm::CRC32,
         ChecksumAlgorithm::CRC32C,
@@ -877,35 +932,56 @@ async fn compose_object_all_checksum_algorithms(ctx: TestContext, bucket_name: S
         // Create source object
         let _resp: PutObjectContentResponse = ctx
             .client
-            .put_object_content(&bucket_name, &src_object, data)
+            .put_object_content(
+                bucket_name.clone(),
+                ObjectKey::try_from(src_object.as_str()).unwrap(),
+                data,
+            )
             .build()
             .send()
             .await
             .unwrap();
 
         // Compose with checksum
-        let sources = vec![ComposeSource::new(&bucket_name, &src_object).unwrap()];
+        let sources = vec![ComposeSource::new(
+            bucket_name.clone(),
+            ObjectKey::try_from(src_object.as_str()).unwrap(),
+        )];
         let resp: ComposeObjectResponse = ctx
             .client
-            .compose_object(&bucket_name, &dst_object, sources)
+            .compose_object(
+                bucket_name.clone(),
+                ObjectKey::try_from(dst_object.as_str()).unwrap(),
+                sources,
+            )
             .checksum_algorithm(algo)
             .build()
             .send()
             .await
             .unwrap();
 
-        assert_eq!(resp.bucket(), bucket_name, "Bucket mismatch for {:?}", algo);
-        assert_eq!(resp.object(), dst_object, "Object mismatch for {:?}", algo);
+        assert_eq!(
+            resp.bucket(),
+            bucket_name.as_str(),
+            "Bucket mismatch for {:?}",
+            algo
+        );
+        assert_eq!(
+            resp.object(),
+            dst_object.as_str(),
+            "Object mismatch for {:?}",
+            algo
+        );
 
         // Cleanup
         ctx.client
-            .delete_object(&bucket_name, &src_object)
+            .delete_object(bucket_name.clone(), src_object.as_str())
             .build()
             .send()
             .await
             .unwrap();
         ctx.client
-            .delete_object(&bucket_name, &dst_object)
+            .delete_object(bucket_name.clone(), dst_object.as_str())
             .build()
             .send()
             .await
@@ -918,7 +994,7 @@ async fn compose_object_all_checksum_algorithms(ctx: TestContext, bucket_name: S
 /// Checksum verification on multipart copy requires source objects to have checksums stored,
 /// which is complex with streaming uploads. This test validates the basic multipart compose works.
 #[minio_macros::test]
-async fn compose_object_multiple_sources(ctx: TestContext, bucket_name: String) {
+async fn compose_object_multiple_sources(ctx: TestContext, bucket_name: BucketName) {
     let src_object1 = rand_object_name();
     let src_object2 = rand_object_name();
     let dst_object = rand_object_name();
@@ -931,7 +1007,7 @@ async fn compose_object_multiple_sources(ctx: TestContext, bucket_name: String) 
     let content1 = ObjectContent::new_from_stream(RandSrc::new(size1), Some(size1));
     let _resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &src_object1, content1)
+        .put_object_content(bucket_name.clone(), src_object1.clone(), content1)
         .build()
         .send()
         .await
@@ -940,7 +1016,7 @@ async fn compose_object_multiple_sources(ctx: TestContext, bucket_name: String) 
     let content2 = ObjectContent::new_from_stream(RandSrc::new(size2), Some(size2));
     let _resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &src_object2, content2)
+        .put_object_content(bucket_name.clone(), src_object2.clone(), content2)
         .build()
         .send()
         .await
@@ -948,24 +1024,24 @@ async fn compose_object_multiple_sources(ctx: TestContext, bucket_name: String) 
 
     // Compose multiple sources
     let sources = vec![
-        ComposeSource::new(&bucket_name, &src_object1).unwrap(),
-        ComposeSource::new(&bucket_name, &src_object2).unwrap(),
+        ComposeSource::new(bucket_name.clone(), src_object1.clone()),
+        ComposeSource::new(bucket_name.clone(), src_object2.clone()),
     ];
     let resp: ComposeObjectResponse = ctx
         .client
-        .compose_object(&bucket_name, &dst_object, sources)
+        .compose_object(bucket_name.clone(), dst_object.clone(), sources)
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), dst_object);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), dst_object.as_str());
 
     // Verify the composed object size
     let stat_resp = ctx
         .client
-        .stat_object(&bucket_name, &dst_object)
+        .stat_object(bucket_name.clone(), dst_object.clone())
         .build()
         .send()
         .await
@@ -974,19 +1050,19 @@ async fn compose_object_multiple_sources(ctx: TestContext, bucket_name: String) 
 
     // Cleanup
     ctx.client
-        .delete_object(&bucket_name, &src_object1)
+        .delete_object(bucket_name.clone(), src_object1.as_str())
         .build()
         .send()
         .await
         .unwrap();
     ctx.client
-        .delete_object(&bucket_name, &src_object2)
+        .delete_object(bucket_name.clone(), src_object2.as_str())
         .build()
         .send()
         .await
         .unwrap();
     ctx.client
-        .delete_object(&bucket_name, &dst_object)
+        .delete_object(bucket_name, dst_object.as_str())
         .build()
         .send()
         .await
@@ -1000,15 +1076,15 @@ async fn compose_object_multiple_sources(ctx: TestContext, bucket_name: String) 
 /// Helper function to upload an object with a trailing checksum
 async fn upload_with_trailing_checksum(
     ctx: &TestContext,
-    bucket: &str,
-    object: &str,
+    bucket: BucketName,
+    object: ObjectKey,
     data: &[u8],
     algorithm: ChecksumAlgorithm,
 ) -> PutObjectResponse {
     let inner = UploadPart::builder()
         .client(ctx.client.clone())
-        .bucket(bucket.to_string())
-        .object(object.to_string())
+        .bucket(bucket)
+        .object(object)
         .data(Arc::new(SegmentedBytes::from(Bytes::from(data.to_vec()))))
         .checksum_algorithm(algorithm)
         .use_trailing_checksum(true)
@@ -1024,14 +1100,14 @@ async fn upload_with_trailing_checksum(
 
 /// Test uploading an object with trailing CRC32 checksum
 #[minio_macros::test]
-async fn upload_with_trailing_crc32_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_with_trailing_crc32_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Hello, MinIO! Testing trailing CRC32 checksum.";
 
     let resp = upload_with_trailing_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::CRC32,
     )
@@ -1043,7 +1119,7 @@ async fn upload_with_trailing_crc32_checksum(ctx: TestContext, bucket_name: Stri
     // Verify we can download the object
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -1054,7 +1130,7 @@ async fn upload_with_trailing_crc32_checksum(ctx: TestContext, bucket_name: Stri
     assert_eq!(bytes.as_ref(), data);
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -1063,14 +1139,14 @@ async fn upload_with_trailing_crc32_checksum(ctx: TestContext, bucket_name: Stri
 
 /// Test uploading an object with trailing CRC32C checksum
 #[minio_macros::test]
-async fn upload_with_trailing_crc32c_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_with_trailing_crc32c_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Hello, MinIO! Testing trailing CRC32C checksum.";
 
     let resp = upload_with_trailing_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::CRC32C,
     )
@@ -1080,7 +1156,7 @@ async fn upload_with_trailing_crc32c_checksum(ctx: TestContext, bucket_name: Str
     assert_eq!(resp.object(), object_name.as_str());
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -1089,14 +1165,14 @@ async fn upload_with_trailing_crc32c_checksum(ctx: TestContext, bucket_name: Str
 
 /// Test uploading an object with trailing CRC64NVME checksum
 #[minio_macros::test]
-async fn upload_with_trailing_crc64nvme_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_with_trailing_crc64nvme_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Hello, MinIO! Testing trailing CRC64NVME checksum.";
 
     let resp = upload_with_trailing_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::CRC64NVME,
     )
@@ -1106,7 +1182,7 @@ async fn upload_with_trailing_crc64nvme_checksum(ctx: TestContext, bucket_name: 
     assert_eq!(resp.object(), object_name.as_str());
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -1115,14 +1191,14 @@ async fn upload_with_trailing_crc64nvme_checksum(ctx: TestContext, bucket_name: 
 
 /// Test uploading an object with trailing SHA1 checksum
 #[minio_macros::test]
-async fn upload_with_trailing_sha1_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_with_trailing_sha1_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Hello, MinIO! Testing trailing SHA1 checksum.";
 
     let resp = upload_with_trailing_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::SHA1,
     )
@@ -1132,7 +1208,7 @@ async fn upload_with_trailing_sha1_checksum(ctx: TestContext, bucket_name: Strin
     assert_eq!(resp.object(), object_name.as_str());
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -1141,14 +1217,14 @@ async fn upload_with_trailing_sha1_checksum(ctx: TestContext, bucket_name: Strin
 
 /// Test uploading an object with trailing SHA256 checksum
 #[minio_macros::test]
-async fn upload_with_trailing_sha256_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_with_trailing_sha256_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let data = b"Hello, MinIO! Testing trailing SHA256 checksum.";
 
     let resp = upload_with_trailing_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::SHA256,
     )
@@ -1158,7 +1234,7 @@ async fn upload_with_trailing_sha256_checksum(ctx: TestContext, bucket_name: Str
     assert_eq!(resp.object(), object_name.as_str());
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -1169,15 +1245,15 @@ async fn upload_with_trailing_sha256_checksum(ctx: TestContext, bucket_name: Str
 #[minio_macros::test]
 async fn upload_download_with_trailing_crc64nvme_verification(
     ctx: TestContext,
-    bucket_name: String,
+    bucket_name: BucketName,
 ) {
     let object_name = rand_object_name();
     let data = b"Round-trip test with trailing CRC64NVME checksum verification.";
 
     upload_with_trailing_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         data,
         ChecksumAlgorithm::CRC64NVME,
     )
@@ -1185,7 +1261,7 @@ async fn upload_download_with_trailing_crc64nvme_verification(
 
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -1204,7 +1280,7 @@ async fn upload_download_with_trailing_crc64nvme_verification(
     }
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -1213,7 +1289,7 @@ async fn upload_download_with_trailing_crc64nvme_verification(
 
 /// Test all checksum algorithms with trailing checksums
 #[minio_macros::test]
-async fn test_all_trailing_checksum_algorithms(ctx: TestContext, bucket_name: String) {
+async fn test_all_trailing_checksum_algorithms(ctx: TestContext, bucket_name: BucketName) {
     let algorithms = vec![
         ChecksumAlgorithm::CRC32,
         ChecksumAlgorithm::CRC32C,
@@ -1223,15 +1299,24 @@ async fn test_all_trailing_checksum_algorithms(ctx: TestContext, bucket_name: St
     ];
 
     for algo in algorithms {
-        let object_name = format!("trailing-checksum-test-{:?}-{}", algo, rand_object_name());
+        let object_name: ObjectKey =
+            format!("trailing-checksum-test-{:?}-{}", algo, rand_object_name())
+                .try_into()
+                .unwrap();
         let data = format!("Testing trailing {:?} checksum algorithm", algo);
 
-        upload_with_trailing_checksum(&ctx, &bucket_name, &object_name, data.as_bytes(), algo)
-            .await;
+        upload_with_trailing_checksum(
+            &ctx,
+            bucket_name.clone(),
+            object_name.clone(),
+            data.as_bytes(),
+            algo,
+        )
+        .await;
 
         let get_resp = ctx
             .client
-            .get_object(&bucket_name, &object_name)
+            .get_object(bucket_name.clone(), object_name.clone())
             .build()
             .send()
             .await
@@ -1249,7 +1334,7 @@ async fn test_all_trailing_checksum_algorithms(ctx: TestContext, bucket_name: St
         }
 
         ctx.client
-            .delete_object(&bucket_name, &object_name)
+            .delete_object(bucket_name.clone(), object_name.as_str())
             .build()
             .send()
             .await
@@ -1263,15 +1348,18 @@ async fn test_all_trailing_checksum_algorithms(ctx: TestContext, bucket_name: St
 /// Older servers may fail with "IncompleteBody" errors.
 /// Run with `cargo test -- --ignored` to include this test.
 #[minio_macros::test(ignore = "Requires newer MinIO server with trailing checksum support")]
-async fn upload_download_large_data_with_trailing_checksum(ctx: TestContext, bucket_name: String) {
+async fn upload_download_large_data_with_trailing_checksum(
+    ctx: TestContext,
+    bucket_name: BucketName,
+) {
     let object_name = rand_object_name();
     // Use 100KB which is larger than the 64KB default chunk size
     let data = vec![0xAB; 1024 * 100];
 
     upload_with_trailing_checksum(
         &ctx,
-        &bucket_name,
-        &object_name,
+        bucket_name.clone(),
+        object_name.clone(),
         &data,
         ChecksumAlgorithm::CRC64NVME,
     )
@@ -1279,7 +1367,7 @@ async fn upload_download_large_data_with_trailing_checksum(ctx: TestContext, buc
 
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -1290,7 +1378,7 @@ async fn upload_download_large_data_with_trailing_checksum(ctx: TestContext, buc
     assert_eq!(downloaded.as_ref(), data.as_slice());
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -1299,13 +1387,13 @@ async fn upload_download_large_data_with_trailing_checksum(ctx: TestContext, buc
 
 /// Test PutObjectContent with trailing checksums
 #[minio_macros::test]
-async fn put_object_content_with_trailing_checksum(ctx: TestContext, bucket_name: String) {
+async fn put_object_content_with_trailing_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let content = "Testing PutObjectContent with trailing CRC64NVME checksum.";
 
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &object_name, content)
+        .put_object_content(bucket_name.clone(), object_name.clone(), content)
         .checksum_algorithm(ChecksumAlgorithm::CRC64NVME)
         .use_trailing_checksum(true)
         .build()
@@ -1313,13 +1401,13 @@ async fn put_object_content_with_trailing_checksum(ctx: TestContext, bucket_name
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
 
     // Verify the object
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -1330,7 +1418,7 @@ async fn put_object_content_with_trailing_checksum(ctx: TestContext, bucket_name
     assert_eq!(bytes.as_ref(), content.as_bytes());
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -1353,7 +1441,7 @@ async fn put_object_content_with_trailing_checksum(ctx: TestContext, bucket_name
 /// 2. Download works without checksum verification errors
 /// 3. Content is correct
 #[minio_macros::test]
-async fn multipart_upload_with_checksum_crc32c(ctx: TestContext, bucket_name: String) {
+async fn multipart_upload_with_checksum_crc32c(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     // 6MB to ensure multipart upload (threshold is 5MB)
     let size: u64 = 6 * 1024 * 1024;
@@ -1361,20 +1449,20 @@ async fn multipart_upload_with_checksum_crc32c(ctx: TestContext, bucket_name: St
     let content = ObjectContent::new_from_stream(RandSrc::new(size), Some(size));
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &object_name, content)
+        .put_object_content(bucket_name.clone(), object_name.clone(), content)
         .checksum_algorithm(ChecksumAlgorithm::CRC32C)
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
 
     // Download and verify - should work even with composite checksum
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -1398,7 +1486,7 @@ async fn multipart_upload_with_checksum_crc32c(ctx: TestContext, bucket_name: St
     }
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -1407,7 +1495,7 @@ async fn multipart_upload_with_checksum_crc32c(ctx: TestContext, bucket_name: St
 
 /// Test multipart upload with CRC64NVME checksum (the recommended algorithm).
 #[minio_macros::test]
-async fn multipart_upload_with_checksum_crc64nvme(ctx: TestContext, bucket_name: String) {
+async fn multipart_upload_with_checksum_crc64nvme(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     // 6MB to ensure multipart upload
     let size: u64 = 6 * 1024 * 1024;
@@ -1415,19 +1503,19 @@ async fn multipart_upload_with_checksum_crc64nvme(ctx: TestContext, bucket_name:
     let content = ObjectContent::new_from_stream(RandSrc::new(size), Some(size));
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &object_name, content)
+        .put_object_content(bucket_name.clone(), object_name.clone(), content)
         .checksum_algorithm(ChecksumAlgorithm::CRC64NVME)
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
 
     // Download with streaming verification (should skip for composite)
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -1438,7 +1526,7 @@ async fn multipart_upload_with_checksum_crc64nvme(ctx: TestContext, bucket_name:
     assert_eq!(bytes.len(), size as usize);
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -1453,7 +1541,7 @@ async fn multipart_upload_with_checksum_crc64nvme(ctx: TestContext, bucket_name:
 #[minio_macros::test(
     ignore = "Requires newer MinIO server with trailing checksum + multipart support"
 )]
-async fn multipart_upload_with_trailing_checksum(ctx: TestContext, bucket_name: String) {
+async fn multipart_upload_with_trailing_checksum(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     // 6MB to ensure multipart upload
     let size: u64 = 6 * 1024 * 1024;
@@ -1461,7 +1549,7 @@ async fn multipart_upload_with_trailing_checksum(ctx: TestContext, bucket_name: 
     let content = ObjectContent::new_from_stream(RandSrc::new(size), Some(size));
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &object_name, content)
+        .put_object_content(bucket_name.clone(), object_name.clone(), content)
         .checksum_algorithm(ChecksumAlgorithm::CRC64NVME)
         .use_trailing_checksum(true)
         .build()
@@ -1469,12 +1557,12 @@ async fn multipart_upload_with_trailing_checksum(ctx: TestContext, bucket_name: 
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
 
     // Download and verify content
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -1484,7 +1572,7 @@ async fn multipart_upload_with_trailing_checksum(ctx: TestContext, bucket_name: 
     assert_eq!(downloaded.len(), size as usize);
 
     ctx.client
-        .delete_object(&bucket_name, &object_name)
+        .delete_object(bucket_name, object_name.as_str())
         .build()
         .send()
         .await
@@ -1493,7 +1581,7 @@ async fn multipart_upload_with_trailing_checksum(ctx: TestContext, bucket_name: 
 
 /// Test all checksum algorithms with multipart upload.
 #[minio_macros::test]
-async fn multipart_upload_all_checksum_algorithms(ctx: TestContext, bucket_name: String) {
+async fn multipart_upload_all_checksum_algorithms(ctx: TestContext, bucket_name: BucketName) {
     let algorithms = vec![
         ChecksumAlgorithm::CRC32,
         ChecksumAlgorithm::CRC32C,
@@ -1506,24 +1594,31 @@ async fn multipart_upload_all_checksum_algorithms(ctx: TestContext, bucket_name:
     let size: u64 = 6 * 1024 * 1024;
 
     for algo in algorithms {
-        let object_name = format!("multipart-{:?}-{}", algo, rand_object_name());
+        let object_name: ObjectKey = format!("multipart-{:?}-{}", algo, rand_object_name())
+            .try_into()
+            .unwrap();
 
         let content = ObjectContent::new_from_stream(RandSrc::new(size), Some(size));
         let resp: PutObjectContentResponse = ctx
             .client
-            .put_object_content(&bucket_name, &object_name, content)
+            .put_object_content(bucket_name.clone(), object_name.clone(), content)
             .checksum_algorithm(algo)
             .build()
             .send()
             .await
             .unwrap();
 
-        assert_eq!(resp.bucket(), bucket_name, "Bucket mismatch for {:?}", algo);
+        assert_eq!(
+            resp.bucket(),
+            bucket_name.as_str(),
+            "Bucket mismatch for {:?}",
+            algo
+        );
 
         // Download and verify - should work for all algorithms
         let get_resp = ctx
             .client
-            .get_object(&bucket_name, &object_name)
+            .get_object(bucket_name.clone(), object_name.clone())
             .build()
             .send()
             .await
@@ -1539,7 +1634,7 @@ async fn multipart_upload_all_checksum_algorithms(ctx: TestContext, bucket_name:
         );
 
         ctx.client
-            .delete_object(&bucket_name, &object_name)
+            .delete_object(bucket_name.clone(), object_name.as_str())
             .build()
             .send()
             .await
@@ -1554,7 +1649,7 @@ async fn multipart_upload_all_checksum_algorithms(ctx: TestContext, bucket_name:
 /// store/return checksums on source objects needed for compose validation.
 /// Run with `cargo test -- --ignored` to include this test.
 #[minio_macros::test(ignore = "Requires newer MinIO server with compose + checksum support")]
-async fn compose_multiple_sources_with_checksum(ctx: TestContext, bucket_name: String) {
+async fn compose_multiple_sources_with_checksum(ctx: TestContext, bucket_name: BucketName) {
     let src_object1 = rand_object_name();
     let src_object2 = rand_object_name();
     let dst_object = rand_object_name();
@@ -1567,7 +1662,7 @@ async fn compose_multiple_sources_with_checksum(ctx: TestContext, bucket_name: S
     let content1 = ObjectContent::new_from_stream(RandSrc::new(size1), Some(size1));
     let _resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &src_object1, content1)
+        .put_object_content(bucket_name.clone(), src_object1.clone(), content1)
         .checksum_algorithm(ChecksumAlgorithm::CRC32C)
         .build()
         .send()
@@ -1577,7 +1672,7 @@ async fn compose_multiple_sources_with_checksum(ctx: TestContext, bucket_name: S
     let content2 = ObjectContent::new_from_stream(RandSrc::new(size2), Some(size2));
     let _resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &src_object2, content2)
+        .put_object_content(bucket_name.clone(), src_object2.clone(), content2)
         .checksum_algorithm(ChecksumAlgorithm::CRC32C)
         .build()
         .send()
@@ -1586,25 +1681,25 @@ async fn compose_multiple_sources_with_checksum(ctx: TestContext, bucket_name: S
 
     // Compose multiple sources with checksum
     let sources = vec![
-        ComposeSource::new(&bucket_name, &src_object1).unwrap(),
-        ComposeSource::new(&bucket_name, &src_object2).unwrap(),
+        ComposeSource::new(bucket_name.clone(), src_object1.clone()),
+        ComposeSource::new(bucket_name.clone(), src_object2.clone()),
     ];
     let resp: ComposeObjectResponse = ctx
         .client
-        .compose_object(&bucket_name, &dst_object, sources)
+        .compose_object(bucket_name.clone(), dst_object.clone(), sources)
         .checksum_algorithm(ChecksumAlgorithm::CRC32C)
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), dst_object);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), dst_object.as_str());
 
     // Download and verify - composite checksum handling
     let get_resp = ctx
         .client
-        .get_object(&bucket_name, &dst_object)
+        .get_object(bucket_name.clone(), dst_object.clone())
         .build()
         .send()
         .await
@@ -1616,19 +1711,19 @@ async fn compose_multiple_sources_with_checksum(ctx: TestContext, bucket_name: S
 
     // Cleanup
     ctx.client
-        .delete_object(&bucket_name, &src_object1)
+        .delete_object(bucket_name.clone(), src_object1.as_str())
         .build()
         .send()
         .await
         .unwrap();
     ctx.client
-        .delete_object(&bucket_name, &src_object2)
+        .delete_object(bucket_name.clone(), src_object2.as_str())
         .build()
         .send()
         .await
         .unwrap();
     ctx.client
-        .delete_object(&bucket_name, &dst_object)
+        .delete_object(bucket_name, dst_object.as_str())
         .build()
         .send()
         .await

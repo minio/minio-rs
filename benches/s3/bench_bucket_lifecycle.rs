@@ -43,7 +43,7 @@ pub(crate) fn bench_get_bucket_lifecycle(criterion: &mut Criterion) {
             let ctx = Ctx2::new().await;
             let config = create_bucket_lifecycle_config_examples();
             ctx.client
-                .put_bucket_lifecycle(&ctx.bucket)
+                .put_bucket_lifecycle(ctx.bucket.clone())
                 .life_cycle_config(config)
                 .build()
                 .send()

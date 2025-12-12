@@ -18,8 +18,9 @@ use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::response::PutBucketEncryptionResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::types::{S3Api, S3Request, SseConfig, ToS3Request};
-use crate::s3::utils::{check_bucket_name, insert};
+use crate::s3::types::SseConfig;
+use crate::s3::types::{BucketName, Region, S3Api, S3Request, ToS3Request};
+use crate::s3::utils::insert;
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -37,9 +38,10 @@ pub struct PutBucketEncryption {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(!default, setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(default)]
     sse_config: SseConfig,
 }
@@ -48,7 +50,7 @@ pub struct PutBucketEncryption {
 ///
 /// Constructed via [`PutBucketEncryption::builder()`](PutBucketEncryption::builder) and used to build a [`PutBucketEncryption`] instance.
 pub type PutBucketEncryptionBldr =
-    PutBucketEncryptionBuilder<((MinioClient,), (), (), (), (String,), ())>;
+    PutBucketEncryptionBuilder<((MinioClient,), (), (), (), (BucketName,), ())>;
 
 impl S3Api for PutBucketEncryption {
     type S3Response = PutBucketEncryptionResponse;
@@ -56,8 +58,6 @@ impl S3Api for PutBucketEncryption {
 
 impl ToS3Request for PutBucketEncryption {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-
         let bytes: Bytes = self.sse_config.to_xml().into();
         let body = Arc::new(SegmentedBytes::from(bytes));
 

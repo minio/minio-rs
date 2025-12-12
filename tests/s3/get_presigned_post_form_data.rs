@@ -15,16 +15,17 @@
 
 use minio::s3::builders::PostPolicy;
 use minio::s3::header_constants::*;
+use minio::s3::types::BucketName;
 use minio_common::example::create_post_policy_example;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 use std::collections::HashMap;
 
 #[minio_macros::test]
-async fn get_presigned_post_form_data(ctx: TestContext, bucket_name: String) {
+async fn get_presigned_post_form_data(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
 
-    let policy: PostPolicy = create_post_policy_example(&bucket_name, &object_name);
+    let policy: PostPolicy = create_post_policy_example(bucket_name.as_str(), object_name.as_str());
 
     let form_data: HashMap<String, String> = ctx
         .client

@@ -19,10 +19,10 @@ use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::PutObjectRetentionResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::types::{RetentionMode, S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{
-    UtcTime, check_bucket_name, check_object_name, insert, md5sum_hash, to_iso8601utc,
+use crate::s3::types::{
+    BucketName, ObjectKey, Region, RetentionMode, S3Api, S3Request, ToS3Request, VersionId,
 };
+use crate::s3::utils::{UtcTime, insert, md5sum_hash, to_iso8601utc};
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -40,13 +40,15 @@ pub struct PutObjectRetention {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
     #[builder(default, setter(into))]
-    version_id: Option<String>,
+    version_id: Option<VersionId>,
     #[builder(default = false)]
     bypass_governance_mode: bool,
     #[builder(default, setter(into))]
@@ -63,8 +65,8 @@ pub type PutObjectRetentionBldr = PutObjectRetentionBuilder<(
     (),
     (),
     (),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
     (),
     (),
     (),
@@ -78,9 +80,6 @@ impl S3Api for PutObjectRetention {
 impl ToS3Request for PutObjectRetention {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         {
-            check_bucket_name(&self.bucket, true)?;
-            check_object_name(&self.object)?;
-
             if self.retention_mode.is_some() ^ self.retain_until_date.is_some() {
                 return Err(ValidationErr::InvalidRetentionConfig(
                     "both mode and retain_until_date must be set or unset".into(),

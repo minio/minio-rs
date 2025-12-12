@@ -45,7 +45,7 @@ pub(crate) fn bench_get_bucket_notification(criterion: &mut Criterion) {
             let ctx = Ctx2::new().await;
             let config = create_bucket_notification_config_example();
             ctx.client
-                .put_bucket_notification(&ctx.bucket)
+                .put_bucket_notification(ctx.bucket.clone())
                 .notification_config(config)
                 .build()
                 .send()

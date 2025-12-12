@@ -22,7 +22,7 @@ use minio::s3::response::{
 };
 use minio::s3::response_traits::{HasBucket, HasEtagFromHeaders, HasObject, HasObjectSize};
 use minio::s3::segmented_bytes::SegmentedBytes;
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, ObjectKey, S3Api};
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
@@ -31,8 +31,8 @@ use tokio::sync::mpsc;
 /// create an object with the given content and check that it is created correctly
 async fn create_object_helper(
     content: &str,
-    bucket_name: &str,
-    object_name: &str,
+    bucket_name: &BucketName,
+    object_name: &ObjectKey,
     ctx: &TestContext,
 ) {
     let data: SegmentedBytes = SegmentedBytes::from(content.to_string());
@@ -40,23 +40,23 @@ async fn create_object_helper(
     // create an object (with put) that contains "aaaa"
     let resp: PutObjectResponse = ctx
         .client
-        .put_object(bucket_name, object_name, data)
+        .put_object(bucket_name.clone(), object_name.clone(), data)
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
 
     let resp: GetObjectResponse = ctx
         .client
-        .get_object(bucket_name, object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size().unwrap(), size);
 
     // double-check that the content we just have put is "aaaa"
@@ -75,7 +75,7 @@ async fn create_object_helper(
 
 /// Append to the end of an existing object (happy flow)
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_0(ctx: TestContext, bucket_name: String) {
+async fn append_object_0(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
 
     let content1 = "aaaa";
@@ -89,25 +89,30 @@ async fn append_object_0(ctx: TestContext, bucket_name: String) {
     let offset_bytes = size;
     let resp: AppendObjectResponse = ctx
         .client
-        .append_object(&bucket_name, &object_name, data2, offset_bytes)
+        .append_object(
+            bucket_name.clone(),
+            object_name.clone(),
+            data2,
+            offset_bytes,
+        )
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size(), size * 2);
 
     let resp: GetObjectResponse = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size().unwrap(), size * 2);
 
     // retrieve the content of the object and check that it is "aaaabbbb"
@@ -126,7 +131,7 @@ async fn append_object_0(ctx: TestContext, bucket_name: String) {
 
 /// Append to the beginning of an existing object (happy flow)
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_1(ctx: TestContext, bucket_name: String) {
+async fn append_object_1(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
 
     let content1 = "aaaa";
@@ -140,25 +145,30 @@ async fn append_object_1(ctx: TestContext, bucket_name: String) {
     let offset_bytes = 0; // byte 0, thus the beginning of the file
     let resp: AppendObjectResponse = ctx
         .client
-        .append_object(&bucket_name, &object_name, data2, offset_bytes)
+        .append_object(
+            bucket_name.clone(),
+            object_name.clone(),
+            data2,
+            offset_bytes,
+        )
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size(), size);
 
     let resp: GetObjectResponse = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size().unwrap(), size);
 
     // retrieve the content of the object and check that it is "bbbb"
@@ -177,7 +187,7 @@ async fn append_object_1(ctx: TestContext, bucket_name: String) {
 
 /// Append to the middle of an existing object (error InvalidWriteOffset)
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_2(ctx: TestContext, bucket_name: String) {
+async fn append_object_2(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
 
     let content1 = "aaaa";
@@ -191,7 +201,12 @@ async fn append_object_2(ctx: TestContext, bucket_name: String) {
     let data2: SegmentedBytes = SegmentedBytes::from(content2.to_string());
     let resp: Result<AppendObjectResponse, Error> = ctx
         .client
-        .append_object(&bucket_name, &object_name, data2, offset_bytes)
+        .append_object(
+            bucket_name.clone(),
+            object_name.clone(),
+            data2,
+            offset_bytes,
+        )
         .build()
         .send()
         .await;
@@ -207,7 +222,7 @@ async fn append_object_2(ctx: TestContext, bucket_name: String) {
 
 /// Append beyond the size of an existing object (error InvalidWriteOffset)
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_3(ctx: TestContext, bucket_name: String) {
+async fn append_object_3(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
 
     let content1 = "aaaa";
@@ -221,7 +236,12 @@ async fn append_object_3(ctx: TestContext, bucket_name: String) {
     let offset_bytes = size + 1;
     let resp: Result<AppendObjectResponse, Error> = ctx
         .client
-        .append_object(&bucket_name, &object_name, data2, offset_bytes)
+        .append_object(
+            bucket_name.clone(),
+            object_name.clone(),
+            data2,
+            offset_bytes,
+        )
         .build()
         .send()
         .await;
@@ -237,7 +257,7 @@ async fn append_object_3(ctx: TestContext, bucket_name: String) {
 
 /// Append to the beginning/end of a non-existing object (happy flow)
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_4(ctx: TestContext, bucket_name: String) {
+async fn append_object_4(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
 
     let content1 = "aaaa";
@@ -248,24 +268,29 @@ async fn append_object_4(ctx: TestContext, bucket_name: String) {
     let offset_bytes = 0; // byte 0, thus the beginning of the file
     let resp: AppendObjectResponse = ctx
         .client
-        .append_object(&bucket_name, &object_name, data1, offset_bytes)
+        .append_object(
+            bucket_name.clone(),
+            object_name.clone(),
+            data1,
+            offset_bytes,
+        )
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size(), size);
 
     let resp: GetObjectResponse = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size().unwrap(), size);
 
     // retrieve the content of the object and check that it is "aaaa"
@@ -284,7 +309,7 @@ async fn append_object_4(ctx: TestContext, bucket_name: String) {
 
 /// Append beyond the size of a non-existing object (error NoSuchKey)
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_5(ctx: TestContext, bucket_name: String) {
+async fn append_object_5(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
 
     let content1 = "aaaa";
@@ -293,7 +318,12 @@ async fn append_object_5(ctx: TestContext, bucket_name: String) {
     let offset_bytes = 1; // byte 1, thus beyond the current length of the (non-existing) file
     let resp: Result<AppendObjectResponse, Error> = ctx
         .client
-        .append_object(&bucket_name, &object_name, data1, offset_bytes)
+        .append_object(
+            bucket_name.clone(),
+            object_name.clone(),
+            data1,
+            offset_bytes,
+        )
         .build()
         .send()
         .await;
@@ -308,7 +338,7 @@ async fn append_object_5(ctx: TestContext, bucket_name: String) {
 }
 
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_content_0(ctx: TestContext, bucket_name: String) {
+async fn append_object_content_0(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
 
     let content1 = "aaaaa";
@@ -319,24 +349,24 @@ async fn append_object_content_0(ctx: TestContext, bucket_name: String) {
 
     let resp: AppendObjectResponse = ctx
         .client
-        .append_object_content(&bucket_name, &object_name, content2)
+        .append_object_content(bucket_name.clone(), object_name.clone(), content2)
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size(), size * 2);
 
     let resp: GetObjectResponse = ctx
         .client
-        .get_object(&bucket_name, &object_name)
+        .get_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size().unwrap(), size * 2);
 
     let content: String = String::from_utf8(
@@ -353,7 +383,7 @@ async fn append_object_content_0(ctx: TestContext, bucket_name: String) {
 }
 
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_content_1(ctx: TestContext, bucket_name: String) {
+async fn append_object_content_1(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
 
     let n_parts = 3;
@@ -363,13 +393,13 @@ async fn append_object_content_1(ctx: TestContext, bucket_name: String) {
 
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &object_name, data1)
+        .put_object_content(bucket_name.clone(), object_name.clone(), data1)
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size(), part_size);
 
     for i in 1..n_parts {
@@ -378,30 +408,30 @@ async fn append_object_content_1(ctx: TestContext, bucket_name: String) {
             ObjectContent::new_from_stream(RandSrc::new(part_size), Some(part_size));
         let resp: AppendObjectResponse = ctx
             .client
-            .append_object_content(&bucket_name, &object_name, data2)
+            .append_object_content(bucket_name.clone(), object_name.clone(), data2)
             .build()
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket(), bucket_name);
-        assert_eq!(resp.object(), object_name);
+        assert_eq!(resp.bucket(), bucket_name.as_str());
+        assert_eq!(resp.object(), object_name.as_str());
         assert_eq!(resp.object_size(), expected_size);
 
         let resp: StatObjectResponse = ctx
             .client
-            .stat_object(&bucket_name, &object_name)
+            .stat_object(bucket_name.clone(), object_name.clone())
             .build()
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket(), bucket_name);
-        assert_eq!(resp.object(), object_name);
+        assert_eq!(resp.bucket(), bucket_name.as_str());
+        assert_eq!(resp.object(), object_name.as_str());
         assert_eq!(resp.size().unwrap(), expected_size);
     }
 }
 
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_content_2(ctx: TestContext, bucket_name: String) {
+async fn append_object_content_2(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
 
     let sizes = [16_u64, 5 * 1024 * 1024, 16 + 5 * 1024 * 1024];
@@ -411,44 +441,44 @@ async fn append_object_content_2(ctx: TestContext, bucket_name: String) {
 
         let resp: PutObjectContentResponse = ctx
             .client
-            .put_object_content(&bucket_name, &object_name, data1)
+            .put_object_content(bucket_name.clone(), object_name.clone(), data1)
             .build()
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket(), bucket_name);
-        assert_eq!(resp.object(), object_name);
+        assert_eq!(resp.bucket(), bucket_name.as_str());
+        assert_eq!(resp.object(), object_name.as_str());
         assert_eq!(resp.object_size(), *size);
 
         let expected_size: u64 = 2 * (*size);
         let data2: ObjectContent = ObjectContent::new_from_stream(RandSrc::new(*size), Some(*size));
         let resp: AppendObjectResponse = ctx
             .client
-            .append_object_content(&bucket_name, &object_name, data2)
+            .append_object_content(bucket_name.clone(), object_name.clone(), data2)
             .build()
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket(), bucket_name);
-        assert_eq!(resp.object(), object_name);
+        assert_eq!(resp.bucket(), bucket_name.as_str());
+        assert_eq!(resp.object(), object_name.as_str());
         assert_eq!(resp.object_size(), expected_size);
 
         let resp: StatObjectResponse = ctx
             .client
-            .stat_object(&bucket_name, &object_name)
+            .stat_object(bucket_name.clone(), object_name.clone())
             .build()
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket(), bucket_name);
-        assert_eq!(resp.object(), object_name);
+        assert_eq!(resp.bucket(), bucket_name.as_str());
+        assert_eq!(resp.object(), object_name.as_str());
         assert_eq!(resp.size().unwrap(), expected_size);
     }
 }
 
 /// Test sending AppendObject across async tasks.
 #[minio_macros::test(skip_if_not_express)]
-async fn append_object_content_3(ctx: TestContext, bucket_name: String) {
+async fn append_object_content_3(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let sizes = vec![16_u64, 5 * 1024 * 1024, 16 + 5 * 1024 * 1024];
 
@@ -480,7 +510,7 @@ async fn append_object_content_3(ctx: TestContext, bucket_name: String) {
                 let initial_size = content.len() as u64;
 
                 let resp: PutObjectContentResponse = client
-                    .put_object_content(&test_bucket, &object_name, content)
+                    .put_object_content(test_bucket.clone(), object_name.clone(), content)
                     .build()
                     .send()
                     .await
@@ -488,7 +518,7 @@ async fn append_object_content_3(ctx: TestContext, bucket_name: String) {
                 assert_eq!(resp.object_size(), initial_size);
 
                 let resp: AppendObjectResponse = client
-                    .append_object_content(&test_bucket, &object_name, item)
+                    .append_object_content(test_bucket.clone(), object_name.clone(), item)
                     .build()
                     .send()
                     .await
@@ -497,7 +527,7 @@ async fn append_object_content_3(ctx: TestContext, bucket_name: String) {
                 let etag: String = resp.etag().unwrap();
 
                 let resp: StatObjectResponse = client
-                    .stat_object(&test_bucket, &object_name)
+                    .stat_object(test_bucket.clone(), object_name.clone())
                     .build()
                     .send()
                     .await
@@ -505,7 +535,7 @@ async fn append_object_content_3(ctx: TestContext, bucket_name: String) {
                 assert_eq!(resp.size().unwrap(), sizes[idx] + initial_size);
                 assert_eq!(resp.etag().unwrap(), etag);
                 client
-                    .delete_object(&test_bucket, &object_name)
+                    .delete_object(test_bucket.clone(), object_name.as_str())
                     .build()
                     .send()
                     .await

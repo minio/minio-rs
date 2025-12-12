@@ -19,7 +19,7 @@ use minio::s3::response::{DeleteObjectResponse, PutObjectContentResponse, StatOb
 use minio::s3::response_traits::{
     HasBucket, HasEtagFromHeaders, HasIsDeleteMarker, HasObject, HasS3Fields,
 };
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, ObjectKey, S3Api};
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
@@ -30,8 +30,8 @@ async fn test_put_object(ctx: &TestContext, bucket_name: &str, object_name: &str
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(
-            bucket_name,
-            object_name,
+            BucketName::try_from(bucket_name).unwrap(),
+            ObjectKey::try_from(object_name).unwrap(),
             ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
         .build()
@@ -45,7 +45,10 @@ async fn test_put_object(ctx: &TestContext, bucket_name: &str, object_name: &str
 
     let resp: StatObjectResponse = ctx
         .client
-        .stat_object(bucket_name, object_name)
+        .stat_object(
+            BucketName::try_from(bucket_name).unwrap(),
+            ObjectKey::try_from(object_name).unwrap(),
+        )
         .build()
         .send()
         .await
@@ -57,52 +60,52 @@ async fn test_put_object(ctx: &TestContext, bucket_name: &str, object_name: &str
 
 /// Test putting an object into a bucket and verifying its existence.
 #[minio_macros::test]
-async fn put_object_1(ctx: TestContext, bucket_name: String) {
-    test_put_object(&ctx, &bucket_name, &rand_object_name()).await;
+async fn put_object_1(ctx: TestContext, bucket_name: BucketName) {
+    test_put_object(&ctx, bucket_name.as_str(), rand_object_name().as_str()).await;
 }
 
 /// Test putting an object with a name that contains special characters.
 #[minio_macros::test]
-async fn put_object_2(ctx: TestContext, bucket_name: String) {
-    test_put_object(&ctx, &bucket_name, "name with+spaces").await;
-    test_put_object(&ctx, &bucket_name, "name%20with%2Bspaces").await;
+async fn put_object_2(ctx: TestContext, bucket_name: BucketName) {
+    test_put_object(&ctx, bucket_name.as_str(), "name with+spaces").await;
+    test_put_object(&ctx, bucket_name.as_str(), "name%20with%2Bspaces").await;
 }
 
 #[minio_macros::test]
-async fn put_object_multipart(ctx: TestContext, bucket_name: String) {
-    let object_name: String = rand_object_name();
+async fn put_object_multipart(ctx: TestContext, bucket_name: BucketName) {
+    let object_name = rand_object_name();
 
     let size: u64 = 16 + MIN_PART_SIZE;
 
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(
-            &bucket_name,
-            &object_name,
+            bucket_name.clone(),
+            object_name.clone(),
             ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size(), size);
 
     let resp: StatObjectResponse = ctx
         .client
-        .stat_object(&bucket_name, &object_name)
+        .stat_object(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.size().unwrap(), size);
 }
 
 #[minio_macros::test]
-async fn put_object_content_1(ctx: TestContext, bucket_name: String) {
+async fn put_object_content_1(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let sizes = [16_u64, MIN_PART_SIZE, 16 + MIN_PART_SIZE];
 
@@ -110,8 +113,8 @@ async fn put_object_content_1(ctx: TestContext, bucket_name: String) {
         let resp: PutObjectContentResponse = ctx
             .client
             .put_object_content(
-                &bucket_name,
-                &object_name,
+                bucket_name.clone(),
+                object_name.clone(),
                 ObjectContent::new_from_stream(RandSrc::new(*size), Some(*size)),
             )
             .content_type(String::from("image/jpeg"))
@@ -124,7 +127,7 @@ async fn put_object_content_1(ctx: TestContext, bucket_name: String) {
         let etag = resp.etag().unwrap();
         let resp: StatObjectResponse = ctx
             .client
-            .stat_object(&bucket_name, &object_name)
+            .stat_object(bucket_name.clone(), object_name.clone())
             .build()
             .send()
             .await
@@ -138,7 +141,7 @@ async fn put_object_content_1(ctx: TestContext, bucket_name: String) {
 
         let resp: DeleteObjectResponse = ctx
             .client
-            .delete_object(&bucket_name, &object_name)
+            .delete_object(bucket_name.clone(), object_name.as_str())
             .build()
             .send()
             .await
@@ -149,7 +152,7 @@ async fn put_object_content_1(ctx: TestContext, bucket_name: String) {
 }
 
 #[minio_macros::test]
-async fn put_object_content_2(ctx: TestContext, bucket_name: String) {
+async fn put_object_content_2(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let sizes = [16_u64, MIN_PART_SIZE, 16 + MIN_PART_SIZE];
 
@@ -159,8 +162,8 @@ async fn put_object_content_2(ctx: TestContext, bucket_name: String) {
         let resp: PutObjectContentResponse = ctx
             .client
             .put_object_content(
-                &bucket_name,
-                &object_name,
+                bucket_name.clone(),
+                object_name.clone(),
                 ObjectContent::new_from_stream(data_src, None),
             )
             .part_size(MIN_PART_SIZE)
@@ -173,7 +176,7 @@ async fn put_object_content_2(ctx: TestContext, bucket_name: String) {
 
         let resp: StatObjectResponse = ctx
             .client
-            .stat_object(&bucket_name, &object_name)
+            .stat_object(bucket_name.clone(), object_name.clone())
             .build()
             .send()
             .await
@@ -185,7 +188,7 @@ async fn put_object_content_2(ctx: TestContext, bucket_name: String) {
 
 /// Test sending PutObject across async tasks.
 #[minio_macros::test]
-async fn put_object_content_3(ctx: TestContext, bucket_name: String) {
+async fn put_object_content_3(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let sizes = vec![16_u64, MIN_PART_SIZE, 16 + MIN_PART_SIZE];
 
@@ -214,7 +217,7 @@ async fn put_object_content_3(ctx: TestContext, bucket_name: String) {
             let mut idx = 0;
             while let Some(item) = receiver.recv().await {
                 let resp: PutObjectContentResponse = client
-                    .put_object_content(&test_bucket, &object_name, item)
+                    .put_object_content(test_bucket.clone(), object_name.clone(), item)
                     .build()
                     .send()
                     .await
@@ -222,7 +225,7 @@ async fn put_object_content_3(ctx: TestContext, bucket_name: String) {
                 assert_eq!(resp.object_size(), sizes[idx]);
                 let etag = resp.etag().unwrap();
                 let resp: StatObjectResponse = client
-                    .stat_object(&test_bucket, &object_name)
+                    .stat_object(test_bucket.clone(), object_name.clone())
                     .build()
                     .send()
                     .await

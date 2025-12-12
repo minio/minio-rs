@@ -25,10 +25,8 @@ use crate::s3::response::{AppendObjectResponse, StatObjectResponse};
 use crate::s3::response_traits::HasObjectSize;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::Sse;
-use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{
-    ChecksumAlgorithm, check_bucket_name, check_object_name, check_sse, compute_checksum_sb,
-};
+use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request};
+use crate::s3::utils::{ChecksumAlgorithm, check_sse, compute_checksum_sb};
 use http::Method;
 use std::sync::Arc;
 use typed_builder::TypedBuilder;
@@ -49,13 +47,15 @@ pub struct AppendObject {
     extra_query_params: Option<Multimap>,
 
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
 
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
 
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
 
     #[builder(default, setter(into))]
     sse: Option<Arc<dyn Sse>>,
@@ -87,8 +87,8 @@ pub type AppendObjectBldr = AppendObjectBuilder<(
     (MinioClient,),
     (),
     (),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
     (),
     (),
     (Arc<SegmentedBytes>,),
@@ -98,8 +98,6 @@ pub type AppendObjectBldr = AppendObjectBuilder<(
 
 impl ToS3Request for AppendObject {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-        check_object_name(&self.object)?;
         check_sse(&self.sse, &self.client)?;
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
@@ -152,11 +150,13 @@ pub struct AppendObjectContent {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
     #[builder(default)]
     sse: Option<Arc<dyn Sse>>,
     #[builder(default = Size::Unknown)]
@@ -187,8 +187,8 @@ pub type AppendObjectContentBldr = AppendObjectContentBuilder<(
     (),
     (),
     (),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
     (),
     (),
     (ObjectContent,),
@@ -200,8 +200,6 @@ pub type AppendObjectContentBldr = AppendObjectContentBuilder<(
 
 impl AppendObjectContent {
     pub async fn send(mut self) -> Result<AppendObjectResponse, Error> {
-        check_bucket_name(&self.bucket, true)?;
-        check_object_name(&self.object)?;
         check_sse(&self.sse, &self.client)?;
 
         {
@@ -236,7 +234,7 @@ impl AppendObjectContent {
         // get the length (if any) of the current file
         let resp: StatObjectResponse = self
             .client
-            .stat_object(&self.bucket, &self.object)
+            .stat_object(self.bucket.clone(), self.object.clone())
             .build()
             .send()
             .await?;

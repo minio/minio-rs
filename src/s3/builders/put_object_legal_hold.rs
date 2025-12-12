@@ -19,8 +19,8 @@ use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::PutObjectLegalHoldResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
+use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId};
+use crate::s3::utils::{insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -38,13 +38,15 @@ pub struct PutObjectLegalHold {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
     #[builder(default, setter(into))]
-    version_id: Option<String>,
+    version_id: Option<VersionId>,
     #[builder(default, setter(into))]
     legal_hold: Option<bool>,
 }
@@ -57,8 +59,8 @@ pub type PutObjectLegalHoldBldr = PutObjectLegalHoldBuilder<(
     (),
     (),
     (),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
     (),
     (Option<bool>,),
 )>;
@@ -69,9 +71,6 @@ impl S3Api for PutObjectLegalHold {
 
 impl ToS3Request for PutObjectLegalHold {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-        check_object_name(&self.object)?;
-
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         let mut query_params: Multimap = insert(self.extra_query_params, "legal-hold");
         query_params.add_version(self.version_id);

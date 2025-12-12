@@ -18,58 +18,58 @@ use minio::s3::response::{
     DeleteBucketEncryptionResponse, GetBucketEncryptionResponse, PutBucketEncryptionResponse,
 };
 use minio::s3::response_traits::{HasBucket, HasRegion};
-use minio::s3::types::{S3Api, SseConfig};
+use minio::s3::types::{BucketName, S3Api, SseConfig};
 use minio_common::test_context::TestContext;
 
 #[minio_macros::test]
-async fn bucket_encryption(ctx: TestContext, bucket_name: String) {
+async fn bucket_encryption(ctx: TestContext, bucket_name: BucketName) {
     let config = SseConfig::default();
 
     if false {
         // TODO this gives a runtime error
         let resp: PutBucketEncryptionResponse = ctx
             .client
-            .put_bucket_encryption(&bucket_name)
+            .put_bucket_encryption(bucket_name.clone())
             .sse_config(config.clone())
             .build()
             .send()
             .await
             .unwrap();
         assert_eq!(resp.config().unwrap(), config);
-        assert_eq!(resp.bucket(), bucket_name);
-        assert_eq!(resp.region(), DEFAULT_REGION);
+        assert_eq!(resp.bucket(), bucket_name.as_str());
+        assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     }
 
     let resp: GetBucketEncryptionResponse = ctx
         .client
-        .get_bucket_encryption(&bucket_name)
+        .get_bucket_encryption(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     assert_eq!(resp.config().unwrap(), config);
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: DeleteBucketEncryptionResponse = ctx
         .client
-        .delete_bucket_encryption(&bucket_name)
+        .delete_bucket_encryption(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: GetBucketEncryptionResponse = ctx
         .client
-        .get_bucket_encryption(&bucket_name)
+        .get_bucket_encryption(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     assert_eq!(resp.config().unwrap(), SseConfig::default());
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     //println!("response of getting encryption config: resp.sse_config={:?}", resp.config);
 }

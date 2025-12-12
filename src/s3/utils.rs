@@ -18,6 +18,7 @@ use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::{Sse, SseCustomerKey};
+use crate::s3::types::{BucketName, ObjectKey};
 use base64::engine::Engine as _;
 use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
 use crc_fast::{CrcAlgorithm, Digest as CrcFastDigest, checksum as crc_fast_checksum};
@@ -1273,8 +1274,8 @@ pub fn check_ssec(
 pub fn check_ssec_with_log(
     ssec: &Option<SseCustomerKey>,
     client: &MinioClient,
-    bucket: &str,
-    object: &str,
+    bucket: &BucketName,
+    object: &ObjectKey,
     version: &Option<String>,
 ) -> Result<(), ValidationErr> {
     if ssec.is_some() && !client.is_secure() {

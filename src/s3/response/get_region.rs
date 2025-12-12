@@ -47,7 +47,7 @@ impl GetRegionResponse {
 
         let mut location = root.get_text().unwrap_or_default().to_string();
         if location.is_empty() {
-            location = String::from(DEFAULT_REGION);
+            location = DEFAULT_REGION.as_str().to_string();
         }
         Ok(location)
     }

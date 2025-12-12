@@ -18,8 +18,9 @@ use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::response::PutBucketNotificationResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::types::{NotificationConfig, S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, insert};
+use crate::s3::types::NotificationConfig;
+use crate::s3::types::{BucketName, Region, S3Api, S3Request, ToS3Request};
+use crate::s3::utils::insert;
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -37,9 +38,10 @@ pub struct PutBucketNotification {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(default)]
     notification_config: NotificationConfig,
 }
@@ -48,7 +50,7 @@ pub struct PutBucketNotification {
 ///
 /// Constructed via [`PutBucketNotification::builder()`](PutBucketNotification::builder) and used to build a [`PutBucketNotification`] instance.
 pub type PutBucketNotificationBldr =
-    PutBucketNotificationBuilder<((MinioClient,), (), (), (), (String,), ())>;
+    PutBucketNotificationBuilder<((MinioClient,), (), (), (), (BucketName,), ())>;
 
 impl S3Api for PutBucketNotification {
     type S3Response = PutBucketNotificationResponse;
@@ -56,8 +58,6 @@ impl S3Api for PutBucketNotification {
 
 impl ToS3Request for PutBucketNotification {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-
         let bytes: Bytes = self.notification_config.to_xml().into();
         let body = Arc::new(SegmentedBytes::from(bytes));
 

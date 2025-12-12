@@ -20,8 +20,10 @@ use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::SelectObjectContentResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::SseCustomerKey;
-use crate::s3::types::{S3Api, S3Request, SelectRequest, ToS3Request};
-use crate::s3::utils::{check_bucket_name, check_object_name, check_ssec, insert, md5sum_hash};
+use crate::s3::types::{
+    BucketName, ObjectKey, Region, S3Api, S3Request, SelectRequest, ToS3Request, VersionId,
+};
+use crate::s3::utils::{check_ssec, insert, md5sum_hash};
 use async_trait::async_trait;
 use bytes::Bytes;
 use http::Method;
@@ -41,14 +43,16 @@ pub struct SelectObjectContent {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
 
     #[builder(default, setter(into))]
-    version_id: Option<String>,
+    version_id: Option<VersionId>,
     #[builder(default, setter(into))]
     ssec: Option<SseCustomerKey>,
     #[builder(default)]
@@ -63,8 +67,8 @@ pub type SelectObjectContentBldr = SelectObjectContentBuilder<(
     (),
     (),
     (),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
     (),
     (),
     (SelectRequest,),
@@ -77,8 +81,6 @@ impl S3Api for SelectObjectContent {
 #[async_trait]
 impl ToS3Request for SelectObjectContent {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-        check_object_name(&self.object)?;
         check_ssec(&self.ssec, &self.client)?;
 
         let bytes: Bytes = self.request.to_xml().into();
