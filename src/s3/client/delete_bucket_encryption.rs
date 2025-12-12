@@ -15,12 +15,14 @@
 
 use crate::s3::builders::{DeleteBucketEncryption, DeleteBucketEncryptionBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`DeleteBucketEncryption`] request builder.
     ///
     /// To execute the request, call [`DeleteBucketEncryption::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`BucketExistsResponse`](crate::s3::response::BucketExistsResponse).    
+    /// which returns a [`Result`] containing a [`BucketExistsResponse`](crate::s3::response::BucketExistsResponse).
     ///
     /// # Example
     ///
@@ -33,22 +35,26 @@ impl MinioClient {
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteBucketEncryptionResponse = client
     ///         .delete_bucket_encryption("bucket-name")
-    ///         .build().send().await.unwrap();
-    ///     println!("bucket '{}' is deleted", resp.bucket());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("bucket '{}' is deleted", resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn delete_bucket_encryption<S: Into<String>>(
+    pub fn delete_bucket_encryption<B>(
         &self,
-        bucket: S,
-    ) -> DeleteBucketEncryptionBldr {
-        DeleteBucketEncryption::builder()
+        bucket: B,
+    ) -> Result<DeleteBucketEncryptionBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(DeleteBucketEncryption::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

@@ -17,11 +17,13 @@ use crate::s3::builders::{DeleteBucket, DeleteBucketBldr, DeleteObject, ObjectTo
 use crate::s3::client::MinioClient;
 use crate::s3::error::Error;
 use crate::s3::error::S3ServerError::S3Error;
+use crate::s3::error::ValidationErr;
 use crate::s3::minio_error_response::MinioErrorCode;
 use crate::s3::response::{
     BucketExistsResponse, DeleteBucketResponse, DeleteObjectResponse, DeleteObjectsResponse,
     DeleteResult, PutObjectLegalHoldResponse,
 };
+use crate::s3::types::{BucketName, ObjectKey, VersionId};
 use crate::s3::types::{S3Api, S3Request, ToStream};
 use bytes::Bytes;
 use futures_util::StreamExt;
@@ -51,23 +53,29 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteBucketResponse = client
     ///         .delete_bucket("bucket-name")
-    ///         .build().send().await.unwrap();
-    ///     println!("bucket '{}' in region '{}' is removed", resp.bucket(), resp.region());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("bucket '{}' in region '{}' is removed", resp.bucket().unwrap(), resp.region());
     /// }
     /// ```
-    pub fn delete_bucket<S: Into<String>>(&self, bucket: S) -> DeleteBucketBldr {
-        DeleteBucket::builder().client(self.clone()).bucket(bucket)
+    pub fn delete_bucket<B>(&self, bucket: B) -> Result<DeleteBucketBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(DeleteBucket::builder()
+            .client(self.clone())
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 
     /// Deletes a bucket and also deletes non-empty buckets by first removing all objects before
     /// deleting the bucket. Bypasses governance mode and legal hold.
-    pub async fn delete_and_purge_bucket<S: Into<String>>(
-        &self,
-        bucket: S,
-    ) -> Result<DeleteBucketResponse, Error> {
-        let bucket: String = bucket.into();
-
-        let resp: BucketExistsResponse = self.bucket_exists(&bucket).build().send().await?;
+    pub async fn delete_and_purge_bucket<B>(&self, bucket: B) -> Result<DeleteBucketResponse, Error>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        let bucket: BucketName = bucket.try_into().map_err(Into::into)?;
+        let resp: BucketExistsResponse = self.bucket_exists(&bucket)?.build().send().await?;
         if !resp.exists {
             // if the bucket does not exist, we can return early
             let dummy: S3Request = S3Request::builder()
@@ -87,7 +95,7 @@ impl MinioClient {
         let is_express = self.is_minio_express().await;
 
         let mut stream = self
-            .list_objects(&bucket)
+            .list_objects(&bucket)?
             .include_versions(!is_express)
             .recursive(true)
             .build()
@@ -98,7 +106,7 @@ impl MinioClient {
             while let Some(items) = stream.next().await {
                 let object_names = items?.contents.into_iter().map(ObjectToDelete::from);
                 let mut resp = self
-                    .delete_objects_streaming(&bucket, object_names)
+                    .delete_objects_streaming(&bucket, object_names)?
                     .bypass_governance_mode(false) // Express does not support governance mode
                     .to_stream()
                     .await;
@@ -111,7 +119,7 @@ impl MinioClient {
             while let Some(items) = stream.next().await {
                 let object_names = items?.contents.into_iter().map(ObjectToDelete::from);
                 let mut resp = self
-                    .delete_objects_streaming(&bucket, object_names)
+                    .delete_objects_streaming(&bucket, object_names)?
                     .bypass_governance_mode(true)
                     .to_stream()
                     .await;
@@ -123,16 +131,30 @@ impl MinioClient {
                             DeleteResult::Deleted(_) => {}
                             DeleteResult::Error(v) => {
                                 // the object is not deleted. try to disable legal hold and try again.
-                                let _resp: PutObjectLegalHoldResponse = self
-                                    .put_object_legal_hold(&bucket, &v.object_name, false)
-                                    .version_id(v.version_id.clone())
-                                    .build()
-                                    .send()
-                                    .await?;
+                                let object_key =
+                                    ObjectKey::try_from(v.object_name.as_str()).unwrap();
+
+                                let result = match &v.version_id {
+                                    Some(vid) => {
+                                        self.put_object_legal_hold(&bucket, &object_key, false)?
+                                            .version_id(VersionId::try_from(vid.as_str()).unwrap())
+                                            .build()
+                                            .send()
+                                            .await
+                                    }
+                                    None => {
+                                        self.put_object_legal_hold(&bucket, &object_key, false)?
+                                            .build()
+                                            .send()
+                                            .await
+                                    }
+                                };
+
+                                let _resp: PutObjectLegalHoldResponse = result?;
 
                                 let _resp: DeleteObjectResponse = DeleteObject::builder()
                                     .client(self.clone())
-                                    .bucket(bucket.clone())
+                                    .bucket(&bucket)
                                     .object(v)
                                     .bypass_governance_mode(true)
                                     .build()
@@ -145,7 +167,7 @@ impl MinioClient {
             }
         }
 
-        let request: DeleteBucket = self.delete_bucket(&bucket).build();
+        let request: DeleteBucket = self.delete_bucket(&bucket)?.build();
         match request.send().await {
             Ok(resp) => Ok(resp),
             Err(Error::S3Server(S3Error(mut e))) => {
@@ -166,7 +188,7 @@ impl MinioClient {
                     // for convenience, add the first 5 documents that were are still in the bucket
                     // to the error message
                     let mut stream = self
-                        .list_objects(&bucket)
+                        .list_objects(&bucket)?
                         .include_versions(!is_express)
                         .recursive(true)
                         .build()
@@ -188,6 +210,23 @@ impl MinioClient {
                         None => format!("found content: {objs:?}"),
                         Some(msg) => format!("{msg}, found content: {objs:?}"),
                     };
+                    e.set_message(new_msg);
+                    Err(Error::S3Server(S3Error(e)))
+                } else if e
+                    .message()
+                    .as_ref()
+                    .map(|msg| msg.contains("Use DeleteWarehouse API"))
+                    .unwrap_or(false)
+                {
+                    // This is a warehouse bucket - provide helpful guidance
+                    let original_msg = e.message().clone().unwrap_or_default();
+                    let new_msg = format!(
+                        "Cannot delete warehouse bucket '{}' using DeleteBucket API. \
+                         Warehouse buckets must be deleted using the DeleteWarehouse S3 Tables API. \
+                         Original error: {}",
+                        bucket, original_msg
+                    );
+                    e.set_code(MinioErrorCode::WarehouseBucketOperationNotSupported);
                     e.set_message(new_msg);
                     Err(Error::S3Server(S3Error(e)))
                 } else {

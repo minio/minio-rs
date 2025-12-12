@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{ListObjectBldr, ListObjects};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`ListObjects`] request builder.
@@ -42,7 +44,7 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///
     ///     let mut resp = client
-    ///         .list_objects("bucket-name")
+    ///         .list_objects("bucket-name").unwrap()
     ///         .recursive(true)
     ///         .use_api_v1(false) // use v2
     ///         .include_versions(true)
@@ -61,7 +63,13 @@ impl MinioClient {
     ///     }
     /// }
     /// ```
-    pub fn list_objects<S: Into<String>>(&self, bucket: S) -> ListObjectBldr {
-        ListObjects::builder().client(self.clone()).bucket(bucket)
+    pub fn list_objects<B>(&self, bucket: B) -> Result<ListObjectBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(ListObjects::builder()
+            .client(self.clone())
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

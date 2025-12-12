@@ -41,6 +41,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
 use std::path::{Path, PathBuf};
+use std::string::ToString;
 use std::sync::{Arc, OnceLock, RwLock};
 use uuid::Uuid;
 
@@ -58,6 +59,7 @@ use crate::s3::response::*;
 use crate::s3::response_traits::{HasEtagFromHeaders, HasS3Fields};
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::signer::{SigningKeyCache, sign_v4_s3, sign_v4_s3_with_context};
+use crate::s3::types::{BucketName, ObjectKey};
 use crate::s3::utils::{
     ChecksumAlgorithm, EMPTY_SHA256, check_ssec_with_log, sha256_hash_sb, to_amz_date, utc_now,
 };
@@ -111,10 +113,12 @@ mod put_object_tagging;
 mod select_object_content;
 mod stat_object;
 
-use super::types::S3Api;
+use super::types::{Region, S3Api};
+use std::sync::LazyLock;
 
 /// The default AWS region to be used if no other region is specified.
-pub const DEFAULT_REGION: &str = "us-east-1";
+pub static DEFAULT_REGION: LazyLock<Region> =
+    LazyLock::new(|| Region::new("us-east-1").expect("default region should be valid"));
 
 /// Minimum allowed size (in bytes) for a multipart upload part (except the last).
 ///
@@ -404,12 +408,10 @@ impl MinioClientBuilder {
             builder = builder.http2_adaptive_window(true);
         }
 
-        let mut user_agent = String::from("MinIO (")
-            + std::env::consts::OS
-            + "; "
-            + std::env::consts::ARCH
-            + ") minio-rs/"
-            + env!("CARGO_PKG_VERSION");
+        let os = std::env::consts::OS;
+        let arch = std::env::consts::ARCH;
+        let version = env!("CARGO_PKG_VERSION");
+        let mut user_agent = format!("MinIO ({os}; {arch}) minio-rs/{version}");
 
         if let Some((app_name, app_version)) = self.app_info {
             user_agent.push_str(format!(" {app_name}/{app_version}").as_str());
@@ -476,12 +478,8 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     ///
-    /// let base_url: BaseUrl = "play.min.io".parse().unwrap();
-    /// let static_provider = StaticProvider::new(
-    ///     "Q3AM3UQ867SPQQA43P2F",
-    ///     "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
-    ///     None,
-    /// );
+    /// let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
+    /// let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     /// let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     /// ```
     pub fn new<P: Provider + Send + Sync + 'static>(
@@ -514,7 +512,7 @@ impl MinioClient {
         } else {
             let be = BucketExists::builder()
                 .client(self.clone())
-                .bucket(Uuid::new_v4().to_string())
+                .bucket(BucketName::try_from(Uuid::new_v4().to_string().as_str()).unwrap())
                 .build();
 
             let express = match be.send().await {
@@ -541,16 +539,16 @@ impl MinioClient {
     }
 
     /// Add a bucket-region pair to the region cache if it does not exist.
-    pub(crate) fn add_bucket_region(&mut self, bucket: &str, region: impl Into<String>) {
+    pub(crate) fn add_bucket_region(&mut self, bucket: &BucketName, region: Region) {
         self.shared
             .region_map
-            .entry(bucket.to_owned())
-            .or_insert_with(|| region.into());
+            .entry(bucket.as_str().to_owned())
+            .or_insert_with(|| region.into_inner());
     }
 
     /// Remove a bucket-region pair from the region cache if it exists.
-    pub(crate) fn remove_bucket_region(&mut self, bucket: &str) {
-        self.shared.region_map.remove(bucket);
+    pub(crate) fn remove_bucket_region(&mut self, bucket: &BucketName) {
+        self.shared.region_map.remove(bucket.as_str());
     }
 
     /// Get the region as configured in the url
@@ -558,7 +556,7 @@ impl MinioClient {
         if self.shared.base_url.region.is_empty() {
             None
         } else {
-            Some(&self.shared.base_url.region)
+            Some(self.shared.base_url.region.as_str())
         }
     }
 
@@ -572,18 +570,19 @@ impl MinioClient {
 
         let sources_len = sources.len();
         for source in sources.iter_mut() {
+            let version_id_str = source.version_id.as_ref().map(|v| v.to_string());
             check_ssec_with_log(
                 &source.ssec,
                 self,
                 &source.bucket,
                 &source.object,
-                &source.version_id,
+                &version_id_str,
             )?;
 
             i += 1;
 
             let stat_resp: StatObjectResponse = self
-                .stat_object(&source.bucket, &source.object)
+                .stat_object(&source.bucket, &source.object)?
                 .extra_headers(source.extra_headers.clone())
                 .extra_query_params(source.extra_query_params.clone())
                 .region(source.region.clone())
@@ -597,7 +596,7 @@ impl MinioClient {
                 .await?;
 
             let mut size = stat_resp.size()?;
-            source.build_headers(size, stat_resp.etag()?)?;
+            source.build_headers(size, stat_resp.etag()?.into_inner())?;
 
             if let Some(l) = source.length {
                 size = l;
@@ -607,9 +606,9 @@ impl MinioClient {
 
             if (size < MIN_PART_SIZE) && (sources_len != 1) && (i != sources_len) {
                 return Err(ValidationErr::InvalidComposeSourcePartSize {
-                    bucket: source.bucket.clone(),
-                    object: source.object.clone(),
-                    version: source.version_id.clone(),
+                    bucket: source.bucket.to_string(),
+                    object: source.object.to_string(),
+                    version: source.version_id.as_ref().map(|v| v.to_string()),
                     size,
                     expected_size: MIN_PART_SIZE,
                 }
@@ -634,7 +633,7 @@ impl MinioClient {
                     return Err(ValidationErr::InvalidComposeSourceMultipart {
                         bucket: source.bucket.to_string(),
                         object: source.object.to_string(),
-                        version: source.version_id.clone(),
+                        version: source.version_id.as_ref().map(|v| v.to_string()),
                         size,
                         expected_size: MIN_PART_SIZE,
                     }
@@ -659,11 +658,11 @@ impl MinioClient {
     async fn execute_internal(
         &self,
         method: &Method,
-        region: &str,
+        region: &Region,
         headers: &mut Multimap,
         query_params: &Multimap,
-        bucket_name: Option<&str>,
-        object_name: Option<&str>,
+        bucket: Option<&BucketName>,
+        object: Option<&ObjectKey>,
         body: Option<Arc<SegmentedBytes>>,
         trailing_checksum: Option<ChecksumAlgorithm>,
         use_signed_streaming: bool,
@@ -673,13 +672,10 @@ impl MinioClient {
             AwsChunkedEncoder, RechunkingStream, SignedAwsChunkedEncoder,
         };
 
-        let mut url = self.shared.base_url.build_url(
-            method,
-            region,
-            query_params,
-            bucket_name,
-            object_name,
-        )?;
+        let mut url =
+            self.shared
+                .base_url
+                .build_url(method, region, query_params, bucket, object)?;
         let mut extensions = http::Extensions::default();
 
         headers.add(HOST, url.host_header_value());
@@ -753,11 +749,11 @@ impl MinioClient {
         self.run_before_signing_hooks(
             method,
             &mut url,
-            region,
+            region.as_ref(),
             headers,
             query_params,
-            bucket_name,
-            object_name,
+            bucket,
+            object,
             &body,
             &mut extensions,
         )
@@ -866,11 +862,11 @@ impl MinioClient {
         self.run_after_execute_hooks(
             method,
             &url,
-            region,
+            region.as_ref(),
             headers,
             query_params,
-            bucket_name,
-            object_name,
+            bucket,
+            object,
             &resp,
             &mut extensions,
         )
@@ -892,17 +888,17 @@ impl MinioClient {
             headers,
             method,
             &url.path,
-            bucket_name,
-            object_name,
+            bucket,
+            object,
             retry,
         )?;
 
         // If the error is a NoSuchBucket or RetryHead, remove the bucket from the region map.
         if (matches!(e.code(), MinioErrorCode::NoSuchBucket)
             || matches!(e.code(), MinioErrorCode::RetryHead))
-            && let Some(v) = bucket_name
+            && let Some(v) = bucket
         {
-            self.shared.region_map.remove(v);
+            self.shared.region_map.remove(v.as_str());
         };
 
         Err(Error::S3Server(S3ServerError::S3Error(Box::new(e))))
@@ -911,11 +907,11 @@ impl MinioClient {
     pub(crate) async fn execute(
         &self,
         method: Method,
-        region: &str,
+        region: &Region,
         headers: &mut Multimap,
         query_params: &Multimap,
-        bucket_name: &Option<&str>,
-        object_name: &Option<&str>,
+        bucket: Option<&BucketName>,
+        object: Option<&ObjectKey>,
         data: Option<Arc<SegmentedBytes>>,
         trailing_checksum: Option<ChecksumAlgorithm>,
         use_signed_streaming: bool,
@@ -926,8 +922,8 @@ impl MinioClient {
                 region,
                 headers,
                 query_params,
-                bucket_name.as_deref(),
-                object_name.as_deref(),
+                bucket,
+                object,
                 data.as_ref().map(Arc::clone),
                 trailing_checksum,
                 use_signed_streaming,
@@ -952,14 +948,118 @@ impl MinioClient {
             region,
             headers,
             query_params,
-            bucket_name.as_deref(),
-            object_name.as_deref(),
+            bucket,
+            object,
             data,
             trailing_checksum,
             use_signed_streaming,
             false,
         )
         .await
+    }
+
+    /// Execute request with custom path (for admin APIs)
+    pub(crate) async fn execute_with_custom_path(
+        &self,
+        method: Method,
+        region: &Region,
+        headers: &mut Multimap,
+        query_params: &Multimap,
+        custom_path: &str,
+        data: Option<Arc<SegmentedBytes>>,
+    ) -> Result<reqwest::Response, Error> {
+        // Build URL with custom path instead of bucket/object
+        let url = self
+            .shared
+            .base_url
+            .build_custom_url(query_params, custom_path)?;
+
+        {
+            headers.add(HOST, url.host_header_value());
+            let sha256: String = match method {
+                Method::PUT | Method::POST => {
+                    // Only set Content-Type if there's actually a body
+                    // Empty body with Content-Type can cause some MinIO versions to expect XML
+                    if data.is_some() && !headers.contains_key(CONTENT_TYPE) {
+                        headers.add(CONTENT_TYPE, "application/octet-stream");
+                    }
+                    let len: usize = data.as_ref().map_or(0, |b| b.len());
+                    headers.add(CONTENT_LENGTH, len.to_string());
+                    match data {
+                        None => EMPTY_SHA256.into(),
+                        Some(ref v) => {
+                            let clone = v.clone();
+                            async_std::task::spawn_blocking(move || sha256_hash_sb(clone)).await
+                        }
+                    }
+                }
+                _ => EMPTY_SHA256.into(),
+            };
+            headers.add(X_AMZ_CONTENT_SHA256, sha256.clone());
+
+            let date = utc_now();
+            headers.add(X_AMZ_DATE, to_amz_date(date));
+            if let Some(p) = &self.shared.provider {
+                let creds = p.fetch();
+                if let Some(token) = &creds.session_token {
+                    headers.add(X_AMZ_SECURITY_TOKEN, token);
+                }
+                sign_v4_s3(
+                    &self.shared.signing_key_cache,
+                    &method,
+                    &url.path,
+                    region,
+                    headers,
+                    query_params,
+                    &creds.access_key,
+                    &creds.secret_key,
+                    &sha256,
+                    date,
+                );
+            }
+        }
+
+        let mut req = self.http_client.request(method.clone(), url.to_string());
+
+        for (key, values) in headers.iter_all() {
+            for value in values {
+                req = req.header(key, value);
+            }
+        }
+
+        if (method == Method::PUT) || (method == Method::POST) {
+            let bytes_vec: Vec<Bytes> = match data {
+                Some(v) => v.iter().collect(),
+                None => Vec::new(),
+            };
+            let stream = futures_util::stream::iter(
+                bytes_vec.into_iter().map(|b| -> Result<_, Error> { Ok(b) }),
+            );
+            req = req.body(Body::wrap_stream(stream));
+        }
+
+        let resp: reqwest::Response = req.send().await.map_err(ValidationErr::from)?;
+        if resp.status().is_success() {
+            return Ok(resp);
+        }
+
+        let mut resp = resp;
+        let status_code = resp.status().as_u16();
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+        let body: Bytes = resp.bytes().await.map_err(ValidationErr::from)?;
+
+        let e: MinioErrorResponse = self.shared.create_minio_error_response(
+            body,
+            status_code,
+            headers,
+            &method,
+            &url.path,
+            None,  // No bucket for custom paths
+            None,  // No object for custom paths
+            false, // No retry for admin APIs
+        )?;
+
+        Err(Error::S3Server(S3ServerError::S3Error(Box::new(e))))
     }
 
     async fn run_after_execute_hooks(
@@ -969,8 +1069,8 @@ impl MinioClient {
         region: &str,
         headers: &mut Multimap,
         query_params: &Multimap,
-        bucket_name: Option<&str>,
-        object_name: Option<&str>,
+        bucket: Option<&BucketName>,
+        object: Option<&ObjectKey>,
         resp: &Result<Response, reqwest::Error>,
         extensions: &mut http::Extensions,
     ) {
@@ -981,8 +1081,8 @@ impl MinioClient {
                 region,
                 headers,
                 query_params,
-                bucket_name,
-                object_name,
+                bucket,
+                object,
                 resp,
                 extensions,
             )
@@ -997,8 +1097,8 @@ impl MinioClient {
         region: &str,
         headers: &mut Multimap,
         query_params: &Multimap,
-        bucket_name: Option<&str>,
-        object_name: Option<&str>,
+        bucket: Option<&BucketName>,
+        object: Option<&ObjectKey>,
         body: &Option<Arc<SegmentedBytes>>,
         extensions: &mut http::Extensions,
     ) -> Result<(), Error> {
@@ -1009,13 +1109,13 @@ impl MinioClient {
                 region,
                 headers,
                 query_params,
-                bucket_name,
-                object_name,
+                bucket,
+                object,
                 body.as_deref(),
                 extensions,
             )
             .await
-            .inspect_err(|e| log::warn!("Hook {} failed {e}", hook.name()))?;
+            .inspect_err(|e| log::warn!("Hook {name} failed {e}", name = hook.name()))?;
         }
         Ok(())
     }
@@ -1079,16 +1179,20 @@ impl MinioClient {
         check_bucket_name(bucket, true)?;
         check_object_name(object)?;
 
+        // Create typed wrappers after validation
+        let bucket_typed = BucketName::new(bucket)?;
+        let object_typed = ObjectKey::new(object)?;
+
         // Use default region (skip region lookup for performance)
-        let region = DEFAULT_REGION;
+        let region: &Region = &DEFAULT_REGION;
 
         // Build URL directly (no query params for GET)
         let url = self.shared.base_url.build_url(
             &Method::GET,
             region,
             &Multimap::new(),
-            Some(bucket),
-            Some(object),
+            Some(&bucket_typed),
+            Some(&object_typed),
         )?;
 
         // Build headers in Multimap (single source of truth)
@@ -1195,7 +1299,7 @@ impl SharedClientItems {
         status_code: u16,
         method: &Method,
         header_map: &reqwest::header::HeaderMap,
-        bucket_name: Option<&str>,
+        bucket: Option<&BucketName>,
         retry: bool,
     ) -> Result<(MinioErrorCode, String), Error> {
         let (mut code, mut message) = match status_code {
@@ -1221,8 +1325,8 @@ impl SharedClientItems {
         if retry
             && !region.is_empty()
             && (method == Method::HEAD)
-            && let Some(v) = bucket_name
-            && self.region_map.contains_key(v)
+            && let Some(v) = bucket
+            && self.region_map.contains_key(v.as_str())
         {
             code = MinioErrorCode::RetryHead;
             message = String::new();
@@ -1238,8 +1342,8 @@ impl SharedClientItems {
         headers: HeaderMap,
         method: &Method,
         resource: &str,
-        bucket_name: Option<&str>,
-        object_name: Option<&str>,
+        bucket: Option<&BucketName>,
+        object: Option<&ObjectKey>,
         retry: bool,
     ) -> Result<MinioErrorResponse, Error> {
         // if body is present, try to parse it as XML error response
@@ -1272,17 +1376,13 @@ impl SharedClientItems {
 
         // Decide code and message by status
         let (code, message) = match http_status_code {
-            301 | 307 | 400 => self.handle_redirect_response(
-                http_status_code,
-                method,
-                &headers,
-                bucket_name,
-                retry,
-            )?,
+            301 | 307 | 400 => {
+                self.handle_redirect_response(http_status_code, method, &headers, bucket, retry)?
+            }
             403 => (MinioErrorCode::AccessDenied, "Access denied".into()),
-            404 => match object_name {
+            404 => match object {
                 Some(_) => (MinioErrorCode::NoSuchKey, "Object does not exist".into()),
-                None => match bucket_name {
+                None => match bucket {
                     Some(_) => (MinioErrorCode::NoSuchBucket, "Bucket does not exist".into()),
                     None => (
                         MinioErrorCode::ResourceNotFound,
@@ -1294,7 +1394,7 @@ impl SharedClientItems {
                 MinioErrorCode::MethodNotAllowed,
                 "The specified method is not allowed against this resource".into(),
             ),
-            409 => match bucket_name {
+            409 => match bucket {
                 Some(_) => (MinioErrorCode::NoSuchBucket, "Bucket does not exist".into()),
                 None => (
                     MinioErrorCode::ResourceConflict,
@@ -1331,8 +1431,8 @@ impl SharedClientItems {
             resource.to_string(),
             request_id,
             host_id,
-            bucket_name.map(String::from),
-            object_name.map(String::from),
+            bucket.cloned(),
+            object.cloned(),
         ))
     }
 }

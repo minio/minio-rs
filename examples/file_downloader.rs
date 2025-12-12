@@ -15,25 +15,25 @@
 
 mod common;
 
-use crate::common::{create_bucket_if_not_exists, create_client_on_play};
+use crate::common::{create_bucket_if_not_exists, create_client};
 use minio::s3::MinioClient;
 use minio::s3::builders::ObjectContent;
-use minio::s3::types::S3Api;
+use minio::s3::types::{ObjectKey, S3Api};
 use std::path::Path;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
-    let client: MinioClient = create_client_on_play()?;
+    let client: MinioClient = create_client()?;
 
-    let bucket_name: &str = "file-download-rust-bucket";
-    let object_name: &str = "cat.png";
+    let bucket: &str = "file-download-rust-bucket";
+    let object: &str = "cat.png";
 
     // File we are going to upload to the bucket
     let filename: &Path = Path::new("./examples/cat.png");
-    let download_path: &str = &format!("/tmp/downloads/{object_name}");
+    let download_path: &str = &format!("/tmp/downloads/{object}");
 
-    create_bucket_if_not_exists(bucket_name, &client).await?;
+    create_bucket_if_not_exists(bucket, &client).await?;
 
     if filename.exists() {
         log::info!("File '{}' exists.", &filename.to_str().unwrap());
@@ -44,18 +44,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let content = ObjectContent::from(filename);
     client
-        .put_object_content(bucket_name, object_name, content)
+        .put_object_content(bucket, ObjectKey::new(object)?, content)?
         .build()
         .send()
         .await?;
 
     log::info!(
-        "file '{}' is successfully uploaded as object '{object_name}' to bucket '{bucket_name}'.",
+        "file '{}' is successfully uploaded as object '{object}' to bucket '{bucket}'.",
         filename.display()
     );
 
     let get_object = client
-        .get_object(bucket_name, object_name)
+        .get_object(bucket, ObjectKey::new(object)?)?
         .build()
         .send()
         .await?;
@@ -65,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .to_file(Path::new(download_path))
         .await?;
 
-    log::info!("Object '{object_name}' is successfully downloaded to file '{download_path}'.");
+    log::info!("Object '{object}' is successfully downloaded to file '{download_path}'.");
 
     Ok(())
 }

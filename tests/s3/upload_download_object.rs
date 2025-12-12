@@ -17,7 +17,7 @@ use async_std::io::ReadExt;
 use minio::s3::builders::ObjectContent;
 use minio::s3::response::{GetObjectResponse, PutObjectContentResponse};
 use minio::s3::response_traits::{HasBucket, HasObject};
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, ObjectKey, S3Api};
 use minio::s3::utils::hex_encode;
 use minio_common::rand_reader::RandReader;
 use minio_common::test_context::TestContext;
@@ -49,13 +49,8 @@ async fn get_hash(filename: &str) -> String {
     }
 }
 
-async fn test_upload_download_object(
-    ctx: &TestContext,
-    bucket_name: &str,
-    object_name: &str,
-    size: u64,
-) {
-    let mut file = async_std::fs::File::create(&object_name).await.unwrap();
+async fn test_upload_download_object(ctx: &TestContext, bucket: &str, object: &str, size: u64) {
+    let mut file = async_std::fs::File::create(&object).await.unwrap();
 
     async_std::io::copy(&mut RandReader::new(size), &mut file)
         .await
@@ -63,29 +58,38 @@ async fn test_upload_download_object(
 
     file.sync_all().await.unwrap();
 
-    let obj: ObjectContent = PathBuf::from(object_name).as_path().into();
+    let obj: ObjectContent = PathBuf::from(object).as_path().into();
 
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(bucket_name, object_name, obj)
+        .put_object_content(
+            BucketName::try_from(bucket).unwrap(),
+            ObjectKey::try_from(object).unwrap(),
+            obj,
+        )
+        .unwrap()
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), Some(&BucketName::try_from(bucket).unwrap()));
+    assert_eq!(resp.object(), Some(&ObjectKey::try_from(object).unwrap()));
     assert_eq!(resp.object_size(), size);
 
-    let filename: String = rand_object_name_utf8(20);
+    let filename: String = rand_object_name_utf8(20).to_string();
     let resp: GetObjectResponse = ctx
         .client
-        .get_object(bucket_name, object_name)
+        .get_object(
+            BucketName::try_from(bucket).unwrap(),
+            ObjectKey::try_from(object).unwrap(),
+        )
+        .unwrap()
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), Some(&BucketName::try_from(bucket).unwrap()));
+    assert_eq!(resp.object(), Some(&ObjectKey::try_from(object).unwrap()));
 
     // save the object to a file
     resp.content()
@@ -93,32 +97,28 @@ async fn test_upload_download_object(
         .to_file(PathBuf::from(&filename).as_path())
         .await
         .unwrap();
-    assert_eq!(get_hash(object_name).await, get_hash(&filename).await);
+    assert_eq!(get_hash(object).await, get_hash(&filename).await);
 
-    async_std::fs::remove_file(&object_name).await.unwrap();
+    async_std::fs::remove_file(&object).await.unwrap();
     async_std::fs::remove_file(&filename).await.unwrap();
 }
 
 /// Test uploading and downloading an object with a size that fits in a single part
 #[minio_macros::test]
-async fn upload_download_object_1(ctx: TestContext, bucket_name: String) {
-    test_upload_download_object(&ctx, &bucket_name, &rand_object_name_utf8(20), 16).await;
+async fn upload_download_object_1(ctx: TestContext, bucket: BucketName) {
+    let object = rand_object_name_utf8(20);
+    test_upload_download_object(&ctx, bucket.as_str(), object.as_str(), 16).await;
 }
 
 /// Test uploading and downloading an object with a name that contains white space characters.
 #[minio_macros::test]
-async fn upload_download_object_2(ctx: TestContext, bucket_name: String) {
-    test_upload_download_object(&ctx, &bucket_name, "a b+c", 16).await;
+async fn upload_download_object_2(ctx: TestContext, bucket: BucketName) {
+    test_upload_download_object(&ctx, bucket.as_str(), "a b+c", 16).await;
 }
 
 /// Test uploading and downloading an object with a size that needs multiple parts.
 #[minio_macros::test]
-async fn upload_download_object_3(ctx: TestContext, bucket_name: String) {
-    test_upload_download_object(
-        &ctx,
-        &bucket_name,
-        &rand_object_name_utf8(20),
-        16 + 5 * 1024 * 1024,
-    )
-    .await;
+async fn upload_download_object_3(ctx: TestContext, bucket: BucketName) {
+    let object = rand_object_name_utf8(20);
+    test_upload_download_object(&ctx, bucket.as_str(), object.as_str(), 16 + 5 * 1024 * 1024).await;
 }

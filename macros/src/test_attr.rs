@@ -58,7 +58,7 @@ impl MacroArgs {
 
         // Validate that the function has exactly two arguments: ctx and bucket_name
         if (func.sig.inputs.len() != 2) && !self.no_bucket.is_present() {
-            let error_msg = "Minio test function must have exactly two arguments: (ctx: TestContext, bucket_name: String)";
+            let error_msg = "Minio test function must have exactly two arguments: (ctx: TestContext, bucket_name: BucketName)";
             return Err(proc_macro::TokenStream::from(
                 Error::custom(error_msg)
                     .with_span(&func.sig.inputs.span())
@@ -82,13 +82,13 @@ impl MacroArgs {
             }
         }
 
-        // Check the second argument (bucket_name: String)
+        // Check the second argument (bucket_name: BucketName)
         if !self.no_bucket.is_present()
             && let Some(FnArg::Typed(pat_type)) = iter.next()
         {
             let type_str = pat_type.ty.to_token_stream().to_string();
-            if !type_str.contains("String") {
-                let error_msg = "The second argument must be of type String";
+            if !type_str.contains("BucketName") {
+                let error_msg = "The second argument must be of type BucketName";
                 return Err(proc_macro::TokenStream::from(
                     Error::custom(error_msg)
                         .with_span(&pat_type.span())
@@ -107,6 +107,8 @@ pub(crate) fn expand_test_macro(
     mut func: ItemFn,
 ) -> Result<TokenStream, proc_macro::TokenStream> {
     let input_span = func.sig.paren_token.span.span();
+    let old_output = func.sig.output.clone();
+    let returns_result = returns_result_type(&old_output);
     func.sig.output = ReturnType::Default;
     let old_inps = func.sig.inputs.clone();
     func.sig.inputs = Punctuated::default();
@@ -119,7 +121,8 @@ pub(crate) fn expand_test_macro(
 
     let inner_inputs = quote_spanned!(input_span=> #old_inps);
     let inner_fn_name = create_inner_func_name(&func);
-    let inner_header = quote_spanned!(func.sig.span()=> async fn #inner_fn_name(#inner_inputs));
+    let inner_header =
+        quote_spanned!(func.sig.span()=> async fn #inner_fn_name(#inner_inputs) #old_output);
 
     // Generate the skip logic for express mode if required
     let maybe_skip_if_express = generate_express_skip_logic(&args, func.sig.span());
@@ -141,6 +144,7 @@ pub(crate) fn expand_test_macro(
             maybe_skip_if_express,
             inner_fn_name,
             func.block.span(),
+            returns_result,
         )
     } else {
         generate_with_bucket_body(
@@ -149,6 +153,7 @@ pub(crate) fn expand_test_macro(
             inner_fn_name,
             &args,
             func.block.span(),
+            returns_result,
         )
     };
 
@@ -220,16 +225,36 @@ fn generate_express_skip_logic(args: &MacroArgs, span: proc_macro2::Span) -> Tok
     }
 }
 
+fn returns_result_type(output: &ReturnType) -> bool {
+    match output {
+        ReturnType::Default => false,
+        ReturnType::Type(_, ty) => {
+            let type_str = ty.to_token_stream().to_string();
+            type_str.starts_with("Result") || type_str.contains(":: Result")
+        }
+    }
+}
+
 fn generate_no_bucket_body(
     prelude: TokenStream,
     maybe_skip_if_express: TokenStream,
     inner_fn_name: TokenStream,
     span: proc_macro2::Span,
+    returns_result: bool,
 ) -> TokenStream {
+    let inner_call = if returns_result {
+        quote_spanned!(span=>
+            if let Err(e) = #inner_fn_name(ctx).await {
+                panic!("Test failed with error: {:?}", e);
+            }
+        )
+    } else {
+        quote_spanned!(span=> #inner_fn_name(ctx).await;)
+    };
     quote_spanned!(span=> {
         #prelude
         #maybe_skip_if_express
-        #inner_fn_name(ctx).await;
+        #inner_call
     })
 }
 
@@ -239,6 +264,7 @@ fn generate_with_bucket_body(
     inner_fn_name: TokenStream,
     args: &MacroArgs,
     span: proc_macro2::Span,
+    returns_result: bool,
 ) -> TokenStream {
     let bucket_name = args
         .bucket_name
@@ -255,23 +281,40 @@ fn generate_with_bucket_body(
     } else {
         TokenStream::new()
     };
-    let maybe_cleanup = if args.no_cleanup.is_present() {
-        quote! {}
+    let (maybe_save_bucket, maybe_cleanup) = if args.no_cleanup.is_present() {
+        (quote! {}, quote! {})
     } else {
-        quote! {
-            ::minio_common::cleanup_guard::cleanup(client_clone, bucket_name).await;
-        }
+        (
+            quote! {
+                let bucket_name_for_cleanup = bucket_name.clone();
+            },
+            quote! {
+                ::minio_common::cleanup_guard::cleanup(client_clone, bucket_name_for_cleanup).await;
+            },
+        )
+    };
+    let inner_call = if returns_result {
+        quote_spanned!(span=>
+            let res = AssertUnwindSafe(async {
+                #inner_fn_name(ctx, bucket_name).await.map_err(|e| panic!("Test failed with error: {:?}", e))
+            }).catch_unwind().await;
+        )
+    } else {
+        quote_spanned!(span=>
+            let res = AssertUnwindSafe(#inner_fn_name(ctx, bucket_name)).catch_unwind().await;
+        )
     };
     quote_spanned!(span=> {
         #prelude
         #maybe_skip_if_express
 
         let client_clone = ctx.client.clone();
-        let bucket_name = #bucket_name;
+        let bucket_name_str = #bucket_name;
+        let bucket_name = ::minio::s3::types::BucketName::try_from(bucket_name_str).expect("Invalid bucket name");
         // Try to create bucket, but continue if it already exists (for no_cleanup tests)
-        match client_clone.create_bucket(bucket_name)#maybe_lock.build().send().await {
+        match client_clone.create_bucket(bucket_name.clone()).expect("Failed to create bucket builder")#maybe_lock.build().send().await {
             Ok(resp) => {
-                assert_eq!(resp.bucket(), bucket_name);
+                assert_eq!(resp.bucket(), Some(&bucket_name));
             }
             Err(e) => {
                 // If bucket already exists, that's ok for no_cleanup tests
@@ -280,10 +323,11 @@ fn generate_with_bucket_body(
                     panic!("Failed to create bucket: {:?}", e);
                 }
                 // Otherwise continue - bucket already exists from previous run
-                eprintln!("Note: Reusing existing bucket {} from previous test run", bucket_name);
+                eprintln!("Note: Reusing existing bucket {} from previous test run", bucket_name_str);
             }
         };
-        let res = AssertUnwindSafe(#inner_fn_name(ctx, bucket_name.to_string())).catch_unwind().await;
+        #maybe_save_bucket
+        #inner_call
         #maybe_cleanup
         if let Err(e) = res {
             ::std::panic::resume_unwind(e);

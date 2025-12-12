@@ -16,6 +16,7 @@
 extern crate alloc;
 
 use crate::s3::error::{Error, ValidationErr};
+use crate::s3::types::{BucketName, ObjectKey};
 use crate::s3::utils::{get_text_default, get_text_option};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -92,6 +93,8 @@ pub enum MinioErrorCode {
     AccessDenied,
     NotSupported,
     InvalidWriteOffset,
+    /// Attempted to use S3 DeleteBucket API on a warehouse bucket (S3 Tables)
+    WarehouseBucketOperationNotSupported,
 
     OtherError(String), // This is a catch-all for any error code not explicitly defined
 }
@@ -120,6 +123,7 @@ const ALL_MINIO_ERROR_CODE: &[MinioErrorCode] = &[
     MinioErrorCode::BucketNotEmpty,
     MinioErrorCode::BucketAlreadyOwnedByYou,
     MinioErrorCode::InvalidWriteOffset,
+    MinioErrorCode::WarehouseBucketOperationNotSupported,
     //MinioErrorCode::OtherError("".to_string()),
 ];
 
@@ -154,6 +158,9 @@ impl FromStr for MinioErrorCode {
             "bucketnotempty" => Ok(MinioErrorCode::BucketNotEmpty),
             "bucketalreadyownedbyyou" => Ok(MinioErrorCode::BucketAlreadyOwnedByYou),
             "invalidwriteoffset" => Ok(MinioErrorCode::InvalidWriteOffset),
+            "warehousebucketoperationnotsupported" => {
+                Ok(MinioErrorCode::WarehouseBucketOperationNotSupported)
+            }
 
             v => Ok(MinioErrorCode::OtherError(v.to_owned())),
         }
@@ -194,6 +201,9 @@ impl std::fmt::Display for MinioErrorCode {
             MinioErrorCode::BucketNotEmpty => write!(f, "BucketNotEmpty"),
             MinioErrorCode::BucketAlreadyOwnedByYou => write!(f, "BucketAlreadyOwnedByYou"),
             MinioErrorCode::InvalidWriteOffset => write!(f, "InvalidWriteOffset"),
+            MinioErrorCode::WarehouseBucketOperationNotSupported => {
+                write!(f, "WarehouseBucketOperationNotSupported")
+            }
             MinioErrorCode::OtherError(msg) => write!(f, "{msg}"),
         }
     }
@@ -227,8 +237,8 @@ pub struct MinioErrorResponse {
     resource: String,
     request_id: String,
     host_id: String,
-    bucket_name: Option<String>,
-    object_name: Option<String>,
+    bucket: Option<BucketName>,
+    object: Option<ObjectKey>,
 }
 
 impl MinioErrorResponse {
@@ -239,8 +249,8 @@ impl MinioErrorResponse {
         resource: String,
         request_id: String,
         host_id: String,
-        bucket_name: Option<String>,
-        object_name: Option<String>,
+        bucket: Option<BucketName>,
+        object: Option<ObjectKey>,
     ) -> Self {
         Self {
             headers,
@@ -249,8 +259,8 @@ impl MinioErrorResponse {
             resource,
             request_id,
             host_id,
-            bucket_name,
-            object_name,
+            bucket,
+            object,
         }
     }
 
@@ -273,8 +283,8 @@ impl MinioErrorResponse {
             resource: String::new(),
             request_id: String::new(),
             host_id: String::new(),
-            bucket_name: None,
-            object_name: None,
+            bucket: None,
+            object: None,
         }
     }
 
@@ -287,8 +297,8 @@ impl MinioErrorResponse {
             resource: get_text_default(&root, "Resource"),
             request_id: get_text_default(&root, "RequestId"),
             host_id: get_text_default(&root, "HostId"),
-            bucket_name: get_text_option(&root, "BucketName"),
-            object_name: get_text_option(&root, "Key"),
+            bucket: get_text_option(&root, "BucketName").and_then(|s| BucketName::new(s).ok()),
+            object: get_text_option(&root, "Key").and_then(|s| ObjectKey::new(s).ok()),
         })
     }
 
@@ -301,6 +311,9 @@ impl MinioErrorResponse {
     }
     pub fn code(&self) -> MinioErrorCode {
         self.code.clone()
+    }
+    pub fn set_code(&mut self, code: MinioErrorCode) {
+        self.code = code;
     }
     pub fn message(&self) -> &Option<String> {
         &self.message
@@ -317,11 +330,11 @@ impl MinioErrorResponse {
     pub fn host_id(&self) -> &str {
         &self.host_id
     }
-    pub fn bucket_name(&self) -> &Option<String> {
-        &self.bucket_name
+    pub fn bucket_name(&self) -> Option<&BucketName> {
+        self.bucket.as_ref()
     }
-    pub fn object_name(&self) -> &Option<String> {
-        &self.object_name
+    pub fn object_name(&self) -> Option<&ObjectKey> {
+        self.object.as_ref()
     }
 }
 
@@ -329,14 +342,14 @@ impl std::fmt::Display for MinioErrorResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "S3 operation failed: \n\tcode: {:?}\n\tmessage: {:?}\n\tresource: {}\n\trequest_id: {}\n\thost_id: {}\n\tbucket_name: {:?}\n\tobject_name: {:?}",
+            "S3 operation failed: \n\tcode: {:?}\n\tmessage: {:?}\n\tresource: {}\n\trequest_id: {}\n\thost_id: {}\n\tbucket: {:?}\n\tobject: {:?}",
             self.code,
             self.message,
             self.resource,
             self.request_id,
             self.host_id,
-            self.bucket_name,
-            self.object_name,
+            self.bucket,
+            self.object,
         )
     }
 }

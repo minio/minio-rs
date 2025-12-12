@@ -30,7 +30,7 @@ pub(crate) async fn bench_put_object_lock_config(criterion: &mut Criterion) {
             let config = create_object_lock_config_example();
             PutObjectLockConfig::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(&ctx.bucket)
                 .config(config)
                 .build()
         },
@@ -47,7 +47,7 @@ pub(crate) async fn bench_get_object_lock_config(criterion: &mut Criterion) {
         |ctx| {
             GetObjectLockConfig::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(&ctx.bucket)
                 .build()
         },
     )
@@ -63,7 +63,7 @@ pub(crate) async fn bench_delete_object_lock_config(criterion: &mut Criterion) {
         |ctx| {
             DeleteObjectLockConfig::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(&ctx.bucket)
                 .build()
         },
     )

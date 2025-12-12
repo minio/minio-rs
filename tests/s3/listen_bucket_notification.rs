@@ -17,7 +17,7 @@ use futures_util::stream::StreamExt;
 use minio::s3::builders::ObjectContent;
 use minio::s3::response::PutObjectContentResponse;
 use minio::s3::response_traits::{HasBucket, HasObject};
-use minio::s3::types::{NotificationRecord, NotificationRecords, S3Api};
+use minio::s3::types::{BucketName, NotificationRecord, NotificationRecords, S3Api};
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
@@ -28,8 +28,8 @@ use tokio::time::{Duration, sleep};
 /// to avoid conflicts with parallel test execution. Multiple notification listeners attempting to
 /// connect concurrently can overwhelm the server's notification infrastructure.
 #[minio_macros::test(flavor = "current_thread")]
-async fn listen_bucket_notification(ctx: TestContext, bucket_name: String) {
-    let object_name = rand_object_name();
+async fn listen_bucket_notification(ctx: TestContext, bucket: BucketName) {
+    let object = rand_object_name();
 
     type MessageType = u32;
     const SECRET_MSG: MessageType = 42;
@@ -39,15 +39,16 @@ async fn listen_bucket_notification(ctx: TestContext, bucket_name: String) {
         mpsc::UnboundedReceiver<MessageType>,
     ) = mpsc::unbounded_channel();
 
-    let bucket_name2 = bucket_name.clone();
-    let object_name2 = object_name.clone();
+    let bucket2 = bucket.clone();
+    let object2 = object.clone();
 
     let spawned_listen_task = tokio::spawn(async move {
         let ctx2 = TestContext::new_from_env();
 
         let (_resp, mut event_stream) = ctx2
             .client
-            .listen_bucket_notification(&bucket_name2)
+            .listen_bucket_notification(&bucket2)
+            .unwrap()
             .build()
             .send()
             .await
@@ -59,11 +60,11 @@ async fn listen_bucket_notification(ctx: TestContext, bucket_name: String) {
 
             if let Some(record) = record {
                 let key: &str = &record.s3.object.key;
-                if key == object_name2 {
+                if key == object2.as_str() {
                     // Do something with the record, check if you received an event triggered
                     // by the put_object that will happen in a few ms.
                     assert_eq!(record.event_name, "s3:ObjectCreated:Put");
-                    assert_eq!(record.s3.bucket.name, bucket_name2);
+                    assert_eq!(record.s3.bucket.name, bucket2.as_str());
                     //println!("record {:#?}", record);
 
                     sender.send(SECRET_MSG).unwrap();
@@ -81,16 +82,17 @@ async fn listen_bucket_notification(ctx: TestContext, bucket_name: String) {
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(
-            &bucket_name,
-            &object_name,
+            &bucket,
+            &object,
             ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
+        .unwrap()
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), Some(&bucket));
+    assert_eq!(resp.object(), Some(&object));
 
     let _ = spawned_listen_task.await;
 

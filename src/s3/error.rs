@@ -1,4 +1,5 @@
 use crate::s3::minio_error_response::MinioErrorResponse;
+use crate::s3::types::Region;
 use thiserror::Error;
 
 // Client side validation issues like invalid url or bucket name
@@ -19,6 +20,9 @@ pub enum ValidationErr {
     /// Error while parsing a URL from string
     #[error("Invalid URL: {0}")]
     InvalidUrl(#[from] http::uri::InvalidUri),
+
+    #[error("Remote target not found")]
+    RemoteTargetNotFound,
 
     /// Error while performing IO operations
     #[error("IO error: {0}")]
@@ -137,8 +141,8 @@ pub enum ValidationErr {
 
     #[error("Region must be {bucket_region}, but passed {region}")]
     RegionMismatch {
-        bucket_region: String,
-        region: String,
+        bucket_region: Region,
+        region: Region,
     },
 
     #[error("{crc_type} CRC mismatch; expected: {expected}, got: {got}")]
@@ -225,6 +229,9 @@ pub enum ValidationErr {
     #[error("Invalid versioning status: {0}")]
     InvalidVersioningStatus(String),
 
+    #[error("Invalid bucket policy: {0}")]
+    InvalidBucketPolicy(String),
+
     #[error("Post policy error: {0}")]
     PostPolicyError(String),
 
@@ -274,6 +281,75 @@ pub enum ValidationErr {
 
     #[error("Invalid table name: {0}")]
     InvalidTableName(String),
+
+    #[error("Invalid view name: {0}")]
+    InvalidViewName(String),
+
+    #[error("Invalid plan ID: {0}")]
+    InvalidPlanId(String),
+
+    #[error("Invalid page size: {0}")]
+    InvalidPageSize(String),
+
+    #[error("Invalid table changes: {0}")]
+    InvalidTableChanges(String),
+
+    #[error("Invalid metadata location: {0}")]
+    InvalidMetadataLocation(String),
+
+    #[error("Invalid view SQL: {0}")]
+    InvalidViewSql(String),
+
+    #[error("Invalid version ID: {0}")]
+    InvalidVersionId(String),
+
+    #[error("Invalid region: {0}")]
+    InvalidRegion(String),
+
+    #[error("Invalid ETag: {0}")]
+    InvalidETag(String),
+
+    #[error("Invalid content type: {0}")]
+    InvalidContentType(String),
+
+    #[error("Invalid access key: {0}")]
+    InvalidAccessKey(String),
+
+    #[error("Invalid secret key: {0}")]
+    InvalidSecretKey(String),
+
+    #[error("Invalid policy name: {0}")]
+    InvalidPolicyName(String),
+
+    #[error("Invalid group name: {0}")]
+    InvalidGroupName(String),
+
+    #[error("Invalid job ID: {0}")]
+    InvalidJobId(String),
+
+    #[error("Invalid KMS key ID: {0}")]
+    InvalidKmsKeyId(String),
+
+    #[error("Invalid KMS identity: {0}")]
+    InvalidKmsIdentity(String),
+
+    #[error("Invalid tier name: {0}")]
+    InvalidTierName(String),
+
+    #[error("Invalid pool name: {0}")]
+    InvalidPoolName(String),
+
+    #[error("Invalid node address: {0}")]
+    InvalidNodeAddress(String),
+
+    #[error("Invalid config key: {0}")]
+    InvalidConfigKey(String),
+
+    #[error("Invalid IDP config name: {0}")]
+    InvalidIdpConfigName(String),
+
+    #[error("Invalid ARN: {0}")]
+    InvalidArn(String),
 }
 
 impl From<reqwest::header::ToStrError> for ValidationErr {
@@ -282,6 +358,12 @@ impl From<reqwest::header::ToStrError> for ValidationErr {
             message: "The provided value has an invalid encoding".into(),
             source: Some(Box::new(err)),
         }
+    }
+}
+
+impl From<std::convert::Infallible> for ValidationErr {
+    fn from(infallible: std::convert::Infallible) -> Self {
+        match infallible {}
     }
 }
 
@@ -346,7 +428,7 @@ pub enum S3ServerError {
 // Top-level Minio client error
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("S3 server error occurred")]
+    #[error("{0}")]
     S3Server(#[from] S3ServerError),
 
     #[error("Drive IO error occurred")]
@@ -357,9 +439,6 @@ pub enum Error {
 
     #[error("Validation error occurred")]
     Validation(#[from] ValidationErr),
-
-    #[error("Tables error occurred")]
-    TablesError(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 // region message helpers
@@ -569,9 +648,10 @@ mod tests {
 
     #[test]
     fn test_validation_err_region_mismatch() {
+        use crate::s3::types::Region;
         let err = ValidationErr::RegionMismatch {
-            bucket_region: "us-west-2".to_string(),
-            region: "us-east-1".to_string(),
+            bucket_region: Region::try_from("us-west-2").unwrap(),
+            region: Region::try_from("us-east-1").unwrap(),
         };
         let msg = err.to_string();
         assert!(msg.contains("us-west-2"));

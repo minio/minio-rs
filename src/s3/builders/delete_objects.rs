@@ -20,7 +20,9 @@ use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::{DeleteError, DeleteObjectResponse, DeleteObjectsResponse};
 use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::types::{ListEntry, S3Api, S3Request, ToS3Request, ToStream};
+use crate::s3::types::{
+    BucketName, ListEntry, ObjectKey, Region, S3Api, S3Request, ToS3Request, ToStream, VersionId,
+};
 use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -32,46 +34,123 @@ use std::sync::Arc;
 use typed_builder::TypedBuilder;
 // region: object-to-delete
 
-pub trait ValidKey: Into<String> {}
-impl ValidKey for String {}
-impl ValidKey for &str {}
-impl ValidKey for &String {}
-
 /// Specifies an object to be deleted.
 ///
-/// The object can be specified by key or by key and version_id via the `From` trait.
-#[derive(Debug, Clone, Default)]
+/// The object can be specified by key or by key and version_id via the `TryFrom` trait.
+#[derive(Debug, Clone, Default, TypedBuilder)]
 pub struct ObjectToDelete {
-    key: String,
-    version_id: Option<String>,
+    key: ObjectKey,
+    version_id: Option<VersionId>,
 }
 
-/// A key can be converted into a `DeleteObject` with `version_id` set to `None`.
-impl<K: ValidKey> From<K> for ObjectToDelete {
-    fn from(key: K) -> Self {
+/// A String key can be converted into a `ObjectToDelete` with `version_id` set to `None`.
+impl TryFrom<String> for ObjectToDelete {
+    type Error = ValidationErr;
+
+    fn try_from(key: String) -> Result<Self, Self::Error> {
+        Ok(Self {
+            key: ObjectKey::new(key)?,
+            version_id: None,
+        })
+    }
+}
+
+/// A &str key can be converted into a `ObjectToDelete` with `version_id` set to `None`.
+impl TryFrom<&str> for ObjectToDelete {
+    type Error = ValidationErr;
+
+    fn try_from(key: &str) -> Result<Self, Self::Error> {
+        Ok(Self {
+            key: ObjectKey::new(key)?,
+            version_id: None,
+        })
+    }
+}
+
+/// An ObjectKey can be converted into a `ObjectToDelete` with `version_id` set to `None`.
+impl From<ObjectKey> for ObjectToDelete {
+    fn from(key: ObjectKey) -> Self {
         Self {
-            key: key.into(),
+            key,
             version_id: None,
         }
     }
 }
 
-/// A tuple of key and version_id can be converted into a `DeleteObject`.
-impl<K: ValidKey> From<(K, &str)> for ObjectToDelete {
-    fn from((key, version_id): (K, &str)) -> Self {
+/// A reference to ObjectKey can be converted into a `ObjectToDelete` with `version_id` set to `None`.
+impl From<&ObjectKey> for ObjectToDelete {
+    fn from(key: &ObjectKey) -> Self {
         Self {
-            key: key.into(),
-            version_id: Some(version_id.to_string()),
+            key: key.clone(),
+            version_id: None,
         }
     }
 }
 
-/// A tuple of key and optional version_id can be converted into a `DeleteObject`.
-impl<K: ValidKey> From<(K, Option<&str>)> for ObjectToDelete {
-    fn from((key, version_id): (K, Option<&str>)) -> Self {
+/// A tuple of String key and version_id can be converted into a `ObjectToDelete`.
+impl<V: Into<VersionId>> TryFrom<(String, V)> for ObjectToDelete {
+    type Error = ValidationErr;
+
+    fn try_from((key, version_id): (String, V)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            key: ObjectKey::new(key)?,
+            version_id: Some(version_id.into()),
+        })
+    }
+}
+
+/// A tuple of &str key and version_id can be converted into a `ObjectToDelete`.
+impl<V: Into<VersionId>> TryFrom<(&str, V)> for ObjectToDelete {
+    type Error = ValidationErr;
+
+    fn try_from((key, version_id): (&str, V)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            key: ObjectKey::new(key)?,
+            version_id: Some(version_id.into()),
+        })
+    }
+}
+
+/// A tuple of ObjectKey and version_id can be converted into a `ObjectToDelete`.
+impl<V: Into<VersionId>> From<(ObjectKey, V)> for ObjectToDelete {
+    fn from((key, version_id): (ObjectKey, V)) -> Self {
         Self {
-            key: key.into(),
-            version_id: version_id.map(|v| v.to_string()),
+            key,
+            version_id: Some(version_id.into()),
+        }
+    }
+}
+
+/// A tuple of String key and optional version_id can be converted into a `ObjectToDelete`.
+impl<V: Into<VersionId>> TryFrom<(String, Option<V>)> for ObjectToDelete {
+    type Error = ValidationErr;
+
+    fn try_from((key, version_id): (String, Option<V>)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            key: ObjectKey::new(key)?,
+            version_id: version_id.map(Into::into),
+        })
+    }
+}
+
+/// A tuple of &str key and optional version_id can be converted into a `ObjectToDelete`.
+impl<V: Into<VersionId>> TryFrom<(&str, Option<V>)> for ObjectToDelete {
+    type Error = ValidationErr;
+
+    fn try_from((key, version_id): (&str, Option<V>)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            key: ObjectKey::new(key)?,
+            version_id: version_id.map(Into::into),
+        })
+    }
+}
+
+/// A tuple of ObjectKey and optional version_id can be converted into a `ObjectToDelete`.
+impl<V: Into<VersionId>> From<(ObjectKey, Option<V>)> for ObjectToDelete {
+    fn from((key, version_id): (ObjectKey, Option<V>)) -> Self {
+        Self {
+            key,
+            version_id: version_id.map(Into::into),
         }
     }
 }
@@ -79,8 +158,8 @@ impl<K: ValidKey> From<(K, Option<&str>)> for ObjectToDelete {
 impl From<ListEntry> for ObjectToDelete {
     fn from(entry: ListEntry) -> Self {
         Self {
-            key: entry.name,
-            version_id: entry.version_id,
+            key: ObjectKey::new_unchecked(entry.name),
+            version_id: entry.version_id.map(VersionId::new_unchecked),
         }
     }
 }
@@ -88,8 +167,8 @@ impl From<ListEntry> for ObjectToDelete {
 impl From<DeleteError> for ObjectToDelete {
     fn from(entry: DeleteError) -> Self {
         Self {
-            key: entry.object_name,
-            version_id: entry.version_id,
+            key: ObjectKey::new_unchecked(entry.object_name),
+            version_id: entry.version_id.map(VersionId::new_unchecked),
         }
     }
 }
@@ -110,9 +189,9 @@ pub struct DeleteObject {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    bucket: BucketName,
     #[builder(default, setter(into))]
     object: ObjectToDelete,
     #[builder(default)]
@@ -126,8 +205,15 @@ impl S3Api for DeleteObject {
 /// Builder type for [`DeleteObject`] that is returned by [`MinioClient::delete_object`](crate::s3::client::MinioClient::delete_object).
 ///
 /// This type alias simplifies the complex generic signature generated by the `typed_builder` crate.
-pub type DeleteObjectBldr =
-    DeleteObjectBuilder<((MinioClient,), (), (), (), (String,), (ObjectToDelete,), ())>;
+pub type DeleteObjectBldr = DeleteObjectBuilder<(
+    (MinioClient,),
+    (),
+    (),
+    (),
+    (BucketName,),
+    (ObjectToDelete,),
+    (),
+)>;
 
 impl ToS3Request for DeleteObject {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
@@ -170,9 +256,9 @@ pub struct DeleteObjects {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    bucket: BucketName,
 
     #[builder(!default)]
     objects: Vec<ObjectToDelete>,
@@ -199,7 +285,7 @@ pub type DeleteObjectsBldr = DeleteObjectsBuilder<(
     (),
     (),
     (),
-    (String,),
+    (BucketName,),
     (Vec<ObjectToDelete>,),
     (),
     (),
@@ -216,11 +302,11 @@ impl ToS3Request for DeleteObjects {
         for object in self.objects.iter() {
             data.push_str("<Object>");
             data.push_str("<Key>");
-            data.push_str(&object.key);
+            data.push_str(object.key.as_str());
             data.push_str("</Key>");
             if let Some(v) = object.version_id.as_ref() {
                 data.push_str("<VersionId>");
-                data.push_str(v);
+                data.push_str(v.as_str());
                 data.push_str("</VersionId>");
             }
             data.push_str("</Object>");
@@ -290,7 +376,7 @@ pub struct DeleteObjectsStreaming {
     //TODO
     client: MinioClient,
 
-    bucket: String,
+    bucket: BucketName,
     objects: ObjectsStream,
 
     bypass_governance_mode: bool,
@@ -298,11 +384,11 @@ pub struct DeleteObjectsStreaming {
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
-    region: Option<String>,
+    region: Option<Region>,
 }
 
 impl DeleteObjectsStreaming {
-    pub fn new(client: MinioClient, bucket: String, objects: impl Into<ObjectsStream>) -> Self {
+    pub fn new(client: MinioClient, bucket: BucketName, objects: impl Into<ObjectsStream>) -> Self {
         Self {
             client,
             bucket,
@@ -342,7 +428,7 @@ impl DeleteObjectsStreaming {
     }
 
     /// Sets the region for the request.
-    pub fn region(mut self, region: Option<String>) -> Self {
+    pub fn region(mut self, region: Option<Region>) -> Self {
         self.region = region;
         self
     }
@@ -362,7 +448,7 @@ impl DeleteObjectsStreaming {
         Ok(Some(
             DeleteObjects::builder()
                 .client(self.client.clone())
-                .bucket(self.bucket.clone())
+                .bucket(&self.bucket)
                 .objects(objects)
                 .bypass_governance_mode(self.bypass_governance_mode)
                 .verbose_mode(self.verbose_mode)

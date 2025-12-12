@@ -30,7 +30,7 @@ futures-io = "0.3"
 reqwest = { version = "0.12", default-features = false }
 bytes = "1.11"
 async-std = "1.13"
-tokio = "1.48"
+tokio = "1.49"
 rand = "0.9"
 log = "0.4"
 chrono = "0.4"
@@ -49,7 +49,7 @@ async-stream = "0.3"
 async-trait = "0.1"
 base64 = "0.22"
 chrono = { workspace = true, features = ["serde"] }
-crc-fast = "1.8"
+crc-fast = "1.10"
 dashmap = "6.1.0"
 env_logger = "0.11"
 hmac = { version = "0.12", optional = true }

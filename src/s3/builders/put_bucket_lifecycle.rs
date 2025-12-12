@@ -20,8 +20,8 @@ use crate::s3::lifecycle_config::LifecycleConfig;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::PutBucketLifecycleResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::types::{S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, insert, md5sum_hash};
+use crate::s3::types::{BucketName, Region, S3Api, S3Request, ToS3Request};
+use crate::s3::utils::{insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -39,9 +39,10 @@ pub struct PutBucketLifecycle {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(!default, setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(default)]
     life_cycle_config: LifecycleConfig,
 }
@@ -50,7 +51,7 @@ pub struct PutBucketLifecycle {
 ///
 /// Constructed via [`PutBucketLifecycle::builder()`](PutBucketLifecycle::builder) and used to build a [`PutBucketLifecycle`] instance.
 pub type PutBucketLifecycleBldr =
-    PutBucketLifecycleBuilder<((MinioClient,), (), (), (), (String,), ())>;
+    PutBucketLifecycleBuilder<((MinioClient,), (), (), (), (BucketName,), ())>;
 
 impl S3Api for PutBucketLifecycle {
     type S3Response = PutBucketLifecycleResponse;
@@ -58,8 +59,6 @@ impl S3Api for PutBucketLifecycle {
 
 impl ToS3Request for PutBucketLifecycle {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
 
         let bytes: Bytes = self.life_cycle_config.to_xml().into();

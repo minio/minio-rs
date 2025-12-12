@@ -16,24 +16,28 @@
 use http::{Response as HttpResponse, StatusCode};
 use minio::s3::error::Error;
 
+use minio::s3::types::{BucketName, ObjectKey};
 use rand::Rng;
 use rand::distr::StandardUniform;
 use uuid::Uuid;
 
-pub fn rand_bucket_name() -> String {
-    format!("test-bucket-{}", Uuid::new_v4())
+pub fn rand_bucket_name() -> BucketName {
+    BucketName::new(format!("test-bucket-{}", Uuid::new_v4())).unwrap()
 }
 
-pub fn rand_object_name() -> String {
-    format!("test-object-{}", Uuid::new_v4())
+pub fn rand_object_name() -> ObjectKey {
+    ObjectKey::new(format!("test-object-{}", Uuid::new_v4())).unwrap()
 }
 
-pub fn rand_object_name_utf8(len: usize) -> String {
+pub fn rand_object_name_utf8(len: usize) -> ObjectKey {
     let rng = rand::rng();
-    rng.sample_iter(StandardUniform)
-        .filter(|c: &char| !c.is_control())
-        .take(len)
-        .collect()
+    ObjectKey::new(
+        rng.sample_iter(StandardUniform)
+            .filter(|c: &char| !c.is_control())
+            .take(len)
+            .collect::<String>(),
+    )
+    .unwrap()
 }
 
 pub async fn get_bytes_from_response(v: Result<reqwest::Response, Error>) -> bytes::Bytes {

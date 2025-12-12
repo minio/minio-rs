@@ -16,6 +16,7 @@
 //! Implementation of Simple Storage Service (aka S3) client
 
 pub mod aws_chunked;
+pub mod bucket_policy_config;
 pub mod builders;
 pub mod client;
 pub mod creds;

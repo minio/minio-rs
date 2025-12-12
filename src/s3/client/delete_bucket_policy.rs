@@ -15,12 +15,14 @@
 
 use crate::s3::builders::{DeleteBucketPolicy, DeleteBucketPolicyBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`DeleteBucketPolicy`] request builder.
     ///
     /// To execute the request, call [`DeleteBucketPolicy::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`DeleteBucketPolicyResponse`](crate::s3::response::DeleteBucketPolicyResponse).    
+    /// which returns a [`Result`] containing a [`DeleteBucketPolicyResponse`](crate::s3::response::DeleteBucketPolicyResponse).
     ///
     /// # Example
     ///
@@ -33,19 +35,26 @@ impl MinioClient {
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteBucketPolicyResponse = client
     ///         .delete_bucket_policy("bucket-name")
-    ///         .build().send().await.unwrap();
-    ///     println!("policy of bucket '{}' is deleted", resp.bucket());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("policy of bucket '{}' is deleted", resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn delete_bucket_policy<S: Into<String>>(&self, bucket: S) -> DeleteBucketPolicyBldr {
-        DeleteBucketPolicy::builder()
+    pub fn delete_bucket_policy<B>(
+        &self,
+        bucket: B,
+    ) -> Result<DeleteBucketPolicyBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(DeleteBucketPolicy::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

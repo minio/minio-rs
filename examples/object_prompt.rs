@@ -21,14 +21,14 @@ use minio::s3::builders::ObjectContent;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::response::GetObjectPromptResponse;
-use minio::s3::types::S3Api;
+use minio::s3::types::{ObjectKey, S3Api};
 use std::path::Path;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
 
-    //Note: object prompt is not supported on play.min.io, you will need point to AIStor
+    // Note: object prompt requires MinIO AIStor
     let base_url = "http://localhost:9000".parse::<BaseUrl>()?;
     log::info!("Trying to connect to MinIO at: `{base_url:?}`");
 
@@ -39,14 +39,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .ignore_cert_check(Some(true))
         .build()?;
 
-    let bucket_name: &str = "object-prompt-rust-bucket";
-    create_bucket_if_not_exists(bucket_name, &client).await?;
+    let bucket: &str = "object-prompt-rust-bucket";
+    create_bucket_if_not_exists(bucket, &client).await?;
 
     // File we are going to upload to the bucket
     let filename: &Path = Path::new("./examples/cat.png");
 
     // Name of the object that will be stored in the bucket
-    let object_name: &str = "cat.png";
+    let object: &str = "cat.png";
 
     if filename.exists() {
         log::info!("File '{}' exists.", &filename.to_str().unwrap());
@@ -57,18 +57,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let content = ObjectContent::from(filename);
     client
-        .put_object_content(bucket_name, object_name, content)
+        .put_object_content(bucket, ObjectKey::new(object)?, content)?
         .build()
         .send()
         .await?;
 
     log::info!(
-        "File '{}' is successfully uploaded as object '{object_name}' to bucket '{bucket_name}'.",
+        "File '{}' is successfully uploaded as object '{object}' to bucket '{bucket}'.",
         filename.display()
     );
 
     let resp: GetObjectPromptResponse = client
-        .get_object_prompt(bucket_name, object_name, "what is it about?")
+        .get_object_prompt(bucket, ObjectKey::new(object)?, "what is it about?")?
         //.lambda_arn("arn:minio:s3-object-lambda::_:webhook") // this is the default value
         .build()
         .send()

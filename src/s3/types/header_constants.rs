@@ -133,3 +133,19 @@ pub const STREAMING_UNSIGNED_PAYLOAD_TRAILER: &str = "STREAMING-UNSIGNED-PAYLOAD
 /// Each chunk is signed with AWS Signature V4, and the trailer includes a trailer signature.
 pub const STREAMING_AWS4_HMAC_SHA256_PAYLOAD_TRAILER: &str =
     "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER";
+
+// Iceberg REST API headers
+pub const IDEMPOTENCY_KEY: &str = "Idempotency-Key";
+pub const X_ICEBERG_ACCESS_DELEGATION: &str = "X-Iceberg-Access-Delegation";
+
+// Iceberg REST API query parameters
+pub const PAGE_TOKEN: &str = "pageToken";
+pub const PAGE_SIZE: &str = "pageSize";
+pub const PARENT: &str = "parent";
+pub const PURGE_REQUESTED: &str = "purgeRequested";
+pub const SNAPSHOTS: &str = "snapshots";
+pub const PLAN_ID: &str = "planId";
+
+// MinIO-specific query parameters
+pub const PRESERVE_BUCKET: &str = "preserve-bucket";
+pub const FORCE: &str = "force";

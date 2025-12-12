@@ -15,12 +15,14 @@
 
 use crate::s3::builders::{DeleteBucketReplication, DeleteBucketReplicationBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`DeleteBucketReplication`] request builder.
     ///
     /// To execute the request, call [`DeleteBucketReplication::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`DeleteBucketReplicationResponse`](crate::s3::response::DeleteBucketReplicationResponse).    
+    /// which returns a [`Result`] containing a [`DeleteBucketReplicationResponse`](crate::s3::response::DeleteBucketReplicationResponse).
     ///
     /// 🛈 This operation is not supported for express buckets.
     ///
@@ -35,22 +37,26 @@ impl MinioClient {
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteBucketReplicationResponse = client
-    ///         .delete_bucket_replication("bucket-name")
+    ///         .delete_bucket_replication("bucket-name").unwrap()
     ///         .build().send().await.unwrap();
-    ///     println!("replication of bucket '{}' is deleted", resp.bucket());
+    ///     println!("replication of bucket '{}' is deleted", resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn delete_bucket_replication<S: Into<String>>(
+    pub fn delete_bucket_replication<B>(
         &self,
-        bucket: S,
-    ) -> DeleteBucketReplicationBldr {
-        DeleteBucketReplication::builder()
+        bucket: B,
+    ) -> Result<DeleteBucketReplicationBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(DeleteBucketReplication::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

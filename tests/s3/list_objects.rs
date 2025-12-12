@@ -16,7 +16,7 @@
 use async_std::stream::StreamExt;
 use minio::s3::response::{ListObjectsResponse, PutObjectContentResponse};
 use minio::s3::response_traits::{HasBucket, HasObject};
-use minio::s3::types::ToStream;
+use minio::s3::types::{BucketName, ObjectKey, ToStream};
 use minio_common::test_context::TestContext;
 use minio_common::utils::{rand_object_name, rand_object_name_utf8};
 use std::collections::HashSet;
@@ -28,7 +28,7 @@ async fn test_list_objects(
     n_prefixes: usize,
     n_objects: usize,
     ctx: TestContext,
-    bucket_name: String,
+    bucket: BucketName,
 ) {
     if express {
         if use_api_v1 {
@@ -48,28 +48,31 @@ async fn test_list_objects(
         return;
     }
 
-    let mut names_set_before: HashSet<String> = HashSet::new();
-    let mut names_vec_after: Vec<String> = Vec::with_capacity(n_prefixes * n_objects);
+    let mut names_set_before: HashSet<ObjectKey> = HashSet::new();
+    let mut names_vec_after: Vec<ObjectKey> = Vec::with_capacity(n_prefixes * n_objects);
 
     for _ in 0..n_prefixes {
-        let prefix: String = rand_object_name();
+        let prefix = rand_object_name();
         for _ in 0..=n_objects {
-            let object_name: String = format!("{}/{}", prefix, rand_object_name());
+            let object =
+                ObjectKey::try_from(format!("{}/{}", prefix.as_str(), rand_object_name())).unwrap();
             let resp: PutObjectContentResponse = ctx
                 .client
-                .put_object_content(&bucket_name, &object_name, "hello world")
+                .put_object_content(&bucket, &object, "hello world")
+                .unwrap()
                 .build()
                 .send()
                 .await
                 .unwrap();
-            assert_eq!(resp.bucket(), bucket_name);
-            assert_eq!(resp.object(), object_name);
-            names_set_before.insert(object_name);
+            assert_eq!(resp.bucket(), Some(&bucket));
+            assert_eq!(resp.object(), Some(&object));
+            names_set_before.insert(object);
         }
     }
     let mut stream = ctx
         .client
-        .list_objects(&bucket_name)
+        .list_objects(&bucket)
+        .unwrap()
         .use_api_v1(use_api_v1)
         .include_versions(include_versions)
         .recursive(true)
@@ -80,7 +83,7 @@ async fn test_list_objects(
     while let Some(items) = stream.next().await {
         let items = items.unwrap().contents;
         for item in items.iter() {
-            names_vec_after.push(item.name.clone());
+            names_vec_after.push(ObjectKey::try_from(item.name.clone()).unwrap());
         }
     }
     assert_eq!(names_vec_after.len(), names_set_before.len());
@@ -95,51 +98,53 @@ async fn test_list_objects(
             "With regular (non S3-Express) we expected the results to be sorted, yet the list of objects is unsorted"
         );
     }
-    let names_set_after: HashSet<String> = names_vec_after.into_iter().collect();
+    let names_set_after: HashSet<ObjectKey> = names_vec_after.into_iter().collect();
     assert_eq!(names_set_after, names_set_before);
 }
 
 #[minio_macros::test(skip_if_express)]
-async fn list_objects_v1_no_versions(ctx: TestContext, bucket_name: String) {
-    test_list_objects(true, false, false, 5, 5, ctx, bucket_name).await;
+async fn list_objects_v1_no_versions(ctx: TestContext, bucket: BucketName) {
+    test_list_objects(true, false, false, 5, 5, ctx, bucket).await;
 }
 
 #[minio_macros::test(skip_if_express)]
-async fn list_objects_v1_with_versions(ctx: TestContext, bucket_name: String) {
-    test_list_objects(true, true, false, 5, 5, ctx, bucket_name).await;
+async fn list_objects_v1_with_versions(ctx: TestContext, bucket: BucketName) {
+    test_list_objects(true, true, false, 5, 5, ctx, bucket).await;
 }
 
 #[minio_macros::test(skip_if_express)]
-async fn list_objects_v2_no_versions(ctx: TestContext, bucket_name: String) {
-    test_list_objects(false, false, false, 5, 5, ctx, bucket_name).await;
+async fn list_objects_v2_no_versions(ctx: TestContext, bucket: BucketName) {
+    test_list_objects(false, false, false, 5, 5, ctx, bucket).await;
 }
 
 #[minio_macros::test(skip_if_express)]
-async fn list_objects_v2_with_versions(ctx: TestContext, bucket_name: String) {
-    test_list_objects(false, true, false, 5, 5, ctx, bucket_name).await;
+async fn list_objects_v2_with_versions(ctx: TestContext, bucket: BucketName) {
+    test_list_objects(false, true, false, 5, 5, ctx, bucket).await;
 }
 
 /// Test for S3-Express: List objects with S3-Express are only supported with V2 API, without
 /// versions, and yield results that need not be sorted.
 #[minio_macros::test(skip_if_not_express)]
-async fn list_objects_express(ctx: TestContext, bucket_name: String) {
-    test_list_objects(false, false, true, 5, 5, ctx, bucket_name).await;
+async fn list_objects_express(ctx: TestContext, bucket: BucketName) {
+    test_list_objects(false, false, true, 5, 5, ctx, bucket).await;
 }
 
-async fn test_list_one_object(ctx: &TestContext, bucket_name: &str, object_name: &str) {
+async fn test_list_one_object(ctx: &TestContext, bucket: BucketName, object: ObjectKey) {
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(bucket_name, object_name, "Hello, World!")
+        .put_object_content(&bucket, &object, "Hello, World!")
+        .unwrap()
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), Some(&bucket));
+    assert_eq!(resp.object(), Some(&object));
 
     let mut stream = ctx
         .client
-        .list_objects(bucket_name)
+        .list_objects(&bucket)
+        .unwrap()
         .use_api_v1(false) // S3-Express does not support V1 API
         .include_versions(false) // S3-Express does not support versions
         .build()
@@ -152,13 +157,14 @@ async fn test_list_one_object(ctx: &TestContext, bucket_name: &str, object_name:
     }
 
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].contents[0].name, object_name);
+    assert_eq!(result[0].contents[0].name, object.as_str());
 }
 
 /// Test listing an object with a name that contains utf-8 characters.
 #[minio_macros::test]
-async fn list_object_1(ctx: TestContext, bucket_name: String) {
-    test_list_one_object(&ctx, &bucket_name, &rand_object_name_utf8(20)).await;
+async fn list_object_1(ctx: TestContext, bucket: BucketName) {
+    let object = rand_object_name_utf8(20);
+    test_list_one_object(&ctx, bucket, object).await;
 }
 
 /// Test getting an object with a name that contains white space characters.
@@ -167,6 +173,7 @@ async fn list_object_1(ctx: TestContext, bucket_name: String) {
 /// form-encoding, yielding "a+b2Bc", which will result in "a+b+c" is percent-decoding is
 /// used. This test checks that form-decoding is used to retrieve "a b+c".
 #[minio_macros::test]
-async fn list_object_2(ctx: TestContext, bucket_name: String) {
-    test_list_one_object(&ctx, &bucket_name, "a b+c").await;
+async fn list_object_2(ctx: TestContext, bucket: BucketName) {
+    let object = ObjectKey::try_from("a b+c").unwrap();
+    test_list_one_object(&ctx, bucket, object).await;
 }

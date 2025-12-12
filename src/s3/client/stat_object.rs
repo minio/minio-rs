@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{StatObject, StatObjectBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`StatObject`] request builder to retrieve object metadata.
@@ -38,23 +40,25 @@ impl MinioClient {
     /// use minio::s3::response_traits::HasObject;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: StatObjectResponse =
-    ///         client.stat_object("bucket-name", "object-name").build().send().await.unwrap();
-    ///     println!("stat of object '{}' are {:#?}", resp.object(), resp);
+    ///         client.stat_object("bucket-name", "object-name").unwrap().build().send().await.unwrap();
+    ///     println!("stat of object '{}' are {:#?}", resp.object().unwrap(), resp);
     /// }
     /// ```
-    pub fn stat_object<S1: Into<String>, S2: Into<String>>(
-        &self,
-        bucket: S1,
-        object: S2,
-    ) -> StatObjectBldr {
-        StatObject::builder()
+    pub fn stat_object<B, O>(&self, bucket: B, object: O) -> Result<StatObjectBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(StatObject::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?))
     }
 }

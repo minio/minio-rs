@@ -14,8 +14,9 @@
 // limitations under the License.
 
 use crate::s3::builders::{GetObjectPrompt, GetObjectPromptBldr};
-
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`GetObjectPrompt`] request builder. Prompt an object using natural language.
@@ -39,20 +40,27 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetObjectPromptResponse = client
     ///         .get_object_prompt("bucket-name", "object-name", "What is it about?")
-    ///         .build().send().await.unwrap();
+    ///         .unwrap().build().send().await.unwrap();
     ///     println!("the prompt response is: '{:?}'", resp.prompt_response());
     /// }
     /// ```
-    pub fn get_object_prompt<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
+    pub fn get_object_prompt<B, O, S>(
         &self,
-        bucket: S1,
-        object: S2,
-        prompt: S3,
-    ) -> GetObjectPromptBldr {
-        GetObjectPrompt::builder()
+        bucket: B,
+        object: O,
+        prompt: S,
+    ) -> Result<GetObjectPromptBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+        S: Into<String>,
+    {
+        Ok(GetObjectPrompt::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
-            .prompt(prompt)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?)
+            .prompt(prompt))
     }
 }

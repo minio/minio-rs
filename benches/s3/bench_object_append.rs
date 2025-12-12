@@ -45,6 +45,7 @@ pub(crate) async fn bench_object_append(criterion: &mut Criterion) {
                 runtime.block_on(
                     ctx.client
                         .stat_object(&ctx.bucket, &ctx.object)
+                        .unwrap()
                         .build()
                         .send(),
                 )
@@ -54,8 +55,8 @@ pub(crate) async fn bench_object_append(criterion: &mut Criterion) {
             let offset_bytes: u64 = resp.size().unwrap();
             AppendObject::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
-                .object(ctx.object.clone())
+                .bucket(&ctx.bucket)
+                .object(&ctx.object)
                 .data(Arc::new(data1))
                 .offset_bytes(offset_bytes)
                 .build()

@@ -17,7 +17,7 @@ use crate::s3::MinioClient;
 use crate::s3::builders::{BucketCommon, BucketCommonBuilder};
 use crate::s3::error::ValidationErr;
 use crate::s3::response::GetObjectLockConfigResponse;
-use crate::s3::types::{S3Api, S3Request, ToS3Request};
+use crate::s3::types::{BucketName, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::{check_bucket_name, insert};
 use http::Method;
 
@@ -32,7 +32,7 @@ pub struct GetObjectLockConfigPhantomData;
 
 pub type GetObjectLockConfigBldr = BucketCommonBuilder<
     GetObjectLockConfigPhantomData,
-    ((MinioClient,), (), (), (), (String,), ()),
+    ((MinioClient,), (), (), (), (BucketName,), ()),
 >;
 
 impl S3Api for GetObjectLockConfig {

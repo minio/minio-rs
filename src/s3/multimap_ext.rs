@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::s3::types::VersionId;
 use crate::s3::utils::url_encode;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -53,7 +54,7 @@ pub trait MultimapExt {
     /// Adds a multimap to the current multimap
     fn add_multimap(&mut self, other: Multimap);
 
-    fn add_version(&mut self, version: Option<String>);
+    fn add_version(&mut self, version: Option<VersionId>);
 
     #[must_use]
     fn take_version(self) -> Option<String>;
@@ -74,12 +75,12 @@ impl MultimapExt for Multimap {
     }
     fn add_multimap(&mut self, other: Multimap) {
         for (key, values) in other.into_iter() {
-            self.insert_many(key.clone(), values);
+            self.insert_many(key, values);
         }
     }
-    fn add_version(&mut self, version: Option<String>) {
+    fn add_version(&mut self, version: Option<VersionId>) {
         if let Some(v) = version {
-            self.insert("versionId".into(), v);
+            self.insert("versionId".into(), v.into_inner());
         }
     }
     fn take_version(mut self) -> Option<String> {

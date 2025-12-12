@@ -19,6 +19,8 @@ use crate::s3::builders::{
     UploadPartCopy, UploadPartCopyBldr,
 };
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::{BucketName, ObjectKey, UploadId};
 
 impl MinioClient {
     /// Creates a [`UploadPartCopy`] request builder.
@@ -39,37 +41,45 @@ impl MinioClient {
     /// use minio::s3::response_traits::HasObject;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let data1: SegmentedBytes = SegmentedBytes::from("aaaa".to_string());
     ///     todo!();
     ///     let resp: UploadPartCopyResponse = client
-    ///         .upload_part_copy("bucket-name", "object-name", "TODO")
-    ///         .build().send().await.unwrap();
-    ///     println!("uploaded {}", resp.object());
+    ///         .upload_part_copy("bucket-name", "object-name", "upload-id-123")
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("uploaded {}", resp.object().unwrap());
     /// }
     /// ```
-    pub fn upload_part_copy<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
+    pub fn upload_part_copy<B, O, U>(
         &self,
-        bucket: S1,
-        object: S2,
-        upload_id: S3,
-    ) -> UploadPartCopyBldr {
-        UploadPartCopy::builder()
+        bucket: B,
+        object: O,
+        upload_id: U,
+    ) -> Result<UploadPartCopyBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+        U: TryInto<UploadId>,
+        U::Error: Into<ValidationErr>,
+    {
+        Ok(UploadPartCopy::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
-            .upload_id(upload_id)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?)
+            .upload_id(upload_id.try_into().map_err(Into::into)?))
     }
 
     /// Create a CopyObject request builder. This is a lower-level API that
     /// performs a non-multipart object copy.
-    pub(crate) fn copy_object_internal<S1: Into<String>, S2: Into<String>>(
+    pub(crate) fn copy_object_internal(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
     ) -> CopyObjectInternalBldr {
         CopyObjectInternal::builder()
             .client(self.clone())
@@ -103,38 +113,41 @@ impl MinioClient {
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::CopyObjectResponse;
     /// use minio::s3::builders::CopySource;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
+    /// use minio::s3::response_traits::HasVersion;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// use minio::s3::response_traits::HasVersion;
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: CopyObjectResponse = client
     ///         .copy_object("bucket-name-dst", "object-name-dst")
-    ///         .source(CopySource::builder().bucket("bucket-name-src").object("object-name-src").build())
+    ///         .unwrap()
+    ///         .source(CopySource::builder().bucket(BucketName::new("bucket-name-src").unwrap()).object(ObjectKey::new("object-name-src").unwrap()).build())
     ///         .build().send().await.unwrap();
     ///     println!("copied the file from src to dst. New version: {:?}", resp.version_id());
     /// }
     /// ```
-    pub fn copy_object<S1: Into<String>, S2: Into<String>>(
-        &self,
-        bucket: S1,
-        object: S2,
-    ) -> CopyObjectBldr {
-        CopyObject::builder()
+    pub fn copy_object<B, O>(&self, bucket: B, object: O) -> Result<CopyObjectBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(CopyObject::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?))
     }
 
     /// Create a ComposeObjectInternal request builder. This is a higher-level API that
     /// performs a multipart object compose.
-    pub(crate) fn compose_object_internal<S1: Into<String>, S2: Into<String>>(
+    pub(crate) fn compose_object_internal(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
     ) -> ComposeObjectInternalBldr {
         ComposeObjectInternal::builder()
             .client(self.clone())
@@ -144,16 +157,22 @@ impl MinioClient {
 
     /// compose object is higher-level API that calls an internal compose object, and if that call fails,
     /// it calls ['abort_multipart_upload`](MinioClient::abort_multipart_upload).
-    pub fn compose_object<S1: Into<String>, S2: Into<String>>(
+    pub fn compose_object<B, O>(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: B,
+        object: O,
         sources: Vec<ComposeSource>,
-    ) -> ComposeObjectBldr {
-        ComposeObject::builder()
+    ) -> Result<ComposeObjectBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(ComposeObject::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
-            .sources(sources)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?)
+            .sources(sources))
     }
 }

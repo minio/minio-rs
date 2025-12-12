@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{PutObjectRetention, PutObjectRetentionBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`PutObjectRetention`] request builder.
@@ -36,7 +38,7 @@ impl MinioClient {
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::PutObjectRetentionResponse;
     /// use minio::s3::builders::ObjectToDelete;
-    /// use minio::s3::types::{S3Api, RetentionMode};
+    /// use minio::s3::types::{RetentionMode, S3Api};
     /// use minio::s3::utils::utc_now;
     /// use minio::s3::response_traits::HasObject;
     ///
@@ -48,20 +50,27 @@ impl MinioClient {
     ///     let retain_until_date = utc_now() + chrono::Duration::days(1);
     ///     let resp: PutObjectRetentionResponse = client
     ///         .put_object_retention("bucket-name", "object-name")
+    ///         .unwrap()
     ///         .retention_mode(RetentionMode::GOVERNANCE)
     ///         .retain_until_date(Some(retain_until_date))
     ///         .build().send().await.unwrap();
-    ///     println!("set the object retention for object '{}'", resp.object());
+    ///     println!("set the object retention for object '{}'", resp.object().unwrap());
     /// }
     /// ```
-    pub fn put_object_retention<S1: Into<String>, S2: Into<String>>(
+    pub fn put_object_retention<B, O>(
         &self,
-        bucket: S1,
-        object: S2,
-    ) -> PutObjectRetentionBldr {
-        PutObjectRetention::builder()
+        bucket: B,
+        object: O,
+    ) -> Result<PutObjectRetentionBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(PutObjectRetention::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?))
     }
 }

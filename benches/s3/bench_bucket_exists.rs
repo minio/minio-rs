@@ -26,7 +26,7 @@ pub(crate) fn bench_bucket_exists(criterion: &mut Criterion) {
         |ctx| {
             BucketExists::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(&ctx.bucket)
                 .build()
         },
     );

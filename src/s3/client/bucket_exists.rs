@@ -15,12 +15,14 @@
 
 use crate::s3::builders::{BucketExists, BucketExistsBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`BucketExists`] request builder to check if a bucket exists in S3.
     ///
     /// To execute the request, call [`BucketExists::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`BucketExistsResponse`](crate::s3::response::BucketExistsResponse).    
+    /// which returns a [`Result`] containing a [`BucketExistsResponse`](crate::s3::response::BucketExistsResponse).
     ///
     /// # Example
     ///
@@ -33,17 +35,23 @@ impl MinioClient {
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: BucketExistsResponse = client
     ///         .bucket_exists("bucket-name")
-    ///         .build().send().await.unwrap();
-    ///     println!("bucket '{}' exists: {}", resp.bucket(), resp.exists());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("bucket '{}' exists: {}", resp.bucket().unwrap(), resp.exists());
     /// }
     /// ```
-    pub fn bucket_exists<S: Into<String>>(&self, bucket: S) -> BucketExistsBldr {
-        BucketExists::builder().client(self.clone()).bucket(bucket)
+    pub fn bucket_exists<B>(&self, bucket: B) -> Result<BucketExistsBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(BucketExists::builder()
+            .client(self.clone())
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

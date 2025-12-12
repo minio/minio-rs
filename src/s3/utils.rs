@@ -18,6 +18,7 @@ use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::{Sse, SseCustomerKey};
+use crate::s3::types::{BucketName, ObjectKey};
 use base64::engine::Engine as _;
 use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
 use crc_fast::{CrcAlgorithm, Digest as CrcFastDigest, checksum as crc_fast_checksum};
@@ -717,10 +718,24 @@ mod tests {
 
     #[test]
     fn test_check_bucket_name_strict() {
+        // Uppercase not allowed in strict mode
         assert!(check_bucket_name("My-Bucket", false).is_ok());
         assert!(check_bucket_name("My-Bucket", true).is_err());
+        // Underscore not allowed in strict mode
         assert!(check_bucket_name("my_bucket", false).is_ok());
         assert!(check_bucket_name("my_bucket", true).is_err());
+        // Reserved prefixes not allowed in strict mode
+        assert!(check_bucket_name("xn--bucket", false).is_ok());
+        assert!(check_bucket_name("xn--bucket", true).is_err());
+        assert!(check_bucket_name("sthree-bucket", false).is_ok());
+        assert!(check_bucket_name("sthree-bucket", true).is_err());
+        // Reserved suffix not allowed in strict mode
+        assert!(check_bucket_name("bucket-s3alias", false).is_ok());
+        assert!(check_bucket_name("bucket-s3alias", true).is_err());
+        // Valid strict names
+        assert!(check_bucket_name("my-bucket", true).is_ok());
+        assert!(check_bucket_name("bucket123", true).is_ok());
+        assert!(check_bucket_name("my.bucket.name", true).is_ok());
     }
 
     #[test]
@@ -992,6 +1007,33 @@ mod tests {
     }
 
     #[test]
+    fn test_url_encode_equals_escape() {
+        // Both functions should encode the same way (RFC 3986 unreserved chars)
+        let test_cases = [
+            "simple",
+            "with spaces",
+            "special&chars",
+            "path/like",
+            "equals=sign",
+            "plus+sign",
+            "asterisk*here",
+            "tilde~ok",
+            "dash-ok",
+            "underscore_ok",
+            "dot.ok",
+            "mixed Key & Value = test",
+        ];
+
+        for input in test_cases {
+            assert_eq!(
+                url_encode(input),
+                escape(input),
+                "Encoding mismatch for: {input}"
+            );
+        }
+    }
+
+    #[test]
     fn test_compute_checksum_sb_matches_compute_checksum() {
         // Test data
         let test_data = b"The quick brown fox jumps over the lazy dog";
@@ -1165,24 +1207,24 @@ pub fn match_region(value: &str) -> bool {
 
 /// Validates given bucket name.
 // TODO: S3Express has slightly different rules for bucket names
-pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(), ValidationErr> {
-    let bucket_name: &str = bucket_name.as_ref().trim();
-    let bucket_name_len = bucket_name.len();
-    if bucket_name_len == 0 {
+pub fn check_bucket_name(bucket: impl AsRef<str>, strict: bool) -> Result<(), ValidationErr> {
+    let bucket: &str = bucket.as_ref().trim();
+    let bucket_len = bucket.len();
+    if bucket_len == 0 {
         return Err(ValidationErr::InvalidBucketName {
             name: "".into(),
             reason: "bucket name cannot be empty".into(),
         });
     }
-    if bucket_name_len < 3 {
+    if bucket_len < 3 {
         return Err(ValidationErr::InvalidBucketName {
-            name: bucket_name.into(),
-            reason: "bucket name  cannot be less than 3 characters".into(),
+            name: bucket.into(),
+            reason: "bucket name cannot be less than 3 characters".into(),
         });
     }
-    if bucket_name_len > 63 {
+    if bucket_len > 63 {
         return Err(ValidationErr::InvalidBucketName {
-            name: bucket_name.into(),
+            name: bucket.into(),
             reason: "bucket name cannot be greater than 63 characters".into(),
         });
     }
@@ -1195,33 +1237,53 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
             Regex::new("^[a-z0-9][a-z0-9\\.\\-]{1,61}[a-z0-9]$").unwrap();
     }
 
-    if IPV4_REGEX.is_match(bucket_name) {
+    if IPV4_REGEX.is_match(bucket) {
         return Err(ValidationErr::InvalidBucketName {
-            name: bucket_name.into(),
+            name: bucket.into(),
             reason: "bucket name cannot be an IP address".into(),
         });
     }
 
-    if bucket_name.contains("..") || bucket_name.contains(".-") || bucket_name.contains("-.") {
+    if bucket.contains("..") || bucket.contains(".-") || bucket.contains("-.") {
         return Err(ValidationErr::InvalidBucketName {
-            name: bucket_name.into(),
+            name: bucket.into(),
             reason: "bucket name contains invalid successive characters '..', '.-' or '-.'".into(),
         });
     }
 
     if strict {
-        if !VALID_BUCKET_NAME_STRICT_REGEX.is_match(bucket_name) {
+        if !VALID_BUCKET_NAME_STRICT_REGEX.is_match(bucket) {
             return Err(ValidationErr::InvalidBucketName {
-                name: bucket_name.into(),
+                name: bucket.into(),
                 reason: format!(
                     "bucket name does not follow S3 standards strictly, according to {}",
                     *VALID_BUCKET_NAME_STRICT_REGEX
                 ),
             });
         }
-    } else if !VALID_BUCKET_NAME_REGEX.is_match(bucket_name) {
+        // AWS reserved prefixes and suffixes
+        if bucket.starts_with("xn--") {
+            return Err(ValidationErr::InvalidBucketName {
+                name: bucket.into(),
+                reason: "bucket name cannot start with 'xn--' (reserved for IDN)".into(),
+            });
+        }
+        if bucket.starts_with("sthree-") {
+            return Err(ValidationErr::InvalidBucketName {
+                name: bucket.into(),
+                reason: "bucket name cannot start with 'sthree-' (reserved by AWS)".into(),
+            });
+        }
+        if bucket.ends_with("-s3alias") {
+            return Err(ValidationErr::InvalidBucketName {
+                name: bucket.into(),
+                reason: "bucket name cannot end with '-s3alias' (reserved for S3 Access Points)"
+                    .into(),
+            });
+        }
+    } else if !VALID_BUCKET_NAME_REGEX.is_match(bucket) {
         return Err(ValidationErr::InvalidBucketName {
-            name: bucket_name.into(),
+            name: bucket.into(),
             reason: format!(
                 "bucket name does not follow S3 standards, according to {}",
                 *VALID_BUCKET_NAME_REGEX
@@ -1234,14 +1296,14 @@ pub fn check_bucket_name(bucket_name: impl AsRef<str>, strict: bool) -> Result<(
 
 /// Validates given object name.
 // TODO: S3Express has slightly different rules for object names
-pub fn check_object_name(object_name: impl AsRef<str>) -> Result<(), ValidationErr> {
-    let name = object_name.as_ref();
-    match name.len() {
+pub fn check_object_name(object: impl AsRef<str>) -> Result<(), ValidationErr> {
+    let object: &str = object.as_ref();
+    match object.len() {
         0 => Err(ValidationErr::InvalidObjectName(
             "object name cannot be empty".into(),
         )),
         n if n > 1024 => Err(ValidationErr::InvalidObjectName(format!(
-            "Object name ('{name}') cannot be greater than 1024 bytes"
+            "Object name ('{object}') cannot be greater than 1024 bytes"
         ))),
         _ => Ok(()),
     }
@@ -1273,8 +1335,8 @@ pub fn check_ssec(
 pub fn check_ssec_with_log(
     ssec: &Option<SseCustomerKey>,
     client: &MinioClient,
-    bucket: &str,
-    object: &str,
+    bucket: &BucketName,
+    object: &ObjectKey,
     version: &Option<String>,
 ) -> Result<(), ValidationErr> {
     if ssec.is_some() && !client.is_secure() {
@@ -1374,9 +1436,9 @@ fn escape(s: &str) -> String {
     utf8_percent_encode(s, QUERY_ESCAPE).collect()
 }
 
-// TODO: use this while adding API to set tags.
-//
-// Handles escaping same as MinIO server - needed for ensuring compatibility.
+/// Encodes tags as URL-encoded query parameters for the `x-amz-tagging` header.
+///
+/// Handles escaping compatible with MinIO server and AWS S3.
 pub fn encode_tags(h: &HashMap<String, String>) -> String {
     let mut tags = Vec::with_capacity(h.len());
     for (k, v) in h {

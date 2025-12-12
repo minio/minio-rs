@@ -15,7 +15,7 @@
 
 mod common;
 
-use crate::common::{create_bucket_if_not_exists, create_client_on_play};
+use crate::common::{create_bucket_if_not_exists, create_client};
 use minio::s3::MinioClient;
 use minio::s3::builders::VersioningStatus;
 use minio::s3::response::{GetBucketVersioningResponse, PutBucketVersioningResponse};
@@ -24,16 +24,13 @@ use minio::s3::types::S3Api;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
-    let client: MinioClient = create_client_on_play()?;
+    let client: MinioClient = create_client()?;
 
-    let bucket_name: &str = "versioning-rust-bucket";
-    create_bucket_if_not_exists(bucket_name, &client).await?;
+    let bucket: &str = "versioning-rust-bucket";
+    create_bucket_if_not_exists(bucket, &client).await?;
 
-    let resp: GetBucketVersioningResponse = client
-        .get_bucket_versioning(bucket_name)
-        .build()
-        .send()
-        .await?;
+    let resp: GetBucketVersioningResponse =
+        client.get_bucket_versioning(bucket)?.build().send().await?;
     log::info!(
         "versioning before: status={:?}, mfa_delete={:?}",
         resp.status(),
@@ -41,17 +38,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     let _resp: PutBucketVersioningResponse = client
-        .put_bucket_versioning(bucket_name)
-        .versioning_status(VersioningStatus::Enabled)
+        .put_bucket_versioning(bucket, VersioningStatus::Enabled)?
         .build()
         .send()
         .await?;
 
-    let resp: GetBucketVersioningResponse = client
-        .get_bucket_versioning(bucket_name)
-        .build()
-        .send()
-        .await?;
+    let resp: GetBucketVersioningResponse =
+        client.get_bucket_versioning(bucket)?.build().send().await?;
 
     log::info!(
         "versioning after setting to Enabled: status={:?}, mfa_delete={:?}",
@@ -60,39 +53,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     let _resp: PutBucketVersioningResponse = client
-        .put_bucket_versioning(bucket_name)
-        .versioning_status(VersioningStatus::Suspended)
+        .put_bucket_versioning(bucket, VersioningStatus::Suspended)?
         .build()
         .send()
         .await?;
 
-    let resp: GetBucketVersioningResponse = client
-        .get_bucket_versioning(bucket_name)
-        .build()
-        .send()
-        .await?;
+    let resp: GetBucketVersioningResponse =
+        client.get_bucket_versioning(bucket)?.build().send().await?;
 
     log::info!(
         "versioning after setting to Suspended: status={:?}, mfa_delete={:?}",
-        resp.status(),
-        resp.mfa_delete()
-    );
-
-    let _resp: PutBucketVersioningResponse = client
-        .put_bucket_versioning(bucket_name)
-        //.versioning_status(VersioningStatus::Suspended)
-        .build()
-        .send()
-        .await?;
-
-    let resp: GetBucketVersioningResponse = client
-        .get_bucket_versioning(bucket_name)
-        .build()
-        .send()
-        .await?;
-
-    log::info!(
-        "versioning after setting to None: status={:?}, mfa_delete={:?}",
         resp.status(),
         resp.mfa_delete()
     );

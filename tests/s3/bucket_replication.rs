@@ -22,57 +22,62 @@ use minio::s3::response::{
     PutBucketPolicyResponse, PutBucketReplicationResponse, PutBucketVersioningResponse,
 };
 use minio::s3::response_traits::{HasBucket, HasRegion};
-use minio::s3::types::{ReplicationConfig, S3Api};
+use minio::s3::types::{BucketName, ReplicationConfig, S3Api};
 use minio_common::example::{
     create_bucket_policy_config_example_for_replication, create_bucket_replication_config_example,
 };
 use minio_common::test_context::TestContext;
 
 #[minio_macros::test(skip_if_express)]
-async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
+async fn bucket_replication_s3(ctx: TestContext, bucket: BucketName) {
     let ctx2 = TestContext::new_from_env();
-    let (bucket_name2, cleanup2) = ctx2.create_bucket_helper().await;
+    let (bucket2, cleanup2) = ctx2.create_bucket_helper().await;
 
     {
         let resp: PutBucketVersioningResponse = ctx
             .client
-            .put_bucket_versioning(&bucket_name)
-            .versioning_status(VersioningStatus::Enabled)
+            .put_bucket_versioning(&bucket, VersioningStatus::Enabled)
+            .unwrap()
             .build()
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket(), bucket_name);
-        assert_eq!(resp.region(), DEFAULT_REGION);
+        assert_eq!(resp.bucket(), Some(&bucket));
+        assert_eq!(resp.region(), &*DEFAULT_REGION);
 
         let resp: PutBucketVersioningResponse = ctx
             .client
-            .put_bucket_versioning(&bucket_name2)
-            .versioning_status(VersioningStatus::Enabled)
+            .put_bucket_versioning(bucket2.as_str(), VersioningStatus::Enabled)
+            .unwrap()
             .build()
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.bucket(), bucket_name2);
-        assert_eq!(resp.region(), DEFAULT_REGION);
+        assert_eq!(
+            resp.bucket(),
+            Some(&BucketName::try_from(bucket2.as_str()).unwrap())
+        );
+        assert_eq!(resp.region(), &*DEFAULT_REGION);
 
         let resp: GetBucketVersioningResponse = ctx
             .client
-            .get_bucket_versioning(&bucket_name)
+            .get_bucket_versioning(&bucket)
+            .unwrap()
             .build()
             .send()
             .await
             .unwrap();
         assert_eq!(resp.status().unwrap(), Some(VersioningStatus::Enabled));
-        assert_eq!(resp.bucket(), bucket_name);
-        assert_eq!(resp.region(), DEFAULT_REGION);
+        assert_eq!(resp.bucket(), Some(&bucket));
+        assert_eq!(resp.region(), &*DEFAULT_REGION);
 
         if false {
             //TODO: to allow replication policy needs to be applied, but this fails
             let config: String = create_bucket_policy_config_example_for_replication();
             let _resp: PutBucketPolicyResponse = ctx
                 .client
-                .put_bucket_policy(&bucket_name)
+                .put_bucket_policy(&bucket)
+                .unwrap()
                 .config(config.clone())
                 .build()
                 .send()
@@ -81,7 +86,8 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
 
             let _resp: PutBucketPolicyResponse = ctx
                 .client
-                .put_bucket_policy(&bucket_name2)
+                .put_bucket_policy(bucket2.as_str())
+                .unwrap()
                 .config(config.clone())
                 .build()
                 .send()
@@ -91,37 +97,40 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
     }
 
     if false {
-        let config: ReplicationConfig = create_bucket_replication_config_example(&bucket_name2);
+        let config: ReplicationConfig = create_bucket_replication_config_example(&bucket2);
 
         //TODO setup permissions that allow replication
         // TODO panic: called `Result::unwrap()` on an `Err` value: S3Error(ErrorResponse { code: "XMinioAdminRemoteTargetNotFoundError", message: "The remote target does not exist",
         let resp: PutBucketReplicationResponse = ctx
             .client
-            .put_bucket_replication(&bucket_name)
+            .put_bucket_replication(&bucket)
+            .unwrap()
             .replication_config(config.clone())
             .build()
             .send()
             .await
             .unwrap();
         //println!("response of setting replication: resp={:?}", resp);
-        assert_eq!(resp.bucket(), bucket_name);
-        assert_eq!(resp.region(), DEFAULT_REGION);
+        assert_eq!(resp.bucket(), Some(&bucket));
+        assert_eq!(resp.region(), &*DEFAULT_REGION);
 
         let resp: GetBucketReplicationResponse = ctx
             .client
-            .get_bucket_replication(&bucket_name)
+            .get_bucket_replication(&bucket)
+            .unwrap()
             .build()
             .send()
             .await
             .unwrap();
         //assert_eq!(resp.config, config); //TODO
-        assert_eq!(resp.bucket(), bucket_name);
-        assert_eq!(resp.region(), DEFAULT_REGION);
+        assert_eq!(resp.bucket(), Some(&bucket));
+        assert_eq!(resp.region(), &*DEFAULT_REGION);
 
         // TODO called `Result::unwrap()` on an `Err` value: S3Error(ErrorResponse { code: "XMinioAdminRemoteTargetNotFoundError", message: "The remote target does not exist",
         let resp: DeleteBucketReplicationResponse = ctx
             .client
-            .delete_bucket_replication(&bucket_name)
+            .delete_bucket_replication(&bucket)
+            .unwrap()
             .build()
             .send()
             .await
@@ -130,7 +139,8 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
     }
     let _resp: GetBucketVersioningResponse = ctx
         .client
-        .get_bucket_versioning(&bucket_name)
+        .get_bucket_versioning(&bucket)
+        .unwrap()
         .build()
         .send()
         .await
@@ -140,12 +150,13 @@ async fn bucket_replication_s3(ctx: TestContext, bucket_name: String) {
 }
 
 #[minio_macros::test(skip_if_not_express)]
-async fn bucket_replication_s3express(ctx: TestContext, bucket_name: String) {
-    let config: ReplicationConfig = create_bucket_replication_config_example(&bucket_name);
+async fn bucket_replication_s3express(ctx: TestContext, bucket: BucketName) {
+    let config: ReplicationConfig = create_bucket_replication_config_example(&bucket);
 
     let resp: Result<PutBucketReplicationResponse, Error> = ctx
         .client
-        .put_bucket_replication(&bucket_name)
+        .put_bucket_replication(&bucket)
+        .unwrap()
         .replication_config(config.clone())
         .build()
         .send()
@@ -159,7 +170,8 @@ async fn bucket_replication_s3express(ctx: TestContext, bucket_name: String) {
 
     let resp: Result<GetBucketReplicationResponse, Error> = ctx
         .client
-        .get_bucket_replication(&bucket_name)
+        .get_bucket_replication(&bucket)
+        .unwrap()
         .build()
         .send()
         .await;
@@ -172,7 +184,8 @@ async fn bucket_replication_s3express(ctx: TestContext, bucket_name: String) {
 
     let resp: Result<DeleteBucketReplicationResponse, Error> = ctx
         .client
-        .delete_bucket_replication(&bucket_name)
+        .delete_bucket_replication(&bucket)
+        .unwrap()
         .build()
         .send()
         .await;

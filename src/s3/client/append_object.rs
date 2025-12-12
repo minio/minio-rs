@@ -19,7 +19,9 @@ use super::MinioClient;
 use crate::s3::builders::{
     AppendObject, AppendObjectBldr, AppendObjectContent, AppendObjectContentBldr, ObjectContent,
 };
+use crate::s3::error::ValidationErr;
 use crate::s3::segmented_bytes::SegmentedBytes;
+use crate::s3::types::{BucketName, ObjectKey};
 use std::sync::Arc;
 
 impl MinioClient {
@@ -27,7 +29,7 @@ impl MinioClient {
     /// This is a lower-level API that performs a non-multipart object upload.
     ///
     /// To execute the request, call [`AppendObject::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`AppendObjectResponse`](crate::s3::response::AppendObjectResponse).    
+    /// which returns a [`Result`] containing a [`AppendObjectResponse`](crate::s3::response::AppendObjectResponse).
     ///
     /// 🛈 This operation is not supported for regular non-express buckets.
     ///
@@ -43,7 +45,7 @@ impl MinioClient {
     /// use minio::s3::response_traits::HasObjectSize;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
@@ -51,27 +53,33 @@ impl MinioClient {
     ///     let data2: SegmentedBytes = SegmentedBytes::from("bbbb".to_string());
     ///     let resp: PutObjectResponse = client
     ///         .put_object("bucket-name", "object-name", data1)
-    ///         .build().send().await.unwrap();
+    ///         .unwrap().build().send().await.unwrap();
     ///     let offset_bytes = 4; // the offset at which to append the data
     ///     let resp: AppendObjectResponse = client
     ///         .append_object("bucket-name", "object-name", data2, offset_bytes)
-    ///         .build().send().await.unwrap();
+    ///         .unwrap().build().send().await.unwrap();
     ///     println!("size of the final object is {} bytes", resp.object_size());
     /// }
     /// ```
-    pub fn append_object<S1: Into<String>, S2: Into<String>>(
+    pub fn append_object<B, O>(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: B,
+        object: O,
         data: SegmentedBytes,
         offset_bytes: u64,
-    ) -> AppendObjectBldr {
-        AppendObject::builder()
+    ) -> Result<AppendObjectBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(AppendObject::builder()
             .client(self.clone())
-            .bucket(bucket.into())
-            .object(object.into())
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?)
             .data(Arc::new(data))
-            .offset_bytes(offset_bytes)
+            .offset_bytes(offset_bytes))
     }
 
     /// Creates an [`AppendObjectContent`] request builder to append data to the end of an (existing)
@@ -79,7 +87,7 @@ impl MinioClient {
     /// handles multipart appends transparently.
     ///
     /// To execute the request, call [`AppendObjectContent::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`AppendObjectResponse`](crate::s3::response::AppendObjectResponse).    
+    /// which returns a [`Result`] containing a [`AppendObjectResponse`](crate::s3::response::AppendObjectResponse).
     ///
     /// 🛈 This operation is not supported for regular non-express buckets.
     ///
@@ -96,7 +104,7 @@ impl MinioClient {
     /// use minio::s3::response_traits::HasObjectSize;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
@@ -104,23 +112,30 @@ impl MinioClient {
     ///     let content2: String = "bbbb".to_string();
     ///     let resp: PutObjectResponse = client
     ///         .put_object("bucket-name", "object-name", data1)
-    ///         .build().send().await.unwrap();
+    ///         .unwrap().build().send().await.unwrap();
     ///     let resp: AppendObjectResponse = client
     ///         .append_object_content("bucket-name", "object-name", content2)
-    ///         .build().send().await.unwrap();
+    ///         .unwrap().build().send().await.unwrap();
     ///     println!("size of the final object is {} bytes", resp.object_size());
     /// }
     /// ```
-    pub fn append_object_content<S1: Into<String>, S2: Into<String>, C: Into<ObjectContent>>(
+    pub fn append_object_content<B, O, C>(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: B,
+        object: O,
         content: C,
-    ) -> AppendObjectContentBldr {
-        AppendObjectContent::builder()
+    ) -> Result<AppendObjectContentBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+        C: Into<ObjectContent>,
+    {
+        Ok(AppendObjectContent::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
-            .input_content(content)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?)
+            .input_content(content))
     }
 }
