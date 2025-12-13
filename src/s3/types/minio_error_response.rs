@@ -92,6 +92,8 @@ pub enum MinioErrorCode {
     AccessDenied,
     NotSupported,
     InvalidWriteOffset,
+    /// Attempted to use S3 DeleteBucket API on a warehouse bucket (S3 Tables)
+    WarehouseBucketOperationNotSupported,
 
     OtherError(String), // This is a catch-all for any error code not explicitly defined
 }
@@ -120,6 +122,7 @@ const ALL_MINIO_ERROR_CODE: &[MinioErrorCode] = &[
     MinioErrorCode::BucketNotEmpty,
     MinioErrorCode::BucketAlreadyOwnedByYou,
     MinioErrorCode::InvalidWriteOffset,
+    MinioErrorCode::WarehouseBucketOperationNotSupported,
     //MinioErrorCode::OtherError("".to_string()),
 ];
 
@@ -154,6 +157,9 @@ impl FromStr for MinioErrorCode {
             "bucketnotempty" => Ok(MinioErrorCode::BucketNotEmpty),
             "bucketalreadyownedbyyou" => Ok(MinioErrorCode::BucketAlreadyOwnedByYou),
             "invalidwriteoffset" => Ok(MinioErrorCode::InvalidWriteOffset),
+            "warehousebucketoperationnotsupported" => {
+                Ok(MinioErrorCode::WarehouseBucketOperationNotSupported)
+            }
 
             v => Ok(MinioErrorCode::OtherError(v.to_owned())),
         }
@@ -194,6 +200,9 @@ impl std::fmt::Display for MinioErrorCode {
             MinioErrorCode::BucketNotEmpty => write!(f, "BucketNotEmpty"),
             MinioErrorCode::BucketAlreadyOwnedByYou => write!(f, "BucketAlreadyOwnedByYou"),
             MinioErrorCode::InvalidWriteOffset => write!(f, "InvalidWriteOffset"),
+            MinioErrorCode::WarehouseBucketOperationNotSupported => {
+                write!(f, "WarehouseBucketOperationNotSupported")
+            }
             MinioErrorCode::OtherError(msg) => write!(f, "{msg}"),
         }
     }
@@ -301,6 +310,9 @@ impl MinioErrorResponse {
     }
     pub fn code(&self) -> MinioErrorCode {
         self.code.clone()
+    }
+    pub fn set_code(&mut self, code: MinioErrorCode) {
+        self.code = code;
     }
     pub fn message(&self) -> &Option<String> {
         &self.message

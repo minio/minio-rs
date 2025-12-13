@@ -17,8 +17,8 @@ use crate::s3::client::MinioClient;
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::ListenBucketNotificationResponse;
-use crate::s3::types::{NotificationRecords, S3Api, S3Request, ToS3Request};
-use crate::s3::utils::check_bucket_name;
+use crate::s3::types::NotificationRecords;
+use crate::s3::types::{BucketName, Region, S3Api, S3Request, ToS3Request};
 use async_trait::async_trait;
 use futures_util::Stream;
 use http::Method;
@@ -36,9 +36,10 @@ pub struct ListenBucketNotification {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(default, setter(into))]
     prefix: Option<String>,
     #[builder(default, setter(into))]
@@ -51,7 +52,7 @@ pub struct ListenBucketNotification {
 ///
 /// Constructed via [`ListenBucketNotification::builder()`](ListenBucketNotification::builder) and used to build a [`ListenBucketNotification`] instance.
 pub type ListenBucketNotificationBldr =
-    ListenBucketNotificationBuilder<((MinioClient,), (), (), (), (String,), (), (), ())>;
+    ListenBucketNotificationBuilder<((MinioClient,), (), (), (), (BucketName,), (), (), ())>;
 
 #[async_trait]
 impl S3Api for ListenBucketNotification {
@@ -64,7 +65,6 @@ impl S3Api for ListenBucketNotification {
 impl ToS3Request for ListenBucketNotification {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         {
-            check_bucket_name(&self.bucket, true)?;
             if self.client.is_aws_host() {
                 return Err(ValidationErr::UnsupportedAwsApi(
                     "ListenBucketNotification".into(),

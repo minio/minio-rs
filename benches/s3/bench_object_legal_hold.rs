@@ -30,8 +30,8 @@ pub(crate) async fn bench_put_object_legal_hold(criterion: &mut Criterion) {
         |ctx| {
             PutObjectLegalHold::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
-                .object(ctx.object.clone())
+                .bucket(ctx.bucket_name())
+                .object(ctx.object_key())
                 .legal_hold(true)
                 .build()
         },
@@ -47,7 +47,7 @@ pub(crate) async fn bench_get_object_legal_hold(criterion: &mut Criterion) {
         || async {
             let ctx = Ctx2::new_with_object(true).await;
             ctx.client
-                .get_object_legal_hold(&ctx.bucket, &ctx.object)
+                .get_object_legal_hold(ctx.bucket_name(), ctx.object_key())
                 .build()
                 .send()
                 .await
@@ -57,8 +57,8 @@ pub(crate) async fn bench_get_object_legal_hold(criterion: &mut Criterion) {
         |ctx| {
             GetObjectLegalHold::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
-                .object(ctx.object.clone())
+                .bucket(ctx.bucket_name())
+                .object(ctx.object_key())
                 .build()
         },
     )

@@ -47,7 +47,7 @@ use minio::s3::http::Url;
 use minio::s3::multimap_ext::Multimap;
 use minio::s3::response::BucketExistsResponse;
 use minio::s3::segmented_bytes::SegmentedBytes;
-use minio::s3::types::{S3Api, ToStream};
+use minio::s3::types::{BucketName, ObjectKey, S3Api, ToStream};
 use minio::s3::{MinioClient, MinioClientBuilder};
 use std::sync::Arc;
 
@@ -186,12 +186,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Operation 1: Check if bucket exists
     println!("📋 Checking if bucket exists...");
-    let resp: BucketExistsResponse = client.bucket_exists(&args.bucket).build().send().await?;
+    let resp: BucketExistsResponse = client
+        .bucket_exists(BucketName::new(&args.bucket)?)
+        .build()
+        .send()
+        .await?;
 
     // Operation 2: Create bucket if it doesn't exist
     if !resp.exists() {
         println!("\n📋 Creating bucket...");
-        client.create_bucket(&args.bucket).build().send().await?;
+        client
+            .create_bucket(BucketName::new(&args.bucket)?)
+            .build()
+            .send()
+            .await?;
     } else {
         println!("\n✓ Bucket already exists");
     }
@@ -201,7 +209,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let content = b"Hello from MinIO Rust SDK with debug logging!";
     let object_content: ObjectContent = content.to_vec().into();
     client
-        .put_object_content(&args.bucket, &args.object, object_content)
+        .put_object_content(
+            BucketName::new(&args.bucket)?,
+            ObjectKey::new(&args.object)?,
+            object_content,
+        )
         .build()
         .send()
         .await?;
@@ -209,7 +221,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Operation 4: List objects in the bucket
     println!("\n📋 Listing objects in bucket...");
     let mut list_stream = client
-        .list_objects(&args.bucket)
+        .list_objects(BucketName::new(&args.bucket)?)
         .recursive(false)
         .build()
         .to_stream()

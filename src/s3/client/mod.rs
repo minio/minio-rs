@@ -41,6 +41,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
 use std::path::{Path, PathBuf};
+use std::string::ToString;
 use std::sync::{Arc, OnceLock, RwLock};
 use uuid::Uuid;
 
@@ -58,6 +59,7 @@ use crate::s3::response::*;
 use crate::s3::response_traits::{HasEtagFromHeaders, HasS3Fields};
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::signer::{SigningKeyCache, sign_v4_s3};
+use crate::s3::types::BucketName;
 use crate::s3::utils::{EMPTY_SHA256, check_ssec_with_log, sha256_hash_sb, to_amz_date, utc_now};
 
 mod append_object;
@@ -91,6 +93,7 @@ mod get_presigned_object_url;
 mod get_presigned_post_form_data;
 mod get_region;
 pub mod hooks;
+mod is_warehouse_bucket;
 mod list_buckets;
 mod list_objects;
 mod listen_bucket_notification;
@@ -109,10 +112,12 @@ mod put_object_tagging;
 mod select_object_content;
 mod stat_object;
 
-use super::types::S3Api;
+use super::types::{Region, S3Api};
+use std::sync::LazyLock;
 
 /// The default AWS region to be used if no other region is specified.
-pub const DEFAULT_REGION: &str = "us-east-1";
+pub static DEFAULT_REGION: LazyLock<Region> =
+    LazyLock::new(|| Region::new("us-east-1").expect("default region should be valid"));
 
 /// Minimum allowed size (in bytes) for a multipart upload part (except the last).
 ///
@@ -512,7 +517,7 @@ impl MinioClient {
         } else {
             let be = BucketExists::builder()
                 .client(self.clone())
-                .bucket(Uuid::new_v4().to_string())
+                .bucket(BucketName::try_from(Uuid::new_v4().to_string().as_str()).unwrap())
                 .build();
 
             let express = match be.send().await {
@@ -556,7 +561,7 @@ impl MinioClient {
         if self.shared.base_url.region.is_empty() {
             None
         } else {
-            Some(&self.shared.base_url.region)
+            Some(self.shared.base_url.region.as_str())
         }
     }
 
@@ -570,18 +575,19 @@ impl MinioClient {
 
         let sources_len = sources.len();
         for source in sources.iter_mut() {
+            let version_id_str = source.version_id.as_ref().map(|v| v.to_string());
             check_ssec_with_log(
                 &source.ssec,
                 self,
                 &source.bucket,
                 &source.object,
-                &source.version_id,
+                &version_id_str,
             )?;
 
             i += 1;
 
             let stat_resp: StatObjectResponse = self
-                .stat_object(&source.bucket, &source.object)
+                .stat_object(source.bucket.clone(), source.object.clone())
                 .extra_headers(source.extra_headers.clone())
                 .extra_query_params(source.extra_query_params.clone())
                 .region(source.region.clone())
@@ -605,9 +611,9 @@ impl MinioClient {
 
             if (size < MIN_PART_SIZE) && (sources_len != 1) && (i != sources_len) {
                 return Err(ValidationErr::InvalidComposeSourcePartSize {
-                    bucket: source.bucket.clone(),
-                    object: source.object.clone(),
-                    version: source.version_id.clone(),
+                    bucket: source.bucket.to_string(),
+                    object: source.object.to_string(),
+                    version: source.version_id.as_ref().map(|v| v.to_string()),
                     size,
                     expected_size: MIN_PART_SIZE,
                 }
@@ -632,7 +638,7 @@ impl MinioClient {
                     return Err(ValidationErr::InvalidComposeSourceMultipart {
                         bucket: source.bucket.to_string(),
                         object: source.object.to_string(),
-                        version: source.version_id.clone(),
+                        version: source.version_id.as_ref().map(|v| v.to_string()),
                         size,
                         expected_size: MIN_PART_SIZE,
                     }
@@ -657,7 +663,7 @@ impl MinioClient {
     async fn execute_internal(
         &self,
         method: &Method,
-        region: &str,
+        region: &Region,
         headers: &mut Multimap,
         query_params: &Multimap,
         bucket_name: Option<&str>,
@@ -703,7 +709,7 @@ impl MinioClient {
         self.run_before_signing_hooks(
             method,
             &mut url,
-            region,
+            region.as_ref(),
             headers,
             query_params,
             bucket_name,
@@ -774,7 +780,7 @@ impl MinioClient {
         self.run_after_execute_hooks(
             method,
             &url,
-            region,
+            region.as_ref(),
             headers,
             query_params,
             bucket_name,
@@ -819,7 +825,7 @@ impl MinioClient {
     pub(crate) async fn execute(
         &self,
         method: Method,
-        region: &str,
+        region: &Region,
         headers: &mut Multimap,
         query_params: &Multimap,
         bucket_name: &Option<&str>,
@@ -982,7 +988,7 @@ impl MinioClient {
         check_object_name(object)?;
 
         // Use default region (skip region lookup for performance)
-        let region = DEFAULT_REGION;
+        let region: &Region = &DEFAULT_REGION;
 
         // Build URL directly (no query params for GET)
         let url = self.shared.base_url.build_url(

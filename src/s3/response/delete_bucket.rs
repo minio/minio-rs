@@ -45,7 +45,8 @@ impl FromS3Response for DeleteBucketResponse {
         let mut request = request;
         let bucket = request
             .bucket
-            .as_deref()
+            .as_ref()
+            .map(|b| b.as_str())
             .ok_or(Error::Validation(ValidationErr::MissingBucketName))?;
 
         request.client.remove_bucket_region(bucket);

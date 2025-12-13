@@ -20,7 +20,8 @@ use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::GetPresignedObjectUrlResponse;
 use crate::s3::signer::presign_v4;
-use crate::s3::utils::{UtcTime, check_bucket_name, check_object_name, utc_now};
+use crate::s3::types::{BucketName, ObjectKey, Region, VersionId};
+use crate::s3::utils::{UtcTime, utc_now};
 use http::Method;
 use typed_builder::TypedBuilder;
 
@@ -35,13 +36,13 @@ pub struct GetPresignedObjectUrl {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    object: ObjectKey,
     #[builder(default, setter(into))]
-    version_id: Option<String>,
+    version_id: Option<VersionId>,
     #[builder(!default)]
     method: Method,
 
@@ -58,8 +59,8 @@ pub type GetPresignedObjectUrlBldr = GetPresignedObjectUrlBuilder<(
     (MinioClient,),
     (),
     (),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
     (),
     (Method,),
     (),
@@ -69,23 +70,23 @@ pub type GetPresignedObjectUrlBldr = GetPresignedObjectUrlBuilder<(
 impl GetPresignedObjectUrl {
     /// Sends the request to generate a presigned URL for an S3 object.
     pub async fn send(self) -> Result<GetPresignedObjectUrlResponse, Error> {
-        check_bucket_name(&self.bucket, true)?;
-        check_object_name(&self.object)?;
-
-        let region: String = self
+        let region_str: String = self
             .client
-            .get_region_cached(&self.bucket, &self.region)
+            .get_region_cached(self.bucket.clone(), &self.region)
             .await?;
 
+        let region = Region::new(&region_str)?;
+
+        let version_id_str = self.version_id.as_ref().map(|v| v.to_string());
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
-        query_params.add_version(self.version_id.clone());
+        query_params.add_version(self.version_id);
 
         let mut url = self.client.shared.base_url.build_url(
             &self.method,
             &region,
             &query_params,
-            Some(&self.bucket),
-            Some(&self.object),
+            Some(self.bucket.as_ref()),
+            Some(self.object.as_ref()),
         )?;
 
         if let Some(p) = &self.client.shared.provider {
@@ -116,10 +117,10 @@ impl GetPresignedObjectUrl {
         }
 
         Ok(GetPresignedObjectUrlResponse {
-            region,
-            bucket: self.bucket,
-            object: self.object,
-            version_id: self.version_id,
+            region: region_str,
+            bucket: self.bucket.to_string(),
+            object: self.object.to_string(),
+            version_id: version_id_str,
             url: url.to_string(),
         })
     }

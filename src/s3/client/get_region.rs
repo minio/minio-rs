@@ -16,7 +16,7 @@
 use super::{DEFAULT_REGION, MinioClient};
 use crate::s3::builders::{GetRegion, GetRegionBldr};
 use crate::s3::error::{Error, ValidationErr};
-use crate::s3::types::S3Api;
+use crate::s3::types::{BucketName, Region, S3Api};
 
 impl MinioClient {
     /// Creates a [`GetRegion`] request builder.
@@ -31,7 +31,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::GetRegionResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, S3Api};
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
@@ -40,12 +40,12 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetRegionResponse = client
-    ///         .get_region("bucket-name")
+    ///         .get_region(BucketName::new("bucket-name").unwrap())
     ///         .build().send().await.unwrap();
     ///     println!("retrieved region '{:?}' for bucket '{}'", resp.region_response(), resp.bucket());
     /// }
     /// ```
-    pub fn get_region<S: Into<String>>(&self, bucket: S) -> GetRegionBldr {
+    pub fn get_region(&self, bucket: BucketName) -> GetRegionBldr {
         GetRegion::builder().client(self.clone()).bucket(bucket)
     }
 
@@ -55,14 +55,14 @@ impl MinioClient {
     ///
     /// If `skip_region_lookup` is enabled on the client, this method returns
     /// the default region immediately without making any network calls.
-    pub async fn get_region_cached<S: Into<String>>(
+    pub async fn get_region_cached(
         &self,
-        bucket: S,
-        region: &Option<String>, // the region as provided by the S3Request
+        bucket: BucketName,
+        region: &Option<Region>, // the region as provided by the S3Request
     ) -> Result<String, Error> {
         // If skip_region_lookup is enabled (for MinIO servers), return default region immediately
         if self.shared.skip_region_lookup {
-            return Ok(DEFAULT_REGION.to_owned());
+            return Ok(DEFAULT_REGION.as_str().to_string());
         }
 
         // If a region is provided, validate it against the base_url region
@@ -76,29 +76,29 @@ impl MinioClient {
                 }
                 .into());
             }
-            return Ok(requested_region.clone());
+            return Ok(requested_region.to_string());
         }
 
         // If base_url has a region set, use it
         if !self.shared.base_url.region.is_empty() {
-            return Ok(self.shared.base_url.region.clone());
+            return Ok(self.shared.base_url.region.as_str().to_string());
         }
 
-        let bucket: String = bucket.into();
+        let bucket2: BucketName = bucket.clone();
         // If no bucket or provider is configured, fall back to default
         if bucket.is_empty() || self.shared.provider.is_none() {
-            return Ok(DEFAULT_REGION.to_owned());
+            return Ok(DEFAULT_REGION.as_str().to_string());
         }
 
         // Return cached region if available
-        if let Some(v) = self.shared.region_map.get(&bucket) {
+        if let Some(v) = self.shared.region_map.get(bucket.as_str()) {
             return Ok(v.value().clone());
         }
 
         // Otherwise, fetch the region from the server and cache it
         let resolved_region: String = {
             let region = self
-                .get_region(&bucket)
+                .get_region(bucket2)
                 .build()
                 .send()
                 .await?
@@ -106,13 +106,13 @@ impl MinioClient {
             if !region.is_empty() {
                 region
             } else {
-                DEFAULT_REGION.to_owned()
+                DEFAULT_REGION.as_str().to_string()
             }
         };
 
         self.shared
             .region_map
-            .insert(bucket, resolved_region.clone());
+            .insert(bucket.to_string(), resolved_region.clone());
 
         Ok(resolved_region)
     }
@@ -124,6 +124,7 @@ mod tests {
     use crate::s3::client::MinioClientBuilder;
     use crate::s3::creds::StaticProvider;
     use crate::s3::http::BaseUrl;
+    use crate::s3::types::BucketName;
 
     fn create_test_client(skip_region_lookup: bool) -> MinioClient {
         let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
@@ -139,9 +140,10 @@ mod tests {
         let client = create_test_client(true);
 
         // With skip_region_lookup enabled, should return default region immediately
-        let region = client.get_region_cached("any-bucket", &None).await.unwrap();
+        let bucket = BucketName::try_from("any-bucket").unwrap();
+        let region = client.get_region_cached(bucket, &None).await.unwrap();
 
-        assert_eq!(region, DEFAULT_REGION);
+        assert_eq!(region, DEFAULT_REGION.as_str());
     }
 
     #[tokio::test]
@@ -149,13 +151,15 @@ mod tests {
         let client = create_test_client(true);
 
         // Even with a provided region, skip_region_lookup should return default
+        let bucket = BucketName::try_from("any-bucket").unwrap();
+        let region_param = Some(Region::try_from("eu-west-1").unwrap());
         let region = client
-            .get_region_cached("any-bucket", &Some("eu-west-1".to_string()))
+            .get_region_cached(bucket, &region_param)
             .await
             .unwrap();
 
         // skip_region_lookup takes precedence and returns default region
-        assert_eq!(region, DEFAULT_REGION);
+        assert_eq!(region, DEFAULT_REGION.as_str());
     }
 
     #[tokio::test]
@@ -163,9 +167,10 @@ mod tests {
         let client = create_test_client(true);
 
         // Multiple calls should consistently return the default region
-        for bucket in ["bucket1", "bucket2", "bucket3"] {
+        for bucket_str in ["bucket1", "bucket2", "bucket3"] {
+            let bucket = BucketName::try_from(bucket_str).unwrap();
             let region = client.get_region_cached(bucket, &None).await.unwrap();
-            assert_eq!(region, DEFAULT_REGION);
+            assert_eq!(region, DEFAULT_REGION.as_str());
         }
     }
 
@@ -174,23 +179,19 @@ mod tests {
         let client = create_test_client(false);
 
         // Without skip_region_lookup, provided region should be used
+        let bucket = BucketName::try_from("any-bucket").unwrap();
+        let region_param = Some(Region::try_from("eu-west-1").unwrap());
         let region = client
-            .get_region_cached("any-bucket", &Some("eu-west-1".to_string()))
+            .get_region_cached(bucket, &region_param)
             .await
             .unwrap();
 
         assert_eq!(region, "eu-west-1");
     }
 
-    #[tokio::test]
-    async fn test_without_skip_region_lookup_empty_bucket_returns_default() {
-        let client = create_test_client(false);
-
-        // Empty bucket name should return default region
-        let region = client.get_region_cached("", &None).await.unwrap();
-
-        assert_eq!(region, DEFAULT_REGION);
-    }
+    // Note: The test for empty bucket name returning default region has been removed
+    // because BucketName now validates at construction time and rejects empty strings.
+    // This edge case is now handled by the type system preventing empty bucket names entirely.
 
     #[test]
     fn test_skip_region_lookup_builder_default_is_false() {

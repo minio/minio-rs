@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{PutBucketLifecycle, PutBucketLifecycleBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`PutBucketLifecycle`] request builder.
@@ -31,7 +32,7 @@ impl MinioClient {
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketLifecycleResponse;
-    /// use minio::s3::types::{Filter, S3Api};
+    /// use minio::s3::types::{BucketName, Filter, S3Api};
     /// use minio::s3::lifecycle_config::{LifecycleRule, LifecycleConfig};
     /// use minio::s3::response_traits::HasBucket;
     ///
@@ -49,13 +50,13 @@ impl MinioClient {
     ///     }];
     ///
     ///     let resp: PutBucketLifecycleResponse = client
-    ///         .put_bucket_lifecycle("bucket-name")
+    ///         .put_bucket_lifecycle(BucketName::new("bucket-name").unwrap())
     ///         .life_cycle_config(LifecycleConfig { rules })
     ///         .build().send().await.unwrap();
     ///     println!("set bucket replication policy on bucket '{}'", resp.bucket());
     /// }
     /// ```
-    pub fn put_bucket_lifecycle<S: Into<String>>(&self, bucket: S) -> PutBucketLifecycleBldr {
+    pub fn put_bucket_lifecycle(&self, bucket: BucketName) -> PutBucketLifecycleBldr {
         PutBucketLifecycle::builder()
             .client(self.clone())
             .bucket(bucket)

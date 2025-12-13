@@ -16,40 +16,40 @@
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::response::{BucketExistsResponse, DeleteBucketResponse};
 use minio::s3::response_traits::{HasBucket, HasRegion};
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, S3Api};
 use minio_common::test_context::TestContext;
 
 #[minio_macros::test(no_cleanup)]
-async fn bucket_exists(ctx: TestContext, bucket_name: String) {
+async fn bucket_exists(ctx: TestContext, bucket_name: BucketName) {
     let resp: BucketExistsResponse = ctx
         .client
-        .bucket_exists(&bucket_name)
+        .bucket_exists(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     assert!(resp.exists());
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: DeleteBucketResponse = ctx
         .client
-        .delete_bucket(&bucket_name)
+        .delete_bucket(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: BucketExistsResponse = ctx
         .client
-        .bucket_exists(&bucket_name)
+        .bucket_exists(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     assert!(!resp.exists());
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 }

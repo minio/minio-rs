@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{PutObjectLockConfig, PutObjectLockConfigBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`PutObjectLockConfig`] request builder.
@@ -31,7 +32,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::{CreateBucketResponse, PutObjectLockConfigResponse};
-    /// use minio::s3::types::{S3Api, ObjectLockConfig, RetentionMode};
+    /// use minio::s3::types::{BucketName, S3Api, ObjectLockConfig, RetentionMode};
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
@@ -39,10 +40,10 @@ impl MinioClient {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
-    ///     let bucket_name = "bucket-name";
+    ///     let bucket_name = BucketName::new("bucket-name").unwrap();
     ///
     ///     let resp: CreateBucketResponse = client
-    ///         .create_bucket(bucket_name).object_lock(true)
+    ///         .create_bucket(bucket_name.clone()).object_lock(true)
     ///         .build().send().await.unwrap();
     ///     println!("created bucket '{}' with object locking enabled", resp.bucket());
     ///
@@ -55,7 +56,7 @@ impl MinioClient {
     ///     println!("configured object locking for bucket '{}'", resp.bucket());
     /// }
     /// ```
-    pub fn put_object_lock_config<S: Into<String>>(&self, bucket: S) -> PutObjectLockConfigBldr {
+    pub fn put_object_lock_config(&self, bucket: BucketName) -> PutObjectLockConfigBldr {
         PutObjectLockConfig::builder()
             .client(self.clone())
             .bucket(bucket)

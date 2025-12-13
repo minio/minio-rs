@@ -21,7 +21,7 @@ use minio::s3::lifecycle_config::{LifecycleConfig, LifecycleRule};
 use minio::s3::response::{
     DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, PutBucketLifecycleResponse,
 };
-use minio::s3::types::{Filter, S3Api};
+use minio::s3::types::{BucketName, Filter, S3Api};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if false {
         // TODO
         let resp: GetBucketLifecycleResponse = client
-            .get_bucket_lifecycle(bucket_name)
+            .get_bucket_lifecycle(BucketName::new(bucket_name)?)
             .build()
             .send()
             .await?;
@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }];
 
     let resp: PutBucketLifecycleResponse = client
-        .put_bucket_lifecycle(bucket_name)
+        .put_bucket_lifecycle(BucketName::new(bucket_name)?)
         .life_cycle_config(LifecycleConfig { rules })
         .build()
         .send()
@@ -63,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if false {
         // TODO
         let resp: GetBucketLifecycleResponse = client
-            .get_bucket_lifecycle(bucket_name)
+            .get_bucket_lifecycle(BucketName::new(bucket_name)?)
             .build()
             .send()
             .await?;
@@ -73,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if false {
         // TODO
         let resp: DeleteBucketLifecycleResponse = client
-            .delete_bucket_lifecycle(bucket_name)
+            .delete_bucket_lifecycle(BucketName::new(bucket_name)?)
             .build()
             .send()
             .await?;

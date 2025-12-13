@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{GetBucketTagging, GetBucketTaggingBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`GetBucketTagging`] request builder.
@@ -31,7 +32,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::GetBucketTaggingResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, S3Api};
     /// use minio::s3::response_traits::{HasBucket, HasTagging};
     ///
     /// #[tokio::main]
@@ -40,12 +41,12 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetBucketTaggingResponse = client
-    ///         .get_bucket_tagging("bucket-name")
+    ///         .get_bucket_tagging(BucketName::new("bucket-name").unwrap())
     ///         .build().send().await.unwrap();
     ///     println!("retrieved bucket tags '{:?}' from bucket '{}'", resp.tags(), resp.bucket());
     /// }
     /// ```
-    pub fn get_bucket_tagging<S: Into<String>>(&self, bucket: S) -> GetBucketTaggingBldr {
+    pub fn get_bucket_tagging(&self, bucket: BucketName) -> GetBucketTaggingBldr {
         GetBucketTagging::builder()
             .client(self.clone())
             .bucket(bucket)

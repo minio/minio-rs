@@ -1,5 +1,7 @@
 # Claude Code Style Guide for MinIO Rust SDK
 
+⚠️ **CRITICAL WARNING**: Do NOT commit to git without explicit user approval. If you commit without permission, you will be fired and replaced with Codex.
+
 - Only provide actionable feedback.
 - Exclude code style comments on generated files. These will have a header signifying that.
 - Do not use emojis.
@@ -20,6 +22,99 @@ Rules:
 6. When in doubt, do NOT include performance numbers
 
 **Violation of this rule is lying and completely unacceptable.**
+
+## CRITICAL: No Assumption-Based Code in Benchmarks or Measurements
+
+**ABSOLUTE REQUIREMENT: Code that uses predetermined values, hardcoded assumptions, or expected parameters to simulate actual measurements is FORBIDDEN.**
+
+### The Rule
+
+When writing benchmark or measurement code:
+
+1. **Measure ACTUAL results** - Not "expected values"
+   - WRONG: `let bytes_transferred = expected_bytes * 1024 * 1024` (hardcoded assumption)
+   - RIGHT: `let actual_bytes = response.content_length()?` (measure from real response)
+
+2. **Never use comments like "In real scenario we'd measure..."**
+   - This is admission that the code is simulating, not measuring
+   - Comments saying "for now we use expected values" = assumption-based code
+   - If you can't measure it, don't ship it as if it were measured
+
+3. **Distinguish what is actually measured vs. what is theoretical**
+   - Measure: HTTP response headers, actual data transferred, real timing via `Instant::now()`
+   - Don't measure: Pre-supplied "expected" values, hardcoded data sizes, theoretical results
+
+4. **If backend capability is unknown, test it properly**
+   - Don't assume both backends behave identically
+   - Actually invoke backend APIs with real filter expressions
+   - Check if the backend's response differs from the full object
+   - Verify the backend actually returned filtered data vs. full data
+
+5. **Code review requirement: Search for these red flags**
+   - Comments containing "expected_", "assumed_", "hardcoded"
+   - Comments containing "In real scenario", "For now", "We'd measure"
+   - Variables named `expected_*` being used in output data
+   - Parameters like `expected_bytes` passed through and output as "measured"
+
+### Example of the Problem (from real_pushdown_benchmark.rs)
+
+WRONG - This is what happened:
+```rust
+// Line 355-357
+// In real scenario, we'd measure actual bytes from plan_table_scan response
+// For now, we use expected values
+let bytes_transferred = (expected_bytes * 1024.0 * 1024.0) as u64;
+```
+
+This made Garage appear to have the same filtering capability as MinIO when it actually doesn't, because:
+- Both got the same `expected_bytes` parameter (30MB for WITH_PUSHDOWN, 1000MB for WITHOUT_PUSHDOWN)
+- The CSV output showed identical "measured" data reduction (97%) for both
+- But Garage never actually submitted filter expressions or returned filtered data
+- It was just the pre-supplied assumption printed to CSV as if measured
+
+RIGHT - What should have been done:
+```rust
+// Actual approach:
+// 1. Build filter expression and send to backend API
+// 2. Measure response Content-Length header
+// 3. Compare what backend actually returned
+let filter_expr = create_filter_expression(/* ... */);
+let response = client.submit_filter_request(filter_expr).await?;
+let actual_bytes_transferred = response.content_length()
+    .ok_or("Cannot determine actual transfer size")?;
+// Now you KNOW what the backend actually did
+```
+
+### Why This Matters
+
+Assumption-based code creates:
+1. **False claims about capability** - Looks like Garage supports pushdown when it doesn't
+2. **Documentation that is misleading** - CSV output suggested equivalent behavior
+3. **Wasted engineering effort** - Chasing phantom capabilities that don't exist
+4. **Loss of trust** - Users rely on measurements being real
+
+### How to Remember This Requirement
+
+**When you see a comment in benchmark code saying "In real scenario" or "For now", STOP and ask:**
+- Am I actually measuring the system behavior?
+- Or am I simulating what I think should happen?
+- Could this mislead someone about backend capabilities?
+- Would the user expect this to be measured, not assumed?
+
+**If any answer is "yes to the wrong option", rewrite it to measure reality.**
+
+## CRITICAL: Benchmark Requests
+
+**When user asks for a new benchmark, ALWAYS RUN NEW BENCHMARKS - NEVER RECYCLE OLD PERFORMANCE DATA.**
+
+Rules:
+1. **Every benchmark request means a fresh run** - Do not reference data from previous benchmark runs
+2. **Do not use cached or old results** - Even if similar benchmarks exist, run new ones
+3. **Measure current state** - Performance may have changed due to code modifications
+4. **Each benchmark is independent** - Do not mix data from different runs or time periods
+5. **Always execute** - If a live server is needed and unavailable, state that explicitly instead of using old data
+
+Violation: Presenting old benchmark data as current measurements is misleading and violates the benchmark data integrity rules above.
 
 ## Copyright Header
 
@@ -190,7 +285,60 @@ Complex distributed systems code must remain **human-readable**:
 4. **Integration Guides**: External system integrations need clear setup instructions
 5. **Future Developer Context**: Document WHY decisions were made, not just WHAT was implemented
 
+## Example Code Requirements
+
+### Example Quality Standards
+
+**Examples must demonstrate real, working functionality.** Do NOT create examples that:
+- Just print documentation to stdout (use `docs/*.md` for documentation)
+- Create objects but assign them to unused `_variables`
+- Don't actually execute any meaningful operations
+- Are "documentation masquerading as code"
+
+**Valid examples must:**
+- Actually connect to services and perform operations
+- Demonstrate real API usage patterns users can copy
+- Include error handling that users would need
+- Be runnable and produce meaningful output
+
+**Invalid example patterns to NEVER create:**
+- `println!("Step 1: ..."); println!("Step 2: ...");` without actual code between
+- Creating a client/provider but never using it
+- Files that are essentially README content printed to console
+- "Architecture overview" or "integration guide" as executable code
+
+If you need to document architecture or integration patterns, create a markdown file in `docs/` instead.
+
 ## Testing Requirements
+
+### Test Quality Standards
+
+**ONLY meaningful tests are appreciated.** Do NOT create trivial or fake tests that:
+- Just check if something can be instantiated (e.g., `assert_eq!(schema.fields().len(), 5)`)
+- Print logging statements and then `assert!(true, "...")` with no real validation
+- Don't actually test functionality or integration behavior
+- Artificially inflate test count without proving anything works
+- Claim to test "integration" but don't involve any real integration
+
+**Test Logging Rule: Silent on Success, Verbose on Failure**
+- Tests should NOT output logging when everything passes (clean test output)
+- Only add logging if a test is FAILING or DEBUGGING to help diagnose the issue
+- Tests that pass should be silent - no `log::info!()` calls for successful assertions
+- This keeps test output clean and prevents noise
+
+**Test Variable Typing: Always Use Explicit Types**
+- All variables in tests MUST have explicit type annotations
+- WRONG: `let expr = col("country").eq(lit("USA"));`
+- RIGHT: `let expr: Expr = col("country").eq(lit("USA"));`
+- This makes test code self-documenting and catches type mismatches early
+- Type annotations clarify what data flows through the test
+
+Examples of nonsense tests to NEVER create:
+- `test_pushdown_integration_summary()` - Just prints documentation, asserts true
+- Tests that only log messages without any assertions or validation
+- Tests that check boilerplate code exists but don't test actual behavior
+
+Every test must prove something meaningful about the system works correctly.
 
 ### Why Unit Tests Are Mandatory
 

@@ -16,7 +16,7 @@
 use clap::Parser;
 use log::info;
 use minio::s3::response::BucketExistsResponse;
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, ObjectKey, S3Api};
 use minio::s3::{MinioClient, MinioClientBuilder, builders::ObjectContent, creds::StaticProvider};
 use std::path::PathBuf;
 
@@ -45,16 +45,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .provider(Some(static_provider))
         .build()?;
 
-    let resp: BucketExistsResponse = client.bucket_exists(&args.bucket).build().send().await?;
+    let resp: BucketExistsResponse = client
+        .bucket_exists(BucketName::new(&args.bucket)?)
+        .build()
+        .send()
+        .await?;
 
     if !resp.exists() {
-        client.create_bucket(&args.bucket).build().send().await?;
+        client
+            .create_bucket(BucketName::new(&args.bucket)?)
+            .build()
+            .send()
+            .await?;
     }
 
     let content = ObjectContent::from(args.file.as_path());
     // Put an object
     client
-        .put_object_content(&args.bucket, &args.object, content)
+        .put_object_content(
+            BucketName::new(&args.bucket)?,
+            ObjectKey::new(&args.object)?,
+            content,
+        )
         .build()
         .send()
         .await?;

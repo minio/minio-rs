@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{StatObject, StatObjectBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`StatObject`] request builder to retrieve object metadata.
@@ -34,24 +35,22 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::StatObjectResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
     /// use minio::s3::response_traits::HasObject;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
+    ///     let bucket = BucketName::new("bucket-name").unwrap();
+    ///     let object = ObjectKey::new("object-name").unwrap();
     ///     let resp: StatObjectResponse =
-    ///         client.stat_object("bucket-name", "object-name").build().send().await.unwrap();
+    ///         client.stat_object(bucket, object).build().send().await.unwrap();
     ///     println!("stat of object '{}' are {:#?}", resp.object(), resp);
     /// }
     /// ```
-    pub fn stat_object<S1: Into<String>, S2: Into<String>>(
-        &self,
-        bucket: S1,
-        object: S2,
-    ) -> StatObjectBldr {
+    pub fn stat_object(&self, bucket: BucketName, object: ObjectKey) -> StatObjectBldr {
         StatObject::builder()
             .client(self.clone())
             .bucket(bucket)

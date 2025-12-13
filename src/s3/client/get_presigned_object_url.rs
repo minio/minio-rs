@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{GetPresignedObjectUrl, GetPresignedObjectUrlBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::{BucketName, ObjectKey};
 use http::Method;
 
 impl MinioClient {
@@ -31,7 +32,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::GetPresignedObjectUrlResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -39,15 +40,15 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetPresignedObjectUrlResponse = client
-    ///         .get_presigned_object_url("bucket-name", "object-name", Method::GET)
+    ///         .get_presigned_object_url(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap(), Method::GET)
     ///         .build().send().await.unwrap();
     ///     println!("the presigned url: '{:?}'", resp.url);
     /// }
     /// ```
-    pub fn get_presigned_object_url<S1: Into<String>, S2: Into<String>>(
+    pub fn get_presigned_object_url(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
         method: Method,
     ) -> GetPresignedObjectUrlBldr {
         GetPresignedObjectUrl::builder()

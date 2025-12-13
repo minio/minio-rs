@@ -104,6 +104,45 @@ async fn test_list_buckets() {
 }
 ```
 
+### 5. S3 Tables / Iceberg REST Catalog Tests
+
+**Location:** `tests/s3tables/` directory
+
+**Purpose:** Test the Iceberg REST Catalog API implementation
+- Warehouse, namespace, table CRUD operations
+- View operations (create, load, rename, drop)
+- Name validation rules
+- Concurrent operation handling
+- Apache Iceberg RCK (REST Compatibility Kit) compliance
+
+**Coverage Goal:** All Iceberg REST API endpoints
+
+**Test Inspiration:**
+- MinIO server tests (`tables-integration_test.go`)
+- Apache Iceberg [CatalogTests.java](https://github.com/apache/iceberg/blob/main/core/src/test/java/org/apache/iceberg/catalog/CatalogTests.java)
+- Apache Iceberg [ViewCatalogTests.java](https://github.com/apache/iceberg/blob/main/core/src/test/java/org/apache/iceberg/view/ViewCatalogTests.java)
+
+**Example:**
+```rust
+#[minio_macros::test(no_bucket)]
+async fn create_existing_table_fails(ctx: TestContext) {
+    let tables = create_tables_client(&ctx);
+    let warehouse_name = rand_warehouse_name();
+    let namespace_name = rand_namespace_name();
+    let table_name = rand_table_name();
+
+    create_warehouse_helper(&warehouse_name, &tables).await;
+    create_namespace_helper(&warehouse_name, &namespace_name, &tables).await;
+    create_table_helper(&warehouse_name, &namespace_name, &table_name, &tables).await;
+
+    // Try to create the same table again - should fail
+    let result = tables.create_table(...).build().send().await;
+    assert!(result.is_err(), "Creating duplicate table should fail");
+}
+```
+
+See [S3TABLES_TESTS.md](S3TABLES_TESTS.md) for detailed documentation.
+
 ## What NOT to Test
 
 ### 1. Client Execution Methods

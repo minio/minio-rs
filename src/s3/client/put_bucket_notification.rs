@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{PutBucketNotification, PutBucketNotificationBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`PutBucketNotification`] request builder.
@@ -28,7 +29,7 @@ impl MinioClient {
     /// use minio::s3::MinioClient;
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
-    /// use minio::s3::types::{NotificationConfig, PrefixFilterRule, QueueConfig, S3Api, SuffixFilterRule};
+    /// use minio::s3::types::{BucketName, NotificationConfig, PrefixFilterRule, QueueConfig, S3Api, SuffixFilterRule};
     /// use minio::s3::response::PutBucketNotificationResponse;
     /// use minio::s3::response_traits::HasBucket;
     ///
@@ -57,13 +58,13 @@ impl MinioClient {
     ///     };
     ///
     ///     let resp: PutBucketNotificationResponse = client
-    ///         .put_bucket_notification("bucket-name")
+    ///         .put_bucket_notification(BucketName::new("bucket-name").unwrap())
     ///         .notification_config(config)
     ///         .build().send().await.unwrap();
     ///     println!("set bucket notification for bucket '{:?}'", resp.bucket());
     /// }
     /// ```
-    pub fn put_bucket_notification<S: Into<String>>(&self, bucket: S) -> PutBucketNotificationBldr {
+    pub fn put_bucket_notification(&self, bucket: BucketName) -> PutBucketNotificationBldr {
         PutBucketNotification::builder()
             .client(self.clone())
             .bucket(bucket)

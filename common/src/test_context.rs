@@ -19,6 +19,7 @@ use minio::s3::MinioClient;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::S3Api;
+use minio::s3::types::Region;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone)]
@@ -53,7 +54,7 @@ impl TestContext {
             let mut base_url: BaseUrl = host.parse().unwrap();
             base_url.https = secure;
             if let Some(v) = region {
-                base_url.region = v;
+                base_url.region = Region::try_from(v.as_str()).unwrap();
             }
 
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
@@ -80,7 +81,7 @@ impl TestContext {
             const DEFAULT_ENABLE_HTTPS: &str = "true";
             const DEFAULT_SSL_CERT_FILE: &str = "./tests/public.crt";
             const DEFAULT_IGNORE_CERT_CHECK: &str = "false";
-            const DEFAULT_SERVER_REGION: &str = "";
+            const DEFAULT_SERVER_REGION: &str = "us-east-1";
 
             let host: String =
                 std::env::var("SERVER_ENDPOINT").unwrap_or(DEFAULT_SERVER_ENDPOINT.to_string());
@@ -105,13 +106,13 @@ impl TestContext {
                 .parse()
                 .unwrap_or(true);
             log::debug!("IGNORE_CERT_CHECK={ignore_cert_check}");
-            let region: String =
+            let region_str: String =
                 std::env::var("SERVER_REGION").unwrap_or(DEFAULT_SERVER_REGION.to_string());
-            log::debug!("SERVER_REGION={region:?}");
+            log::debug!("SERVER_REGION={region_str:?}");
 
             let mut base_url: BaseUrl = host.parse().unwrap();
             base_url.https = secure;
-            base_url.region = region;
+            base_url.region = Region::try_from(region_str.as_str()).unwrap();
 
             let static_provider = StaticProvider::new(&access_key, &secret_key, None);
             let client = MinioClient::new(
@@ -136,7 +137,7 @@ impl TestContext {
     /// Creates a temporary bucket with an automatic cleanup guard.
     ///
     /// This function creates a new bucket and returns both its name and a `CleanupGuard`
-    /// that ensures the bucket is deleted when it goes out of scope.  
+    /// that ensures the bucket is deleted when it goes out of scope.
     ///
     /// # Returns
     /// A tuple containing:
@@ -153,12 +154,13 @@ impl TestContext {
         let bucket_name = rand_bucket_name();
         let _resp = self
             .client
-            .create_bucket(&bucket_name)
+            .create_bucket(bucket_name.clone())
             .build()
             .send()
             .await
             .unwrap();
-        let guard = CleanupGuard::new(self.client.clone(), &bucket_name);
-        (bucket_name, guard)
+        let bucket_name_str = bucket_name.to_string();
+        let guard = CleanupGuard::new(self.client.clone(), bucket_name);
+        (bucket_name_str, guard)
     }
 }
