@@ -305,6 +305,9 @@ pub enum ValidationErr {
 
     #[error("Invalid content type: {0}")]
     InvalidContentType(String),
+
+    #[error("Invalid SIMD mode: {0}")]
+    InvalidSimdMode(String),
 }
 
 impl From<reqwest::header::ToStrError> for ValidationErr {
@@ -388,6 +391,9 @@ pub enum Error {
 
     #[error("Validation error occurred")]
     Validation(#[from] ValidationErr),
+
+    #[error("Tables error: {0}")]
+    TablesError(#[from] crate::s3tables::error::TablesError),
 }
 
 // region message helpers

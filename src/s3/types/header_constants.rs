@@ -149,3 +149,7 @@ pub const PLAN_ID: &str = "planId";
 // MinIO-specific query parameters
 pub const PRESERVE_BUCKET: &str = "preserve-bucket";
 pub const FORCE: &str = "force";
+
+// MinIO S3Tables-specific headers
+pub const X_MINIO_SIMD_MODE: &str = "X-Minio-Simd-Mode";
+pub const X_MINIO_STORAGE_PUSHDOWN: &str = "X-Minio-Storage-Pushdown";
