@@ -21,6 +21,19 @@ Rules:
 
 **Violation of this rule is lying and completely unacceptable.**
 
+## CRITICAL: No Code Bloat
+
+**Unnecessary bloat code is NOT acceptable.**
+
+Rules:
+1. Write the minimum code needed to solve the problem
+2. Do not add unnecessary abstractions, helpers, or setup functions
+3. Before adding a function, ask: "Is this actually needed?"
+4. Reuse existing functionality instead of creating new wrappers
+5. If a simpler solution exists, use it
+
+**Example**: If you need to check if an API returns 501, just call the API and check the code. Do NOT create elaborate setup functions, state machines, or helper infrastructure.
+
 ## Copyright Header
 
 All source files that haven't been generated MUST include the following copyright header:

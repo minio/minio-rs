@@ -20,7 +20,7 @@ use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::Region;
 use minio::s3::types::{BucketName, S3Api};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct TestContext {
@@ -43,11 +43,15 @@ impl TestContext {
             let access_key = std::env::var("ACCESS_KEY").unwrap();
             let secret_key = std::env::var("SECRET_KEY").unwrap();
             let secure = std::env::var("ENABLE_HTTPS").is_ok();
-            let value = std::env::var("MINIO_SSL_CERT_FILE").unwrap();
-            let mut ssl_cert_file = None;
-            if !value.is_empty() {
-                ssl_cert_file = Some(Path::new(&value));
-            }
+            // SSL cert file is only required when HTTPS is enabled
+            let ssl_cert_file = if secure {
+                std::env::var("MINIO_SSL_CERT_FILE")
+                    .ok()
+                    .filter(|v| !v.is_empty())
+                    .map(PathBuf::from)
+            } else {
+                None
+            };
             let ignore_cert_check = std::env::var("IGNORE_CERT_CHECK").is_ok();
             let region = std::env::var("SERVER_REGION").ok();
 
@@ -61,7 +65,7 @@ impl TestContext {
             let client = MinioClient::new(
                 base_url.clone(),
                 Some(static_provider),
-                ssl_cert_file,
+                ssl_cert_file.as_deref(),
                 Some(ignore_cert_check),
             )
             .unwrap();
@@ -72,7 +76,7 @@ impl TestContext {
                 access_key,
                 secret_key,
                 ignore_cert_check: Some(ignore_cert_check),
-                ssl_cert_file: ssl_cert_file.map(PathBuf::from),
+                ssl_cert_file,
             }
         } else {
             const DEFAULT_SERVER_ENDPOINT: &str = "http://localhost:9000/";

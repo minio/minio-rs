@@ -1,0 +1,531 @@
+# S3 Tables / Iceberg Compatibility Integration Tests
+#
+# This workflow runs comprehensive integration tests for the S3 Tables API
+# and Iceberg REST Catalog compatibility. It validates that the minio-rs SDK
+# correctly implements the Apache Iceberg REST Catalog specification.
+#
+# Jobs:
+# 1. integration-tests-basic: Core S3 Tables API tests
+# 2. iceberg-compat-tests: Iceberg Catalog/View/Transaction compatibility tests
+# 3. datafusion-integration: DataFusion TableProvider integration tests
+# 4. stress-tests: Long-running chaos/stress tests (manual trigger only)
+#
+# Note: This workflow requires a MinIO server with S3 Tables / Iceberg support.
+
+name: S3 Tables Iceberg Compatibility Tests
+
+# NOTE: S3 Tables / Iceberg support requires MinIO AIStor which needs a valid license.
+# This workflow is disabled until S3 Tables is available in the public MinIO release.
+# For local testing, use a licensed MinIO AIStor build.
+
+on:
+  # Disabled - AIStor requires license, public MinIO doesn't have S3 Tables yet
+  # push:
+  #   branches: ["master", "henk-s3-tables-feature"]
+  # pull_request:
+  #   branches: ["master"]
+  workflow_dispatch:
+    inputs:
+      run_stress_tests:
+        description: "Run stress tests (takes longer)"
+        required: false
+        default: false
+        type: boolean
+      stress_duration:
+        description: "Stress test duration in seconds"
+        required: false
+        default: "120"
+        type: string
+
+env:
+  RUST_LOG: debug
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ==========================================================================
+  # Job 1: Basic S3 Tables Integration Tests
+  # ==========================================================================
+  integration-tests-basic:
+    name: S3 Tables Basic Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-s3tables-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-s3tables-
+            ${{ runner.os }}-cargo-
+
+      - name: Start MinIO Server
+        run: |
+          # Download MinIO AIStor edge build with S3 Tables / Iceberg support
+          wget --quiet https://dl.min.io/aistor/minio/edge/linux-amd64/minio
+          chmod +x minio
+
+          echo "MinIO AIStor Server Version:"
+          ./minio --version
+
+          # Start MinIO server in background
+          MINIO_CI_CD=true \
+            MINIO_ROOT_USER=minioadmin \
+            MINIO_ROOT_PASSWORD=minioadmin \
+            MINIO_SITE_REGION=us-east-1 \
+            ./minio server /tmp/minio-data --console-address ":9001" &
+
+          # Wait for server to be ready
+          echo "Waiting for MinIO server to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:9000/minio/health/live > /dev/null 2>&1; then
+              echo "MinIO server is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "MinIO server failed to start"
+              exit 1
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+      - name: Run S3 Tables Basic Tests
+        env:
+          SERVER_ENDPOINT: localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+          TABLES_ENDPOINT: http://localhost:9000
+        run: |
+          # Run basic S3 Tables tests (create/delete, list, error handling)
+          cargo test --release \
+            -p minio \
+            -- \
+            --test-threads=4 \
+            --nocapture \
+            s3tables::create_delete \
+            s3tables::list_warehouses \
+            s3tables::list_namespaces \
+            s3tables::list_tables \
+            s3tables::error_handling \
+            s3tables::name_validation
+
+  # ==========================================================================
+  # Job 2: Iceberg Compatibility Tests
+  # ==========================================================================
+  iceberg-compat-tests:
+    name: Iceberg Compatibility Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: integration-tests-basic
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-iceberg-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-iceberg-
+            ${{ runner.os }}-cargo-
+
+      - name: Start MinIO Server
+        run: |
+          wget --quiet https://dl.min.io/aistor/minio/edge/linux-amd64/minio
+          chmod +x minio
+
+          MINIO_CI_CD=true \
+            MINIO_ROOT_USER=minioadmin \
+            MINIO_ROOT_PASSWORD=minioadmin \
+            MINIO_SITE_REGION=us-east-1 \
+            ./minio server /tmp/minio-data --console-address ":9001" &
+
+          for i in {1..30}; do
+            if curl -s http://localhost:9000/minio/health/live > /dev/null 2>&1; then
+              echo "MinIO server is ready"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Run Iceberg Catalog Compatibility Tests (Phase 1)
+        env:
+          SERVER_ENDPOINT: localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+          TABLES_ENDPOINT: http://localhost:9000
+        run: |
+          cargo test --release \
+            -p minio \
+            iceberg_catalog_compat \
+            -- --nocapture --test-threads=2
+
+      - name: Run Iceberg View Compatibility Tests (Phase 2)
+        env:
+          SERVER_ENDPOINT: localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+          TABLES_ENDPOINT: http://localhost:9000
+        run: |
+          cargo test --release \
+            -p minio \
+            iceberg_view_compat \
+            -- --nocapture --test-threads=2
+
+      - name: Run Iceberg Transaction Compatibility Tests (Phase 3)
+        env:
+          SERVER_ENDPOINT: localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+          TABLES_ENDPOINT: http://localhost:9000
+        run: |
+          cargo test --release \
+            -p minio \
+            iceberg_transactions_compat \
+            -- --nocapture --test-threads=2
+
+      - name: Run Catalog API Compliance Tests (Phase 4)
+        env:
+          SERVER_ENDPOINT: localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+          TABLES_ENDPOINT: http://localhost:9000
+        run: |
+          cargo test --release \
+            -p minio \
+            catalog_api_compliance \
+            -- --nocapture --test-threads=2
+
+      - name: Run RCK Conformance Tests
+        env:
+          SERVER_ENDPOINT: localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+          TABLES_ENDPOINT: http://localhost:9000
+        run: |
+          cargo test --release \
+            -p minio \
+            rck_conformance \
+            -- --nocapture --test-threads=2
+
+      - name: Run RCK Inspired Tests
+        env:
+          SERVER_ENDPOINT: localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+          TABLES_ENDPOINT: http://localhost:9000
+        run: |
+          cargo test --release \
+            -p minio \
+            rck_inspired \
+            -- --nocapture --test-threads=2
+
+  # ==========================================================================
+  # Job 3: Advanced S3 Tables Tests
+  # ==========================================================================
+  advanced-tests:
+    name: Advanced S3 Tables Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: integration-tests-basic
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-advanced-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-advanced-
+            ${{ runner.os }}-cargo-
+
+      - name: Start MinIO Server
+        run: |
+          wget --quiet https://dl.min.io/aistor/minio/edge/linux-amd64/minio
+          chmod +x minio
+
+          MINIO_CI_CD=true \
+            MINIO_ROOT_USER=minioadmin \
+            MINIO_ROOT_PASSWORD=minioadmin \
+            MINIO_SITE_REGION=us-east-1 \
+            ./minio server /tmp/minio-data --console-address ":9001" &
+
+          for i in {1..30}; do
+            if curl -s http://localhost:9000/minio/health/live > /dev/null 2>&1; then
+              echo "MinIO server is ready"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Run Advanced Tier 2 Tests
+        env:
+          SERVER_ENDPOINT: localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+          TABLES_ENDPOINT: http://localhost:9000
+        run: |
+          cargo test --release \
+            -p minio \
+            s3tables::advanced \
+            -- --nocapture --test-threads=2
+
+      - name: Run Concurrent Operations Tests
+        env:
+          SERVER_ENDPOINT: localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+          TABLES_ENDPOINT: http://localhost:9000
+        run: |
+          cargo test --release \
+            -p minio \
+            concurrent_operations \
+            -- --nocapture --test-threads=1
+
+      - name: Run View Operations Tests
+        env:
+          SERVER_ENDPOINT: localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+          TABLES_ENDPOINT: http://localhost:9000
+        run: |
+          cargo test --release \
+            -p minio \
+            view_operations \
+            -- --nocapture --test-threads=2
+
+  # ==========================================================================
+  # Job 4: DataFusion Integration Tests (optional feature)
+  # ==========================================================================
+  datafusion-integration:
+    name: DataFusion Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: integration-tests-basic
+    # Only run if datafusion feature tests exist
+    continue-on-error: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-datafusion-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-datafusion-
+            ${{ runner.os }}-cargo-
+
+      - name: Start MinIO Server
+        run: |
+          wget --quiet https://dl.min.io/aistor/minio/edge/linux-amd64/minio
+          chmod +x minio
+
+          MINIO_CI_CD=true \
+            MINIO_ROOT_USER=minioadmin \
+            MINIO_ROOT_PASSWORD=minioadmin \
+            MINIO_SITE_REGION=us-east-1 \
+            ./minio server /tmp/minio-data --console-address ":9001" &
+
+          for i in {1..30}; do
+            if curl -s http://localhost:9000/minio/health/live > /dev/null 2>&1; then
+              echo "MinIO server is ready"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Run DataFusion Integration Tests
+        env:
+          SERVER_ENDPOINT: localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+          TABLES_ENDPOINT: http://localhost:9000
+        run: |
+          cargo test --release \
+            --features datafusion \
+            -p minio \
+            datafusion_full_integration \
+            -- --nocapture --test-threads=1
+
+  # ==========================================================================
+  # Job 5: Stress/Chaos Tests (Manual Trigger Only)
+  # ==========================================================================
+  stress-tests:
+    name: Stress Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_stress_tests == 'true' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-stress-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-stress-
+            ${{ runner.os }}-cargo-
+
+      - name: Start MinIO Server
+        run: |
+          wget --quiet https://dl.min.io/aistor/minio/edge/linux-amd64/minio
+          chmod +x minio
+
+          MINIO_CI_CD=true \
+            MINIO_ROOT_USER=minioadmin \
+            MINIO_ROOT_PASSWORD=minioadmin \
+            MINIO_SITE_REGION=us-east-1 \
+            ./minio server /tmp/minio-data --console-address ":9001" &
+
+          for i in {1..30}; do
+            if curl -s http://localhost:9000/minio/health/live > /dev/null 2>&1; then
+              echo "MinIO server is ready"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Run Chaos Test
+        env:
+          TABLES_ENDPOINT: http://localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+        run: |
+          cargo run --release \
+            --example tables_stress_state_chaos \
+            -- --duration ${{ github.event.inputs.stress_duration || '120' }}
+
+      - name: Run Sustained Load Test
+        env:
+          TABLES_ENDPOINT: http://localhost:9000
+          ACCESS_KEY: minioadmin
+          SECRET_KEY: minioadmin
+          SERVER_REGION: us-east-1
+        run: |
+          cargo run --release \
+            --example tables_stress_sustained_load \
+            -- --duration ${{ github.event.inputs.stress_duration || '120' }}
+
+  # ==========================================================================
+  # Job 6: All Tests Summary
+  # ==========================================================================
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [integration-tests-basic, iceberg-compat-tests, advanced-tests]
+    if: always()
+
+    steps:
+      - name: Check test results
+        run: |
+          echo "=== S3 Tables Integration Test Summary ==="
+          echo ""
+          echo "Basic Integration Tests: ${{ needs.integration-tests-basic.result }}"
+          echo "Iceberg Compatibility Tests: ${{ needs.iceberg-compat-tests.result }}"
+          echo "Advanced Tests: ${{ needs.advanced-tests.result }}"
+          echo ""
+
+          if [ "${{ needs.integration-tests-basic.result }}" != "success" ] || \
+             [ "${{ needs.iceberg-compat-tests.result }}" != "success" ] || \
+             [ "${{ needs.advanced-tests.result }}" != "success" ]; then
+            echo "Some tests failed!"
+            exit 1
+          fi
+
+          echo "All required tests passed!"

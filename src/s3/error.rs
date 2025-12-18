@@ -439,6 +439,23 @@ pub enum Error {
 
     #[error("Validation error occurred")]
     Validation(#[from] ValidationErr),
+
+    #[error("Tables error: {0}")]
+    TablesError(#[from] crate::s3tables::error::TablesError),
+}
+
+impl Error {
+    /// Returns `true` if this error is a commit conflict (HTTP 409).
+    ///
+    /// A commit conflict occurs when the table was modified by another writer
+    /// since the metadata was loaded. The typical recovery pattern is to reload
+    /// the table metadata and retry the operation.
+    pub fn is_conflict(&self) -> bool {
+        matches!(
+            self,
+            Error::TablesError(crate::s3tables::error::TablesError::CommitConflict { .. })
+        )
+    }
 }
 
 // region message helpers

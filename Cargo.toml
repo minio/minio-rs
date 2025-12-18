@@ -22,6 +22,8 @@ ring = ["dep:ring"]
 # Gracefully falls back to HTTP/1.1 when the server doesn't support it.
 http2 = ["reqwest/http2"]
 localhost = []
+# Puffin compression support for Iceberg table compression
+puffin-compression = ["dep:zstd", "dep:lz4_flex"]
 
 [workspace.dependencies]
 uuid = "1.19"
@@ -58,6 +60,7 @@ lazy_static = "1.5"
 log = { workspace = true }
 md5 = "0.8"
 multimap = "0.10"
+once_cell = "1.21"
 percent-encoding = "2.3"
 url = "2.5"
 regex = "1.12"
@@ -71,6 +74,10 @@ xmltree = "0.12"
 http = { workspace = true }
 thiserror = "2.0"
 typed-builder = "0.23"
+tokio = { workspace = true, optional = true, features = ["rt-multi-thread"] }
+# Puffin compression (optional, for Iceberg table compression)
+zstd = { version = "0.13", optional = true }
+lz4_flex = { version = "0.11", optional = true }
 
 [dev-dependencies]
 minio-common = { path = "./common" }
@@ -81,6 +88,14 @@ clap = { version = "4.5", features = ["derive"] }
 rand = { workspace = true, features = ["small_rng"] }
 quickcheck = "1.0"
 criterion = "0.8"
+# Iceberg-rust for proper manifest file creation in benchmarks
+iceberg = { version = "0.7", features = ["storage-s3"] }
+iceberg-catalog-rest = "0.7"
+# Arrow/Parquet versions matching iceberg-rust 0.7 (v55.1)
+# Use package aliasing to avoid conflicts with datafusion's arrow/parquet
+arrow-array-55 = { version = "55.1", package = "arrow-array" }
+arrow-schema-55 = { version = "55.1", package = "arrow-schema" }
+parquet-55 = { version = "55.1", package = "parquet", features = ["async"] }
 
 [lib]
 name = "minio"
@@ -100,6 +115,14 @@ name = "append_object"
 
 [[example]]
 name = "load_balancing_with_hooks"
+
+[[example]]
+name = "tables_quickstart"
+path = "examples/s3tables/tables_quickstart.rs"
+
+[[example]]
+name = "deletion_benchmark"
+path = "examples/s3tables/deletion_benchmark.rs"
 
 [[bench]]
 name = "s3-api"

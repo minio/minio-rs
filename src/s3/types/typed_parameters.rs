@@ -128,8 +128,15 @@ impl BucketName {
     ///
     /// This is intended for internal use when parsing server responses,
     /// where the bucket name is already known to be valid.
+    ///
+    /// In debug builds, validation is still performed and will panic on invalid input.
     pub(crate) fn new_unchecked(name: impl Into<String>) -> Self {
-        Self(name.into())
+        let name = name.into();
+        #[cfg(debug_assertions)]
+        {
+            check_bucket_name(&name, false).expect("new_unchecked called with invalid bucket name");
+        }
+        Self(name)
     }
 }
 
@@ -275,8 +282,15 @@ impl ObjectKey {
     ///
     /// This is intended for internal use when parsing server responses,
     /// where the object key is already known to be valid.
+    ///
+    /// In debug builds, validation is still performed and will panic on invalid input.
     pub(crate) fn new_unchecked(key: impl Into<String>) -> Self {
-        Self(key.into())
+        let key = key.into();
+        #[cfg(debug_assertions)]
+        {
+            check_object_name(&key).expect("new_unchecked called with invalid object key");
+        }
+        Self(key)
     }
 }
 
@@ -391,8 +405,12 @@ impl VersionId {
     ///
     /// This is intended for internal use when parsing server responses,
     /// where the version ID is already known to be valid.
+    ///
+    /// In debug builds, validation is still performed and will panic on invalid input.
     pub(crate) fn new_unchecked(id: impl Into<String>) -> Self {
-        Self(id.into())
+        let id = id.into();
+        debug_assert!(!id.is_empty(), "new_unchecked called with empty version ID");
+        Self(id)
     }
 }
 
@@ -625,8 +643,12 @@ impl UploadId {
     ///
     /// This is intended for internal use when parsing server responses,
     /// where the upload ID is already known to be valid.
+    ///
+    /// In debug builds, validation is still performed and will panic on invalid input.
     pub(crate) fn new_unchecked(id: impl Into<String>) -> Self {
-        Self(id.into())
+        let id = id.into();
+        debug_assert!(!id.is_empty(), "new_unchecked called with empty upload ID");
+        Self(id)
     }
 }
 
