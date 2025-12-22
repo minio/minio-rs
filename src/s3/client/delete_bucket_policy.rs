@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{DeleteBucketPolicy, DeleteBucketPolicyBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`DeleteBucketPolicy`] request builder.
@@ -29,21 +30,21 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::DeleteBucketPolicyResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, S3Api};
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteBucketPolicyResponse = client
-    ///         .delete_bucket_policy("bucket-name")
+    ///         .delete_bucket_policy(BucketName::new("bucket-name").unwrap())
     ///         .build().send().await.unwrap();
     ///     println!("policy of bucket '{}' is deleted", resp.bucket());
     /// }
     /// ```
-    pub fn delete_bucket_policy<S: Into<String>>(&self, bucket: S) -> DeleteBucketPolicyBldr {
+    pub fn delete_bucket_policy(&self, bucket: BucketName) -> DeleteBucketPolicyBldr {
         DeleteBucketPolicy::builder()
             .client(self.clone())
             .bucket(bucket)

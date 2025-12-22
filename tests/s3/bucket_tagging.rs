@@ -20,65 +20,65 @@ use minio::s3::response::{
     DeleteBucketTaggingResponse, GetBucketTaggingResponse, PutBucketTaggingResponse,
 };
 use minio::s3::response_traits::{HasBucket, HasRegion, HasTagging};
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, S3Api};
 use minio_common::example::create_tags_example;
 use minio_common::test_context::TestContext;
 
 #[minio_macros::test(skip_if_express)]
-async fn bucket_tags_s3(ctx: TestContext, bucket_name: String) {
+async fn bucket_tags_s3(ctx: TestContext, bucket_name: BucketName) {
     let tags = create_tags_example();
 
     let resp: PutBucketTaggingResponse = ctx
         .client
-        .put_bucket_tagging(&bucket_name)
+        .put_bucket_tagging(bucket_name.clone())
         .tags(tags.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: GetBucketTaggingResponse = ctx
         .client
-        .get_bucket_tagging(&bucket_name)
+        .get_bucket_tagging(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     assert_eq!(resp.tags().unwrap(), tags);
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: DeleteBucketTaggingResponse = ctx
         .client
-        .delete_bucket_tagging(&bucket_name)
+        .delete_bucket_tagging(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: GetBucketTaggingResponse = ctx
         .client
-        .get_bucket_tagging(&bucket_name)
+        .get_bucket_tagging(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     assert!(resp.tags().unwrap().is_empty());
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 }
 
 #[minio_macros::test(skip_if_not_express)]
-async fn bucket_tags_s3express(ctx: TestContext, bucket_name: String) {
+async fn bucket_tags_s3express(ctx: TestContext, bucket_name: BucketName) {
     let tags = create_tags_example();
 
     let resp: Result<PutBucketTaggingResponse, Error> = ctx
         .client
-        .put_bucket_tagging(&bucket_name)
+        .put_bucket_tagging(bucket_name.clone())
         .tags(tags.clone())
         .build()
         .send()
@@ -92,7 +92,7 @@ async fn bucket_tags_s3express(ctx: TestContext, bucket_name: String) {
 
     let resp: Result<GetBucketTaggingResponse, Error> = ctx
         .client
-        .get_bucket_tagging(&bucket_name)
+        .get_bucket_tagging(bucket_name.clone())
         .build()
         .send()
         .await;
@@ -105,7 +105,7 @@ async fn bucket_tags_s3express(ctx: TestContext, bucket_name: String) {
 
     let resp: Result<DeleteBucketTaggingResponse, Error> = ctx
         .client
-        .delete_bucket_tagging(&bucket_name)
+        .delete_bucket_tagging(bucket_name.clone())
         .build()
         .send()
         .await;

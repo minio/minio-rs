@@ -15,7 +15,7 @@
 
 use crate::s3::error::ValidationErr;
 use crate::s3::response_traits::HasS3Fields;
-use crate::s3::types::{Bucket, S3Request};
+use crate::s3::types::{Bucket, BucketName, S3Request};
 use crate::s3::utils::{from_iso8601utc, get_text_result};
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::{Buf, Bytes};
@@ -45,7 +45,7 @@ impl ListBucketsResponse {
         while let Some(b) = buckets_xml.take_child("Bucket") {
             let bucket = b;
             buckets.push(Bucket {
-                name: get_text_result(&bucket, "Name")?,
+                name: BucketName::try_from(get_text_result(&bucket, "Name")?.as_str())?,
                 creation_date: from_iso8601utc(&get_text_result(&bucket, "CreationDate")?)?,
             })
         }

@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{GetBucketVersioning, GetBucketVersioningBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`GetBucketVersioning`] request builder.
@@ -31,7 +32,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::GetBucketVersioningResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, S3Api};
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
@@ -40,12 +41,12 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetBucketVersioningResponse = client
-    ///         .get_bucket_versioning("bucket-name")
+    ///         .get_bucket_versioning(BucketName::new("bucket-name").unwrap())
     ///         .build().send().await.unwrap();
     ///     println!("retrieved versioning status '{:?}' from bucket '{}'", resp.status(), resp.bucket());
     /// }
     /// ```
-    pub fn get_bucket_versioning<S: Into<String>>(&self, bucket: S) -> GetBucketVersioningBldr {
+    pub fn get_bucket_versioning(&self, bucket: BucketName) -> GetBucketVersioningBldr {
         GetBucketVersioning::builder()
             .client(self.clone())
             .bucket(bucket)

@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{GetObjectTagging, GetObjectTaggingBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`GetObjectTagging`] request builder.
@@ -31,7 +32,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::GetObjectTaggingResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
     /// use minio::s3::response_traits::{HasBucket, HasObject, HasTagging};
     ///
     /// #[tokio::main]
@@ -40,15 +41,15 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetObjectTaggingResponse = client
-    ///         .get_object_tagging("bucket-name", "object-name")
+    ///         .get_object_tagging(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap())
     ///         .build().send().await.unwrap();
     ///     println!("retrieved object tags '{:?}' from object '{}' in bucket '{}' is enabled", resp.tags(), resp.object(), resp.bucket());
     /// }
     /// ```
-    pub fn get_object_tagging<S1: Into<String>, S2: Into<String>>(
+    pub fn get_object_tagging(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
     ) -> GetObjectTaggingBldr {
         GetObjectTagging::builder()
             .client(self.clone())

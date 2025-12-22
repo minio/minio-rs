@@ -51,7 +51,7 @@ pub(crate) async fn bench_get_object_tagging(criterion: &mut Criterion) {
 
             let _resp: PutObjectTaggingResponse = ctx
                 .client
-                .put_object_tagging(&ctx.bucket, &ctx.object)
+                .put_object_tagging(ctx.bucket.clone(), ctx.object.clone())
                 .tags(create_tags_example())
                 .build()
                 .send()

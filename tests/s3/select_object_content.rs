@@ -17,31 +17,35 @@ use minio::s3::error::{Error, S3ServerError};
 use minio::s3::minio_error_response::MinioErrorCode;
 use minio::s3::response::{PutObjectContentResponse, SelectObjectContentResponse};
 use minio::s3::response_traits::{HasBucket, HasObject};
-use minio::s3::types::{S3Api, SelectRequest};
+use minio::s3::types::{BucketName, S3Api, SelectRequest};
 use minio_common::example::{create_select_content_data, create_select_content_request};
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 
 #[minio_macros::test(skip_if_express)]
-async fn select_object_content_s3(ctx: TestContext, bucket_name: String) {
-    let object_name: String = rand_object_name();
+async fn select_object_content_s3(ctx: TestContext, bucket_name: BucketName) {
+    let object_name = rand_object_name();
     let (select_body, select_data) = create_select_content_data();
 
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &object_name, select_body.clone())
+        .put_object_content(
+            bucket_name.clone(),
+            object_name.clone(),
+            select_body.clone(),
+        )
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
 
     let select_request: SelectRequest = create_select_content_request();
 
     let mut resp: SelectObjectContentResponse = ctx
         .client
-        .select_object_content(&bucket_name, &object_name, select_request)
+        .select_object_content(bucket_name.clone(), object_name.clone(), select_request)
         .build()
         .send()
         .await
@@ -59,13 +63,13 @@ async fn select_object_content_s3(ctx: TestContext, bucket_name: String) {
 }
 
 #[minio_macros::test(skip_if_not_express)]
-async fn select_object_content_express(ctx: TestContext, bucket_name: String) {
+async fn select_object_content_express(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let (select_body, _) = create_select_content_data();
 
     let _resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &object_name, select_body)
+        .put_object_content(bucket_name.clone(), object_name.clone(), select_body)
         .build()
         .send()
         .await
@@ -75,7 +79,7 @@ async fn select_object_content_express(ctx: TestContext, bucket_name: String) {
 
     let resp: Result<SelectObjectContentResponse, Error> = ctx
         .client
-        .select_object_content(&bucket_name, &object_name, select_request)
+        .select_object_content(bucket_name.clone(), object_name.clone(), select_request)
         .build()
         .send()
         .await;

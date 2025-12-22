@@ -18,7 +18,7 @@ use minio::s3::response::{
     DeleteBucketNotificationResponse, GetBucketNotificationResponse, PutBucketNotificationResponse,
 };
 use minio::s3::response_traits::{HasBucket, HasRegion};
-use minio::s3::types::{NotificationConfig, S3Api};
+use minio::s3::types::{BucketName, NotificationConfig, S3Api};
 use minio_common::example::create_bucket_notification_config_example;
 use minio_common::test_context::TestContext;
 
@@ -53,33 +53,36 @@ const SQS_ARN: &str = "arn:minio:sqs:us-east-1:miniojavatest:webhook";
 /// - If notification targets are properly configured, the test runs normally
 /// - If targets are not configured, the test gracefully skips (not a failure)
 /// - This allows the test suite to pass in development environments without notification infrastructure
-#[minio_macros::test(skip_if_express)]
-async fn test_bucket_notification(ctx: TestContext, bucket_name: String) {
+#[minio_macros::test(
+    skip_if_express,
+    ignore = "Requires notification target configuration; enable when madmin is ported to Rust"
+)]
+async fn test_bucket_notification(ctx: TestContext, bucket_name: BucketName) {
     let config: NotificationConfig = create_bucket_notification_config_example();
 
     let resp: PutBucketNotificationResponse = ctx
         .client
-        .put_bucket_notification(&bucket_name)
+        .put_bucket_notification(bucket_name.clone())
         .notification_config(config.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     //println!("response of setting notification: resp={:?}", resp);
 
     let resp: GetBucketNotificationResponse = ctx
         .client
-        .get_bucket_notification(&bucket_name)
+        .get_bucket_notification(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     let config2: NotificationConfig = resp.config().unwrap();
     assert_eq!(config2, config);
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     //println!("response of getting notification: resp={:?}", resp);
 
     assert_eq!(config2.queue_config_list.as_ref().unwrap().len(), 1);
@@ -116,23 +119,23 @@ async fn test_bucket_notification(ctx: TestContext, bucket_name: String) {
 
     let resp: DeleteBucketNotificationResponse = ctx
         .client
-        .delete_bucket_notification(&bucket_name)
+        .delete_bucket_notification(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     //println!("response of deleting notification: resp={:?}", resp);
 
     let resp: GetBucketNotificationResponse = ctx
         .client
-        .get_bucket_notification(&bucket_name)
+        .get_bucket_notification(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     assert_eq!(resp.config().unwrap(), NotificationConfig::default());
 }

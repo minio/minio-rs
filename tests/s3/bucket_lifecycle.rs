@@ -21,64 +21,64 @@ use minio::s3::response::{
     DeleteBucketLifecycleResponse, GetBucketLifecycleResponse, PutBucketLifecycleResponse,
 };
 use minio::s3::response_traits::{HasBucket, HasRegion};
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, S3Api};
 use minio_common::example::create_bucket_lifecycle_config_examples;
 use minio_common::test_context::TestContext;
 
 #[minio_macros::test]
-async fn bucket_lifecycle(ctx: TestContext, bucket_name: String) {
+async fn bucket_lifecycle(ctx: TestContext, bucket_name: BucketName) {
     let config: LifecycleConfig = create_bucket_lifecycle_config_examples();
 
     let resp: PutBucketLifecycleResponse = ctx
         .client
-        .put_bucket_lifecycle(&bucket_name)
+        .put_bucket_lifecycle(bucket_name.clone())
         .life_cycle_config(config.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: GetBucketLifecycleResponse = ctx
         .client
-        .get_bucket_lifecycle(&bucket_name)
+        .get_bucket_lifecycle(bucket_name.clone())
         .with_updated_at(false)
         .build()
         .send()
         .await
         .unwrap();
     assert_eq!(resp.config().unwrap(), config);
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     assert!(resp.updated_at().is_none());
 
     let resp: GetBucketLifecycleResponse = ctx
         .client
-        .get_bucket_lifecycle(&bucket_name)
+        .get_bucket_lifecycle(bucket_name.clone())
         .with_updated_at(true)
         .build()
         .send()
         .await
         .unwrap();
     assert_eq!(resp.config().unwrap(), config);
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     assert!(resp.updated_at().is_some());
 
     let resp: DeleteBucketLifecycleResponse = ctx
         .client
-        .delete_bucket_lifecycle(&bucket_name)
+        .delete_bucket_lifecycle(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: Result<GetBucketLifecycleResponse, Error> = ctx
         .client
-        .get_bucket_lifecycle(&bucket_name)
+        .get_bucket_lifecycle(bucket_name.clone())
         .build()
         .send()
         .await;

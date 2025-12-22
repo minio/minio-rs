@@ -23,12 +23,18 @@ use crate::s3::response::{
     CopyObjectInternalResponse, CopyObjectResponse, CreateMultipartUploadResponse,
     StatObjectResponse, UploadPartCopyResponse,
 };
+use crate::s3::response_traits::HasChecksumHeaders;
 use crate::s3::response_traits::HasEtagFromBody;
 use crate::s3::sse::{Sse, SseCustomerKey};
-use crate::s3::types::{Directive, PartInfo, Retention, S3Api, S3Request, ToS3Request};
+use crate::s3::types::Directive;
+use crate::s3::types::PartInfo;
+use crate::s3::types::Retention;
+use crate::s3::types::{
+    BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, UploadId, VersionId,
+};
 use crate::s3::utils::{
-    UtcTime, check_bucket_name, check_object_name, check_sse, check_ssec, to_http_header_value,
-    to_iso8601utc, url_encode,
+    ChecksumAlgorithm, UtcTime, check_sse, check_ssec, to_http_header_value, to_iso8601utc,
+    url_encode,
 };
 use async_recursion::async_recursion;
 use http::Method;
@@ -48,17 +54,26 @@ pub struct UploadPartCopy {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
     #[builder(setter(into))] // force required + accept Into<String>
-    upload_id: String,
+    upload_id: UploadId,
     #[builder(default = 0)]
     part_number: u16,
     #[builder(default)]
     headers: Multimap,
+    /// Optional checksum algorithm for data integrity verification during part copy.
+    ///
+    /// When specified, the server computes a checksum of the copied part data using
+    /// this algorithm. Use the same algorithm for all parts in a multipart upload.
+    /// Supported algorithms: CRC32, CRC32C, SHA1, SHA256, CRC64NVME.
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<crate::s3::utils::ChecksumAlgorithm>,
 }
 
 impl S3Api for UploadPartCopy {
@@ -73,9 +88,10 @@ pub type UploadPartCopyBldr = UploadPartCopyBuilder<(
     (),
     (),
     (),
-    (String,),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
+    (UploadId,),
+    (),
     (),
     (),
 )>;
@@ -83,8 +99,6 @@ pub type UploadPartCopyBldr = UploadPartCopyBuilder<(
 impl ToS3Request for UploadPartCopy {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         {
-            check_bucket_name(&self.bucket, true)?;
-            check_object_name(&self.object)?;
             if self.upload_id.is_empty() {
                 return Err(ValidationErr::InvalidUploadId(
                     "upload ID cannot be empty".into(),
@@ -100,10 +114,14 @@ impl ToS3Request for UploadPartCopy {
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         headers.add_multimap(self.headers);
 
+        if let Some(algorithm) = self.checksum_algorithm {
+            headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
+        }
+
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         {
             query_params.add("partNumber", self.part_number.to_string());
-            query_params.add("uploadId", self.upload_id);
+            query_params.add("uploadId", self.upload_id.to_string());
         }
 
         Ok(S3Request::builder()
@@ -127,11 +145,13 @@ pub struct CopyObjectInternal {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    pub(crate) region: Option<String>,
+    pub(crate) region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
     #[builder(default)]
     headers: Multimap,
     #[builder(default, setter(into))]
@@ -150,6 +170,8 @@ pub struct CopyObjectInternal {
     metadata_directive: Option<Directive>,
     #[builder(default, setter(into))]
     tagging_directive: Option<Directive>,
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<crate::s3::utils::ChecksumAlgorithm>,
 }
 
 impl S3Api for CopyObjectInternal {
@@ -164,8 +186,9 @@ pub type CopyObjectInternalBldr = CopyObjectInternalBuilder<(
     (),
     (),
     (),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
+    (),
     (),
     (),
     (),
@@ -225,12 +248,12 @@ impl ToS3Request for CopyObjectInternal {
             }
 
             let mut copy_source = String::from("/");
-            copy_source.push_str(&self.source.bucket);
+            copy_source.push_str(self.source.bucket.as_str());
             copy_source.push('/');
-            copy_source.push_str(&self.source.object);
+            copy_source.push_str(self.source.object.as_str());
             if let Some(v) = &self.source.version_id {
                 copy_source.push_str("?versionId=");
-                copy_source.push_str(&url_encode(v));
+                copy_source.push_str(&url_encode(v.as_str()));
             }
             headers.add(X_AMZ_COPY_SOURCE, copy_source);
 
@@ -261,6 +284,10 @@ impl ToS3Request for CopyObjectInternal {
             if let Some(v) = self.source.ssec {
                 headers.add_multimap(v.copy_headers());
             }
+
+            if let Some(algorithm) = self.checksum_algorithm {
+                headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
+            }
         };
 
         Ok(S3Request::builder()
@@ -287,11 +314,13 @@ pub struct CopyObject {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    pub(crate) region: Option<String>,
+    pub(crate) region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
     #[builder(default, setter(into))]
     headers: Option<Multimap>,
     #[builder(default, setter(into))]
@@ -310,6 +339,13 @@ pub struct CopyObject {
     metadata_directive: Option<Directive>,
     #[builder(default, setter(into))]
     tagging_directive: Option<Directive>,
+    /// Optional checksum algorithm for data integrity verification during copy.
+    ///
+    /// When specified, the server computes a checksum of the destination object using
+    /// this algorithm during the copy operation. Supported algorithms: CRC32, CRC32C,
+    /// SHA1, SHA256, CRC64NVME. The checksum value is included in response headers for verification.
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<crate::s3::utils::ChecksumAlgorithm>,
 }
 
 /// Builder type for [`CopyObject`] that is returned by [`MinioClient::copy_object`](crate::s3::client::MinioClient::copy_object).
@@ -320,8 +356,9 @@ pub type CopyObjectBldr = CopyObjectBuilder<(
     (),
     (),
     (),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
+    (),
     (),
     (),
     (),
@@ -346,7 +383,7 @@ impl CopyObject {
 
         let stat_resp: StatObjectResponse = self
             .client
-            .stat_object(&source.bucket, &source.object)
+            .stat_object(source.bucket.clone(), source.object.clone())
             .extra_headers(source.extra_headers)
             .extra_query_params(source.extra_query_params)
             .region(source.region)
@@ -385,7 +422,8 @@ impl CopyObject {
             }
 
             let src: ComposeSource = {
-                let mut src = ComposeSource::new(&self.source.bucket, &self.source.object)?;
+                let mut src =
+                    ComposeSource::new(self.source.bucket.clone(), self.source.object.clone());
                 src.extra_headers = self.source.extra_headers;
                 src.extra_query_params = self.source.extra_query_params;
                 src.region = self.source.region;
@@ -402,7 +440,11 @@ impl CopyObject {
 
             let resp: ComposeObjectResponse = self
                 .client
-                .compose_object(&self.source.bucket, &self.source.object, sources)
+                .compose_object(
+                    self.source.bucket.clone(),
+                    self.source.object.clone(),
+                    sources,
+                )
                 .extra_headers(self.extra_headers)
                 .extra_query_params(self.extra_query_params)
                 .region(self.region)
@@ -421,7 +463,7 @@ impl CopyObject {
         } else {
             let resp: CopyObjectInternalResponse = self
                 .client
-                .copy_object_internal(&self.bucket, &self.object)
+                .copy_object_internal(self.bucket.clone(), self.object.clone())
                 .extra_headers(self.extra_headers)
                 .extra_query_params(self.extra_query_params)
                 .region(self.region)
@@ -434,6 +476,7 @@ impl CopyObject {
                 .source(self.source)
                 .metadata_directive(self.metadata_directive)
                 .tagging_directive(self.tagging_directive)
+                .checksum_algorithm(self.checksum_algorithm)
                 .build()
                 .send()
                 .await?;
@@ -453,11 +496,13 @@ pub struct ComposeObjectInternal {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    pub(crate) region: Option<String>,
+    pub(crate) region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
     #[builder(default, setter(into))]
     headers: Option<Multimap>,
     #[builder(default, setter(into))]
@@ -472,6 +517,8 @@ pub struct ComposeObjectInternal {
     legal_hold: bool,
     #[builder(default)]
     sources: Vec<ComposeSource>,
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 /// Builder type for [`ComposeObjectInternal`] that is returned by `compose_object_internal` method.
@@ -482,8 +529,9 @@ pub type ComposeObjectInternalBldr = ComposeObjectInternalBuilder<(
     (),
     (),
     (),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
+    (),
     (),
     (),
     (),
@@ -495,13 +543,11 @@ pub type ComposeObjectInternalBldr = ComposeObjectInternalBuilder<(
 
 impl ComposeObjectInternal {
     #[async_recursion]
-    pub async fn send(self) -> (Result<ComposeObjectResponse, Error>, String) {
-        let mut upload_id = String::new();
-
+    pub async fn send(self) -> (Result<ComposeObjectResponse, Error>, Option<UploadId>) {
         let mut sources = self.sources;
         let part_count: u16 = match self.client.calculate_part_count(&mut sources).await {
             Ok(v) => v,
-            Err(e) => return (Err(e), upload_id),
+            Err(e) => return (Err(e), None),
         };
         let sources = sources; // Note: make sources readonly
 
@@ -511,7 +557,7 @@ impl ComposeObjectInternal {
 
             let resp: CopyObjectResponse = match self
                 .client
-                .copy_object(&self.bucket, &self.object)
+                .copy_object(self.bucket.clone(), self.object.clone())
                 .extra_headers(self.extra_headers)
                 .extra_query_params(self.extra_query_params)
                 .region(self.region)
@@ -523,21 +569,21 @@ impl ComposeObjectInternal {
                 .legal_hold(self.legal_hold)
                 .source(
                     CopySource::builder()
-                        .bucket(&self.bucket)
-                        .object(&self.object)
+                        .bucket(sources[0].bucket.clone())
+                        .object(sources[0].object.clone())
                         .build(),
-                ) // TODO redundant use of bucket and object
+                )
                 .build()
                 .send()
                 .await
             {
                 Ok(v) => v,
-                Err(e) => return (Err(e), upload_id),
+                Err(e) => return (Err(e), None),
             };
 
             let resp: ComposeObjectResponse = resp; // retype to ComposeObjectResponse
 
-            (Ok(resp), upload_id)
+            (Ok(resp), None)
         } else {
             let headers: Multimap = into_headers_copy_object(
                 self.extra_headers,
@@ -550,24 +596,24 @@ impl ComposeObjectInternal {
             );
             let cmu: CreateMultipartUploadResponse = match self
                 .client
-                .create_multipart_upload(&self.bucket, &self.object)
+                .create_multipart_upload(self.bucket.clone(), self.object.clone())
                 .extra_query_params(self.extra_query_params.clone())
                 .region(self.region.clone())
                 .extra_headers(Some(headers))
+                .checksum_algorithm(self.checksum_algorithm)
                 .build()
                 .send()
                 .await
             {
                 Ok(v) => v,
-                Err(e) => return (Err(e), upload_id),
+                Err(e) => return (Err(e), None),
             };
 
-            // the multipart upload was successful: update the upload_id
-            let upload_id_cmu: String = match cmu.upload_id().await {
+            // the multipart upload was successful: get the upload_id
+            let upload_id: UploadId = match cmu.upload_id().await {
                 Ok(v) => v,
-                Err(e) => return (Err(e.into()), upload_id),
+                Err(e) => return (Err(e.into()), None),
             };
-            upload_id.push_str(&upload_id_cmu);
 
             let mut part_number = 0_u16;
             let ssec_headers: Multimap = match self.sse {
@@ -608,28 +654,32 @@ impl ComposeObjectInternal {
 
                     let resp: UploadPartCopyResponse = match self
                         .client
-                        .upload_part_copy(&self.bucket, &self.object, &upload_id)
+                        .upload_part_copy(
+                            self.bucket.clone(),
+                            self.object.clone(),
+                            upload_id.clone(),
+                        )
                         .region(self.region.clone())
                         .part_number(part_number)
                         .headers(headers)
+                        .checksum_algorithm(self.checksum_algorithm)
                         .build()
                         .send()
                         .await
                     {
                         Ok(v) => v,
-                        Err(e) => return (Err(e), upload_id),
+                        Err(e) => return (Err(e), Some(upload_id)),
                     };
 
                     let etag = match resp.etag() {
                         Ok(v) => v,
-                        Err(e) => return (Err(e.into()), upload_id),
+                        Err(e) => return (Err(e.into()), Some(upload_id)),
                     };
 
-                    parts.push(PartInfo {
-                        number: part_number,
-                        etag,
-                        size,
-                    });
+                    let checksum = self
+                        .checksum_algorithm
+                        .and_then(|alg| resp.get_checksum(alg).map(|v| (alg, v)));
+                    parts.push(PartInfo::new(part_number, etag, size, checksum));
                 } else {
                     let part_ranges = calculate_part_ranges(offset, size, MAX_PART_SIZE);
                     for (part_offset, length) in part_ranges {
@@ -644,35 +694,44 @@ impl ComposeObjectInternal {
 
                         let resp: UploadPartCopyResponse = match self
                             .client
-                            .upload_part_copy(&self.bucket, &self.object, &upload_id)
+                            .upload_part_copy(
+                                self.bucket.clone(),
+                                self.object.clone(),
+                                upload_id.clone(),
+                            )
                             .region(self.region.clone())
                             .part_number(part_number)
                             .headers(headers_copy)
+                            .checksum_algorithm(self.checksum_algorithm)
                             .build()
                             .send()
                             .await
                         {
                             Ok(v) => v,
-                            Err(e) => return (Err(e), upload_id),
+                            Err(e) => return (Err(e), Some(upload_id)),
                         };
 
                         let etag = match resp.etag() {
                             Ok(v) => v,
-                            Err(e) => return (Err(e.into()), upload_id),
+                            Err(e) => return (Err(e.into()), Some(upload_id)),
                         };
 
-                        parts.push(PartInfo {
-                            number: part_number,
-                            etag,
-                            size: length,
-                        });
+                        let checksum = self
+                            .checksum_algorithm
+                            .and_then(|alg| resp.get_checksum(alg).map(|v| (alg, v)));
+                        parts.push(PartInfo::new(part_number, etag, length, checksum));
                     }
                 }
             }
 
             let resp: Result<CompleteMultipartUploadResponse, Error> = self
                 .client
-                .complete_multipart_upload(&self.bucket, &self.object, &upload_id, parts)
+                .complete_multipart_upload(
+                    self.bucket.clone(),
+                    self.object.clone(),
+                    upload_id.clone(),
+                    parts,
+                )
                 .region(self.region)
                 .build()
                 .send()
@@ -685,9 +744,9 @@ impl ComposeObjectInternal {
                         headers: v.headers,
                         body: v.body,
                     };
-                    (Ok(resp), upload_id)
+                    (Ok(resp), Some(upload_id))
                 }
-                Err(e) => (Err(e), upload_id),
+                Err(e) => (Err(e), Some(upload_id)),
             }
         }
     }
@@ -706,11 +765,13 @@ pub struct ComposeObject {
     #[builder(default, setter(into))]
     extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    #[builder(!default)]
+    bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    object: String,
+    #[builder(!default)]
+    object: ObjectKey,
     #[builder(default, setter(into))]
     headers: Option<Multimap>,
     #[builder(default, setter(into))]
@@ -725,6 +786,8 @@ pub struct ComposeObject {
     legal_hold: bool,
     #[builder(default)]
     sources: Vec<ComposeSource>,
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 /// Builder type for [`ComposeObject`] that is returned by [`MinioClient::compose_object`](crate::s3::client::MinioClient::compose_object).
@@ -735,8 +798,8 @@ pub type ComposeObjectBldr = ComposeObjectBuilder<(
     (),
     (),
     (),
-    (String,),
-    (String,),
+    (BucketName,),
+    (ObjectKey,),
     (),
     (),
     (),
@@ -744,18 +807,16 @@ pub type ComposeObjectBldr = ComposeObjectBuilder<(
     (),
     (),
     (Vec<ComposeSource>,),
+    (),
 )>;
 
 impl ComposeObject {
     pub async fn send(self) -> Result<ComposeObjectResponse, Error> {
         check_sse(&self.sse, &self.client)?;
 
-        let object: String = self.object.clone();
-        let bucket: String = self.bucket.clone();
-
-        let (res, upload_id): (Result<ComposeObjectResponse, Error>, String) = self
+        let (res, upload_id): (Result<ComposeObjectResponse, Error>, Option<UploadId>) = self
             .client
-            .compose_object_internal(&self.bucket, &self.object)
+            .compose_object_internal(self.bucket.clone(), self.object.clone())
             .extra_headers(self.extra_headers)
             .extra_query_params(self.extra_query_params)
             .region(self.region)
@@ -766,6 +827,7 @@ impl ComposeObject {
             .retention(self.retention)
             .legal_hold(self.legal_hold)
             .sources(self.sources)
+            .checksum_algorithm(self.checksum_algorithm)
             .build()
             .send()
             .await;
@@ -773,10 +835,10 @@ impl ComposeObject {
         match res {
             Ok(v) => Ok(v),
             Err(e) => {
-                if !upload_id.is_empty() {
+                if let Some(upload_id) = upload_id {
                     let _resp: AbortMultipartUploadResponse = self
                         .client
-                        .abort_multipart_upload(&bucket, &object, &upload_id)
+                        .abort_multipart_upload(self.bucket, self.object, upload_id)
                         .build()
                         .send()
                         .await?;
@@ -790,14 +852,14 @@ impl ComposeObject {
 // region: misc
 
 /// Source object information for [`compose_object`](MinioClient::compose_object).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ComposeSource {
     pub extra_headers: Option<Multimap>,
     pub extra_query_params: Option<Multimap>,
-    pub region: Option<String>,
-    pub bucket: String,
-    pub object: String,
-    pub version_id: Option<String>,
+    pub region: Option<Region>,
+    pub bucket: BucketName, //TODO ComposeSource should derive TypedBuilder not Default!
+    pub object: ObjectKey,
+    pub version_id: Option<VersionId>,
     pub ssec: Option<SseCustomerKey>,
     pub offset: Option<u64>,
     pub length: Option<u64>,
@@ -817,17 +879,29 @@ impl ComposeSource {
     ///
     /// ```
     /// use minio::s3::builders::ComposeSource;
-    /// let src = ComposeSource::new("my-src-bucket", "my-src-object").unwrap();
+    /// use minio::s3::types::{BucketName, ObjectKey};
+    /// let bucket = BucketName::new("my-src-bucket").unwrap();
+    /// let object = ObjectKey::new("my-src-object").unwrap();
+    /// let src = ComposeSource::new(bucket, object);
     /// ```
-    pub fn new(bucket_name: &str, object_name: &str) -> Result<Self, ValidationErr> {
-        check_bucket_name(bucket_name, true)?;
-        check_object_name(object_name)?;
-
-        Ok(Self {
-            bucket: bucket_name.to_owned(),
-            object: object_name.to_owned(),
-            ..Default::default()
-        })
+    pub fn new(bucket: BucketName, object: ObjectKey) -> Self {
+        Self {
+            extra_headers: None,
+            extra_query_params: None,
+            region: None,
+            bucket,
+            object,
+            version_id: None,
+            ssec: None,
+            offset: None,
+            length: None,
+            match_etag: None,
+            not_match_etag: None,
+            modified_since: None,
+            unmodified_since: None,
+            object_size: None,
+            headers: None,
+        }
     }
 
     pub fn get_object_size(&self) -> u64 {
@@ -845,7 +919,7 @@ impl ComposeSource {
             return Err(ValidationErr::InvalidComposeSourceOffset {
                 bucket: self.bucket.to_string(),
                 object: self.object.to_string(),
-                version: self.version_id.clone(),
+                version: self.version_id.as_ref().map(|v| v.to_string()),
                 offset: v,
                 object_size,
             });
@@ -856,7 +930,7 @@ impl ComposeSource {
                 return Err(ValidationErr::InvalidComposeSourceLength {
                     bucket: self.bucket.to_string(),
                     object: self.object.to_string(),
-                    version: self.version_id.clone(),
+                    version: self.version_id.as_ref().map(|v| v.to_string()),
                     length: v,
                     object_size,
                 });
@@ -866,7 +940,7 @@ impl ComposeSource {
                 return Err(ValidationErr::InvalidComposeSourceSize {
                     bucket: self.bucket.to_string(),
                     object: self.object.to_string(),
-                    version: self.version_id.clone(),
+                    version: self.version_id.as_ref().map(|v| v.to_string()),
                     compose_size: self.offset.unwrap_or_default() + v,
                     object_size,
                 });
@@ -878,12 +952,12 @@ impl ComposeSource {
         let mut headers = Multimap::new();
 
         let mut copy_source = String::from("/");
-        copy_source.push_str(&self.bucket);
+        copy_source.push_str(self.bucket.as_ref());
         copy_source.push('/');
-        copy_source.push_str(&self.object);
+        copy_source.push_str(self.object.as_ref());
         if let Some(v) = &self.version_id {
             copy_source.push_str("?versionId=");
-            copy_source.push_str(&url_encode(v));
+            copy_source.push_str(&url_encode(v.as_ref()));
         }
         headers.add(X_AMZ_COPY_SOURCE, copy_source);
 
@@ -928,13 +1002,13 @@ pub struct CopySource {
     #[builder(default, setter(into))]
     pub extra_query_params: Option<Multimap>,
     #[builder(default, setter(into))]
-    pub region: Option<String>,
+    pub region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    pub bucket: String,
+    pub bucket: BucketName,
     #[builder(setter(into))] // force required + accept Into<String>
-    pub object: String,
+    pub object: ObjectKey,
     #[builder(default, setter(into))]
-    pub version_id: Option<String>,
+    pub version_id: Option<VersionId>,
     #[builder(default, setter(into))]
     pub ssec: Option<SseCustomerKey>,
     #[builder(default, setter(into))]

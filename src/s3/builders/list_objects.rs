@@ -19,7 +19,7 @@ use crate::s3::response::ListObjectsResponse;
 use crate::s3::response::list_objects::{
     ListObjectVersionsResponse, ListObjectsV1Response, ListObjectsV2Response,
 };
-use crate::s3::types::{S3Api, S3Request, ToS3Request, ToStream};
+use crate::s3::types::{BucketName, Region, S3Api, S3Request, ToS3Request, ToStream};
 use crate::s3::utils::{check_bucket_name, insert};
 use async_trait::async_trait;
 use futures_util::{Stream, StreamExt, stream as futures_stream};
@@ -63,8 +63,8 @@ struct ListObjectsV1 {
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
-    region: Option<String>,
-    bucket: String,
+    region: Option<Region>,
+    bucket: BucketName,
     delimiter: Option<String>,
     disable_url_encoding: bool,
     max_keys: Option<u16>,
@@ -168,8 +168,8 @@ struct ListObjectsV2 {
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
-    region: Option<String>,
-    bucket: String,
+    region: Option<Region>,
+    bucket: BucketName,
     delimiter: Option<String>,
     disable_url_encoding: bool,
     max_keys: Option<u16>,
@@ -289,8 +289,8 @@ struct ListObjectVersions {
 
     extra_headers: Option<Multimap>,
     extra_query_params: Option<Multimap>,
-    region: Option<String>,
-    bucket: String,
+    region: Option<Region>,
+    bucket: BucketName,
     delimiter: Option<String>,
     disable_url_encoding: bool,
     max_keys: Option<u16>,
@@ -418,9 +418,9 @@ pub struct ListObjects {
     extra_query_params: Option<Multimap>,
     /// Sets the region for the request
     #[builder(default, setter(into))]
-    region: Option<String>,
+    region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
-    bucket: String,
+    bucket: BucketName,
 
     /// Delimiter to roll up common prefixes on.
     #[builder(default, setter(into))]
@@ -493,7 +493,7 @@ pub type ListObjectBldr = ListObjectsBuilder<(
     (),
     (),
     (),
-    (String,),
+    (BucketName,),
     (),
     (),
     (),

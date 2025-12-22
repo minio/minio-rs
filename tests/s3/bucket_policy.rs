@@ -18,28 +18,28 @@ use minio::s3::response::{
     DeleteBucketPolicyResponse, GetBucketPolicyResponse, PutBucketPolicyResponse,
 };
 use minio::s3::response_traits::{HasBucket, HasRegion};
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, S3Api};
 use minio_common::example::create_bucket_policy_config_example;
 use minio_common::test_context::TestContext;
 
 #[minio_macros::test]
-async fn bucket_policy(ctx: TestContext, bucket_name: String) {
+async fn bucket_policy(ctx: TestContext, bucket_name: BucketName) {
     let config: String = create_bucket_policy_config_example(&bucket_name);
 
     let resp: PutBucketPolicyResponse = ctx
         .client
-        .put_bucket_policy(&bucket_name)
+        .put_bucket_policy(bucket_name.clone())
         .config(config.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: GetBucketPolicyResponse = ctx
         .client
-        .get_bucket_policy(&bucket_name)
+        .get_bucket_policy(bucket_name.clone())
         .build()
         .send()
         .await
@@ -48,27 +48,27 @@ async fn bucket_policy(ctx: TestContext, bucket_name: String) {
     // println!("response of getting policy: resp.config={:?}", resp.config);
     // assert_eq!(&resp.config, &config);
     assert!(!resp.config().unwrap().is_empty());
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: DeleteBucketPolicyResponse = ctx
         .client
-        .delete_bucket_policy(&bucket_name)
+        .delete_bucket_policy(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: GetBucketPolicyResponse = ctx
         .client
-        .get_bucket_policy(&bucket_name)
+        .get_bucket_policy(bucket_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     assert_eq!(resp.config().unwrap(), "{}");
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 }

@@ -17,7 +17,7 @@ use criterion::Criterion;
 use minio::s3::MinioClient;
 use minio::s3::error::Error;
 use minio::s3::response::{CreateBucketResponse, PutObjectContentResponse};
-use minio::s3::types::{FromS3Response, S3Api, S3Request};
+use minio::s3::types::{BucketName, FromS3Response, ObjectKey, S3Api, S3Request};
 use minio_common::cleanup_guard::CleanupGuard;
 use minio_common::test_context::TestContext;
 use minio_common::utils::{
@@ -28,10 +28,10 @@ use tokio::runtime::Runtime;
 
 pub(crate) struct Ctx2 {
     pub client: MinioClient,
-    pub bucket: String,
-    pub object: String,
+    pub bucket: BucketName,
+    pub object: ObjectKey,
     _cleanup: CleanupGuard,
-    pub aux_bucket: Option<String>,
+    pub aux_bucket: Option<BucketName>,
     _aux_cleanup: Option<CleanupGuard>,
 }
 
@@ -47,7 +47,7 @@ impl Ctx2 {
         Self {
             client: ctx.client,
             bucket: bucket_name,
-            object: "".to_string(),
+            object: ObjectKey::new("Dummy").unwrap(),
             _cleanup: cleanup,
             aux_bucket: None,
             _aux_cleanup: None,
@@ -59,21 +59,21 @@ impl Ctx2 {
             env::set_var("MINIO_SSL_CERT_FILE", "./tests/public.crt");
         }
         let ctx = TestContext::new_from_env();
-        let bucket_name: String = rand_bucket_name();
+        let bucket_name = rand_bucket_name();
         let _resp: CreateBucketResponse = ctx
             .client
-            .create_bucket(&bucket_name)
+            .create_bucket(bucket_name.clone())
             .object_lock(object_lock)
             .build()
             .send()
             .await
             .unwrap();
-        let cleanup = CleanupGuard::new(ctx.client.clone(), &bucket_name);
+        let cleanup = CleanupGuard::new(ctx.client.clone(), bucket_name.clone());
         let object_name = rand_object_name();
         let data = bytes::Bytes::from("hello, world".to_string().into_bytes());
         let _resp: PutObjectContentResponse = ctx
             .client
-            .put_object_content(&bucket_name, &object_name, data)
+            .put_object_content(bucket_name.clone(), object_name.clone(), data)
             .build()
             .send()
             .await
@@ -82,26 +82,25 @@ impl Ctx2 {
         Self {
             client: ctx.client,
             bucket: bucket_name,
-            object: object_name.to_string(),
+            object: object_name,
             _cleanup: cleanup,
             aux_bucket: None,
             _aux_cleanup: None,
         }
     }
     #[allow(dead_code)]
-    pub async fn new_aux(&mut self) -> String {
-        let bucket_name: String = rand_bucket_name();
+    pub async fn new_aux(&mut self) -> BucketName {
+        let bucket_name = rand_bucket_name();
         self.aux_bucket = Some(bucket_name.clone());
-        self._aux_cleanup = Some(CleanupGuard::new(self.client.clone(), &bucket_name));
+        self._aux_cleanup = Some(CleanupGuard::new(self.client.clone(), bucket_name.clone()));
         let _resp: CreateBucketResponse = self
             .client
-            .create_bucket(&bucket_name)
+            .create_bucket(bucket_name.clone())
             .object_lock(false)
             .build()
             .send()
             .await
             .unwrap();
-
         bucket_name
     }
 }

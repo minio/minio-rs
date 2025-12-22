@@ -17,21 +17,22 @@ use http::Method;
 use minio::s3::client::DEFAULT_REGION;
 use minio::s3::header_constants::*;
 use minio::s3::response::GetPresignedObjectUrlResponse;
+use minio::s3::types::BucketName;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 
 #[minio_macros::test]
-async fn get_presigned_object_url(ctx: TestContext, bucket_name: String) {
+async fn get_presigned_object_url(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
     let resp: GetPresignedObjectUrlResponse = ctx
         .client
-        .get_presigned_object_url(&bucket_name, &object_name, Method::GET)
+        .get_presigned_object_url(bucket_name.clone(), object_name.clone(), Method::GET)
         .build()
         .send()
         .await
         .unwrap();
     assert!(resp.url.contains(X_AMZ_SIGNATURE));
-    assert_eq!(resp.bucket, bucket_name);
-    assert_eq!(resp.object, object_name);
-    assert_eq!(resp.region, DEFAULT_REGION);
+    assert_eq!(resp.bucket.as_str(), bucket_name.as_str());
+    assert_eq!(resp.object.as_str(), object_name.as_str());
+    assert_eq!(resp.region.as_str(), DEFAULT_REGION.as_str());
 }

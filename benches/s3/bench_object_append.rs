@@ -44,7 +44,7 @@ pub(crate) async fn bench_object_append(criterion: &mut Criterion) {
                     tokio::runtime::Runtime::new().map_err(|e| Error::DriveIo(e.into()))?;
                 runtime.block_on(
                     ctx.client
-                        .stat_object(&ctx.bucket, &ctx.object)
+                        .stat_object(ctx.bucket.clone(), ctx.object.clone())
                         .build()
                         .send(),
                 )

@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{GetObject, GetObjectBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`GetObject`] request builder to download an object from a specified S3 bucket.
@@ -32,7 +33,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::GetObjectResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -40,18 +41,14 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetObjectResponse = client
-    ///         .get_object("bucket-name", "object-name")
+    ///         .get_object(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap())
     ///         .build().send().await.unwrap();
     ///     let content_bytes = resp.content().unwrap().to_segmented_bytes().await.unwrap().to_bytes();
     ///     let content_str = String::from_utf8(content_bytes.to_vec()).unwrap();
     ///     println!("retrieved content '{content_str}'");
     /// }
     /// ```
-    pub fn get_object<S1: Into<String>, S2: Into<String>>(
-        &self,
-        bucket: S1,
-        object: S2,
-    ) -> GetObjectBldr {
+    pub fn get_object(&self, bucket: BucketName, object: ObjectKey) -> GetObjectBldr {
         GetObject::builder()
             .client(self.clone())
             .bucket(bucket)

@@ -19,6 +19,7 @@ use crate::s3::builders::{
     UploadPartCopy, UploadPartCopyBldr,
 };
 use crate::s3::client::MinioClient;
+use crate::s3::types::{BucketName, ObjectKey, UploadId};
 
 impl MinioClient {
     /// Creates a [`UploadPartCopy`] request builder.
@@ -35,27 +36,27 @@ impl MinioClient {
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::UploadPartCopyResponse;
     /// use minio::s3::segmented_bytes::SegmentedBytes;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, UploadId, S3Api};
     /// use minio::s3::response_traits::HasObject;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let data1: SegmentedBytes = SegmentedBytes::from("aaaa".to_string());
     ///     todo!();
     ///     let resp: UploadPartCopyResponse = client
-    ///         .upload_part_copy("bucket-name", "object-name", "TODO")
+    ///         .upload_part_copy(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap(), UploadId::new("upload-id-123").unwrap())
     ///         .build().send().await.unwrap();
     ///     println!("uploaded {}", resp.object());
     /// }
     /// ```
-    pub fn upload_part_copy<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
+    pub fn upload_part_copy(
         &self,
-        bucket: S1,
-        object: S2,
-        upload_id: S3,
+        bucket: BucketName,
+        object: ObjectKey,
+        upload_id: UploadId,
     ) -> UploadPartCopyBldr {
         UploadPartCopy::builder()
             .client(self.clone())
@@ -66,10 +67,10 @@ impl MinioClient {
 
     /// Create a CopyObject request builder. This is a lower-level API that
     /// performs a non-multipart object copy.
-    pub(crate) fn copy_object_internal<S1: Into<String>, S2: Into<String>>(
+    pub(crate) fn copy_object_internal(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
     ) -> CopyObjectInternalBldr {
         CopyObjectInternal::builder()
             .client(self.clone())
@@ -103,26 +104,22 @@ impl MinioClient {
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::CopyObjectResponse;
     /// use minio::s3::builders::CopySource;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
+    /// use minio::s3::response_traits::HasVersion;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    /// use minio::s3::response_traits::HasVersion;
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: CopyObjectResponse = client
-    ///         .copy_object("bucket-name-dst", "object-name-dst")
-    ///         .source(CopySource::builder().bucket("bucket-name-src").object("object-name-src").build())
+    ///         .copy_object(BucketName::new("bucket-name-dst").unwrap(), ObjectKey::new("object-name-dst").unwrap())
+    ///         .source(CopySource::builder().bucket(BucketName::new("bucket-name-src").unwrap()).object(ObjectKey::new("object-name-src").unwrap()).build())
     ///         .build().send().await.unwrap();
     ///     println!("copied the file from src to dst. New version: {:?}", resp.version_id());
     /// }
     /// ```
-    pub fn copy_object<S1: Into<String>, S2: Into<String>>(
-        &self,
-        bucket: S1,
-        object: S2,
-    ) -> CopyObjectBldr {
+    pub fn copy_object(&self, bucket: BucketName, object: ObjectKey) -> CopyObjectBldr {
         CopyObject::builder()
             .client(self.clone())
             .bucket(bucket)
@@ -131,10 +128,10 @@ impl MinioClient {
 
     /// Create a ComposeObjectInternal request builder. This is a higher-level API that
     /// performs a multipart object compose.
-    pub(crate) fn compose_object_internal<S1: Into<String>, S2: Into<String>>(
+    pub(crate) fn compose_object_internal(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
     ) -> ComposeObjectInternalBldr {
         ComposeObjectInternal::builder()
             .client(self.clone())
@@ -144,10 +141,10 @@ impl MinioClient {
 
     /// compose object is higher-level API that calls an internal compose object, and if that call fails,
     /// it calls ['abort_multipart_upload`](MinioClient::abort_multipart_upload).
-    pub fn compose_object<S1: Into<String>, S2: Into<String>>(
+    pub fn compose_object(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
         sources: Vec<ComposeSource>,
     ) -> ComposeObjectBldr {
         ComposeObject::builder()

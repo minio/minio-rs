@@ -47,7 +47,7 @@ pub(crate) async fn bench_get_bucket_tagging(criterion: &mut Criterion) {
         || async {
             let ctx = Ctx2::new().await;
             ctx.client
-                .put_bucket_tagging(&ctx.bucket)
+                .put_bucket_tagging(ctx.bucket.clone())
                 .tags(create_tags_example())
                 .build()
                 .send()

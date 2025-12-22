@@ -16,7 +16,8 @@
 //! Basic S3 data types: ListEntry, Bucket, Part, Retention, etc.
 
 use crate::s3::error::ValidationErr;
-use crate::s3::utils::UtcTime;
+use crate::s3::types::BucketName;
+use crate::s3::utils::{ChecksumAlgorithm, UtcTime};
 use std::collections::HashMap;
 use std::fmt;
 
@@ -42,7 +43,7 @@ pub struct ListEntry {
 #[derive(Clone, Debug)]
 /// Contains the bucket name and creation date
 pub struct Bucket {
-    pub name: String,
+    pub name: BucketName,
     pub creation_date: UtcTime,
 }
 
@@ -50,14 +51,37 @@ pub struct Bucket {
 /// Contains part number and etag of multipart upload
 pub struct Part {
     pub number: u16,
-    pub etag: String,
+    pub etag: String, //TODO create struct for ETag?
 }
 
+/// Contains part information for multipart uploads including optional checksum.
+///
+/// Only one checksum algorithm is active per upload, so the checksum is stored
+/// as an optional tuple of (algorithm, base64-encoded value).
 #[derive(Clone, Debug)]
 pub struct PartInfo {
     pub number: u16,
     pub etag: String,
     pub size: u64,
+    /// Optional checksum for this part: (algorithm, base64-encoded value)
+    pub checksum: Option<(ChecksumAlgorithm, String)>,
+}
+
+impl PartInfo {
+    /// Creates a new PartInfo.
+    pub fn new(
+        number: u16,
+        etag: String,
+        size: u64,
+        checksum: Option<(ChecksumAlgorithm, String)>,
+    ) -> Self {
+        Self {
+            number,
+            etag,
+            size,
+            checksum,
+        }
+    }
 }
 
 #[derive(PartialEq, Clone, Debug)]

@@ -55,7 +55,7 @@ use minio::s3::error::Error;
 use minio::s3::http::{BaseUrl, Url};
 use minio::s3::multimap_ext::Multimap;
 use minio::s3::segmented_bytes::SegmentedBytes;
-use minio::s3::types::{S3Api, ToStream};
+use minio::s3::types::{BucketName, ObjectKey, S3Api, ToStream};
 use reqwest::Response;
 use std::env;
 use std::str::FromStr;
@@ -590,7 +590,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Creating test bucket: {}", test_bucket);
 
     // Try to create the bucket (might fail if it exists, that's ok)
-    match client.create_bucket(&test_bucket).build().send().await {
+    match client
+        .create_bucket(BucketName::new(&test_bucket)?)
+        .build()
+        .send()
+        .await
+    {
         Ok(_) => println!("✅ Bucket created successfully"),
         Err(e) => {
             // Check if it's because the bucket already exists
@@ -624,7 +629,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             1 => {
                 // Check if bucket exists
                 client
-                    .bucket_exists(&test_bucket)
+                    .bucket_exists(BucketName::new(&test_bucket)?)
                     .build()
                     .send()
                     .await
@@ -633,7 +638,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             2 => {
                 // Stat a non-existent object (will fail but that's ok)
                 client
-                    .stat_object(&test_bucket, format!("test-object-{}", i))
+                    .stat_object(
+                        BucketName::new(&test_bucket)?,
+                        ObjectKey::new(format!("test-object-{}", i))?,
+                    )
                     .build()
                     .send()
                     .await
@@ -641,7 +649,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             3 => {
                 // List objects in bucket (just check if we can start the stream)
-                drop(client.list_objects(&test_bucket).build().to_stream());
+                drop(
+                    client
+                        .list_objects(BucketName::new(&test_bucket)?)
+                        .build()
+                        .to_stream(),
+                );
                 Ok(())
             }
             _ => unreachable!(),
@@ -691,7 +704,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Clean up: try to delete the test bucket
     println!("\nCleaning up test bucket...");
-    match client.delete_bucket(&test_bucket).build().send().await {
+    match client
+        .delete_bucket(BucketName::new(&test_bucket)?)
+        .build()
+        .send()
+        .await
+    {
         Ok(_) => println!("✅ Test bucket deleted"),
         Err(e) => println!("ℹ️  Could not delete test bucket: {}", e),
     }

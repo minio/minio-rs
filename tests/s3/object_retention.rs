@@ -19,14 +19,14 @@ use minio::s3::response::{
     GetObjectRetentionResponse, PutObjectContentResponse, PutObjectRetentionResponse,
 };
 use minio::s3::response_traits::{HasBucket, HasObject, HasRegion, HasVersion};
-use minio::s3::types::{RetentionMode, S3Api};
+use minio::s3::types::{BucketName, RetentionMode, S3Api};
 use minio::s3::utils::{to_iso8601utc, utc_now};
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 
 #[minio_macros::test(skip_if_express, object_lock)]
-async fn object_retention(ctx: TestContext, bucket_name: String) {
+async fn object_retention(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
 
     let size = 16_u64;
@@ -34,39 +34,39 @@ async fn object_retention(ctx: TestContext, bucket_name: String) {
     let resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(
-            &bucket_name,
-            &object_name,
+            bucket_name.clone(),
+            object_name.clone(),
             ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
         )
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size(), size);
     assert_ne!(resp.version_id(), None);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     //assert_eq!(resp.etag, "");
 
     let retain_until_date = utc_now() + chrono::Duration::days(1);
     let resp: PutObjectRetentionResponse = ctx
         .client
-        .put_object_retention(&bucket_name, &object_name)
+        .put_object_retention(bucket_name.clone(), object_name.clone())
         .retention_mode(RetentionMode::GOVERNANCE)
         .retain_until_date(retain_until_date)
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.version_id(), None);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: GetObjectRetentionResponse = ctx
         .client
-        .get_object_retention(&bucket_name, &object_name)
+        .get_object_retention(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
@@ -82,28 +82,28 @@ async fn object_retention(ctx: TestContext, bucket_name: String) {
 
     let resp: PutObjectRetentionResponse = ctx
         .client
-        .put_object_retention(&bucket_name, &object_name)
+        .put_object_retention(bucket_name.clone(), object_name.clone())
         .bypass_governance_mode(true)
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.version_id(), None);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 
     let resp: GetObjectRetentionResponse = ctx
         .client
-        .get_object_retention(&bucket_name, &object_name)
+        .get_object_retention(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     assert!(resp.retention_mode().unwrap().is_none());
     assert!(resp.retain_until_date().unwrap().is_none());
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.version_id(), None);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
 }

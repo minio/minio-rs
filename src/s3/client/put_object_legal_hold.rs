@@ -15,6 +15,7 @@
 
 use crate::s3::builders::{PutObjectLegalHold, PutObjectLegalHoldBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`PutObjectLegalHold`] request builder.
@@ -31,7 +32,7 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::PutObjectLegalHoldResponse;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, ObjectKey, S3Api};
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
@@ -40,15 +41,15 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: PutObjectLegalHoldResponse = client
-    ///         .put_object_legal_hold("bucket-name", "object-name", true)
+    ///         .put_object_legal_hold(BucketName::new("bucket-name").unwrap(), ObjectKey::new("object-name").unwrap(), true)
     ///         .build().send().await.unwrap();
     ///     println!("legal hold of bucket '{}' is enabled", resp.bucket());
     /// }
     /// ```
-    pub fn put_object_legal_hold<S1: Into<String>, S2: Into<String>>(
+    pub fn put_object_legal_hold(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: BucketName,
+        object: ObjectKey,
         legal_hold: bool,
     ) -> PutObjectLegalHoldBldr {
         PutObjectLegalHold::builder()

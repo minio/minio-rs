@@ -18,9 +18,8 @@ use crate::s3::creds::Credentials;
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::signer::{SigningKeyCache, post_presign_v4};
-use crate::s3::utils::{
-    UtcTime, b64_encode, check_bucket_name, to_amz_date, to_iso8601utc, to_signer_date, utc_now,
-};
+use crate::s3::types::{BucketName, Region};
+use crate::s3::utils::{UtcTime, b64_encode, to_amz_date, to_iso8601utc, to_signer_date, utc_now};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::RwLock;
@@ -39,10 +38,11 @@ pub struct GetPresignedPolicyFormData {
 
 impl GetPresignedPolicyFormData {
     pub async fn send(self) -> Result<HashMap<String, String>, Error> {
-        let region: String = self
+        let region_str: String = self
             .client
-            .get_region_cached(&self.policy.bucket, &self.policy.region)
+            .get_region_cached(self.policy.bucket.clone(), &self.policy.region)
             .await?;
+        let region = Region::new(&region_str)?;
 
         let creds: Credentials = self.client.shared.provider.as_ref().unwrap().fetch();
         self.policy
@@ -69,8 +69,8 @@ pub type GetPresignedPolicyFormDataBldr =
 /// for condition elements and their usage.
 #[derive(Clone, Debug)]
 pub struct PostPolicy {
-    pub region: Option<String>,
-    pub bucket: String,
+    pub region: Option<Region>,
+    pub bucket: BucketName,
 
     expiration: UtcTime,
     eq_conditions: HashMap<String, String>,
@@ -90,17 +90,17 @@ impl PostPolicy {
     ///
     /// ```
     /// use minio::s3::utils::*;
+    /// use minio::s3::types::BucketName;
     /// use chrono::Duration;
     /// use minio::s3::builders::PostPolicy;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let policy = PostPolicy::new("bucket-name", expiration).unwrap();
+    /// let bucket = BucketName::new("bucket-name").unwrap();
+    /// let policy = PostPolicy::new(bucket, expiration).unwrap();
     /// ```
-    pub fn new(bucket_name: &str, expiration: UtcTime) -> Result<Self, ValidationErr> {
-        check_bucket_name(bucket_name, true)?;
-
+    pub fn new(bucket: BucketName, expiration: UtcTime) -> Result<Self, ValidationErr> {
         Ok(Self {
             region: None,
-            bucket: bucket_name.to_owned(),
+            bucket,
             expiration,
             eq_conditions: Default::default(),
             starts_with_conditions: Default::default(),
@@ -126,12 +126,12 @@ impl PostPolicy {
             || element.eq_ignore_ascii_case(X_AMZ_SIGNATURE)
     }
 
-    fn get_credential_string(access_key: &String, date: &UtcTime, region: &String) -> String {
+    fn get_credential_string(access_key: &String, date: &UtcTime, region: &Region) -> String {
         format!(
             "{}/{}/{}/s3/aws4_request",
             access_key,
             to_signer_date(*date),
-            region
+            region.as_str()
         )
     }
 
@@ -140,10 +140,12 @@ impl PostPolicy {
     ///
     /// ```
     /// use minio::s3::utils::*;
+    /// use minio::s3::types::BucketName;
     /// use chrono::Duration;
     /// use minio::s3::builders::PostPolicy;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("my-bucket", expiration).unwrap();
+    /// let bucket = BucketName::new("my-bucket").unwrap();
+    /// let mut policy = PostPolicy::new(bucket, expiration).unwrap();
     ///
     /// // Add condition that 'key' (object name) equals to 'bucket-name'
     /// policy.add_equals_condition("key", "bucket-name").unwrap();
@@ -184,10 +186,12 @@ impl PostPolicy {
     ///
     /// ```
     /// use minio::s3::utils::*;
+    /// use minio::s3::types::BucketName;
     /// use chrono::Duration;
     /// use minio::s3::builders::PostPolicy;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("bucket-name", expiration).unwrap();
+    /// let bucket = BucketName::new("bucket-name").unwrap();
+    /// let mut policy = PostPolicy::new(bucket, expiration).unwrap();
     /// policy.add_equals_condition("key", "bucket-name");
     ///
     /// policy.remove_equals_condition("key");
@@ -201,10 +205,12 @@ impl PostPolicy {
     ///
     /// ```
     /// use minio::s3::utils::*;
+    /// use minio::s3::types::BucketName;
     /// use chrono::Duration;
     /// use minio::s3::builders::PostPolicy;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("bucket-name", expiration).unwrap();
+    /// let bucket = BucketName::new("bucket-name").unwrap();
+    /// let mut policy = PostPolicy::new(bucket, expiration).unwrap();
     ///
     /// // Add condition that 'Content-Type' starts with 'image/'
     /// policy.add_starts_with_condition("Content-Type", "image/").unwrap();
@@ -245,10 +251,12 @@ impl PostPolicy {
     ///
     /// ```
     /// use minio::s3::utils::*;
+    /// use minio::s3::types::BucketName;
     /// use chrono::Duration;
     /// use minio::s3::builders::PostPolicy;
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("bucket-name", expiration).unwrap();
+    /// let bucket = BucketName::new("bucket-name").unwrap();
+    /// let mut policy = PostPolicy::new(bucket, expiration).unwrap();
     /// policy.add_starts_with_condition("Content-Type", "image/").unwrap();
     ///
     /// policy.remove_starts_with_condition("Content-Type");
@@ -262,11 +270,13 @@ impl PostPolicy {
     ///
     /// ```
     /// use minio::s3::utils::*;
+    /// use minio::s3::types::BucketName;
     /// use chrono::Duration;
     /// use minio::s3::builders::PostPolicy;
     ///
     /// let expiration = utc_now() + Duration::days(7);
-    /// let mut policy = PostPolicy::new("my-bucket", expiration).unwrap();
+    /// let bucket = BucketName::new("my-bucket").unwrap();
+    /// let mut policy = PostPolicy::new(bucket, expiration).unwrap();
     ///
     /// // Add condition that 'content-length-range' is between 64kiB to 10MiB
     /// policy.add_content_length_range_condition(64 * 1024, 10 * 1024 * 1024).unwrap();
@@ -301,7 +311,7 @@ impl PostPolicy {
         access_key: String,
         secret_key: String,
         session_token: Option<String>,
-        region: String,
+        region: Region,
     ) -> Result<HashMap<String, String>, ValidationErr> {
         if region.is_empty() {
             return Err(ValidationErr::PostPolicyError(

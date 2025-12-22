@@ -18,6 +18,7 @@ use crate::s3::builders::{
     ObjectToDelete, ObjectsStream,
 };
 use crate::s3::client::MinioClient;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`DeleteObject`] request builder to delete a single object from an S3 bucket.
@@ -33,7 +34,7 @@ impl MinioClient {
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::DeleteObjectResponse;
     /// use minio::s3::builders::ObjectToDelete;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, S3Api};
     /// use minio::s3::response_traits::HasVersion;
     ///
     /// #[tokio::main]
@@ -42,14 +43,14 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteObjectResponse = client
-    ///         .delete_object("bucket-name", ObjectToDelete::from("object-name"))
+    ///         .delete_object(BucketName::new("bucket-name").unwrap(), ObjectToDelete::from("object-name"))
     ///         .build().send().await.unwrap();
     ///     println!("the object is deleted. The delete marker has version '{:?}'", resp.version_id());
     /// }
     /// ```
-    pub fn delete_object<S: Into<String>, D: Into<ObjectToDelete>>(
+    pub fn delete_object<D: Into<ObjectToDelete>>(
         &self,
-        bucket: S,
+        bucket: BucketName,
         object: D,
     ) -> DeleteObjectBldr {
         DeleteObject::builder()
@@ -62,9 +63,9 @@ impl MinioClient {
     ///
     /// To execute the request, call [`DeleteObjects::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`DeleteObjectsResponse`](crate::s3::response::DeleteObjectsResponse).
-    pub fn delete_objects<S: Into<String>>(
+    pub fn delete_objects(
         &self,
-        bucket: S,
+        bucket: BucketName,
         objects: Vec<ObjectToDelete>,
     ) -> DeleteObjectsBldr {
         DeleteObjects::builder()
@@ -77,11 +78,11 @@ impl MinioClient {
     ///
     /// To execute the request, call [`DeleteObjectsStreaming::to_stream()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`DeleteObjectsResponse`](crate::s3::response::DeleteObjectsResponse).
-    pub fn delete_objects_streaming<S: Into<String>, D: Into<ObjectsStream>>(
+    pub fn delete_objects_streaming<D: Into<ObjectsStream>>(
         &self,
-        bucket: S,
+        bucket: BucketName,
         objects: D,
     ) -> DeleteObjectsStreaming {
-        DeleteObjectsStreaming::new(self.clone(), bucket.into(), objects)
+        DeleteObjectsStreaming::new(self.clone(), bucket, objects)
     }
 }

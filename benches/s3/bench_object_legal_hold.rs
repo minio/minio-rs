@@ -47,7 +47,7 @@ pub(crate) async fn bench_get_object_legal_hold(criterion: &mut Criterion) {
         || async {
             let ctx = Ctx2::new_with_object(true).await;
             ctx.client
-                .get_object_legal_hold(&ctx.bucket, &ctx.object)
+                .get_object_legal_hold(ctx.bucket.clone(), ctx.object.clone())
                 .build()
                 .send()
                 .await

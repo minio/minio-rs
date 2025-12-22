@@ -41,6 +41,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
 use std::path::{Path, PathBuf};
+use std::string::ToString;
 use std::sync::{Arc, OnceLock, RwLock};
 use uuid::Uuid;
 
@@ -57,8 +58,11 @@ use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::*;
 use crate::s3::response_traits::{HasEtagFromHeaders, HasS3Fields};
 use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::signer::{SigningKeyCache, sign_v4_s3};
-use crate::s3::utils::{EMPTY_SHA256, check_ssec_with_log, sha256_hash_sb, to_amz_date, utc_now};
+use crate::s3::signer::{SigningKeyCache, sign_v4_s3, sign_v4_s3_with_context};
+use crate::s3::types::BucketName;
+use crate::s3::utils::{
+    ChecksumAlgorithm, EMPTY_SHA256, check_ssec_with_log, sha256_hash_sb, to_amz_date, utc_now,
+};
 
 mod append_object;
 mod bucket_exists;
@@ -109,10 +113,12 @@ mod put_object_tagging;
 mod select_object_content;
 mod stat_object;
 
-use super::types::S3Api;
+use super::types::{Region, S3Api};
+use std::sync::LazyLock;
 
 /// The default AWS region to be used if no other region is specified.
-pub const DEFAULT_REGION: &str = "us-east-1";
+pub static DEFAULT_REGION: LazyLock<Region> =
+    LazyLock::new(|| Region::new("us-east-1").expect("default region should be valid"));
 
 /// Minimum allowed size (in bytes) for a multipart upload part (except the last).
 ///
@@ -474,12 +480,8 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     ///
-    /// let base_url: BaseUrl = "play.min.io".parse().unwrap();
-    /// let static_provider = StaticProvider::new(
-    ///     "Q3AM3UQ867SPQQA43P2F",
-    ///     "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
-    ///     None,
-    /// );
+    /// let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
+    /// let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     /// let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     /// ```
     pub fn new<P: Provider + Send + Sync + 'static>(
@@ -512,7 +514,7 @@ impl MinioClient {
         } else {
             let be = BucketExists::builder()
                 .client(self.clone())
-                .bucket(Uuid::new_v4().to_string())
+                .bucket(BucketName::try_from(Uuid::new_v4().to_string().as_str()).unwrap())
                 .build();
 
             let express = match be.send().await {
@@ -556,7 +558,7 @@ impl MinioClient {
         if self.shared.base_url.region.is_empty() {
             None
         } else {
-            Some(&self.shared.base_url.region)
+            Some(self.shared.base_url.region.as_str())
         }
     }
 
@@ -570,18 +572,19 @@ impl MinioClient {
 
         let sources_len = sources.len();
         for source in sources.iter_mut() {
+            let version_id_str = source.version_id.as_ref().map(|v| v.to_string());
             check_ssec_with_log(
                 &source.ssec,
                 self,
                 &source.bucket,
                 &source.object,
-                &source.version_id,
+                &version_id_str,
             )?;
 
             i += 1;
 
             let stat_resp: StatObjectResponse = self
-                .stat_object(&source.bucket, &source.object)
+                .stat_object(source.bucket.clone(), source.object.clone())
                 .extra_headers(source.extra_headers.clone())
                 .extra_query_params(source.extra_query_params.clone())
                 .region(source.region.clone())
@@ -605,9 +608,9 @@ impl MinioClient {
 
             if (size < MIN_PART_SIZE) && (sources_len != 1) && (i != sources_len) {
                 return Err(ValidationErr::InvalidComposeSourcePartSize {
-                    bucket: source.bucket.clone(),
-                    object: source.object.clone(),
-                    version: source.version_id.clone(),
+                    bucket: source.bucket.to_string(),
+                    object: source.object.to_string(),
+                    version: source.version_id.as_ref().map(|v| v.to_string()),
                     size,
                     expected_size: MIN_PART_SIZE,
                 }
@@ -632,7 +635,7 @@ impl MinioClient {
                     return Err(ValidationErr::InvalidComposeSourceMultipart {
                         bucket: source.bucket.to_string(),
                         object: source.object.to_string(),
-                        version: source.version_id.clone(),
+                        version: source.version_id.as_ref().map(|v| v.to_string()),
                         size,
                         expected_size: MIN_PART_SIZE,
                     }
@@ -657,14 +660,18 @@ impl MinioClient {
     async fn execute_internal(
         &self,
         method: &Method,
-        region: &str,
+        region: &Region,
         headers: &mut Multimap,
         query_params: &Multimap,
         bucket_name: Option<&str>,
         object_name: Option<&str>,
         body: Option<Arc<SegmentedBytes>>,
+        trailing_checksum: Option<ChecksumAlgorithm>,
+        use_signed_streaming: bool,
         retry: bool,
     ) -> Result<reqwest::Response, Error> {
+        use crate::s3::aws_chunked::{AwsChunkedEncoder, SignedAwsChunkedEncoder};
+
         let mut url = self.shared.base_url.build_url(
             method,
             region,
@@ -675,19 +682,61 @@ impl MinioClient {
         let mut extensions = http::Extensions::default();
 
         headers.add(HOST, url.host_header_value());
+
+        // Determine if we're using trailing checksums (signed or unsigned)
+        let use_trailing = trailing_checksum.is_some()
+            && matches!(*method, Method::PUT | Method::POST)
+            && body.is_some();
+        let use_signed_trailing = use_trailing && use_signed_streaming;
+
         let sha256: String = match *method {
             Method::PUT | Method::POST => {
                 if !headers.contains_key(CONTENT_TYPE) {
                     // Empty body with Content-Type can cause some MinIO versions to expect XML
                     headers.add(CONTENT_TYPE, "application/octet-stream");
                 }
-                let len: usize = body.as_ref().map_or(0, |b| b.len());
-                headers.add(CONTENT_LENGTH, len.to_string());
-                match body {
-                    None => EMPTY_SHA256.into(),
-                    Some(ref v) => {
-                        let clone = v.clone();
-                        async_std::task::spawn_blocking(move || sha256_hash_sb(clone)).await
+                let raw_len: usize = body.as_ref().map_or(0, |b| b.len());
+
+                if use_trailing {
+                    // For trailing checksums, use aws-chunked encoding
+                    let algorithm = trailing_checksum.unwrap();
+
+                    // Set headers for aws-chunked encoding
+                    headers.add(CONTENT_ENCODING, "aws-chunked");
+                    headers.add(X_AMZ_DECODED_CONTENT_LENGTH, raw_len.to_string());
+                    headers.add(X_AMZ_TRAILER, algorithm.header_name());
+
+                    // Calculate the encoded length for Content-Length
+                    let encoded_len = if use_signed_trailing {
+                        crate::s3::aws_chunked::calculate_signed_encoded_length(
+                            raw_len as u64,
+                            crate::s3::aws_chunked::default_chunk_size(),
+                            algorithm,
+                        )
+                    } else {
+                        crate::s3::aws_chunked::calculate_encoded_length(
+                            raw_len as u64,
+                            crate::s3::aws_chunked::default_chunk_size(),
+                            algorithm,
+                        )
+                    };
+                    headers.add(CONTENT_LENGTH, encoded_len.to_string());
+
+                    // Use appropriate Content-SHA256 value
+                    if use_signed_trailing {
+                        STREAMING_AWS4_HMAC_SHA256_PAYLOAD_TRAILER.into()
+                    } else {
+                        STREAMING_UNSIGNED_PAYLOAD_TRAILER.into()
+                    }
+                } else {
+                    // Standard upfront checksum
+                    headers.add(CONTENT_LENGTH, raw_len.to_string());
+                    match body {
+                        None => EMPTY_SHA256.into(),
+                        Some(ref v) => {
+                            let clone = v.clone();
+                            async_std::task::spawn_blocking(move || sha256_hash_sb(clone)).await
+                        }
                     }
                 }
             }
@@ -703,7 +752,7 @@ impl MinioClient {
         self.run_before_signing_hooks(
             method,
             &mut url,
-            region,
+            region.as_ref(),
             headers,
             query_params,
             bucket_name,
@@ -723,24 +772,46 @@ impl MinioClient {
             headers.add("x-minio-redirect-to", url.to_string());
         }
 
-        if let Some(p) = &self.shared.provider {
+        // For signed streaming, we need the signing context for chunk signatures
+        let chunk_signing_context = if let Some(p) = &self.shared.provider {
             let creds = p.fetch();
             if creds.session_token.is_some() {
                 headers.add(X_AMZ_SECURITY_TOKEN, creds.session_token.unwrap());
             }
-            sign_v4_s3(
-                &self.shared.signing_key_cache,
-                method,
-                &url.path,
-                region,
-                headers,
-                query_params,
-                &creds.access_key,
-                &creds.secret_key,
-                &sha256,
-                date,
-            );
-        }
+
+            if use_signed_trailing {
+                // Use the version that returns chunk signing context
+                Some(sign_v4_s3_with_context(
+                    &self.shared.signing_key_cache,
+                    method,
+                    &url.path,
+                    region,
+                    headers,
+                    query_params,
+                    &creds.access_key,
+                    &creds.secret_key,
+                    &sha256,
+                    date,
+                ))
+            } else {
+                // Standard signing without context
+                sign_v4_s3(
+                    &self.shared.signing_key_cache,
+                    method,
+                    &url.path,
+                    region,
+                    headers,
+                    query_params,
+                    &creds.access_key,
+                    &creds.secret_key,
+                    &sha256,
+                    date,
+                );
+                None
+            }
+        } else {
+            None
+        };
 
         let mut req = self.http_client.request(method.clone(), url.to_string());
 
@@ -766,7 +837,22 @@ impl MinioClient {
                 None => BodyIterator::Empty(std::iter::empty()),
             };
             let stream = futures_util::stream::iter(iter.map(|b| -> Result<_, Error> { Ok(b) }));
-            req = req.body(Body::wrap_stream(stream));
+
+            if use_signed_trailing {
+                // Wrap stream with signed aws-chunked encoder for trailing checksum
+                let algorithm = trailing_checksum.unwrap();
+                let context =
+                    chunk_signing_context.expect("signing context required for signed streaming");
+                let encoder = SignedAwsChunkedEncoder::new(stream, algorithm, context);
+                req = req.body(Body::wrap_stream(encoder));
+            } else if use_trailing {
+                // Wrap stream with unsigned aws-chunked encoder for trailing checksum
+                let algorithm = trailing_checksum.unwrap();
+                let encoder = AwsChunkedEncoder::new(stream, algorithm);
+                req = req.body(Body::wrap_stream(encoder));
+            } else {
+                req = req.body(Body::wrap_stream(stream));
+            }
         }
 
         let resp = req.send().await;
@@ -774,7 +860,7 @@ impl MinioClient {
         self.run_after_execute_hooks(
             method,
             &url,
-            region,
+            region.as_ref(),
             headers,
             query_params,
             bucket_name,
@@ -819,12 +905,14 @@ impl MinioClient {
     pub(crate) async fn execute(
         &self,
         method: Method,
-        region: &str,
+        region: &Region,
         headers: &mut Multimap,
         query_params: &Multimap,
         bucket_name: &Option<&str>,
         object_name: &Option<&str>,
         data: Option<Arc<SegmentedBytes>>,
+        trailing_checksum: Option<ChecksumAlgorithm>,
+        use_signed_streaming: bool,
     ) -> Result<reqwest::Response, Error> {
         let resp: Result<reqwest::Response, Error> = self
             .execute_internal(
@@ -835,6 +923,8 @@ impl MinioClient {
                 bucket_name.as_deref(),
                 object_name.as_deref(),
                 data.as_ref().map(Arc::clone),
+                trailing_checksum,
+                use_signed_streaming,
                 true,
             )
             .await;
@@ -859,6 +949,8 @@ impl MinioClient {
             bucket_name.as_deref(),
             object_name.as_deref(),
             data,
+            trailing_checksum,
+            use_signed_streaming,
             false,
         )
         .await
@@ -982,7 +1074,7 @@ impl MinioClient {
         check_object_name(object)?;
 
         // Use default region (skip region lookup for performance)
-        let region = DEFAULT_REGION;
+        let region: &Region = &DEFAULT_REGION;
 
         // Build URL directly (no query params for GET)
         let url = self.shared.base_url.build_url(

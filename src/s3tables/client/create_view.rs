@@ -1,0 +1,49 @@
+// MinIO Rust Library for Amazon S3 Compatible Cloud Storage
+// Copyright 2025 MinIO, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Client method for CreateView operation
+
+use crate::s3tables::builders::{CreateView, CreateViewBldr};
+use crate::s3tables::client::TablesClient;
+use crate::s3tables::iceberg::Schema;
+use crate::s3tables::utils::{Namespace, ViewName, ViewSql, WarehouseName};
+
+impl TablesClient {
+    /// Creates a new view in the catalog
+    ///
+    /// # Arguments
+    ///
+    /// * `warehouse_name` - Name of the warehouse
+    /// * `namespace` - Namespace identifier
+    /// * `view_name` - Name of the view
+    /// * `schema` - Schema for the view
+    /// * `sql` - SQL query defining the view
+    pub fn create_view(
+        &self,
+        warehouse_name: WarehouseName,
+        namespace: Namespace,
+        view_name: ViewName,
+        schema: Schema,
+        sql: ViewSql,
+    ) -> CreateViewBldr {
+        CreateView::builder()
+            .client(self.clone())
+            .warehouse_name(warehouse_name)
+            .namespace(namespace)
+            .view_name(view_name)
+            .schema(schema)
+            .sql(sql)
+    }
+}

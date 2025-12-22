@@ -26,7 +26,7 @@ async fn list_buckets(ctx: TestContext) {
     let mut guards: Vec<CleanupGuard> = Vec::new();
     for _ in 1..=N_BUCKETS {
         let (bucket_name, guard) = ctx.create_bucket_helper().await;
-        names.push(bucket_name);
+        names.push(bucket_name.to_string());
         guards.push(guard);
     }
 
@@ -36,20 +36,11 @@ async fn list_buckets(ctx: TestContext) {
     let resp: ListBucketsResponse = ctx.client.list_buckets().build().send().await.unwrap();
 
     for bucket in resp.buckets().unwrap().iter() {
-        if names.contains(&bucket.name) {
+        if names.contains(&bucket.name.to_string()) {
             count += 1;
         }
-        if false {
-            let n = &bucket.name;
-            if n.starts_with("warehouse-") || n.starts_with("test-bucket-") {
-                println!("deleting bucket: {}", n);
-                ctx.client
-                    .delete_and_purge_bucket(n)
-                    .await
-                    .expect("TODO: panic message");
-            }
-        }
     }
+
     assert_eq!(guards.len(), N_BUCKETS);
     assert_eq!(count, N_BUCKETS);
     for guard in guards {

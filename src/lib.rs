@@ -29,17 +29,18 @@
 //! use minio::s3::MinioClient;
 //! use minio::s3::creds::StaticProvider;
 //! use minio::s3::http::BaseUrl;
-//! use minio::s3::types::S3Api;
+//! use minio::s3::types::{BucketName, S3Api};
 //! use minio::s3::response::BucketExistsResponse;
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let base_url = "play.min.io".parse::<BaseUrl>().unwrap();
-//!     let static_provider = StaticProvider::new("Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG", None);
+//!     let base_url = "http://localhost:9000".parse::<BaseUrl>().unwrap();
+//!     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
 //!     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
 //!
+//!     let bucket = BucketName::new("my-bucket").unwrap();
 //!     let exists: BucketExistsResponse = client
-//!         .bucket_exists("my-bucket")
+//!         .bucket_exists(bucket)
 //!         .build()
 //!         .send()
 //!         .await
@@ -63,6 +64,7 @@
 #![allow(clippy::result_large_err)]
 #![allow(clippy::too_many_arguments)]
 pub mod s3;
+pub mod s3tables;
 
 #[cfg(test)]
 #[macro_use]

@@ -32,6 +32,8 @@ pub(crate) struct MacroArgs {
     no_bucket: darling::util::Flag,
     object_lock: darling::util::Flag,
     no_cleanup: darling::util::Flag,
+    /// Mark test as ignored (skipped by default, run with `cargo test -- --ignored`)
+    ignore: Option<String>,
 }
 
 impl MacroArgs {
@@ -56,7 +58,7 @@ impl MacroArgs {
 
         // Validate that the function has exactly two arguments: ctx and bucket_name
         if (func.sig.inputs.len() != 2) && !self.no_bucket.is_present() {
-            let error_msg = "Minio test function must have exactly two arguments: (ctx: TestContext, bucket_name: String)";
+            let error_msg = "Minio test function must have exactly two arguments: (ctx: TestContext, bucket_name: BucketName)";
             return Err(proc_macro::TokenStream::from(
                 Error::custom(error_msg)
                     .with_span(&func.sig.inputs.span())
@@ -80,13 +82,13 @@ impl MacroArgs {
             }
         }
 
-        // Check the second argument (bucket_name: String)
+        // Check the second argument (bucket_name: BucketName)
         if !self.no_bucket.is_present()
             && let Some(FnArg::Typed(pat_type)) = iter.next()
         {
             let type_str = pat_type.ty.to_token_stream().to_string();
-            if !type_str.contains("String") {
-                let error_msg = "The second argument must be of type String";
+            if !type_str.contains("BucketName") {
+                let error_msg = "The second argument must be of type BucketName";
                 return Err(proc_macro::TokenStream::from(
                     Error::custom(error_msg)
                         .with_span(&pat_type.span())
@@ -171,28 +173,33 @@ fn generate_tokio_test_header(args: &MacroArgs, sig: TokenStream) -> TokenStream
         .as_ref()
         .map(ToString::to_string)
         .or(std::env::var("MINIO_TEST_TOKIO_RUNTIME_FLAVOR").ok());
-    match (flavor, args.worker_threads) {
+
+    // Generate #[ignore = "reason"] if specified
+    let ignore_attr = args
+        .ignore
+        .as_ref()
+        .map(|reason| quote!(#[ignore = #reason]));
+
+    let tokio_attr = match (flavor, args.worker_threads) {
         (Some(flavor), None) => {
-            quote!(#[::tokio::test(flavor = #flavor)]
-            #sig
-                )
+            quote!(#[::tokio::test(flavor = #flavor)])
         }
         (None, Some(worker_threads)) => {
-            quote!(#[::tokio::test(worker_threads = #worker_threads)]
-            #sig
-                )
+            quote!(#[::tokio::test(worker_threads = #worker_threads)])
         }
         (None, None) => {
-            quote!(#[::tokio::test]
-            #sig
-                )
+            quote!(#[::tokio::test])
         }
         (Some(flavor), Some(worker_threads)) => {
-            quote!(#[::tokio::test(flavor = #flavor, worker_threads = #worker_threads)]
-            #sig
-                )
+            quote!(#[::tokio::test(flavor = #flavor, worker_threads = #worker_threads)])
         }
-    }
+    };
+
+    quote!(
+        #ignore_attr
+        #tokio_attr
+        #sig
+    )
 }
 
 fn generate_express_skip_logic(args: &MacroArgs, span: proc_macro2::Span) -> TokenStream {
@@ -248,23 +255,29 @@ fn generate_with_bucket_body(
     } else {
         TokenStream::new()
     };
-    let maybe_cleanup = if args.no_cleanup.is_present() {
-        quote! {}
+    let (maybe_save_bucket, maybe_cleanup) = if args.no_cleanup.is_present() {
+        (quote! {}, quote! {})
     } else {
-        quote! {
-            ::minio_common::cleanup_guard::cleanup(client_clone, bucket_name).await;
-        }
+        (
+            quote! {
+                let bucket_name_for_cleanup = bucket_name.clone();
+            },
+            quote! {
+                ::minio_common::cleanup_guard::cleanup(client_clone, bucket_name_for_cleanup).await;
+            },
+        )
     };
     quote_spanned!(span=> {
         #prelude
         #maybe_skip_if_express
 
         let client_clone = ctx.client.clone();
-        let bucket_name = #bucket_name;
+        let bucket_name_str = #bucket_name;
+        let bucket_name = ::minio::s3::types::BucketName::try_from(bucket_name_str).expect("Invalid bucket name");
         // Try to create bucket, but continue if it already exists (for no_cleanup tests)
-        match client_clone.create_bucket(bucket_name)#maybe_lock.build().send().await {
+        match client_clone.create_bucket(bucket_name.clone())#maybe_lock.build().send().await {
             Ok(resp) => {
-                assert_eq!(resp.bucket(), bucket_name);
+                assert_eq!(resp.bucket(), bucket_name_str);
             }
             Err(e) => {
                 // If bucket already exists, that's ok for no_cleanup tests
@@ -273,10 +286,11 @@ fn generate_with_bucket_body(
                     panic!("Failed to create bucket: {:?}", e);
                 }
                 // Otherwise continue - bucket already exists from previous run
-                eprintln!("Note: Reusing existing bucket {} from previous test run", bucket_name);
+                eprintln!("Note: Reusing existing bucket {} from previous test run", bucket_name_str);
             }
         };
-        let res = AssertUnwindSafe(#inner_fn_name(ctx, bucket_name.to_string())).catch_unwind().await;
+        #maybe_save_bucket
+        let res = AssertUnwindSafe(#inner_fn_name(ctx, bucket_name)).catch_unwind().await;
         #maybe_cleanup
         if let Err(e) = res {
             ::std::panic::resume_unwind(e);

@@ -1,4 +1,5 @@
 use crate::s3::minio_error_response::MinioErrorResponse;
+use crate::s3::types::Region;
 use thiserror::Error;
 
 // Client side validation issues like invalid url or bucket name
@@ -137,8 +138,8 @@ pub enum ValidationErr {
 
     #[error("Region must be {bucket_region}, but passed {region}")]
     RegionMismatch {
-        bucket_region: String,
-        region: String,
+        bucket_region: Region,
+        region: Region,
     },
 
     #[error("{crc_type} CRC mismatch; expected: {expected}, got: {got}")]
@@ -147,6 +148,9 @@ pub enum ValidationErr {
         expected: u32,
         got: u32,
     },
+
+    #[error("Checksum mismatch; expected: {expected}, computed: {computed}")]
+    ChecksumMismatch { expected: String, computed: String },
 
     #[error("Unknown event type: {0}")]
     UnknownEventType(String),
@@ -271,6 +275,39 @@ pub enum ValidationErr {
 
     #[error("Invalid table name: {0}")]
     InvalidTableName(String),
+
+    #[error("Invalid view name: {0}")]
+    InvalidViewName(String),
+
+    #[error("Invalid plan ID: {0}")]
+    InvalidPlanId(String),
+
+    #[error("Invalid page size: {0}")]
+    InvalidPageSize(String),
+
+    #[error("Invalid table changes: {0}")]
+    InvalidTableChanges(String),
+
+    #[error("Invalid metadata location: {0}")]
+    InvalidMetadataLocation(String),
+
+    #[error("Invalid view SQL: {0}")]
+    InvalidViewSql(String),
+
+    #[error("Invalid version ID: {0}")]
+    InvalidVersionId(String),
+
+    #[error("Invalid region: {0}")]
+    InvalidRegion(String),
+
+    #[error("Invalid ETag: {0}")]
+    InvalidETag(String),
+
+    #[error("Invalid content type: {0}")]
+    InvalidContentType(String),
+
+    #[error("Invalid SIMD mode: {0}")]
+    InvalidSimdMode(String),
 }
 
 impl From<reqwest::header::ToStrError> for ValidationErr {
@@ -343,7 +380,7 @@ pub enum S3ServerError {
 // Top-level Minio client error
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("S3 server error occurred")]
+    #[error("{0}")]
     S3Server(#[from] S3ServerError),
 
     #[error("Drive IO error occurred")]
@@ -355,8 +392,8 @@ pub enum Error {
     #[error("Validation error occurred")]
     Validation(#[from] ValidationErr),
 
-    #[error("Tables error occurred")]
-    TablesError(#[from] Box<dyn std::error::Error + Send + Sync>),
+    #[error("Tables error: {0}")]
+    TablesError(#[from] crate::s3tables::error::TablesError),
 }
 
 // region message helpers
@@ -566,9 +603,10 @@ mod tests {
 
     #[test]
     fn test_validation_err_region_mismatch() {
+        use crate::s3::types::Region;
         let err = ValidationErr::RegionMismatch {
-            bucket_region: "us-west-2".to_string(),
-            region: "us-east-1".to_string(),
+            bucket_region: Region::try_from("us-west-2").unwrap(),
+            region: Region::try_from("us-east-1").unwrap(),
         };
         let msg = err.to_string();
         assert!(msg.contains("us-west-2"));

@@ -20,73 +20,73 @@ use minio::s3::response::{
     GetObjectLegalHoldResponse, PutObjectContentResponse, PutObjectLegalHoldResponse,
 };
 use minio::s3::response_traits::{HasBucket, HasObject, HasRegion, HasVersion};
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, S3Api};
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 
 #[minio_macros::test(skip_if_express, object_lock)]
-async fn object_legal_hold_s3(ctx: TestContext, bucket_name: String) {
+async fn object_legal_hold_s3(ctx: TestContext, bucket_name: BucketName) {
     let object_name = rand_object_name();
 
     let data = Bytes::from("hello, world".to_string().into_bytes());
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &object_name, data.clone())
+        .put_object_content(bucket_name.clone(), object_name.clone(), data.clone())
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.object(), object_name.as_str());
     assert_eq!(resp.object_size(), data.len() as u64);
 
     let resp: PutObjectLegalHoldResponse = ctx
         .client
-        .put_object_legal_hold(&bucket_name, &object_name, true)
+        .put_object_legal_hold(bucket_name.clone(), object_name.clone(), true)
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.object(), object_name);
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.object(), object_name.as_str());
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     assert_eq!(resp.version_id(), None);
 
     let resp: GetObjectLegalHoldResponse = ctx
         .client
-        .get_object_legal_hold(&bucket_name, &object_name)
+        .get_object_legal_hold(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     assert!(resp.enabled().unwrap());
-    assert_eq!(resp.object(), object_name);
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.object(), object_name.as_str());
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     assert_eq!(resp.version_id(), None);
 
     let resp: PutObjectLegalHoldResponse = ctx
         .client
-        .put_object_legal_hold(&bucket_name, &object_name, true)
+        .put_object_legal_hold(bucket_name.clone(), object_name.clone(), true)
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.object(), object_name);
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.object(), object_name.as_str());
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     assert_eq!(resp.version_id(), None);
 
     let resp: GetObjectLegalHoldResponse = ctx
         .client
-        .get_object_legal_hold(&bucket_name, &object_name)
+        .get_object_legal_hold(bucket_name.clone(), object_name.clone())
         .build()
         .send()
         .await
         .unwrap();
     assert!(resp.enabled().unwrap());
-    assert_eq!(resp.object(), object_name);
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.region(), DEFAULT_REGION);
+    assert_eq!(resp.object(), object_name.as_str());
+    assert_eq!(resp.bucket(), bucket_name.as_str());
+    assert_eq!(resp.region(), DEFAULT_REGION.as_str());
     assert_eq!(resp.version_id(), None);
 }

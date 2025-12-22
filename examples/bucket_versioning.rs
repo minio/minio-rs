@@ -15,22 +15,22 @@
 
 mod common;
 
-use crate::common::{create_bucket_if_not_exists, create_client_on_play};
+use crate::common::{create_bucket_if_not_exists, create_client};
 use minio::s3::MinioClient;
 use minio::s3::builders::VersioningStatus;
 use minio::s3::response::{GetBucketVersioningResponse, PutBucketVersioningResponse};
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, S3Api};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
-    let client: MinioClient = create_client_on_play()?;
+    let client: MinioClient = create_client()?;
 
     let bucket_name: &str = "versioning-rust-bucket";
     create_bucket_if_not_exists(bucket_name, &client).await?;
 
     let resp: GetBucketVersioningResponse = client
-        .get_bucket_versioning(bucket_name)
+        .get_bucket_versioning(BucketName::new(bucket_name)?)
         .build()
         .send()
         .await?;
@@ -41,14 +41,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     let _resp: PutBucketVersioningResponse = client
-        .put_bucket_versioning(bucket_name)
+        .put_bucket_versioning(BucketName::new(bucket_name)?)
         .versioning_status(VersioningStatus::Enabled)
         .build()
         .send()
         .await?;
 
     let resp: GetBucketVersioningResponse = client
-        .get_bucket_versioning(bucket_name)
+        .get_bucket_versioning(BucketName::new(bucket_name)?)
         .build()
         .send()
         .await?;
@@ -60,14 +60,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     let _resp: PutBucketVersioningResponse = client
-        .put_bucket_versioning(bucket_name)
+        .put_bucket_versioning(BucketName::new(bucket_name)?)
         .versioning_status(VersioningStatus::Suspended)
         .build()
         .send()
         .await?;
 
     let resp: GetBucketVersioningResponse = client
-        .get_bucket_versioning(bucket_name)
+        .get_bucket_versioning(BucketName::new(bucket_name)?)
         .build()
         .send()
         .await?;
@@ -79,14 +79,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     let _resp: PutBucketVersioningResponse = client
-        .put_bucket_versioning(bucket_name)
+        .put_bucket_versioning(BucketName::new(bucket_name)?)
         //.versioning_status(VersioningStatus::Suspended)
         .build()
         .send()
         .await?;
 
     let resp: GetBucketVersioningResponse = client
-        .get_bucket_versioning(bucket_name)
+        .get_bucket_versioning(BucketName::new(bucket_name)?)
         .build()
         .send()
         .await?;

@@ -16,7 +16,7 @@
 use clap::Parser;
 use log::info;
 use minio::s3::response::BucketExistsResponse;
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, ObjectKey, S3Api};
 use minio::s3::{MinioClient, MinioClientBuilder, builders::ObjectContent, creds::StaticProvider};
 use std::path::PathBuf;
 
@@ -35,26 +35,34 @@ struct Cli {
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args = Cli::parse();
 
-    let static_provider = StaticProvider::new(
-        "Q3AM3UQ867SPQQA43P2F",
-        "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
-        None,
-    );
+    let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
 
-    let client: MinioClient = MinioClientBuilder::new("https://play.min.io".parse()?)
+    let client: MinioClient = MinioClientBuilder::new("http://localhost:9000".parse()?)
         .provider(Some(static_provider))
         .build()?;
 
-    let resp: BucketExistsResponse = client.bucket_exists(&args.bucket).build().send().await?;
+    let resp: BucketExistsResponse = client
+        .bucket_exists(BucketName::new(&args.bucket)?)
+        .build()
+        .send()
+        .await?;
 
     if !resp.exists() {
-        client.create_bucket(&args.bucket).build().send().await?;
+        client
+            .create_bucket(BucketName::new(&args.bucket)?)
+            .build()
+            .send()
+            .await?;
     }
 
     let content = ObjectContent::from(args.file.as_path());
     // Put an object
     client
-        .put_object_content(&args.bucket, &args.object, content)
+        .put_object_content(
+            BucketName::new(&args.bucket)?,
+            ObjectKey::new(&args.object)?,
+            content,
+        )
         .build()
         .send()
         .await?;

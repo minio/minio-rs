@@ -105,3 +105,51 @@ pub const X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY: &str =
 
 pub const X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5: &str =
     "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5";
+
+pub const X_AMZ_CHECKSUM_ALGORITHM: &str = "X-Amz-Checksum-Algorithm";
+
+pub const X_AMZ_CHECKSUM_CRC32: &str = "X-Amz-Checksum-CRC32";
+
+pub const X_AMZ_CHECKSUM_CRC32C: &str = "X-Amz-Checksum-CRC32C";
+
+pub const X_AMZ_CHECKSUM_SHA1: &str = "X-Amz-Checksum-SHA1";
+
+pub const X_AMZ_CHECKSUM_SHA256: &str = "X-Amz-Checksum-SHA256";
+
+pub const X_AMZ_CHECKSUM_CRC64NVME: &str = "X-Amz-Checksum-CRC64NVME";
+
+pub const X_AMZ_CHECKSUM_TYPE: &str = "X-Amz-Checksum-Type";
+
+pub const X_AMZ_TRAILER: &str = "X-Amz-Trailer";
+
+pub const X_AMZ_DECODED_CONTENT_LENGTH: &str = "X-Amz-Decoded-Content-Length";
+
+pub const CONTENT_ENCODING: &str = "Content-Encoding";
+
+/// Content-SHA256 value for streaming uploads with unsigned payload and trailing checksum
+pub const STREAMING_UNSIGNED_PAYLOAD_TRAILER: &str = "STREAMING-UNSIGNED-PAYLOAD-TRAILER";
+
+/// Content-SHA256 value for streaming uploads with signed payload and trailing checksum.
+/// Each chunk is signed with AWS Signature V4, and the trailer includes a trailer signature.
+pub const STREAMING_AWS4_HMAC_SHA256_PAYLOAD_TRAILER: &str =
+    "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER";
+
+// Iceberg REST API headers
+pub const IDEMPOTENCY_KEY: &str = "Idempotency-Key";
+pub const X_ICEBERG_ACCESS_DELEGATION: &str = "X-Iceberg-Access-Delegation";
+
+// Iceberg REST API query parameters
+pub const PAGE_TOKEN: &str = "pageToken";
+pub const PAGE_SIZE: &str = "pageSize";
+pub const PARENT: &str = "parent";
+pub const PURGE_REQUESTED: &str = "purgeRequested";
+pub const SNAPSHOTS: &str = "snapshots";
+pub const PLAN_ID: &str = "planId";
+
+// MinIO-specific query parameters
+pub const PRESERVE_BUCKET: &str = "preserve-bucket";
+pub const FORCE: &str = "force";
+
+// MinIO S3Tables-specific headers
+pub const X_MINIO_SIMD_MODE: &str = "X-Minio-Simd-Mode";
+pub const X_MINIO_STORAGE_PUSHDOWN: &str = "X-Minio-Storage-Pushdown";
