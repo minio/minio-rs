@@ -23,12 +23,14 @@ use crate::s3::response::{
     AbortMultipartUploadResponse, CompleteMultipartUploadResponse, CreateMultipartUploadResponse,
     PutObjectContentResponse, PutObjectResponse, UploadPartResponse,
 };
-use crate::s3::response_traits::HasEtagFromHeaders;
+use crate::s3::response_traits::{HasChecksumHeaders, HasEtagFromHeaders};
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::Sse;
 use crate::s3::types::{PartInfo, Retention, S3Api, S3Request, ToS3Request};
+use crate::s3::utils::{
+    ChecksumAlgorithm, check_object_name, check_sse, compute_checksum_sb, insert,
+};
 use crate::s3::utils::{check_bucket_name, md5sum_hash, to_iso8601utc, url_encode};
-use crate::s3::utils::{check_object_name, check_sse, insert};
 use bytes::{Bytes, BytesMut};
 use http::Method;
 use std::{collections::HashMap, sync::Arc};
@@ -65,6 +67,13 @@ pub struct CreateMultipartUpload {
     legal_hold: bool,
     #[builder(default, setter(into))]
     content_type: Option<String>,
+    /// Optional checksum algorithm to use for data integrity verification.
+    ///
+    /// When specified, the server will compute checksums for each uploaded part
+    /// using this algorithm. Supported algorithms: CRC32, CRC32C, SHA1, SHA256, CRC64NVME.
+    /// The checksum is included in response headers for verification.
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 /// Builder type for [`CreateMultipartUpload`] that is returned by [`MinioClient::create_multipart_upload`](crate::s3::client::MinioClient::create_multipart_upload).
@@ -83,6 +92,7 @@ pub type CreateMultipartUploadBldr = CreateMultipartUploadBuilder<(
     (),
     (),
     (),
+    (),
 )>;
 
 impl S3Api for CreateMultipartUpload {
@@ -94,7 +104,7 @@ impl ToS3Request for CreateMultipartUpload {
         check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object)?;
 
-        let headers: Multimap = into_headers_put_object(
+        let mut headers: Multimap = into_headers_put_object(
             self.extra_headers,
             self.user_metadata,
             self.sse,
@@ -103,6 +113,10 @@ impl ToS3Request for CreateMultipartUpload {
             self.legal_hold,
             self.content_type,
         )?;
+
+        if let Some(algorithm) = self.checksum_algorithm {
+            headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
+        }
 
         Ok(S3Request::builder()
             .client(self.client)
@@ -197,6 +211,14 @@ pub struct CompleteMultipartUpload {
     upload_id: String,
     #[builder(!default)] // force required
     parts: Vec<PartInfo>,
+    /// Optional checksum algorithm used during multipart upload.
+    ///
+    /// When specified and all parts were uploaded with the same checksum algorithm,
+    /// the server will compute a composite checksum (checksum-of-checksums) for the
+    /// entire object. This must match the algorithm used in CreateMultipartUpload
+    /// and all UploadPart operations. Supported algorithms: CRC32, CRC32C, SHA1, SHA256, CRC64NVME.
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 /// Builder type for [`CompleteMultipartUpload`] that is returned by [`MinioClient::complete_multipart_upload`](crate::s3::client::MinioClient::complete_multipart_upload).
@@ -211,6 +233,7 @@ pub type CompleteMultipartUploadBldr = CompleteMultipartUploadBuilder<(
     (String,),
     (String,),
     (Vec<PartInfo>,),
+    (),
 )>;
 
 impl S3Api for CompleteMultipartUpload {
@@ -235,14 +258,37 @@ impl ToS3Request for CompleteMultipartUpload {
         // Set the capacity of the byte-buffer based on the part count - attempting
         // to avoid extra allocations when building the XML payload.
         let bytes: Bytes = {
-            let mut data = BytesMut::with_capacity(100 * self.parts.len() + 100);
+            let mut data = BytesMut::with_capacity(200 * self.parts.len() + 100);
             data.extend_from_slice(b"<CompleteMultipartUpload>");
             for part in self.parts.iter() {
                 data.extend_from_slice(b"<Part><PartNumber>");
                 data.extend_from_slice(part.number.to_string().as_bytes());
                 data.extend_from_slice(b"</PartNumber><ETag>");
                 data.extend_from_slice(part.etag.as_bytes());
-                data.extend_from_slice(b"</ETag></Part>");
+                data.extend_from_slice(b"</ETag>");
+                if let Some((algorithm, ref value)) = part.checksum {
+                    let (open_tag, close_tag) = match algorithm {
+                        ChecksumAlgorithm::CRC32 => {
+                            (&b"<ChecksumCRC32>"[..], &b"</ChecksumCRC32>"[..])
+                        }
+                        ChecksumAlgorithm::CRC32C => {
+                            (&b"<ChecksumCRC32C>"[..], &b"</ChecksumCRC32C>"[..])
+                        }
+                        ChecksumAlgorithm::SHA1 => {
+                            (&b"<ChecksumSHA1>"[..], &b"</ChecksumSHA1>"[..])
+                        }
+                        ChecksumAlgorithm::SHA256 => {
+                            (&b"<ChecksumSHA256>"[..], &b"</ChecksumSHA256>"[..])
+                        }
+                        ChecksumAlgorithm::CRC64NVME => {
+                            (&b"<ChecksumCRC64NVME>"[..], &b"</ChecksumCRC64NVME>"[..])
+                        }
+                    };
+                    data.extend_from_slice(open_tag);
+                    data.extend_from_slice(value.as_bytes());
+                    data.extend_from_slice(close_tag);
+                }
+                data.extend_from_slice(b"</Part>");
             }
             data.extend_from_slice(b"</CompleteMultipartUpload>");
             data.freeze()
@@ -252,6 +298,10 @@ impl ToS3Request for CompleteMultipartUpload {
         {
             headers.add(CONTENT_TYPE, "application/xml");
             headers.add(CONTENT_MD5, md5sum_hash(bytes.as_ref()));
+
+            if let Some(algorithm) = self.checksum_algorithm {
+                headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
+            }
         }
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.add("uploadId", self.upload_id);
@@ -311,6 +361,35 @@ pub struct UploadPart {
     upload_id: Option<String>,
     #[builder(default, setter(into))] // force required
     part_number: Option<u16>,
+
+    /// Optional checksum algorithm to use for this part's data integrity verification.
+    ///
+    /// When specified, computes a checksum of the part data using the selected algorithm
+    /// (CRC32, CRC32C, SHA1, SHA256, or CRC64NVME). The checksum is sent with the upload
+    /// and verified by the server. For multipart uploads, use the same algorithm for all parts.
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
+
+    /// When true and `checksum_algorithm` is set, uses trailing checksums.
+    ///
+    /// Trailing checksums use aws-chunked encoding where the checksum is computed
+    /// incrementally while streaming and appended at the end of the request body.
+    /// This avoids buffering the entire content to compute the checksum upfront.
+    ///
+    /// Defaults to false for backwards compatibility.
+    #[builder(default = false)]
+    use_trailing_checksum: bool,
+
+    /// When true, signs each chunk with AWS Signature V4 for streaming uploads.
+    ///
+    /// Requires `use_trailing_checksum` to be true and `checksum_algorithm` to be set.
+    /// Uses STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER where each chunk is signed
+    /// and the trailer includes a trailer signature. This provides additional
+    /// integrity verification at the protocol level.
+    ///
+    /// Defaults to false for backwards compatibility.
+    #[builder(default = false)]
+    use_signed_streaming: bool,
 }
 
 /// Builder type for [`UploadPart`] that is returned by [`MinioClient::upload_part`](crate::s3::client::MinioClient::upload_part).
@@ -332,6 +411,9 @@ pub type UploadPartBldr = UploadPartBuilder<(
     (),
     (Option<String>,),
     (Option<u16>,),
+    (),
+    (),
+    (),
 )>;
 
 impl S3Api for UploadPart {
@@ -360,7 +442,7 @@ impl ToS3Request for UploadPart {
             }
         }
 
-        let headers: Multimap = into_headers_put_object(
+        let mut headers: Multimap = into_headers_put_object(
             self.extra_headers,
             self.user_metadata,
             self.sse,
@@ -369,6 +451,31 @@ impl ToS3Request for UploadPart {
             self.legal_hold,
             self.content_type,
         )?;
+
+        // Determine if we're using trailing checksums
+        let trailing_checksum = if self.use_trailing_checksum && self.checksum_algorithm.is_some() {
+            self.checksum_algorithm
+        } else {
+            None
+        };
+
+        // For upfront checksums (not trailing), compute and add to headers
+        if let Some(algorithm) = self.checksum_algorithm
+            && !self.use_trailing_checksum
+        {
+            let checksum_value = compute_checksum_sb(algorithm, &self.data);
+            headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
+
+            match algorithm {
+                ChecksumAlgorithm::CRC32 => headers.add(X_AMZ_CHECKSUM_CRC32, checksum_value),
+                ChecksumAlgorithm::CRC32C => headers.add(X_AMZ_CHECKSUM_CRC32C, checksum_value),
+                ChecksumAlgorithm::SHA1 => headers.add(X_AMZ_CHECKSUM_SHA1, checksum_value),
+                ChecksumAlgorithm::SHA256 => headers.add(X_AMZ_CHECKSUM_SHA256, checksum_value),
+                ChecksumAlgorithm::CRC64NVME => {
+                    headers.add(X_AMZ_CHECKSUM_CRC64NVME, checksum_value)
+                }
+            }
+        }
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
 
@@ -388,6 +495,8 @@ impl ToS3Request for UploadPart {
             .object(self.object)
             .headers(headers)
             .body(self.data)
+            .trailing_checksum(trailing_checksum)
+            .use_signed_streaming(self.use_signed_streaming)
             .build())
     }
 }
@@ -454,6 +563,29 @@ pub struct PutObjectContent {
     part_size: Size,
     #[builder(default, setter(into))]
     content_type: Option<String>,
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
+
+    /// When true and `checksum_algorithm` is set, uses trailing checksums.
+    ///
+    /// Trailing checksums use aws-chunked encoding where the checksum is computed
+    /// incrementally while streaming and appended at the end of the request body.
+    /// This avoids buffering the entire content to compute the checksum upfront.
+    ///
+    /// Defaults to false for backwards compatibility.
+    #[builder(default = false)]
+    use_trailing_checksum: bool,
+
+    /// When true, signs each chunk with AWS Signature V4 for streaming uploads.
+    ///
+    /// Requires `use_trailing_checksum` to be true and `checksum_algorithm` to be set.
+    /// Uses STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER where each chunk is signed
+    /// and the trailer includes a trailer signature. This provides additional
+    /// integrity verification at the protocol level.
+    ///
+    /// Defaults to false for backwards compatibility.
+    #[builder(default = false)]
+    use_signed_streaming: bool,
 
     // source data
     #[builder(!default, setter(into))] // force required + accept Into<String>
@@ -477,6 +609,9 @@ pub type PutObjectContentBldr = PutObjectContentBuilder<(
     (),
     (String,),
     (String,),
+    (),
+    (),
+    (),
     (),
     (),
     (),
@@ -542,6 +677,9 @@ impl PutObjectContent {
                     upload_id: None,
                     data: Arc::new(seg_bytes),
                     content_type: self.content_type.clone(),
+                    checksum_algorithm: self.checksum_algorithm,
+                    use_trailing_checksum: self.use_trailing_checksum,
+                    use_signed_streaming: self.use_signed_streaming,
                 })
                 .build()
                 .send()
@@ -572,6 +710,7 @@ impl PutObjectContent {
                 .retention(self.retention.clone())
                 .legal_hold(self.legal_hold)
                 .content_type(self.content_type.clone())
+                .checksum_algorithm(self.checksum_algorithm)
                 .build()
                 .send()
                 .await?;
@@ -667,15 +806,22 @@ impl PutObjectContent {
                 upload_id: Some(upload_id.to_string()),
                 data: Arc::new(part_content),
                 content_type: self.content_type.clone(),
+                checksum_algorithm: self.checksum_algorithm,
+                use_trailing_checksum: self.use_trailing_checksum,
+                use_signed_streaming: self.use_signed_streaming,
             }
             .send()
             .await?;
 
-            parts.push(PartInfo {
-                number: part_number,
-                etag: resp.etag()?,
-                size: buffer_size,
-            });
+            let checksum = self
+                .checksum_algorithm
+                .and_then(|alg| resp.get_checksum(alg).map(|v| (alg, v)));
+            parts.push(PartInfo::new(
+                part_number,
+                resp.etag()?,
+                buffer_size,
+                checksum,
+            ));
 
             // Finally, check if we are done.
             if buffer_size < part_size {
@@ -705,6 +851,7 @@ impl PutObjectContent {
             region: self.region,
             parts,
             upload_id,
+            checksum_algorithm: self.checksum_algorithm,
         }
         .send()
         .await?;

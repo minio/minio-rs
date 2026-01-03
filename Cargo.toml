@@ -24,7 +24,7 @@ http2 = ["reqwest/http2"]
 localhost = []
 
 [workspace.dependencies]
-uuid = "1.18"
+uuid = "1.19"
 futures-util = "0.3"
 futures-io = "0.3"
 reqwest = { version = "0.12", default-features = false }
@@ -49,7 +49,7 @@ async-stream = "0.3"
 async-trait = "0.1"
 base64 = "0.22"
 chrono = { workspace = true, features = ["serde"] }
-crc = "3.4"
+crc-fast = "1.8"
 dashmap = "6.1.0"
 env_logger = "0.11"
 hmac = { version = "0.12", optional = true }
@@ -64,6 +64,7 @@ regex = "1.12"
 ring = { version = "0.17", optional = true, default-features = false, features = ["alloc"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+sha1 = "0.10"
 sha2 = { version = "0.10", optional = true }
 urlencoding = "2.1"
 xmltree = "0.12"
@@ -103,4 +104,9 @@ name = "load_balancing_with_hooks"
 [[bench]]
 name = "s3-api"
 path = "benches/s3/api_benchmarks.rs"
+harness = false
+
+[[bench]]
+name = "bench_checksums"
+path = "benches/s3/bench_checksums.rs"
 harness = false

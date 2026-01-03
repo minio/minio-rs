@@ -16,8 +16,8 @@
 use crate::s3::error::ValidationErr;
 use crate::s3::header_constants::*;
 use crate::s3::response_traits::{
-    HasBucket, HasEtagFromHeaders, HasIsDeleteMarker, HasObject, HasObjectSize, HasRegion,
-    HasS3Fields, HasVersion,
+    HasBucket, HasChecksumHeaders, HasEtagFromHeaders, HasIsDeleteMarker, HasObject, HasObjectSize,
+    HasRegion, HasS3Fields, HasVersion,
 };
 use crate::s3::types::S3Request;
 use crate::s3::types::{RetentionMode, parse_legal_hold};
@@ -46,6 +46,7 @@ impl HasRegion for StatObjectResponse {}
 impl HasObject for StatObjectResponse {}
 impl HasEtagFromHeaders for StatObjectResponse {}
 impl HasIsDeleteMarker for StatObjectResponse {}
+impl HasChecksumHeaders for StatObjectResponse {}
 impl HasVersion for StatObjectResponse {}
 impl HasObjectSize for StatObjectResponse {}
 
