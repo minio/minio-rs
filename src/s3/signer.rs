@@ -394,6 +394,155 @@ pub(crate) fn post_presign_v4(
     get_signature(&signing_key, string_to_sign.as_bytes())
 }
 
+// ===========================
+// Chunk Signing for STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER
+// ===========================
+
+/// Context required for signing streaming chunks.
+///
+/// This struct captures the parameters needed to sign each chunk
+/// in STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER uploads.
+/// The signing key can be reused for all chunks since it only depends
+/// on date/region/service which don't change within a request.
+#[derive(Debug, Clone)]
+pub struct ChunkSigningContext {
+    /// The signing key (Arc for zero-copy sharing across chunks)
+    pub signing_key: Arc<[u8]>,
+    /// AMZ date format: 20241219T120000Z
+    pub date_time: String,
+    /// Credential scope: 20241219/us-east-1/s3/aws4_request
+    pub scope: String,
+    /// The seed signature from Authorization header (hex-encoded)
+    pub seed_signature: String,
+}
+
+/// Signs a single chunk for STREAMING-AWS4-HMAC-SHA256-PAYLOAD streaming.
+///
+/// The string-to-sign format is:
+/// ```text
+/// AWS4-HMAC-SHA256-PAYLOAD
+/// <timestamp>
+/// <scope>
+/// <previous-signature>
+/// <SHA256-of-empty-string>
+/// <SHA256-of-chunk-data>
+/// ```
+///
+/// # Arguments
+/// * `signing_key` - The derived signing key
+/// * `date_time` - AMZ date format (e.g., "20130524T000000Z")
+/// * `scope` - Credential scope (e.g., "20130524/us-east-1/s3/aws4_request")
+/// * `previous_signature` - Previous chunk's signature (or seed signature for first chunk)
+/// * `chunk_hash` - Pre-computed SHA256 hash of the chunk data (hex-encoded)
+///
+/// # Returns
+/// The hex-encoded signature for this chunk.
+pub fn sign_chunk(
+    signing_key: &[u8],
+    date_time: &str,
+    scope: &str,
+    previous_signature: &str,
+    chunk_hash: &str,
+) -> String {
+    // SHA256 of empty string (constant per AWS spec)
+    const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+    // Build string-to-sign per AWS spec
+    let string_to_sign = format!(
+        "AWS4-HMAC-SHA256-PAYLOAD\n{}\n{}\n{}\n{}\n{}",
+        date_time, scope, previous_signature, EMPTY_SHA256, chunk_hash
+    );
+
+    hmac_hash_hex(signing_key, string_to_sign.as_bytes())
+}
+
+/// Signs the trailer for STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER.
+///
+/// The string-to-sign format is:
+/// ```text
+/// AWS4-HMAC-SHA256-TRAILER
+/// <timestamp>
+/// <scope>
+/// <last-chunk-signature>
+/// <SHA256-of-canonical-trailers>
+/// ```
+///
+/// # Arguments
+/// * `signing_key` - The derived signing key
+/// * `date_time` - AMZ date format (e.g., "20130524T000000Z")
+/// * `scope` - Credential scope (e.g., "20130524/us-east-1/s3/aws4_request")
+/// * `last_chunk_signature` - The signature of the final 0-byte chunk
+/// * `canonical_trailers_hash` - Pre-computed SHA256 hash of canonical trailers (hex-encoded)
+///
+/// The canonical trailers format is: `<lowercase-header-name>:<trimmed-value>\n`
+/// Example: `x-amz-checksum-crc32c:sOO8/Q==\n`
+///
+/// **Note**: The canonical form uses LF (`\n`), not CRLF (`\r\n`), even though
+/// the HTTP wire format uses CRLF. This is per AWS SigV4 specification.
+///
+/// # Returns
+/// The hex-encoded trailer signature.
+pub fn sign_trailer(
+    signing_key: &[u8],
+    date_time: &str,
+    scope: &str,
+    last_chunk_signature: &str,
+    canonical_trailers_hash: &str,
+) -> String {
+    // Build string-to-sign per AWS spec
+    let string_to_sign = format!(
+        "AWS4-HMAC-SHA256-TRAILER\n{}\n{}\n{}\n{}",
+        date_time, scope, last_chunk_signature, canonical_trailers_hash
+    );
+
+    hmac_hash_hex(signing_key, string_to_sign.as_bytes())
+}
+
+/// Signs request and returns context for chunk signing.
+///
+/// This is used for STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER uploads
+/// where the encoder needs the signing key and seed signature to sign
+/// each chunk during streaming.
+///
+/// The `cache` parameter should be the per-client `signing_key_cache` from `SharedClientItems`.
+pub(crate) fn sign_v4_s3_with_context(
+    cache: &RwLock<SigningKeyCache>,
+    method: &Method,
+    uri: &str,
+    region: &str,
+    headers: &mut Multimap,
+    query_params: &Multimap,
+    access_key: &str,
+    secret_key: &str,
+    content_sha256: &str,
+    date: UtcTime,
+) -> ChunkSigningContext {
+    let scope = get_scope(date, region, "s3");
+    let (signed_headers, canonical_headers) = headers.get_canonical_headers();
+    let canonical_query_string = query_params.get_canonical_query_string();
+    let canonical_request_hash = get_canonical_request_hash(
+        method,
+        uri,
+        &canonical_query_string,
+        &canonical_headers,
+        &signed_headers,
+        content_sha256,
+    );
+    let string_to_sign = get_string_to_sign(date, &scope, &canonical_request_hash);
+    let signing_key = get_signing_key(cache, secret_key, date, region, "s3");
+    let signature = get_signature(&signing_key, string_to_sign.as_bytes());
+    let authorization = get_authorization(access_key, &scope, &signed_headers, &signature);
+
+    headers.add(AUTHORIZATION, authorization);
+
+    ChunkSigningContext {
+        signing_key,
+        date_time: to_amz_date(date),
+        scope,
+        seed_signature: signature,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -761,5 +910,275 @@ mod tests {
         let sig2 = post_presign_v4(&cache, string_to_sign, secret_key, date, region);
 
         assert_eq!(sig1, sig2);
+    }
+
+    // ===========================
+    // Chunk Signing Tests
+    // ===========================
+
+    #[test]
+    fn test_sign_chunk_produces_valid_signature() {
+        // Use signing key derived from AWS test credentials
+        let cache = test_cache();
+        let secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+        let date = get_test_date();
+        let region = "us-east-1";
+
+        let signing_key = get_signing_key(&cache, secret_key, date, region, "s3");
+        let date_time = "20130524T000000Z";
+        let scope = "20130524/us-east-1/s3/aws4_request";
+        let previous_signature = "4f232c4386841ef735655705268965c44a0e4690baa4adea153f7db9fa80a0a9";
+        // SHA256 of some test data
+        let chunk_hash = "bf718b6f653bebc184e1479f1935b8da974d701b893afcf49e701f3e2f9f9c5a";
+
+        let signature = sign_chunk(
+            &signing_key,
+            date_time,
+            scope,
+            previous_signature,
+            chunk_hash,
+        );
+
+        // Should produce 64 character hex signature
+        assert_eq!(signature.len(), 64);
+        assert!(signature.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_sign_chunk_deterministic() {
+        let cache = test_cache();
+        let secret_key = "test_secret";
+        let date = get_test_date();
+        let region = "us-east-1";
+
+        let signing_key = get_signing_key(&cache, secret_key, date, region, "s3");
+        let date_time = "20130524T000000Z";
+        let scope = "20130524/us-east-1/s3/aws4_request";
+        let previous_signature = "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234";
+        let chunk_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+        let sig1 = sign_chunk(
+            &signing_key,
+            date_time,
+            scope,
+            previous_signature,
+            chunk_hash,
+        );
+        let sig2 = sign_chunk(
+            &signing_key,
+            date_time,
+            scope,
+            previous_signature,
+            chunk_hash,
+        );
+
+        assert_eq!(sig1, sig2);
+    }
+
+    #[test]
+    fn test_sign_chunk_empty_data() {
+        let cache = test_cache();
+        let secret_key = "test_secret";
+        let date = get_test_date();
+        let region = "us-east-1";
+
+        let signing_key = get_signing_key(&cache, secret_key, date, region, "s3");
+        let date_time = "20130524T000000Z";
+        let scope = "20130524/us-east-1/s3/aws4_request";
+        let previous_signature = "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234";
+        // SHA256 of empty data
+        let chunk_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+        let signature = sign_chunk(
+            &signing_key,
+            date_time,
+            scope,
+            previous_signature,
+            chunk_hash,
+        );
+
+        // Should still produce valid signature for empty chunk
+        assert_eq!(signature.len(), 64);
+        assert!(signature.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_sign_chunk_chaining() {
+        let cache = test_cache();
+        let secret_key = "test_secret";
+        let date = get_test_date();
+        let region = "us-east-1";
+
+        let signing_key = get_signing_key(&cache, secret_key, date, region, "s3");
+        let date_time = "20130524T000000Z";
+        let scope = "20130524/us-east-1/s3/aws4_request";
+        let seed_signature = "seed1234seed1234seed1234seed1234seed1234seed1234seed1234seed1234";
+        let chunk1_hash = "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111";
+        let chunk2_hash = "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222";
+
+        // Sign first chunk with seed signature
+        let chunk1_sig = sign_chunk(&signing_key, date_time, scope, seed_signature, chunk1_hash);
+
+        // Sign second chunk with first chunk's signature
+        let chunk2_sig = sign_chunk(&signing_key, date_time, scope, &chunk1_sig, chunk2_hash);
+
+        // Signatures should be different
+        assert_ne!(chunk1_sig, chunk2_sig);
+
+        // Both should be valid hex
+        assert_eq!(chunk1_sig.len(), 64);
+        assert_eq!(chunk2_sig.len(), 64);
+    }
+
+    #[test]
+    fn test_sign_trailer_produces_valid_signature() {
+        let cache = test_cache();
+        let secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+        let date = get_test_date();
+        let region = "us-east-1";
+
+        let signing_key = get_signing_key(&cache, secret_key, date, region, "s3");
+        let date_time = "20130524T000000Z";
+        let scope = "20130524/us-east-1/s3/aws4_request";
+        let last_chunk_signature =
+            "b6c6ea8a5354eaf15b3cb7646744f4275b71ea724fed81ceb9323e279d449df9";
+        // SHA256 of "x-amz-checksum-crc32c:sOO8/Q==\n"
+        let canonical_trailers_hash =
+            "1e376db7e1a34a8ef1c4bcee131a2d60a1cb62503747488624e10995f448d774";
+
+        let signature = sign_trailer(
+            &signing_key,
+            date_time,
+            scope,
+            last_chunk_signature,
+            canonical_trailers_hash,
+        );
+
+        // Should produce 64 character hex signature
+        assert_eq!(signature.len(), 64);
+        assert!(signature.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_sign_trailer_deterministic() {
+        let cache = test_cache();
+        let secret_key = "test_secret";
+        let date = get_test_date();
+        let region = "us-east-1";
+
+        let signing_key = get_signing_key(&cache, secret_key, date, region, "s3");
+        let date_time = "20130524T000000Z";
+        let scope = "20130524/us-east-1/s3/aws4_request";
+        let last_chunk_signature =
+            "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234";
+        let canonical_trailers_hash =
+            "1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd";
+
+        let sig1 = sign_trailer(
+            &signing_key,
+            date_time,
+            scope,
+            last_chunk_signature,
+            canonical_trailers_hash,
+        );
+        let sig2 = sign_trailer(
+            &signing_key,
+            date_time,
+            scope,
+            last_chunk_signature,
+            canonical_trailers_hash,
+        );
+
+        assert_eq!(sig1, sig2);
+    }
+
+    #[test]
+    fn test_sign_v4_s3_with_context_returns_valid_context() {
+        let cache = test_cache();
+        let method = Method::PUT;
+        let uri = "/examplebucket/chunkObject.txt";
+        let region = "us-east-1";
+        let mut headers = Multimap::new();
+        let date = get_test_date();
+        let content_sha256 = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER";
+        let access_key = "AKIAIOSFODNN7EXAMPLE";
+        let secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+
+        headers.add(HOST, "s3.amazonaws.com");
+        headers.add(X_AMZ_CONTENT_SHA256, content_sha256);
+        headers.add(X_AMZ_DATE, "20130524T000000Z");
+        headers.add("Content-Encoding", "aws-chunked");
+        headers.add("x-amz-decoded-content-length", "66560");
+        headers.add("x-amz-trailer", "x-amz-checksum-crc32c");
+
+        let query_params = Multimap::new();
+
+        let context = sign_v4_s3_with_context(
+            &cache,
+            &method,
+            uri,
+            region,
+            &mut headers,
+            &query_params,
+            access_key,
+            secret_key,
+            content_sha256,
+            date,
+        );
+
+        // Authorization header should be added
+        assert!(headers.contains_key("Authorization"));
+        let auth_header = headers.get("Authorization").unwrap();
+        assert!(auth_header.starts_with("AWS4-HMAC-SHA256"));
+
+        // Context should have valid values
+        assert!(!context.signing_key.is_empty());
+        assert_eq!(context.date_time, "20130524T000000Z");
+        assert_eq!(context.scope, "20130524/us-east-1/s3/aws4_request");
+        assert_eq!(context.seed_signature.len(), 64);
+        assert!(
+            context
+                .seed_signature
+                .chars()
+                .all(|c| c.is_ascii_hexdigit())
+        );
+    }
+
+    #[test]
+    fn test_chunk_signing_context_can_be_cloned() {
+        let cache = test_cache();
+        let method = Method::PUT;
+        let uri = "/test";
+        let region = "us-east-1";
+        let mut headers = Multimap::new();
+        let date = get_test_date();
+        let content_sha256 = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER";
+        let access_key = "test";
+        let secret_key = "secret";
+
+        headers.add(HOST, "s3.amazonaws.com");
+        headers.add(X_AMZ_CONTENT_SHA256, content_sha256);
+        headers.add(X_AMZ_DATE, "20130524T000000Z");
+
+        let query_params = Multimap::new();
+
+        let context = sign_v4_s3_with_context(
+            &cache,
+            &method,
+            uri,
+            region,
+            &mut headers,
+            &query_params,
+            access_key,
+            secret_key,
+            content_sha256,
+            date,
+        );
+
+        // Should be cloneable (required for async streams)
+        let cloned = context.clone();
+        assert_eq!(context.date_time, cloned.date_time);
+        assert_eq!(context.scope, cloned.scope);
+        assert_eq!(context.seed_signature, cloned.seed_signature);
     }
 }
