@@ -207,7 +207,8 @@ where
                             }
 
                             // Format: <hex-size>\r\n<data>\r\n
-                            let chunk_header = format!("{:x}\r\n", chunk.len());
+                            let chunk_len = chunk.len();
+                            let chunk_header = format!("{chunk_len:x}\r\n");
                             let mut output =
                                 Vec::with_capacity(chunk_header.len() + chunk.len() + 2);
                             output.extend_from_slice(chunk_header.as_bytes());
@@ -276,9 +277,9 @@ pub fn calculate_encoded_length(
 
     // Each chunk: "<hex-size>\r\n<data>\r\n"
     // hex-size length varies based on chunk size
-    let hex_len_full = format!("{:x}", chunk_size).len() as u64;
+    let hex_len_full = format!("{chunk_size:x}").len() as u64;
     let hex_len_partial = if last_chunk_size > 0 {
-        format!("{:x}", last_chunk_size).len() as u64
+        format!("{last_chunk_size:x}").len() as u64
     } else {
         0
     };
@@ -431,8 +432,9 @@ where
                             let signature = self.sign_chunk_data(&chunk_hash);
 
                             // Format: <hex-size>;chunk-signature=<sig>\r\n<data>\r\n
+                            let chunk_len = chunk.len();
                             let chunk_header =
-                                format!("{:x};chunk-signature={}\r\n", chunk.len(), signature);
+                                format!("{chunk_len:x};chunk-signature={signature}\r\n");
                             let mut output =
                                 Vec::with_capacity(chunk_header.len() + chunk.len() + 2);
                             output.extend_from_slice(chunk_header.as_bytes());

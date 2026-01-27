@@ -29,6 +29,7 @@ use crate::s3::error::Error;
 use crate::s3::http::Url;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
+use crate::s3::types::{BucketName, ObjectKey};
 use http::Method;
 use reqwest::Response;
 use std::fmt::Debug;
@@ -47,6 +48,7 @@ use std::fmt::Debug;
 /// use minio::s3::error::Error;
 /// use minio::s3::multimap_ext::Multimap;
 /// use minio::s3::segmented_bytes::SegmentedBytes;
+/// use minio::s3::types::{BucketName, ObjectKey};
 /// use http::{Method, Extensions};
 /// use std::sync::atomic::{AtomicUsize, Ordering};
 /// use std::sync::Arc;
@@ -85,8 +87,8 @@ use std::fmt::Debug;
 ///         _region: &str,
 ///         _headers: &mut Multimap,
 ///         _query_params: &Multimap,
-///         _bucket_name: Option<&str>,
-///         _object_name: Option<&str>,
+///         _bucket: Option<&BucketName>,
+///         _object: Option<&ObjectKey>,
 ///         _body: Option<&SegmentedBytes>,
 ///         _extensions: &mut Extensions,
 ///     ) -> Result<(), Error> {
@@ -109,6 +111,7 @@ use std::fmt::Debug;
 /// use minio::s3::http::Url;
 /// use minio::s3::multimap_ext::Multimap;
 /// use minio::s3::segmented_bytes::SegmentedBytes;
+/// use minio::s3::types::{BucketName, ObjectKey};
 /// use http::{Method, Extensions};
 /// use reqwest::Response;
 /// use std::time::Instant;
@@ -127,8 +130,8 @@ use std::fmt::Debug;
 ///         _region: &str,
 ///         _headers: &mut Multimap,
 ///         _query_params: &Multimap,
-///         _bucket_name: Option<&str>,
-///         _object_name: Option<&str>,
+///         _bucket: Option<&BucketName>,
+///         _object: Option<&ObjectKey>,
 ///         _body: Option<&SegmentedBytes>,
 ///         extensions: &mut Extensions,
 ///     ) -> Result<(), Error> {
@@ -144,8 +147,8 @@ use std::fmt::Debug;
 ///         _region: &str,
 ///         _headers: &Multimap,
 ///         _query_params: &Multimap,
-///         _bucket_name: Option<&str>,
-///         _object_name: Option<&str>,
+///         _bucket: Option<&BucketName>,
+///         _object: Option<&ObjectKey>,
 ///         resp: &Result<Response, reqwest::Error>,
 ///         extensions: &mut Extensions,
 ///     ) {
@@ -175,8 +178,8 @@ pub trait RequestHooks: Debug {
         _region: &str,
         _headers: &mut Multimap,
         _query_params: &Multimap,
-        _bucket_name: Option<&str>,
-        _object_name: Option<&str>,
+        _bucket: Option<&BucketName>,
+        _object: Option<&ObjectKey>,
         _body: Option<&SegmentedBytes>,
         _extensions: &mut Extensions,
     ) -> Result<(), Error> {
@@ -191,8 +194,8 @@ pub trait RequestHooks: Debug {
         _region: &str,
         _headers: &Multimap,
         _query_params: &Multimap,
-        _bucket_name: Option<&str>,
-        _object_name: Option<&str>,
+        _bucket: Option<&BucketName>,
+        _object: Option<&ObjectKey>,
         _resp: &Result<Response, reqwest::Error>,
         _extensions: &mut Extensions,
     ) {
@@ -238,8 +241,8 @@ mod tests {
                 _region: &str,
                 _headers: &mut Multimap,
                 _query_params: &Multimap,
-                _bucket_name: Option<&str>,
-                _object_name: Option<&str>,
+                _bucket: Option<&BucketName>,
+                _object: Option<&ObjectKey>,
                 _body: Option<&SegmentedBytes>,
                 _extensions: &mut Extensions,
             ) -> Result<(), Error> {
@@ -260,6 +263,8 @@ mod tests {
         let mut headers = Multimap::new();
         let query_params = Multimap::new();
         let mut extensions = Extensions::default();
+        let bucket = BucketName::new("bucket").unwrap();
+        let object = ObjectKey::new("object").unwrap();
 
         let result = hook
             .before_signing_mut(
@@ -268,8 +273,8 @@ mod tests {
                 "us-east-1",
                 &mut headers,
                 &query_params,
-                Some("bucket"),
-                Some("object"),
+                Some(&bucket),
+                Some(&object),
                 None,
                 &mut extensions,
             )
@@ -298,8 +303,8 @@ mod tests {
                 _region: &str,
                 headers: &mut Multimap,
                 _query_params: &Multimap,
-                _bucket_name: Option<&str>,
-                _object_name: Option<&str>,
+                _bucket: Option<&BucketName>,
+                _object: Option<&ObjectKey>,
                 _body: Option<&SegmentedBytes>,
                 _extensions: &mut Extensions,
             ) -> Result<(), Error> {
@@ -354,8 +359,8 @@ mod tests {
                 _region: &str,
                 _headers: &mut Multimap,
                 _query_params: &Multimap,
-                _bucket_name: Option<&str>,
-                _object_name: Option<&str>,
+                _bucket: Option<&BucketName>,
+                _object: Option<&ObjectKey>,
                 _body: Option<&SegmentedBytes>,
                 extensions: &mut Extensions,
             ) -> Result<(), Error> {
@@ -410,12 +415,12 @@ mod tests {
                 _region: &str,
                 _headers: &mut Multimap,
                 _query_params: &Multimap,
-                bucket_name: Option<&str>,
-                _object_name: Option<&str>,
+                bucket: Option<&BucketName>,
+                _object: Option<&ObjectKey>,
                 _body: Option<&SegmentedBytes>,
                 _extensions: &mut Extensions,
             ) -> Result<(), Error> {
-                if bucket_name == Some("forbidden-bucket") {
+                if bucket.map(|b| b.as_str()) == Some("forbidden-bucket") {
                     return Err(Error::Validation(ValidationErr::InvalidBucketName {
                         name: "forbidden-bucket".to_string(),
                         reason: "Bucket access denied by hook".to_string(),
@@ -430,6 +435,7 @@ mod tests {
         let mut headers = Multimap::new();
         let query_params = Multimap::new();
         let mut extensions = Extensions::default();
+        let forbidden_bucket = BucketName::new("forbidden-bucket").unwrap();
 
         let result = hook
             .before_signing_mut(
@@ -438,7 +444,7 @@ mod tests {
                 "us-east-1",
                 &mut headers,
                 &query_params,
-                Some("forbidden-bucket"),
+                Some(&forbidden_bucket),
                 None,
                 None,
                 &mut extensions,

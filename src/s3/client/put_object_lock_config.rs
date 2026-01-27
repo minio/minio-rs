@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{PutObjectLockConfig, PutObjectLockConfigBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`PutObjectLockConfig`] request builder.
@@ -39,25 +41,31 @@ impl MinioClient {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
-    ///     let bucket_name = "bucket-name";
     ///
     ///     let resp: CreateBucketResponse = client
-    ///         .create_bucket(bucket_name).object_lock(true)
+    ///         .create_bucket("bucket-name").unwrap().object_lock(true)
     ///         .build().send().await.unwrap();
-    ///     println!("created bucket '{}' with object locking enabled", resp.bucket());
+    ///     println!("created bucket '{}' with object locking enabled", resp.bucket().unwrap());
     ///
     ///     const DURATION_DAYS: i32 = 7;
     ///     let config = ObjectLockConfig::new(RetentionMode::GOVERNANCE, Some(DURATION_DAYS), None).unwrap();
     ///
     ///     let resp: PutObjectLockConfigResponse = client
-    ///         .put_object_lock_config(bucket_name).config(config)
+    ///         .put_object_lock_config("bucket-name").unwrap().config(config)
     ///         .build().send().await.unwrap();
-    ///     println!("configured object locking for bucket '{}'", resp.bucket());
+    ///     println!("configured object locking for bucket '{}'", resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn put_object_lock_config<S: Into<String>>(&self, bucket: S) -> PutObjectLockConfigBldr {
-        PutObjectLockConfig::builder()
+    pub fn put_object_lock_config<B>(
+        &self,
+        bucket: B,
+    ) -> Result<PutObjectLockConfigBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(PutObjectLockConfig::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

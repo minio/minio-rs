@@ -25,16 +25,15 @@ pub(crate) fn bench_object_copy_internal(criterion: &mut Criterion) {
         criterion,
         || async { Ctx2::new_with_object(false).await },
         |ctx| {
-            let object_name_src = &ctx.object;
-            let object_name_dst = rand_object_name();
+            let object = rand_object_name();
             CopyObjectInternal::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
-                .object(object_name_dst)
+                .bucket(&ctx.bucket)
+                .object(object)
                 .source(
                     CopySource::builder()
-                        .bucket(ctx.bucket.clone())
-                        .object(object_name_src)
+                        .bucket(&ctx.bucket)
+                        .object(&ctx.object)
                         .build(),
                 )
                 .build()

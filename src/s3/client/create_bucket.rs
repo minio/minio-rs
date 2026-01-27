@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{CreateBucket, CreateBucketBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`CreateBucket`] request builder.
@@ -39,11 +41,17 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: CreateBucketResponse = client
     ///         .create_bucket("bucket-name")
-    ///         .build().send().await.unwrap();
-    ///     println!("Made bucket '{}' in region '{}'", resp.bucket(), resp.region());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("Made bucket '{}' in region '{}'", resp.bucket().unwrap(), resp.region());
     /// }
     /// ```
-    pub fn create_bucket<S: Into<String>>(&self, bucket: S) -> CreateBucketBldr {
-        CreateBucket::builder().client(self.clone()).bucket(bucket)
+    pub fn create_bucket<B>(&self, bucket: B) -> Result<CreateBucketBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(CreateBucket::builder()
+            .client(self.clone())
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

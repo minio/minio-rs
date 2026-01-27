@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{GetPresignedObjectUrl, GetPresignedObjectUrlBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::{BucketName, ObjectKey};
 use http::Method;
 
 impl MinioClient {
@@ -40,20 +42,26 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetPresignedObjectUrlResponse = client
     ///         .get_presigned_object_url("bucket-name", "object-name", Method::GET)
-    ///         .build().send().await.unwrap();
+    ///         .unwrap().build().send().await.unwrap();
     ///     println!("the presigned url: '{:?}'", resp.url);
     /// }
     /// ```
-    pub fn get_presigned_object_url<S1: Into<String>, S2: Into<String>>(
+    pub fn get_presigned_object_url<B, O>(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: B,
+        object: O,
         method: Method,
-    ) -> GetPresignedObjectUrlBldr {
-        GetPresignedObjectUrl::builder()
+    ) -> Result<GetPresignedObjectUrlBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(GetPresignedObjectUrl::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
-            .method(method)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?)
+            .method(method))
     }
 }

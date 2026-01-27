@@ -26,6 +26,7 @@
 
 use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
+use crate::s3::types::Region;
 use crate::s3::utils::{UtcTime, hex_encode, sha256_hash, to_amz_date, to_signer_date};
 #[cfg(not(feature = "ring"))]
 use hmac::{Hmac, Mac};
@@ -73,7 +74,7 @@ pub(crate) struct SigningKeyCache {
     /// The date string (YYYYMMDD) this key was computed for
     date_str: String,
     /// The region this key was computed for
-    region: String,
+    region: Region,
     /// The service name this key was computed for
     service: String,
 }
@@ -89,7 +90,7 @@ impl SigningKeyCache {
         Self {
             key: Arc::from(Vec::new()),
             date_str: String::new(),
-            region: String::new(),
+            region: Region::new_empty(),
             service: String::new(),
         }
     }
@@ -99,9 +100,9 @@ impl SigningKeyCache {
     /// Note: Does NOT validate the secret key. See struct-level documentation
     /// for the rationale behind this design decision.
     #[inline]
-    fn matches(&self, date_str: &str, region: &str, service: &str) -> bool {
+    fn matches(&self, date_str: &str, region: &Region, service: &str) -> bool {
         // Check most likely to change first (date changes daily)
-        self.date_str == date_str && self.region == region && self.service == service
+        (self.date_str == date_str) && (&self.region == region) && (self.service == service)
     }
 
     /// Returns the cached signing key if it matches the given parameters.
@@ -109,7 +110,12 @@ impl SigningKeyCache {
     /// Returns `None` if the cache is invalid (different date/region/service).
     /// Uses Arc::clone for zero-copy sharing (just atomic reference count increment).
     #[inline]
-    fn get_key_if_matches(&self, date_str: &str, region: &str, service: &str) -> Option<Arc<[u8]>> {
+    fn get_key_if_matches(
+        &self,
+        date_str: &str,
+        region: &Region,
+        service: &str,
+    ) -> Option<Arc<[u8]>> {
         if self.matches(date_str, region, service) {
             Some(Arc::clone(&self.key))
         } else {
@@ -118,7 +124,7 @@ impl SigningKeyCache {
     }
 
     /// Updates the cache with a new signing key and associated parameters.
-    fn update(&mut self, key: Arc<[u8]>, date_str: String, region: String, service: String) {
+    fn update(&mut self, key: Arc<[u8]>, date_str: String, region: Region, service: String) {
         self.key = key;
         self.date_str = date_str;
         self.region = region;
@@ -148,10 +154,11 @@ fn hmac_hash_hex(key: &[u8], data: &[u8]) -> String {
 }
 
 /// Returns scope value of given date, region and service name.
-fn get_scope(date: UtcTime, region: &str, service_name: &str) -> String {
+fn get_scope(date: UtcTime, region: &Region, service_name: &str) -> String {
     format!(
-        "{}/{region}/{service_name}/aws4_request",
-        to_signer_date(date)
+        "{}/{}/{service_name}/aws4_request",
+        to_signer_date(date),
+        region.as_str()
     )
 }
 
@@ -182,14 +189,14 @@ fn get_string_to_sign(date: UtcTime, scope: &str, canonical_request_hash: &str) 
 fn compute_signing_key(
     secret_key: &str,
     date_str: &str,
-    region: &str,
+    region: &Region,
     service_name: &str,
 ) -> Vec<u8> {
     let mut key: Vec<u8> = b"AWS4".to_vec();
     key.extend(secret_key.as_bytes());
 
     let date_key = hmac_hash(key.as_slice(), date_str.as_bytes());
-    let date_region_key = hmac_hash(date_key.as_slice(), region.as_bytes());
+    let date_region_key = hmac_hash(date_key.as_slice(), region.as_str().as_bytes());
     let date_region_service_key = hmac_hash(date_region_key.as_slice(), service_name.as_bytes());
     hmac_hash(date_region_service_key.as_slice(), b"aws4_request")
 }
@@ -222,7 +229,7 @@ fn get_signing_key(
     cache: &RwLock<SigningKeyCache>,
     secret_key: &str,
     date: UtcTime,
-    region: &str,
+    region: &Region,
     service_name: &str,
 ) -> Arc<[u8]> {
     let date_str = to_signer_date(date);
@@ -251,7 +258,7 @@ fn get_signing_key(
         cache_guard.update(
             Arc::clone(&signing_key),
             date_str,
-            region.to_string(),
+            region.clone(),
             service_name.to_string(),
         );
     }
@@ -282,7 +289,7 @@ fn sign_v4(
     service_name: &str,
     method: &Method,
     uri: &str,
-    region: &str,
+    region: &Region,
     headers: &mut Multimap,
     query_params: &Multimap,
     access_key: &str,
@@ -316,7 +323,7 @@ pub(crate) fn sign_v4_s3(
     cache: &RwLock<SigningKeyCache>,
     method: &Method,
     uri: &str,
-    region: &str,
+    region: &Region,
     headers: &mut Multimap,
     query_params: &Multimap,
     access_key: &str,
@@ -347,7 +354,7 @@ pub(crate) fn presign_v4(
     method: &Method,
     host: &str,
     uri: &str,
-    region: &str,
+    region: &Region,
     query_params: &mut Multimap,
     access_key: &str,
     secret_key: &str,
@@ -388,7 +395,7 @@ pub(crate) fn post_presign_v4(
     string_to_sign: &str,
     secret_key: &str,
     date: UtcTime,
-    region: &str,
+    region: &Region,
 ) -> String {
     let signing_key = get_signing_key(cache, secret_key, date, region, "s3");
     get_signature(&signing_key, string_to_sign.as_bytes())
@@ -509,7 +516,7 @@ pub(crate) fn sign_v4_s3_with_context(
     cache: &RwLock<SigningKeyCache>,
     method: &Method,
     uri: &str,
-    region: &str,
+    region: &Region,
     headers: &mut Multimap,
     query_params: &Multimap,
     access_key: &str,
@@ -570,7 +577,7 @@ mod tests {
         let cache = test_cache();
         let method = Method::GET;
         let uri = "/bucket/key";
-        let region = "us-east-1";
+        let region = Region::default();
         let mut headers = Multimap::new();
         let date = get_test_date();
         let content_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -588,7 +595,7 @@ mod tests {
             &cache,
             &method,
             uri,
-            region,
+            &region,
             &mut headers,
             &query_params,
             access_key,
@@ -610,7 +617,7 @@ mod tests {
         let cache = test_cache();
         let method = Method::GET;
         let uri = "/test";
-        let region = "us-east-1";
+        let region = Region::default();
         let access_key = "test_key";
         let secret_key = "test_secret";
         let content_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -631,7 +638,7 @@ mod tests {
             &cache,
             &method,
             uri,
-            region,
+            &region,
             &mut headers1,
             &query_params,
             access_key,
@@ -644,7 +651,7 @@ mod tests {
             &cache,
             &method,
             uri,
-            region,
+            &region,
             &mut headers2,
             &query_params,
             access_key,
@@ -660,7 +667,7 @@ mod tests {
     #[test]
     fn test_sign_v4_s3_different_methods() {
         let cache = test_cache();
-        let region = "us-east-1";
+        let region = Region::default();
         let uri = "/test";
         let access_key = "test";
         let secret_key = "secret";
@@ -682,7 +689,7 @@ mod tests {
             &cache,
             &Method::GET,
             uri,
-            region,
+            &region,
             &mut headers_get,
             &query_params,
             access_key,
@@ -695,7 +702,7 @@ mod tests {
             &cache,
             &Method::PUT,
             uri,
-            region,
+            &region,
             &mut headers_put,
             &query_params,
             access_key,
@@ -716,7 +723,7 @@ mod tests {
         let cache = test_cache();
         let method = Method::GET;
         let uri = "/bucket/my file.txt"; // Space in filename
-        let region = "us-east-1";
+        let region = Region::default();
         let mut headers = Multimap::new();
         let date = get_test_date();
         let content_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -734,7 +741,7 @@ mod tests {
             &cache,
             &method,
             uri,
-            region,
+            &region,
             &mut headers,
             &query_params,
             access_key,
@@ -756,7 +763,7 @@ mod tests {
         let method = Method::GET;
         let host = "s3.amazonaws.com";
         let uri = "/bucket/key";
-        let region = "us-east-1";
+        let region = Region::default();
         let mut query_params = Multimap::new();
         let access_key = "AKIAIOSFODNN7EXAMPLE";
         let secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
@@ -768,7 +775,7 @@ mod tests {
             &method,
             host,
             uri,
-            region,
+            &region,
             &mut query_params,
             access_key,
             secret_key,
@@ -791,7 +798,7 @@ mod tests {
         let method = Method::GET;
         let host = "s3.amazonaws.com";
         let uri = "/test";
-        let region = "us-east-1";
+        let region = Region::default();
         let mut query_params = Multimap::new();
         let access_key = "test";
         let secret_key = "secret";
@@ -803,7 +810,7 @@ mod tests {
             &method,
             host,
             uri,
-            region,
+            &region,
             &mut query_params,
             access_key,
             secret_key,
@@ -821,7 +828,7 @@ mod tests {
         let method = Method::GET;
         let host = "s3.amazonaws.com";
         let uri = "/test";
-        let region = "us-east-1";
+        let region = Region::default();
         let mut query_params = Multimap::new();
         let access_key = "test";
         let secret_key = "secret";
@@ -833,7 +840,7 @@ mod tests {
             &method,
             host,
             uri,
-            region,
+            &region,
             &mut query_params,
             access_key,
             secret_key,
@@ -851,7 +858,7 @@ mod tests {
         let method = Method::GET;
         let host = "s3.amazonaws.com";
         let uri = "/test";
-        let region = "us-east-1";
+        let region = Region::default();
         let mut query_params = Multimap::new();
         let access_key = "AKIAIOSFODNN7EXAMPLE";
         let secret_key = "secret";
@@ -863,7 +870,7 @@ mod tests {
             &method,
             host,
             uri,
-            region,
+            &region,
             &mut query_params,
             access_key,
             secret_key,
@@ -889,9 +896,9 @@ mod tests {
         let string_to_sign = "test_string_to_sign";
         let secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
         let date = get_test_date();
-        let region = "us-east-1";
+        let region = Region::new("us-east-1").unwrap();
 
-        let signature = post_presign_v4(&cache, string_to_sign, secret_key, date, region);
+        let signature = post_presign_v4(&cache, string_to_sign, secret_key, date, &region);
 
         // Should produce 64 character hex signature
         assert_eq!(signature.len(), 64);
@@ -904,10 +911,10 @@ mod tests {
         let string_to_sign = "test_string";
         let secret_key = "test_secret";
         let date = get_test_date();
-        let region = "us-east-1";
+        let region = Region::new("us-east-1").unwrap();
 
-        let sig1 = post_presign_v4(&cache, string_to_sign, secret_key, date, region);
-        let sig2 = post_presign_v4(&cache, string_to_sign, secret_key, date, region);
+        let sig1 = post_presign_v4(&cache, string_to_sign, secret_key, date, &region);
+        let sig2 = post_presign_v4(&cache, string_to_sign, secret_key, date, &region);
 
         assert_eq!(sig1, sig2);
     }
@@ -922,9 +929,9 @@ mod tests {
         let cache = test_cache();
         let secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
         let date = get_test_date();
-        let region = "us-east-1";
+        let region = Region::new("us-east-1").unwrap();
 
-        let signing_key = get_signing_key(&cache, secret_key, date, region, "s3");
+        let signing_key = get_signing_key(&cache, secret_key, date, &region, "s3");
         let date_time = "20130524T000000Z";
         let scope = "20130524/us-east-1/s3/aws4_request";
         let previous_signature = "4f232c4386841ef735655705268965c44a0e4690baa4adea153f7db9fa80a0a9";
@@ -949,9 +956,9 @@ mod tests {
         let cache = test_cache();
         let secret_key = "test_secret";
         let date = get_test_date();
-        let region = "us-east-1";
+        let region = Region::new("us-east-1").unwrap();
 
-        let signing_key = get_signing_key(&cache, secret_key, date, region, "s3");
+        let signing_key = get_signing_key(&cache, secret_key, date, &region, "s3");
         let date_time = "20130524T000000Z";
         let scope = "20130524/us-east-1/s3/aws4_request";
         let previous_signature = "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234";
@@ -980,9 +987,9 @@ mod tests {
         let cache = test_cache();
         let secret_key = "test_secret";
         let date = get_test_date();
-        let region = "us-east-1";
+        let region = Region::new("us-east-1").unwrap();
 
-        let signing_key = get_signing_key(&cache, secret_key, date, region, "s3");
+        let signing_key = get_signing_key(&cache, secret_key, date, &region, "s3");
         let date_time = "20130524T000000Z";
         let scope = "20130524/us-east-1/s3/aws4_request";
         let previous_signature = "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234";
@@ -1007,9 +1014,9 @@ mod tests {
         let cache = test_cache();
         let secret_key = "test_secret";
         let date = get_test_date();
-        let region = "us-east-1";
+        let region = Region::new("us-east-1").unwrap();
 
-        let signing_key = get_signing_key(&cache, secret_key, date, region, "s3");
+        let signing_key = get_signing_key(&cache, secret_key, date, &region, "s3");
         let date_time = "20130524T000000Z";
         let scope = "20130524/us-east-1/s3/aws4_request";
         let seed_signature = "seed1234seed1234seed1234seed1234seed1234seed1234seed1234seed1234";
@@ -1035,9 +1042,9 @@ mod tests {
         let cache = test_cache();
         let secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
         let date = get_test_date();
-        let region = "us-east-1";
+        let region = Region::new("us-east-1").unwrap();
 
-        let signing_key = get_signing_key(&cache, secret_key, date, region, "s3");
+        let signing_key = get_signing_key(&cache, secret_key, date, &region, "s3");
         let date_time = "20130524T000000Z";
         let scope = "20130524/us-east-1/s3/aws4_request";
         let last_chunk_signature =
@@ -1064,9 +1071,9 @@ mod tests {
         let cache = test_cache();
         let secret_key = "test_secret";
         let date = get_test_date();
-        let region = "us-east-1";
+        let region = Region::new("us-east-1").unwrap();
 
-        let signing_key = get_signing_key(&cache, secret_key, date, region, "s3");
+        let signing_key = get_signing_key(&cache, secret_key, date, &region, "s3");
         let date_time = "20130524T000000Z";
         let scope = "20130524/us-east-1/s3/aws4_request";
         let last_chunk_signature =
@@ -1097,7 +1104,7 @@ mod tests {
         let cache = test_cache();
         let method = Method::PUT;
         let uri = "/examplebucket/chunkObject.txt";
-        let region = "us-east-1";
+        let region = Region::new("us-east-1").unwrap();
         let mut headers = Multimap::new();
         let date = get_test_date();
         let content_sha256 = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER";
@@ -1117,7 +1124,7 @@ mod tests {
             &cache,
             &method,
             uri,
-            region,
+            &region,
             &mut headers,
             &query_params,
             access_key,
@@ -1149,7 +1156,7 @@ mod tests {
         let cache = test_cache();
         let method = Method::PUT;
         let uri = "/test";
-        let region = "us-east-1";
+        let region = Region::new("us-east-1").unwrap();
         let mut headers = Multimap::new();
         let date = get_test_date();
         let content_sha256 = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER";
@@ -1166,7 +1173,7 @@ mod tests {
             &cache,
             &method,
             uri,
-            region,
+            &region,
             &mut headers,
             &query_params,
             access_key,

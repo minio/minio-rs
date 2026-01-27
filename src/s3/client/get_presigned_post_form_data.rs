@@ -31,26 +31,21 @@ impl MinioClient {
     /// use minio::s3::MinioClient;
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
-    /// use minio::s3::types::S3Api;
+    /// use minio::s3::types::{BucketName, S3Api};
     /// use minio::s3::builders::PostPolicy;
     /// use minio::s3::utils::utc_now;
-    ///
-    /// pub fn create_post_policy_example(bucket_name: &str, object_name: &str) -> PostPolicy {
-    ///     let expiration: DateTime<Utc> = utc_now() + chrono::Duration::days(5);
-    ///     let mut policy = PostPolicy::new(&bucket_name, expiration).unwrap();
-    ///     policy.add_equals_condition("key", &object_name).unwrap();
-    ///     policy
-    ///         .add_content_length_range_condition(1024 * 1024, 4 * 1024 * 1024)
-    ///         .unwrap();
-    ///     policy
-    /// }
     ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
-    ///     let policy: PostPolicy = create_post_policy_example("bucket-name", "object-name");
+    ///
+    ///     let expiration: DateTime<Utc> = utc_now() + chrono::Duration::days(5);
+    ///     let mut policy = PostPolicy::new(BucketName::new("bucket-name").unwrap(), expiration).unwrap();
+    ///     policy.add_equals_condition("key", "object-name").unwrap();
+    ///     policy.add_content_length_range_condition(1024 * 1024, 4 * 1024 * 1024).unwrap();
+    ///
     ///     let resp: HashMap<String, String> = client
     ///         .get_presigned_post_form_data(policy)
     ///         .build().send().await.unwrap();

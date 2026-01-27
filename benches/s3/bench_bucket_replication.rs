@@ -34,8 +34,8 @@ pub(crate) fn bench_put_bucket_replication(criterion: &mut Criterion) {
 
             let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .put_bucket_versioning(&ctx.bucket)
-                .versioning_status(VersioningStatus::Enabled)
+                .put_bucket_versioning(&ctx.bucket, VersioningStatus::Enabled)
+                .unwrap()
                 .build()
                 .send()
                 .await
@@ -43,8 +43,8 @@ pub(crate) fn bench_put_bucket_replication(criterion: &mut Criterion) {
 
             let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .put_bucket_versioning(ctx.aux_bucket.clone().unwrap())
-                .versioning_status(VersioningStatus::Enabled)
+                .put_bucket_versioning(ctx.aux_bucket.clone().unwrap(), VersioningStatus::Enabled)
+                .unwrap()
                 .build()
                 .send()
                 .await
@@ -53,11 +53,10 @@ pub(crate) fn bench_put_bucket_replication(criterion: &mut Criterion) {
             ctx
         },
         |ctx| {
-            let config =
-                create_bucket_replication_config_example(ctx.aux_bucket.clone().unwrap().as_str());
+            let config = create_bucket_replication_config_example(&ctx.aux_bucket.clone().unwrap());
             PutBucketReplication::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(&ctx.bucket)
                 .replication_config(config)
                 .build()
         },
@@ -74,8 +73,8 @@ pub(crate) fn bench_get_bucket_replication(criterion: &mut Criterion) {
 
             let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .put_bucket_versioning(&ctx.bucket)
-                .versioning_status(VersioningStatus::Enabled)
+                .put_bucket_versioning(&ctx.bucket, VersioningStatus::Enabled)
+                .unwrap()
                 .build()
                 .send()
                 .await
@@ -83,8 +82,8 @@ pub(crate) fn bench_get_bucket_replication(criterion: &mut Criterion) {
 
             let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .put_bucket_versioning(ctx.aux_bucket.clone().unwrap())
-                .versioning_status(VersioningStatus::Enabled)
+                .put_bucket_versioning(ctx.aux_bucket.clone().unwrap(), VersioningStatus::Enabled)
+                .unwrap()
                 .build()
                 .send()
                 .await
@@ -95,7 +94,7 @@ pub(crate) fn bench_get_bucket_replication(criterion: &mut Criterion) {
         |ctx| {
             GetBucketReplication::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(&ctx.bucket)
                 .build()
         },
     )
@@ -111,8 +110,8 @@ pub(crate) fn bench_delete_bucket_replication(criterion: &mut Criterion) {
 
             let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .put_bucket_versioning(&ctx.bucket)
-                .versioning_status(VersioningStatus::Enabled)
+                .put_bucket_versioning(&ctx.bucket, VersioningStatus::Enabled)
+                .unwrap()
                 .build()
                 .send()
                 .await
@@ -120,8 +119,8 @@ pub(crate) fn bench_delete_bucket_replication(criterion: &mut Criterion) {
 
             let _resp: PutBucketVersioningResponse = ctx
                 .client
-                .put_bucket_versioning(ctx.aux_bucket.clone().unwrap())
-                .versioning_status(VersioningStatus::Enabled)
+                .put_bucket_versioning(ctx.aux_bucket.clone().unwrap(), VersioningStatus::Enabled)
+                .unwrap()
                 .build()
                 .send()
                 .await
@@ -132,7 +131,7 @@ pub(crate) fn bench_delete_bucket_replication(criterion: &mut Criterion) {
         |ctx| {
             DeleteBucketReplication::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(&ctx.bucket)
                 .build()
         },
     )

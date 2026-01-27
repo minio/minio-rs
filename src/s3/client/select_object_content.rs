@@ -15,7 +15,8 @@
 
 use crate::s3::builders::{SelectObjectContent, SelectObjectContentBldr};
 use crate::s3::client::MinioClient;
-use crate::s3::types::SelectRequest;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::{BucketName, ObjectKey, SelectRequest};
 
 impl MinioClient {
     /// Creates a [`SelectObjectContent`] request builder.
@@ -63,20 +64,26 @@ impl MinioClient {
     ///
     ///     let resp: SelectObjectContentResponse = client
     ///         .select_object_content("bucket-name", "object-name", request)
-    ///         .build().send().await.unwrap();
+    ///         .unwrap().build().send().await.unwrap();
     ///     println!("the progress: '{:?}'", resp.progress);
     /// }
     /// ```
-    pub fn select_object_content<S1: Into<String>, S2: Into<String>>(
+    pub fn select_object_content<B, O>(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: B,
+        object: O,
         request: SelectRequest,
-    ) -> SelectObjectContentBldr {
-        SelectObjectContent::builder()
+    ) -> Result<SelectObjectContentBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(SelectObjectContent::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
-            .request(request)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?)
+            .request(request))
     }
 }

@@ -21,7 +21,7 @@ use minio::s3::client::MinioClientBuilder;
 use minio::s3::creds::StaticProvider;
 use minio::s3::response::{GetObjectResponse, PutObjectContentResponse};
 use minio::s3::response_traits::{HasBucket, HasObject};
-use minio::s3::types::{S3Api, ToStream};
+use minio::s3::types::{BucketName, ObjectKey, S3Api, ToStream};
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 
@@ -49,32 +49,34 @@ fn create_client_with_skip_region_lookup(ctx: &TestContext) -> MinioClient {
 /// Test that skip_region_lookup allows basic put/get operations.
 /// This verifies operations work correctly when region lookup is skipped.
 #[minio_macros::test]
-async fn skip_region_lookup_put_get_object(ctx: TestContext, bucket_name: String) {
+async fn skip_region_lookup_put_get_object(ctx: TestContext, bucket: BucketName) {
     let client = create_client_with_skip_region_lookup(&ctx);
-    let object_name = rand_object_name();
+    let object = rand_object_name();
     let data: Bytes = Bytes::from("test data with skip_region_lookup");
 
     // Put object using client with skip_region_lookup
     let put_resp: PutObjectContentResponse = client
-        .put_object_content(&bucket_name, &object_name, data.clone())
+        .put_object_content(&bucket, &object, data.clone())
+        .unwrap()
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(put_resp.bucket(), bucket_name);
-    assert_eq!(put_resp.object(), object_name);
+    assert_eq!(put_resp.bucket(), Some(&bucket));
+    assert_eq!(put_resp.object(), Some(&object));
 
     // Get object using the same client
     let get_resp: GetObjectResponse = client
-        .get_object(&bucket_name, &object_name)
+        .get_object(&bucket, &object)
+        .unwrap()
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(get_resp.bucket(), bucket_name);
-    assert_eq!(get_resp.object(), object_name);
+    assert_eq!(get_resp.bucket(), Some(&bucket));
+    assert_eq!(get_resp.object(), Some(&object));
 
     let got = get_resp.into_bytes().await.unwrap();
     assert_eq!(got, data);
@@ -82,12 +84,13 @@ async fn skip_region_lookup_put_get_object(ctx: TestContext, bucket_name: String
 
 /// Test that skip_region_lookup works for bucket operations.
 #[minio_macros::test]
-async fn skip_region_lookup_bucket_exists(ctx: TestContext, bucket_name: String) {
+async fn skip_region_lookup_bucket_exists(ctx: TestContext, bucket: BucketName) {
     let client = create_client_with_skip_region_lookup(&ctx);
 
     // Check bucket exists using client with skip_region_lookup
     let exists = client
-        .bucket_exists(&bucket_name)
+        .bucket_exists(&bucket)
+        .unwrap()
         .build()
         .send()
         .await
@@ -99,12 +102,17 @@ async fn skip_region_lookup_bucket_exists(ctx: TestContext, bucket_name: String)
 
 /// Test that skip_region_lookup works for list operations.
 #[minio_macros::test]
-async fn skip_region_lookup_list_objects(ctx: TestContext, bucket_name: String) {
+async fn skip_region_lookup_list_objects(ctx: TestContext, bucket: BucketName) {
     let client = create_client_with_skip_region_lookup(&ctx);
 
     // List objects using client with skip_region_lookup
     // Just verify the operation completes without error
-    let mut stream = client.list_objects(&bucket_name).build().to_stream().await;
+    let mut stream = client
+        .list_objects(&bucket)
+        .unwrap()
+        .build()
+        .to_stream()
+        .await;
 
     use futures_util::StreamExt;
     // Consume the stream - may be empty, but should not error
@@ -125,17 +133,18 @@ async fn skip_region_lookup_list_objects(ctx: TestContext, bucket_name: String) 
 /// Test that multiple operations work in sequence with skip_region_lookup.
 /// This verifies that the default region is consistently used.
 #[minio_macros::test]
-async fn skip_region_lookup_multiple_operations(ctx: TestContext, bucket_name: String) {
+async fn skip_region_lookup_multiple_operations(ctx: TestContext, bucket: BucketName) {
     let client = create_client_with_skip_region_lookup(&ctx);
 
     // Perform multiple operations to ensure consistent behavior
     for i in 0..3 {
-        let object_name = format!("test-object-{}", i);
+        let object = ObjectKey::try_from(format!("test-object-{}", i).as_str()).unwrap();
         let data: Bytes = Bytes::from(format!("data for object {}", i));
 
         // Put
         client
-            .put_object_content(&bucket_name, &object_name, data.clone())
+            .put_object_content(&bucket, &object, data.clone())
+            .unwrap()
             .build()
             .send()
             .await
@@ -143,7 +152,8 @@ async fn skip_region_lookup_multiple_operations(ctx: TestContext, bucket_name: S
 
         // Get
         let resp: GetObjectResponse = client
-            .get_object(&bucket_name, &object_name)
+            .get_object(&bucket, &object)
+            .unwrap()
             .build()
             .send()
             .await
@@ -154,7 +164,8 @@ async fn skip_region_lookup_multiple_operations(ctx: TestContext, bucket_name: S
 
         // Delete
         client
-            .delete_object(&bucket_name, &object_name)
+            .delete_object(&bucket, &object)
+            .unwrap()
             .build()
             .send()
             .await
@@ -164,14 +175,15 @@ async fn skip_region_lookup_multiple_operations(ctx: TestContext, bucket_name: S
 
 /// Test that skip_region_lookup does not affect stat_object operations.
 #[minio_macros::test]
-async fn skip_region_lookup_stat_object(ctx: TestContext, bucket_name: String) {
+async fn skip_region_lookup_stat_object(ctx: TestContext, bucket: BucketName) {
     let client = create_client_with_skip_region_lookup(&ctx);
-    let object_name = rand_object_name();
+    let object = rand_object_name();
     let data: Bytes = Bytes::from("test data for stat");
 
     // Put object
     client
-        .put_object_content(&bucket_name, &object_name, data.clone())
+        .put_object_content(&bucket, &object, data.clone())
+        .unwrap()
         .build()
         .send()
         .await
@@ -179,13 +191,14 @@ async fn skip_region_lookup_stat_object(ctx: TestContext, bucket_name: String) {
 
     // Stat object using client with skip_region_lookup
     let stat_resp = client
-        .stat_object(&bucket_name, &object_name)
+        .stat_object(&bucket, &object)
+        .unwrap()
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(stat_resp.bucket(), bucket_name);
-    assert_eq!(stat_resp.object(), object_name);
+    assert_eq!(stat_resp.bucket(), Some(&bucket));
+    assert_eq!(stat_resp.object(), Some(&object));
     assert_eq!(stat_resp.size().unwrap(), data.len() as u64);
 }

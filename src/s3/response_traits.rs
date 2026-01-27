@@ -66,7 +66,7 @@
 
 use crate::s3::error::ValidationErr;
 use crate::s3::header_constants::*;
-use crate::s3::types::S3Request;
+use crate::s3::types::{BucketName, ETag, ObjectKey, Region, S3Request, VersionId};
 use crate::s3::utils::{ChecksumAlgorithm, get_text_result, parse_bool, trim_quotes};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -158,25 +158,25 @@ pub trait HasS3Fields {
 }
 /// Returns the name of the S3 bucket.
 pub trait HasBucket: HasS3Fields {
-    /// Returns the name of the S3 bucket.
+    /// Returns the name of the S3 bucket, if set.
     #[inline]
-    fn bucket(&self) -> &str {
-        self.request().bucket.as_deref().unwrap_or_default()
+    fn bucket(&self) -> Option<&BucketName> {
+        self.request().bucket.as_ref()
     }
 }
 /// Returns the object key (name) of the S3 object.
 pub trait HasObject: HasS3Fields {
-    /// Returns the object key (name) of the S3 object.
+    /// Returns the object key (name) of the S3 object, if set.
     #[inline]
-    fn object(&self) -> &str {
-        self.request().object.as_deref().unwrap_or_default()
+    fn object(&self) -> Option<&ObjectKey> {
+        self.request().object.as_ref()
     }
 }
 /// Returns the region of the S3 bucket.
 pub trait HasRegion: HasS3Fields {
     /// Returns the region of the S3 bucket.
     #[inline]
-    fn region(&self) -> &str {
+    fn region(&self) -> &Region {
         &self.request().inner_region
     }
 }
@@ -185,10 +185,11 @@ pub trait HasRegion: HasS3Fields {
 pub trait HasVersion: HasS3Fields {
     /// Returns the version ID of the object (`x-amz-version-id`), if versioning is enabled for the bucket.
     #[inline]
-    fn version_id(&self) -> Option<&str> {
+    fn version_id(&self) -> Option<VersionId> {
         self.headers()
             .get(X_AMZ_VERSION_ID)
             .and_then(|v| v.to_str().ok())
+            .and_then(|s| VersionId::new(s).ok())
     }
 }
 
@@ -198,16 +199,14 @@ pub trait HasEtagFromHeaders: HasS3Fields {
     /// Returns the value of the `ETag` header from response headers (for operations that return ETag in headers).
     /// The ETag is typically a hash of the object content, but it may vary based on the storage backend.
     #[inline]
-    fn etag(&self) -> Result<String, ValidationErr> {
-        // Retrieve the ETag from the response headers.
-        let etag = self
+    fn etag(&self) -> Result<ETag, ValidationErr> {
+        let etag_str = self
             .headers()
             .get("etag")
             .and_then(|v| v.to_str().ok())
             .map(|s| s.trim_matches('"'))
-            .unwrap_or_default()
-            .to_string();
-        Ok(etag)
+            .unwrap_or_default();
+        ETag::new(etag_str)
     }
 }
 
@@ -218,11 +217,10 @@ pub trait HasEtagFromBody: HasS3Fields {
     /// Returns the value of the `ETag` from the response body, which is a unique identifier for
     /// the object version. The ETag is typically a hash of the object content, but it may vary
     /// based on the storage backend.
-    fn etag(&self) -> Result<String, ValidationErr> {
-        // Retrieve the ETag from the response body.
+    fn etag(&self) -> Result<ETag, ValidationErr> {
         let root = xmltree::Element::parse(self.body().clone().reader())?;
-        let etag: String = get_text_result(&root, "ETag")?;
-        Ok(trim_quotes(etag))
+        let etag_str: String = get_text_result(&root, "ETag")?;
+        ETag::new(trim_quotes(etag_str))
     }
 }
 

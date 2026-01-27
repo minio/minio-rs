@@ -24,6 +24,7 @@ pub mod minio_error_response;
 pub mod s3_request;
 pub mod sse;
 pub mod traits;
+pub mod typed_parameters;
 
 // Serialization types
 pub mod serialization;
@@ -47,6 +48,7 @@ pub use basic_types::{
 };
 pub use s3_request::S3Request;
 pub use traits::{FromS3Response, S3Api, ToS3Request, ToStream};
+pub use typed_parameters::{BucketName, ContentType, ETag, ObjectKey, Region, UploadId, VersionId};
 
 // Re-export serialization types
 pub use serialization::{

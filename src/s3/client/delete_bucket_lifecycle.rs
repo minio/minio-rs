@@ -15,12 +15,14 @@
 
 use crate::s3::builders::{DeleteBucketLifecycle, DeleteBucketLifecycleBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`DeleteBucketLifecycle`] request builder.
     ///
     /// To execute the request, call [`DeleteBucketLifecycle::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`DeleteBucketLifecycleResponse`](crate::s3::response::DeleteBucketLifecycleResponse).    
+    /// which returns a [`Result`] containing a [`DeleteBucketLifecycleResponse`](crate::s3::response::DeleteBucketLifecycleResponse).
     ///
     /// # Example
     ///
@@ -33,19 +35,26 @@ impl MinioClient {
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteBucketLifecycleResponse = client
     ///         .delete_bucket_lifecycle("bucket-name")
-    ///         .build().send().await.unwrap();
-    ///     println!("lifecycle of bucket '{}' is deleted", resp.bucket());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("lifecycle of bucket '{}' is deleted", resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn delete_bucket_lifecycle<S: Into<String>>(&self, bucket: S) -> DeleteBucketLifecycleBldr {
-        DeleteBucketLifecycle::builder()
+    pub fn delete_bucket_lifecycle<B>(
+        &self,
+        bucket: B,
+    ) -> Result<DeleteBucketLifecycleBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(DeleteBucketLifecycle::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

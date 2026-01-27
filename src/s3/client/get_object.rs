@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{GetObject, GetObjectBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`GetObject`] request builder to download an object from a specified S3 bucket.
@@ -40,21 +42,23 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetObjectResponse = client
-    ///         .get_object("bucket-name", "object-name")
+    ///         .get_object("bucket-name", "object-name").unwrap()
     ///         .build().send().await.unwrap();
     ///     let content_bytes = resp.content().unwrap().to_segmented_bytes().await.unwrap().to_bytes();
     ///     let content_str = String::from_utf8(content_bytes.to_vec()).unwrap();
     ///     println!("retrieved content '{content_str}'");
     /// }
     /// ```
-    pub fn get_object<S1: Into<String>, S2: Into<String>>(
-        &self,
-        bucket: S1,
-        object: S2,
-    ) -> GetObjectBldr {
-        GetObject::builder()
+    pub fn get_object<B, O>(&self, bucket: B, object: O) -> Result<GetObjectBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(GetObject::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?))
     }
 }

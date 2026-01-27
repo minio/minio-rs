@@ -16,31 +16,32 @@
 use minio::s3::builders::{ComposeSource, ObjectContent};
 use minio::s3::response::{ComposeObjectResponse, PutObjectContentResponse, StatObjectResponse};
 use minio::s3::response_traits::{HasBucket, HasObject};
-use minio::s3::types::S3Api;
+use minio::s3::types::{BucketName, S3Api};
 use minio_common::rand_src::RandSrc;
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name;
 
 #[minio_macros::test]
-async fn compose_object(ctx: TestContext, bucket_name: String) {
-    let object_name_src: String = rand_object_name();
-    let object_name_dst: String = rand_object_name();
+async fn compose_object(ctx: TestContext, bucket: BucketName) {
+    let object_src = rand_object_name();
+    let object_dst = rand_object_name();
 
     let size = 16_u64;
     let content = ObjectContent::new_from_stream(RandSrc::new(size), Some(size));
 
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(&bucket_name, &object_name_src, content)
+        .put_object_content(&bucket, &object_src, content)
+        .unwrap()
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.bucket(), Some(&bucket));
 
     let sources: Vec<ComposeSource> = {
         let mut sources = Vec::new();
-        let mut s1 = ComposeSource::new(&bucket_name, &object_name_src).unwrap();
+        let mut s1 = ComposeSource::new(&bucket, &object_src).unwrap();
         s1.offset = Some(3);
         s1.length = Some(5);
         sources.push(s1);
@@ -49,21 +50,23 @@ async fn compose_object(ctx: TestContext, bucket_name: String) {
 
     let resp: ComposeObjectResponse = ctx
         .client
-        .compose_object(&bucket_name, &object_name_dst, sources)
+        .compose_object(&bucket, &object_dst, sources)
+        .unwrap()
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name_dst);
+    assert_eq!(resp.bucket(), Some(&bucket));
+    assert_eq!(resp.object(), Some(&object_dst));
 
     let resp: StatObjectResponse = ctx
         .client
-        .stat_object(&bucket_name, &object_name_dst)
+        .stat_object(&bucket, &object_dst)
+        .unwrap()
         .build()
         .send()
         .await
         .unwrap();
     assert_eq!(resp.size().unwrap(), 5);
-    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.bucket(), Some(&bucket));
 }

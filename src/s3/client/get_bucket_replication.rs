@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{GetBucketReplication, GetBucketReplicationBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`GetBucketReplication`] request builder.
@@ -40,14 +42,21 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetBucketReplicationResponse = client
-    ///         .get_bucket_replication("bucket-name")
+    ///         .get_bucket_replication("bucket-name").unwrap()
     ///         .build().send().await.unwrap();
-    ///     println!("retrieved bucket replication config '{:?}' from bucket '{}'", resp.config(), resp.bucket());
+    ///     println!("retrieved bucket replication config '{:?}' from bucket '{}'", resp.config(), resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn get_bucket_replication<S: Into<String>>(&self, bucket: S) -> GetBucketReplicationBldr {
-        GetBucketReplication::builder()
+    pub fn get_bucket_replication<B>(
+        &self,
+        bucket: B,
+    ) -> Result<GetBucketReplicationBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(GetBucketReplication::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

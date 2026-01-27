@@ -19,70 +19,72 @@ use minio::s3::response::{
     DeleteObjectResponse, DeleteObjectsResponse, DeleteResult, PutObjectContentResponse,
 };
 use minio::s3::response_traits::{HasBucket, HasObject};
-use minio::s3::types::{S3Api, ToStream};
+use minio::s3::types::{BucketName, ObjectKey, S3Api, ToStream};
 use minio_common::test_context::TestContext;
 use minio_common::utils::rand_object_name_utf8;
 
 async fn create_object_helper(
     ctx: &TestContext,
-    bucket_name: &str,
-    object_name: &str,
+    bucket: &BucketName,
+    object: &ObjectKey,
 ) -> PutObjectContentResponse {
     let resp: PutObjectContentResponse = ctx
         .client
-        .put_object_content(bucket_name, object_name, "hello world")
+        .put_object_content(bucket, object, "hello world")
+        .unwrap()
         .build()
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.bucket(), bucket_name);
-    assert_eq!(resp.object(), object_name);
+    assert_eq!(resp.bucket(), Some(bucket));
+    assert_eq!(resp.object(), Some(object));
     resp
 }
 
-async fn test_delete_object(ctx: &TestContext, bucket_name: &str, object_name: &str) {
-    let _resp = create_object_helper(ctx, bucket_name, object_name).await;
+async fn test_delete_object(ctx: &TestContext, bucket: &BucketName, object: &ObjectKey) {
+    let _resp = create_object_helper(ctx, bucket, object).await;
 
     let resp: DeleteObjectResponse = ctx
         .client
-        .delete_object(bucket_name, object_name)
+        .delete_object(bucket, object)
+        .unwrap()
         .build()
         .send()
         .await
         .unwrap();
 
-    assert_eq!(resp.bucket(), bucket_name);
+    assert_eq!(resp.bucket(), Some(bucket));
 }
 
 /// Test deleting an object with a name that contains utf-8 characters.
 #[minio_macros::test]
-async fn delete_object_1(ctx: TestContext, bucket_name: String) {
-    test_delete_object(&ctx, &bucket_name, &rand_object_name_utf8(20)).await;
+async fn delete_object_1(ctx: TestContext, bucket: BucketName) {
+    let object = rand_object_name_utf8(20);
+    test_delete_object(&ctx, &bucket, &object).await;
 }
 
 /// Test deleting an object with a name that contains white space characters.
 #[minio_macros::test]
-async fn delete_object_2(ctx: TestContext, bucket_name: String) {
-    test_delete_object(&ctx, &bucket_name, "a b+c").await;
+async fn delete_object_2(ctx: TestContext, bucket: BucketName) {
+    let object = ObjectKey::try_from("a b+c").unwrap();
+    test_delete_object(&ctx, &bucket, &object).await;
 }
 
 #[minio_macros::test]
-async fn delete_objects(ctx: TestContext, bucket_name: String) {
+async fn delete_objects(ctx: TestContext, bucket: BucketName) {
     const OBJECT_COUNT: usize = 3;
-    let mut names: Vec<String> = Vec::new();
+    let mut names: Vec<ObjectKey> = Vec::new();
     for _ in 1..=OBJECT_COUNT {
-        let object_name = rand_object_name_utf8(20);
-        let _resp = create_object_helper(&ctx, &bucket_name, &object_name).await;
-        names.push(object_name);
+        let object = rand_object_name_utf8(20);
+        let _resp = create_object_helper(&ctx, &bucket, &object).await;
+        names.push(object);
     }
-    let del_items: Vec<ObjectToDelete> = names
-        .iter()
-        .map(|v| ObjectToDelete::from(v.as_str()))
-        .collect();
+    let del_items: Vec<ObjectToDelete> = names.iter().map(ObjectToDelete::from).collect();
 
     let resp: DeleteObjectsResponse = ctx
         .client
-        .delete_objects::<&String>(&bucket_name, del_items)
+        .delete_objects(&bucket, del_items)
+        .unwrap()
         .verbose_mode(true) // Enable verbose mode to get detailed response
         .build()
         .send()
@@ -97,22 +99,20 @@ async fn delete_objects(ctx: TestContext, bucket_name: String) {
 }
 
 #[minio_macros::test]
-async fn delete_objects_streaming(ctx: TestContext, bucket_name: String) {
+async fn delete_objects_streaming(ctx: TestContext, bucket: BucketName) {
     const OBJECT_COUNT: usize = 3;
-    let mut names: Vec<String> = Vec::new();
+    let mut names: Vec<ObjectKey> = Vec::new();
     for _ in 1..=OBJECT_COUNT {
-        let object_name = rand_object_name_utf8(20);
-        let _resp = create_object_helper(&ctx, &bucket_name, &object_name).await;
-        names.push(object_name);
+        let object = rand_object_name_utf8(20);
+        let _resp = create_object_helper(&ctx, &bucket, &object).await;
+        names.push(object);
     }
-    let del_items: Vec<ObjectToDelete> = names
-        .iter()
-        .map(|v| ObjectToDelete::from(v.as_str()))
-        .collect();
+    let del_items: Vec<ObjectToDelete> = names.iter().map(ObjectToDelete::from).collect();
 
     let mut resp = ctx
         .client
-        .delete_objects_streaming(&bucket_name, del_items.into_iter())
+        .delete_objects_streaming(&bucket, del_items.into_iter())
+        .unwrap()
         .verbose_mode(true)
         .to_stream()
         .await;

@@ -98,15 +98,15 @@ impl Filter {
 
     pub fn to_xml(&self) -> String {
         let mut data = String::from("<Filter>");
-        if self.and_operator.is_some() {
+        if let Some(and_op) = &self.and_operator {
             data.push_str("<And>");
-            if self.and_operator.as_ref().unwrap().prefix.is_some() {
+            if let Some(prefix) = &and_op.prefix {
                 data.push_str("<Prefix>");
-                data.push_str(self.and_operator.as_ref().unwrap().prefix.as_ref().unwrap());
+                data.push_str(prefix);
                 data.push_str("</Prefix>");
             }
-            if self.and_operator.as_ref().unwrap().tags.is_some() {
-                for (key, value) in self.and_operator.as_ref().unwrap().tags.as_ref().unwrap() {
+            if let Some(tags) = &and_op.tags {
+                for (key, value) in tags {
                     data.push_str("<Tag>");
                     data.push_str("<Key>");
                     data.push_str(key);
@@ -119,18 +119,18 @@ impl Filter {
             }
             data.push_str("</And>");
         }
-        if self.prefix.is_some() {
+        if let Some(prefix) = &self.prefix {
             data.push_str("<Prefix>");
-            data.push_str(self.prefix.as_ref().unwrap());
+            data.push_str(prefix);
             data.push_str("</Prefix>");
         }
-        if self.tag.is_some() {
+        if let Some(tag) = &self.tag {
             data.push_str("<Tag>");
             data.push_str("<Key>");
-            data.push_str(&self.tag.as_ref().unwrap().key);
+            data.push_str(&tag.key);
             data.push_str("</Key>");
             data.push_str("<Value>");
-            data.push_str(&self.tag.as_ref().unwrap().value);
+            data.push_str(&tag.value);
             data.push_str("</Value>");
             data.push_str("</Tag>");
         }

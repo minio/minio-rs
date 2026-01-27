@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{PutObjectTagging, PutObjectTaggingBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`PutObjectTagging`] request builder.
@@ -46,19 +48,26 @@ impl MinioClient {
     ///     ]);
     ///     let resp: PutObjectTaggingResponse = client
     ///         .put_object_tagging("bucket-name", "object-name")
+    ///         .unwrap()
     ///         .tags(tags)
     ///         .build().send().await.unwrap();
-    ///     println!("set the object tags for object '{}'", resp.object());
+    ///     println!("set the object tags for object '{}'", resp.object().unwrap());
     /// }
     /// ```
-    pub fn put_object_tagging<S: Into<String>>(
+    pub fn put_object_tagging<B, O>(
         &self,
-        bucket: S,
-        object: S,
-    ) -> PutObjectTaggingBldr {
-        PutObjectTagging::builder()
+        bucket: B,
+        object: O,
+    ) -> Result<PutObjectTaggingBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(PutObjectTagging::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?))
     }
 }

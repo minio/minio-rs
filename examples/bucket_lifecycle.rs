@@ -15,7 +15,7 @@
 
 mod common;
 
-use crate::common::{create_bucket_if_not_exists, create_client_on_play};
+use crate::common::{create_bucket_if_not_exists, create_client};
 use minio::s3::MinioClient;
 use minio::s3::lifecycle_config::{LifecycleConfig, LifecycleRule};
 use minio::s3::response::{
@@ -26,18 +26,15 @@ use minio::s3::types::{Filter, S3Api};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::init(); // Note: set environment variable RUST_LOG="INFO" to log info and higher
-    let client: MinioClient = create_client_on_play()?;
+    let client: MinioClient = create_client()?;
 
-    let bucket_name: &str = "lifecycle-rust-bucket";
-    create_bucket_if_not_exists(bucket_name, &client).await?;
+    let bucket: &str = "lifecycle-rust-bucket";
+    create_bucket_if_not_exists(bucket, &client).await?;
 
     if false {
         // TODO
-        let resp: GetBucketLifecycleResponse = client
-            .get_bucket_lifecycle(bucket_name)
-            .build()
-            .send()
-            .await?;
+        let resp: GetBucketLifecycleResponse =
+            client.get_bucket_lifecycle(bucket)?.build().send().await?;
         log::info!("life cycle settings before setting: resp={resp:?}");
     }
 
@@ -53,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }];
 
     let resp: PutBucketLifecycleResponse = client
-        .put_bucket_lifecycle(bucket_name)
+        .put_bucket_lifecycle(bucket)?
         .life_cycle_config(LifecycleConfig { rules })
         .build()
         .send()
@@ -62,18 +59,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if false {
         // TODO
-        let resp: GetBucketLifecycleResponse = client
-            .get_bucket_lifecycle(bucket_name)
-            .build()
-            .send()
-            .await?;
+        let resp: GetBucketLifecycleResponse =
+            client.get_bucket_lifecycle(bucket)?.build().send().await?;
         log::info!("life cycle settings after setting: resp={resp:?}");
     }
 
     if false {
         // TODO
         let resp: DeleteBucketLifecycleResponse = client
-            .delete_bucket_lifecycle(bucket_name)
+            .delete_bucket_lifecycle(bucket)?
             .build()
             .send()
             .await?;

@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{GetBucketVersioning, GetBucketVersioningBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`GetBucketVersioning`] request builder.
@@ -40,14 +42,21 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetBucketVersioningResponse = client
-    ///         .get_bucket_versioning("bucket-name")
+    ///         .get_bucket_versioning("bucket-name").unwrap()
     ///         .build().send().await.unwrap();
-    ///     println!("retrieved versioning status '{:?}' from bucket '{}'", resp.status(), resp.bucket());
+    ///     println!("retrieved versioning status '{:?}' from bucket '{}'", resp.status(), resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn get_bucket_versioning<S: Into<String>>(&self, bucket: S) -> GetBucketVersioningBldr {
-        GetBucketVersioning::builder()
+    pub fn get_bucket_versioning<B>(
+        &self,
+        bucket: B,
+    ) -> Result<GetBucketVersioningBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(GetBucketVersioning::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

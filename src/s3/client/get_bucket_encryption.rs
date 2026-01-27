@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{GetBucketEncryption, GetBucketEncryptionBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`GetBucketEncryption`] request builder.
@@ -38,14 +40,21 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetBucketEncryptionResponse = client
-    ///         .get_bucket_encryption("bucket-name")
+    ///         .get_bucket_encryption("bucket-name").unwrap()
     ///         .build().send().await.unwrap();
-    ///     println!("retrieved SseConfig '{:?}' from bucket '{}'", resp.config(), resp.bucket());
+    ///     println!("retrieved SseConfig '{:?}' from bucket '{}'", resp.config(), resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn get_bucket_encryption<S: Into<String>>(&self, bucket: S) -> GetBucketEncryptionBldr {
-        GetBucketEncryption::builder()
+    pub fn get_bucket_encryption<B>(
+        &self,
+        bucket: B,
+    ) -> Result<GetBucketEncryptionBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(GetBucketEncryption::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

@@ -19,6 +19,7 @@ use super::super::client::{DEFAULT_REGION, MinioClient};
 use crate::s3::error::Error;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
+use crate::s3::types::{BucketName, ObjectKey, Region};
 use crate::s3::utils::ChecksumAlgorithm;
 use http::Method;
 use std::sync::Arc;
@@ -33,14 +34,20 @@ pub struct S3Request {
     #[builder(!default)] // force required
     method: Method,
 
-    #[builder(default, setter(into))]
-    region: Option<String>,
+    #[builder(default)]
+    region: Option<Region>,
 
     #[builder(default, setter(into))]
-    pub(crate) bucket: Option<String>,
+    pub(crate) bucket: Option<BucketName>,
 
     #[builder(default, setter(into))]
-    pub(crate) object: Option<String>,
+    pub(crate) object: Option<ObjectKey>,
+
+    //TODO is this really needed? Investigate
+    /// Custom path for non-S3 APIs (e.g., admin APIs)
+    /// When set, bypasses bucket/object URL construction
+    #[builder(default, setter(into))]
+    pub(crate) custom_path: Option<String>,
 
     #[builder(default)]
     pub(crate) query_params: Multimap,
@@ -67,33 +74,51 @@ pub struct S3Request {
 
     /// region computed by [`S3Request::execute`]
     #[builder(default, setter(skip))]
-    pub(crate) inner_region: String,
+    pub(crate) inner_region: Region,
 }
 
 impl S3Request {
-    async fn compute_inner_region(&self) -> Result<String, Error> {
-        Ok(match &self.bucket {
-            Some(b) => self.client.get_region_cached(b, &self.region).await?,
-            None => DEFAULT_REGION.to_string(),
-        })
+    async fn compute_inner_region(&self) -> Result<Region, Error> {
+        let region_str = match &self.bucket {
+            Some(b) => {
+                self.client
+                    .get_region_cached(b.clone(), &self.region)
+                    .await?
+            }
+            None => DEFAULT_REGION.as_str().to_string(),
+        };
+        Region::new(&region_str).map_err(Into::into)
     }
 
     /// Execute the request, returning the response. Only used in [`S3Api::send()`]
     pub async fn execute(&mut self) -> Result<reqwest::Response, Error> {
         self.inner_region = self.compute_inner_region().await?;
 
-        self.client
-            .execute(
-                self.method.clone(),
-                &self.inner_region,
-                &mut self.headers,
-                &self.query_params,
-                &self.bucket.as_deref(),
-                &self.object.as_deref(),
-                self.body.as_ref().map(Arc::clone),
-                self.trailing_checksum,
-                self.use_signed_streaming,
-            )
-            .await
+        if let Some(custom_path) = &self.custom_path {
+            self.client
+                .execute_with_custom_path(
+                    self.method.clone(),
+                    &self.inner_region,
+                    &mut self.headers,
+                    &self.query_params,
+                    custom_path,
+                    self.body.as_ref().map(Arc::clone),
+                )
+                .await
+        } else {
+            self.client
+                .execute(
+                    self.method.clone(),
+                    &self.inner_region,
+                    &mut self.headers,
+                    &self.query_params,
+                    self.bucket.as_ref(),
+                    self.object.as_ref(),
+                    self.body.as_ref().map(Arc::clone),
+                    self.trailing_checksum,
+                    self.use_signed_streaming,
+                )
+                .await
+        }
     }
 }

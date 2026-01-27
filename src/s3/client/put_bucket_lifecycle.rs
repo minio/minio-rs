@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{PutBucketLifecycle, PutBucketLifecycleBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`PutBucketLifecycle`] request builder.
@@ -25,11 +27,9 @@ impl MinioClient {
     /// # Example
     ///
     /// ```no_run
-    /// use std::collections::HashMap;
     /// use minio::s3::MinioClient;
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
-    /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketLifecycleResponse;
     /// use minio::s3::types::{Filter, S3Api};
     /// use minio::s3::lifecycle_config::{LifecycleRule, LifecycleConfig};
@@ -49,15 +49,22 @@ impl MinioClient {
     ///     }];
     ///
     ///     let resp: PutBucketLifecycleResponse = client
-    ///         .put_bucket_lifecycle("bucket-name")
+    ///         .put_bucket_lifecycle("bucket-name").unwrap()
     ///         .life_cycle_config(LifecycleConfig { rules })
     ///         .build().send().await.unwrap();
-    ///     println!("set bucket replication policy on bucket '{}'", resp.bucket());
+    ///     println!("set bucket replication policy on bucket '{}'", resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn put_bucket_lifecycle<S: Into<String>>(&self, bucket: S) -> PutBucketLifecycleBldr {
-        PutBucketLifecycle::builder()
+    pub fn put_bucket_lifecycle<B>(
+        &self,
+        bucket: B,
+    ) -> Result<PutBucketLifecycleBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(PutBucketLifecycle::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

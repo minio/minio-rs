@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{GetObjectTagging, GetObjectTaggingBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`GetObjectTagging`] request builder.
@@ -41,18 +43,24 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetObjectTaggingResponse = client
     ///         .get_object_tagging("bucket-name", "object-name")
-    ///         .build().send().await.unwrap();
-    ///     println!("retrieved object tags '{:?}' from object '{}' in bucket '{}' is enabled", resp.tags(), resp.object(), resp.bucket());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("retrieved object tags '{:?}' from object '{}' in bucket '{}' is enabled", resp.tags(), resp.object().unwrap(), resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn get_object_tagging<S1: Into<String>, S2: Into<String>>(
+    pub fn get_object_tagging<B, O>(
         &self,
-        bucket: S1,
-        object: S2,
-    ) -> GetObjectTaggingBldr {
-        GetObjectTagging::builder()
+        bucket: B,
+        object: O,
+    ) -> Result<GetObjectTaggingBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(GetObjectTagging::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?))
     }
 }

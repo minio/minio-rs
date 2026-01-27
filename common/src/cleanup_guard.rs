@@ -14,39 +14,37 @@
 // limitations under the License.
 
 use minio::s3::MinioClient;
+use minio::s3::types::BucketName;
 
 /// Cleanup guard that removes the bucket when it is dropped
 pub struct CleanupGuard {
     client: MinioClient,
-    bucket_name: String,
+    bucket: BucketName,
 }
 
 impl CleanupGuard {
     #[allow(dead_code)]
-    pub fn new<S: Into<String>>(client: MinioClient, bucket_name: S) -> Self {
-        Self {
-            client,
-            bucket_name: bucket_name.into(),
-        }
+    pub fn new(client: MinioClient, bucket: BucketName) -> Self {
+        Self { client, bucket }
     }
 
     pub async fn cleanup(&self) {
-        cleanup(self.client.clone(), &self.bucket_name).await;
+        cleanup(self.client.clone(), self.bucket.clone()).await;
     }
 }
 
-pub async fn cleanup(client: MinioClient, bucket_name: &str) {
+pub async fn cleanup(client: MinioClient, bucket: BucketName) {
     tokio::select!(
         _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
-            eprintln!("Cleanup timeout after 60s while removing bucket {bucket_name}");
+            eprintln!("Cleanup timeout after 60s while removing bucket {}", bucket);
         },
-        outcome = client.delete_and_purge_bucket(bucket_name) => {
+        outcome = client.delete_and_purge_bucket(bucket.clone()) => {
             match outcome {
                 Ok(_) => {
-                    //eprintln!("Bucket {} removed successfully", bucket_name);
+                    //eprintln!("Bucket {} removed successfully", bucket);
                 }
                 Err(e) => {
-                    eprintln!("Error removing bucket '{bucket_name}':\n{e}");
+                    eprintln!("Error removing bucket '{bucket}':\n{e}");
                 }
             }
         }

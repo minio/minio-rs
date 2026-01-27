@@ -15,12 +15,14 @@
 
 use crate::s3::builders::{DeleteBucketNotification, DeleteBucketNotificationBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`DeleteBucketNotification`] request builder.
     ///
     /// To execute the request, call [`DeleteBucketNotification::send()`](crate::s3::types::S3Api::send),
-    /// which returns a [`Result`] containing a [`DeleteBucketNotificationResponse`](crate::s3::response::DeleteBucketNotificationResponse).    
+    /// which returns a [`Result`] containing a [`DeleteBucketNotificationResponse`](crate::s3::response::DeleteBucketNotificationResponse).
     ///
     /// # Example
     ///
@@ -33,22 +35,26 @@ impl MinioClient {
     /// use minio::s3::response_traits::HasBucket;
     ///
     /// #[tokio::main]
-    /// async fn main() {    
+    /// async fn main() {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteBucketNotificationResponse = client
     ///         .delete_bucket_notification("bucket-name")
-    ///         .build().send().await.unwrap();
-    ///     println!("notification of bucket '{}' is deleted", resp.bucket());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("notification of bucket '{}' is deleted", resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn delete_bucket_notification<S: Into<String>>(
+    pub fn delete_bucket_notification<B>(
         &self,
-        bucket: S,
-    ) -> DeleteBucketNotificationBldr {
-        DeleteBucketNotification::builder()
+        bucket: B,
+    ) -> Result<DeleteBucketNotificationBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(DeleteBucketNotification::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

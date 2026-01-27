@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{GetObjectLegalHold, GetObjectLegalHoldBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`GetObjectLegalHold`] request builder.
@@ -41,18 +43,24 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetObjectLegalHoldResponse = client
     ///         .get_object_legal_hold("bucket-name", "object-name")
-    ///         .build().send().await.unwrap();
-    ///     println!("legal hold of object '{}' in bucket '{}' is enabled: {:?}", resp.object(), resp.bucket(), resp.enabled());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("legal hold of object '{}' in bucket '{}' is enabled: {:?}", resp.object().unwrap(), resp.bucket().unwrap(), resp.enabled());
     /// }
     /// ```
-    pub fn get_object_legal_hold<S1: Into<String>, S2: Into<String>>(
+    pub fn get_object_legal_hold<B, O>(
         &self,
-        bucket: S1,
-        object: S2,
-    ) -> GetObjectLegalHoldBldr {
-        GetObjectLegalHold::builder()
+        bucket: B,
+        object: O,
+    ) -> Result<GetObjectLegalHoldBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(GetObjectLegalHold::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?))
     }
 }

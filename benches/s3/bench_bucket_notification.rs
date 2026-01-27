@@ -30,7 +30,7 @@ pub(crate) fn bench_put_bucket_notification(criterion: &mut Criterion) {
             let config = create_bucket_notification_config_example();
             PutBucketNotification::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(&ctx.bucket)
                 .notification_config(config)
                 .build()
         },
@@ -46,6 +46,7 @@ pub(crate) fn bench_get_bucket_notification(criterion: &mut Criterion) {
             let config = create_bucket_notification_config_example();
             ctx.client
                 .put_bucket_notification(&ctx.bucket)
+                .unwrap()
                 .notification_config(config)
                 .build()
                 .send()
@@ -56,7 +57,7 @@ pub(crate) fn bench_get_bucket_notification(criterion: &mut Criterion) {
         |ctx| {
             GetBucketNotification::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(&ctx.bucket)
                 .build()
         },
     )
@@ -70,7 +71,7 @@ pub(crate) fn bench_delete_bucket_notification(criterion: &mut Criterion) {
         |ctx| {
             DeleteBucketNotification::builder()
                 .client(ctx.client.clone())
-                .bucket(ctx.bucket.clone())
+                .bucket(&ctx.bucket)
                 .build()
         },
     )

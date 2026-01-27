@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{PutBucketNotification, PutBucketNotificationBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`PutBucketNotification`] request builder.
@@ -57,15 +59,22 @@ impl MinioClient {
     ///     };
     ///
     ///     let resp: PutBucketNotificationResponse = client
-    ///         .put_bucket_notification("bucket-name")
+    ///         .put_bucket_notification("bucket-name").unwrap()
     ///         .notification_config(config)
     ///         .build().send().await.unwrap();
-    ///     println!("set bucket notification for bucket '{:?}'", resp.bucket());
+    ///     println!("set bucket notification for bucket '{:?}'", resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn put_bucket_notification<S: Into<String>>(&self, bucket: S) -> PutBucketNotificationBldr {
-        PutBucketNotification::builder()
+    pub fn put_bucket_notification<B>(
+        &self,
+        bucket: B,
+    ) -> Result<PutBucketNotificationBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(PutBucketNotification::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

@@ -17,6 +17,8 @@
 
 use crate::s3::builders::{ListenBucketNotification, ListenBucketNotificationBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`ListenBucketNotification`] request builder.
@@ -47,22 +49,26 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let (_resp, mut event_stream) = client
-    ///         .listen_bucket_notification("bucket-name")
+    ///         .listen_bucket_notification("bucket-name").unwrap()
     ///         .build().send().await.unwrap();
     ///
     ///     while let Some(event) = event_stream.next().await {
     ///         let event: NotificationRecords = event.unwrap();
-    ///         let record: Option<&NotificationRecord> = event.records.first();    
+    ///         let record: Option<&NotificationRecord> = event.records.first();
     ///         println!("received a notification record {:#?}", record);
     ///     }
     /// }
     /// ```
-    pub fn listen_bucket_notification<S: Into<String>>(
+    pub fn listen_bucket_notification<B>(
         &self,
-        bucket: S,
-    ) -> ListenBucketNotificationBldr {
-        ListenBucketNotification::builder()
+        bucket: B,
+    ) -> Result<ListenBucketNotificationBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(ListenBucketNotification::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

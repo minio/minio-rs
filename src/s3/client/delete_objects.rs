@@ -18,6 +18,8 @@ use crate::s3::builders::{
     ObjectToDelete, ObjectsStream,
 };
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`DeleteObject`] request builder to delete a single object from an S3 bucket.
@@ -32,7 +34,6 @@ impl MinioClient {
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
     /// use minio::s3::response::DeleteObjectResponse;
-    /// use minio::s3::builders::ObjectToDelete;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response_traits::HasVersion;
     ///
@@ -42,46 +43,65 @@ impl MinioClient {
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteObjectResponse = client
-    ///         .delete_object("bucket-name", ObjectToDelete::from("object-name"))
-    ///         .build().send().await.unwrap();
+    ///         .delete_object("bucket-name", "object-name")
+    ///         .unwrap().build().send().await.unwrap();
     ///     println!("the object is deleted. The delete marker has version '{:?}'", resp.version_id());
     /// }
     /// ```
-    pub fn delete_object<S: Into<String>, D: Into<ObjectToDelete>>(
+    pub fn delete_object<B, D>(
         &self,
-        bucket: S,
+        bucket: B,
         object: D,
-    ) -> DeleteObjectBldr {
-        DeleteObject::builder()
+    ) -> Result<DeleteObjectBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        D: TryInto<ObjectToDelete>,
+        D::Error: Into<ValidationErr>,
+    {
+        Ok(DeleteObject::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?))
     }
 
     /// Creates a [`DeleteObjects`] request builder to delete multiple objects from an S3 bucket.
     ///
     /// To execute the request, call [`DeleteObjects::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`DeleteObjectsResponse`](crate::s3::response::DeleteObjectsResponse).
-    pub fn delete_objects<S: Into<String>>(
+    pub fn delete_objects<B>(
         &self,
-        bucket: S,
+        bucket: B,
         objects: Vec<ObjectToDelete>,
-    ) -> DeleteObjectsBldr {
-        DeleteObjects::builder()
+    ) -> Result<DeleteObjectsBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(DeleteObjects::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .objects(objects)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .objects(objects))
     }
 
     /// Creates a [`DeleteObjectsStreaming`] request builder to delete a stream of objects from an S3 bucket.
     ///
     /// To execute the request, call [`DeleteObjectsStreaming::to_stream()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`DeleteObjectsResponse`](crate::s3::response::DeleteObjectsResponse).
-    pub fn delete_objects_streaming<S: Into<String>, D: Into<ObjectsStream>>(
+    pub fn delete_objects_streaming<B, D>(
         &self,
-        bucket: S,
+        bucket: B,
         objects: D,
-    ) -> DeleteObjectsStreaming {
-        DeleteObjectsStreaming::new(self.clone(), bucket.into(), objects)
+    ) -> Result<DeleteObjectsStreaming, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        D: Into<ObjectsStream>,
+    {
+        Ok(DeleteObjectsStreaming::new(
+            self.clone(),
+            bucket.try_into().map_err(Into::into)?,
+            objects,
+        ))
     }
 }

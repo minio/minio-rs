@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{PutBucketReplication, PutBucketReplicationBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`PutBucketReplication`] request builder.
@@ -22,7 +24,7 @@ impl MinioClient {
     /// To execute the request, call [`SetBucketReplication::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`SetBucketReplicationResponse`](crate::s3::response::PutBucketReplicationResponse).
     ///
-    /// 🛈 This operation is not supported for express buckets.
+    /// This operation is not supported for express buckets.
     ///
     /// # Example
     ///
@@ -30,7 +32,6 @@ impl MinioClient {
     /// use minio::s3::MinioClient;
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
-    /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketReplicationResponse;
     /// use minio::s3::types::{S3Api, AndOperator, Destination, Filter, ReplicationConfig, ReplicationRule};
     /// use minio::s3::response_traits::HasBucket;
@@ -41,8 +42,8 @@ impl MinioClient {
     ///     let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
     ///     let static_provider = StaticProvider::new("minioadmin", "minioadmin", None);
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
-    ///     
-    ///     let mut tags: HashMap<String, String> = HashMap::new();  
+    ///
+    ///     let mut tags: HashMap<String, String> = HashMap::new();
     ///     tags.insert(String::from("key1"), String::from("value1"));
     ///     tags.insert(String::from("key2"), String::from("value2"));
     ///
@@ -76,15 +77,22 @@ impl MinioClient {
     ///     });
     ///
     ///     let resp: PutBucketReplicationResponse = client
-    ///         .put_bucket_replication("bucket-name")
+    ///         .put_bucket_replication("bucket-name").unwrap()
     ///         .replication_config(ReplicationConfig {role: None, rules})
     ///         .build().send().await.unwrap();
-    ///     println!("enabled versioning on bucket '{}'", resp.bucket());
+    ///     println!("enabled versioning on bucket '{}'", resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn put_bucket_replication<S: Into<String>>(&self, bucket: S) -> PutBucketReplicationBldr {
-        PutBucketReplication::builder()
+    pub fn put_bucket_replication<B>(
+        &self,
+        bucket: B,
+    ) -> Result<PutBucketReplicationBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(PutBucketReplication::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

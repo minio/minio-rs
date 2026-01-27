@@ -14,7 +14,9 @@
 // limitations under the License.
 
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
 use crate::s3::segmented_bytes::SegmentedBytes;
+use crate::s3::types::{BucketName, ObjectKey, UploadId};
 use crate::s3::{
     builders::{
         AbortMultipartUpload, AbortMultipartUploadBldr, CompleteMultipartUpload,
@@ -56,23 +58,29 @@ impl MinioClient {
     ///     let data = SegmentedBytes::from("Hello world".to_string());
     ///     let resp: PutObjectResponse = client
     ///         .put_object("bucket-name", "object-name", data)
-    ///         .build().send().await.unwrap();
-    ///     println!("successfully put object '{}'", resp.object());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("successfully put object '{}'", resp.object().unwrap());
     /// }
     /// ```
-    pub fn put_object<S1: Into<String>, S2: Into<String>>(
+    pub fn put_object<B, O>(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: B,
+        object: O,
         data: SegmentedBytes,
-    ) -> PutObjectBldr {
+    ) -> Result<PutObjectBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
         let inner = UploadPart::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?)
             .data(Arc::new(data))
             .build();
-        PutObject::builder().inner(inner)
+        Ok(PutObject::builder().inner(inner))
     }
 
     /// Creates a [`CreateMultipartUpload`] request builder to initiate a new multipart upload for a specified object in a bucket.
@@ -98,19 +106,25 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: CreateMultipartUploadResponse = client
     ///         .create_multipart_upload("bucket-name", "large-object")
-    ///         .build().send().await.unwrap();
+    ///         .unwrap().build().send().await.unwrap();
     ///     println!("Initiated multipart upload with UploadId '{:?}'", resp.upload_id().await);
     /// }
     /// ```
-    pub fn create_multipart_upload<S1: Into<String>, S2: Into<String>>(
+    pub fn create_multipart_upload<B, O>(
         &self,
-        bucket: S1,
-        object: S2,
-    ) -> CreateMultipartUploadBldr {
-        CreateMultipartUpload::builder()
+        bucket: B,
+        object: O,
+    ) -> Result<CreateMultipartUploadBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(CreateMultipartUpload::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?))
     }
 
     /// Creates an [`AbortMultipartUpload`] request builder to abort an ongoing multipart upload for an object.
@@ -136,21 +150,29 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: AbortMultipartUploadResponse = client
     ///         .abort_multipart_upload("bucket-name", "object-name", "upload-id-123")
-    ///         .build().send().await.unwrap();
+    ///         .unwrap().build().send().await.unwrap();
     ///     println!("Aborted multipart upload for '{}', upload id '{}'", "object-name", "upload-id-123");
     /// }
     /// ```
-    pub fn abort_multipart_upload<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
+    pub fn abort_multipart_upload<B, O, U>(
         &self,
-        bucket: S1,
-        object: S2,
-        upload_id: S3,
-    ) -> AbortMultipartUploadBldr {
-        AbortMultipartUpload::builder()
+        bucket: B,
+        object: O,
+        upload_id: U,
+    ) -> Result<AbortMultipartUploadBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+        U: TryInto<UploadId>,
+        U::Error: Into<ValidationErr>,
+    {
+        Ok(AbortMultipartUpload::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
-            .upload_id(upload_id)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?)
+            .upload_id(upload_id.try_into().map_err(Into::into)?))
     }
 
     /// Creates a [`CompleteMultipartUpload`] request builder to complete a multipart upload by assembling previously uploaded parts into a single object.
@@ -178,23 +200,31 @@ impl MinioClient {
     ///     let parts: Vec<PartInfo> = vec![]; // fill with your uploaded part info
     ///     let resp: CompleteMultipartUploadResponse = client
     ///         .complete_multipart_upload("bucket-name", "object-name", "upload-id-123", parts)
-    ///         .build().send().await.unwrap();
-    ///     println!("Completed multipart upload for '{}'", resp.object());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("Completed multipart upload for '{}'", resp.object().unwrap());
     /// }
     /// ```
-    pub fn complete_multipart_upload<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
+    pub fn complete_multipart_upload<B, O, U>(
         &self,
-        bucket: S1,
-        object: S2,
-        upload_id: S3,
+        bucket: B,
+        object: O,
+        upload_id: U,
         parts: Vec<PartInfo>,
-    ) -> CompleteMultipartUploadBldr {
-        CompleteMultipartUpload::builder()
+    ) -> Result<CompleteMultipartUploadBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+        U: TryInto<UploadId>,
+        U::Error: Into<ValidationErr>,
+    {
+        Ok(CompleteMultipartUpload::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
-            .upload_id(upload_id)
-            .parts(parts)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?)
+            .upload_id(upload_id.try_into().map_err(Into::into)?)
+            .parts(parts))
     }
 
     /// Creates an [`UploadPart`] request builder to upload a single part as part of a multipart upload.
@@ -223,25 +253,33 @@ impl MinioClient {
     ///     let data = SegmentedBytes::from("Some part data".to_string());
     ///     let resp: UploadPartResponse = client
     ///         .upload_part("bucket-name", "object-name", "upload-id", 1, data)
-    ///         .build().send().await.unwrap();
-    ///     println!("Uploaded object: {}", resp.object());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("Uploaded object: {}", resp.object().unwrap());
     /// }
     /// ```
-    pub fn upload_part<S1: Into<String>, S2: Into<String>, S3: Into<String>>(
+    pub fn upload_part<B, O, U>(
         &self,
-        bucket: S1,
-        object: S2,
-        upload_id: S3,
+        bucket: B,
+        object: O,
+        upload_id: U,
         part_number: u16,
         data: SegmentedBytes,
-    ) -> UploadPartBldr {
-        UploadPart::builder()
+    ) -> Result<UploadPartBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+        U: TryInto<UploadId>,
+        U::Error: Into<ValidationErr>,
+    {
+        Ok(UploadPart::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
-            .upload_id(upload_id.into())
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?)
+            .upload_id(upload_id.try_into().map_err(Into::into)?.to_string())
             .part_number(part_number)
-            .data(Arc::new(data))
+            .data(Arc::new(data)))
     }
 
     /// Creates a [`PutObjectContent`] request builder to upload data to MinIO/S3, automatically handling multipart uploads for large content.
@@ -269,20 +307,27 @@ impl MinioClient {
     ///     let content = "Hello, world!".to_string();
     ///     let resp: PutObjectContentResponse = client
     ///         .put_object_content("bucket", "object", content)
-    ///         .build().send().await.unwrap();
-    ///     println!("Uploaded object '{}' with ETag '{:?}'", resp.object(), resp.etag());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("Uploaded object '{}' with ETag '{:?}'", resp.object().unwrap(), resp.etag());
     /// }
     /// ```
-    pub fn put_object_content<S1: Into<String>, S2: Into<String>, C: Into<ObjectContent>>(
+    pub fn put_object_content<B, O, C>(
         &self,
-        bucket: S1,
-        object: S2,
+        bucket: B,
+        object: O,
         content: C,
-    ) -> PutObjectContentBldr {
-        PutObjectContent::builder()
+    ) -> Result<PutObjectContentBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+        C: Into<ObjectContent>,
+    {
+        Ok(PutObjectContent::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
-            .input_content(content)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?)
+            .input_content(content))
     }
 }

@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{PutBucketTagging, PutBucketTaggingBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::BucketName;
 
 impl MinioClient {
     /// Creates a [`PutBucketTagging`] request builder.
@@ -22,15 +24,12 @@ impl MinioClient {
     /// To execute the request, call [`PutBucketTagging::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`PutBucketTaggingResponse`](crate::s3::response::PutBucketTaggingResponse).
     ///
-    /// 🛈 This operation is not supported for express buckets.
-    ///
     /// # Example
     ///
     /// ```no_run
     /// use minio::s3::MinioClient;
     /// use minio::s3::creds::StaticProvider;
     /// use minio::s3::http::BaseUrl;
-    /// use minio::s3::builders::VersioningStatus;
     /// use minio::s3::response::PutBucketTaggingResponse;
     /// use minio::s3::types::S3Api;
     /// use minio::s3::response_traits::HasBucket;
@@ -47,15 +46,19 @@ impl MinioClient {
     ///     tags.insert(String::from("User"), String::from("jsmith"));
     ///
     ///     let resp: PutBucketTaggingResponse = client
-    ///         .put_bucket_tagging("bucket-name")
+    ///         .put_bucket_tagging("bucket-name").unwrap()
     ///         .tags(tags)
     ///         .build().send().await.unwrap();
-    ///     println!("set tags on bucket '{}'", resp.bucket());
+    ///     println!("set tags on bucket '{}'", resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn put_bucket_tagging<S: Into<String>>(&self, bucket: S) -> PutBucketTaggingBldr {
-        PutBucketTagging::builder()
+    pub fn put_bucket_tagging<B>(&self, bucket: B) -> Result<PutBucketTaggingBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+    {
+        Ok(PutBucketTagging::builder()
             .client(self.clone())
-            .bucket(bucket)
+            .bucket(bucket.try_into().map_err(Into::into)?))
     }
 }

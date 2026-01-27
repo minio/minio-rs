@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{GetObjectRetention, GetObjectRetentionBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`GetObjectRetention`] request builder.
@@ -41,18 +43,24 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: GetObjectRetentionResponse = client
     ///         .get_object_retention("bucket-name", "object-name")
-    ///         .build().send().await.unwrap();
-    ///     println!("retrieved retention mode '{:?}' until '{:?}' from bucket '{}' is enabled", resp.retention_mode(), resp.retain_until_date(), resp.bucket());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("retrieved retention mode '{:?}' until '{:?}' from bucket '{}' is enabled", resp.retention_mode(), resp.retain_until_date(), resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn get_object_retention<S1: Into<String>, S2: Into<String>>(
+    pub fn get_object_retention<B, O>(
         &self,
-        bucket: S1,
-        object: S2,
-    ) -> GetObjectRetentionBldr {
-        GetObjectRetention::builder()
+        bucket: B,
+        object: O,
+    ) -> Result<GetObjectRetentionBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(GetObjectRetention::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?))
     }
 }

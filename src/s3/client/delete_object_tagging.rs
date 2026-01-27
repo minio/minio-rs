@@ -15,6 +15,8 @@
 
 use crate::s3::builders::{DeleteObjectTagging, DeleteObjectTaggingBldr};
 use crate::s3::client::MinioClient;
+use crate::s3::error::ValidationErr;
+use crate::s3::types::{BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`DeleteObjectTagging`] request builder.
@@ -41,18 +43,24 @@ impl MinioClient {
     ///     let client = MinioClient::new(base_url, Some(static_provider), None, None).unwrap();
     ///     let resp: DeleteObjectTaggingResponse = client
     ///         .delete_object_tagging("bucket-name", "object_name")
-    ///         .build().send().await.unwrap();
-    ///     println!("legal hold of object '{}' in bucket '{}' is deleted", resp.object(), resp.bucket());
+    ///         .unwrap().build().send().await.unwrap();
+    ///     println!("legal hold of object '{}' in bucket '{}' is deleted", resp.object().unwrap(), resp.bucket().unwrap());
     /// }
     /// ```
-    pub fn delete_object_tagging<S1: Into<String>, S2: Into<String>>(
+    pub fn delete_object_tagging<B, O>(
         &self,
-        bucket: S1,
-        object: S2,
-    ) -> DeleteObjectTaggingBldr {
-        DeleteObjectTagging::builder()
+        bucket: B,
+        object: O,
+    ) -> Result<DeleteObjectTaggingBldr, ValidationErr>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        Ok(DeleteObjectTagging::builder()
             .client(self.clone())
-            .bucket(bucket)
-            .object(object)
+            .bucket(bucket.try_into().map_err(Into::into)?)
+            .object(object.try_into().map_err(Into::into)?))
     }
 }
