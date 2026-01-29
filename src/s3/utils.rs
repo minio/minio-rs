@@ -58,6 +58,27 @@ pub fn url_encode(s: &str) -> String {
     urlencoding::encode(s).into_owned()
 }
 
+/// Encodes a URL path, encoding each segment while preserving `/` separators.
+///
+/// This is used for AWS SigV4 canonical URI where the path must be URI-encoded
+/// but with `/` characters preserved.
+///
+/// # Example
+///
+/// ```
+/// use minio::s3::utils::url_encode_path;
+///
+/// let path = "/warehouse/namespaces/level1\x1Flevel2";
+/// let encoded = url_encode_path(path);
+/// assert_eq!(encoded, "/warehouse/namespaces/level1%1Flevel2");
+/// ```
+pub fn url_encode_path(path: &str) -> String {
+    path.split('/')
+        .map(|segment| urlencoding::encode(segment).into_owned())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// Encodes data using base64 algorithm.
 pub fn b64_encode(input: impl AsRef<[u8]>) -> String {
     base64::engine::general_purpose::STANDARD.encode(input)

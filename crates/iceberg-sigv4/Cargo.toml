@@ -1,0 +1,60 @@
+# MinIO Rust Library for Amazon S3 Compatible Cloud Storage
+# Copyright 2025 MinIO, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[package]
+name = "iceberg-sigv4"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "AWS SigV4 authentication for Iceberg REST Catalog and S3 APIs"
+repository = "https://github.com/minio/minio-rs"
+readme = "README.md"
+keywords = ["aws", "sigv4", "authentication", "iceberg", "s3"]
+categories = ["authentication", "web-programming"]
+
+[dependencies]
+# Async support
+async-trait = "0.1"
+
+# HTTP types
+http = "1.0"
+bytes = "1.0"
+
+# Time handling
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+
+# Cryptography (default: pure Rust)
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+
+# Cryptography (optional: ring for performance)
+ring = { version = "0.17", optional = true, default-features = false, features = ["alloc"] }
+
+# URL encoding
+percent-encoding = "2.3"
+urlencoding = "2.1"
+
+# Error handling
+thiserror = "2.0"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[features]
+default = ["rust-crypto"]
+# Use pure Rust crypto (default)
+rust-crypto = ["hmac", "sha2"]
+# Use ring for better performance (requires C compiler)
+ring-crypto = ["ring"]

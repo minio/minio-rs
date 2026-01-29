@@ -346,6 +346,41 @@ pub(crate) fn sign_v4_s3(
     )
 }
 
+/// Signs and updates headers for the given S3 Tables request parameters.
+///
+/// This is a simplified signing function for S3 Tables that doesn't use caching.
+/// It uses "s3tables" as the service name for signing.
+pub(crate) fn sign_v4_s3tables(
+    method: &Method,
+    uri: &str,
+    region: &Region,
+    headers: &mut Multimap,
+    query_params: &Multimap,
+    access_key: &str,
+    secret_key: &str,
+    content_sha256: &str,
+    date: UtcTime,
+) {
+    let scope = get_scope(date, region, "s3tables");
+    let (signed_headers, canonical_headers) = headers.get_canonical_headers();
+    let canonical_query_string = query_params.get_canonical_query_string();
+    let canonical_request_hash = get_canonical_request_hash(
+        method,
+        uri,
+        &canonical_query_string,
+        &canonical_headers,
+        &signed_headers,
+        content_sha256,
+    );
+    let string_to_sign = get_string_to_sign(date, &scope, &canonical_request_hash);
+    let date_str = to_signer_date(date);
+    let signing_key = compute_signing_key(secret_key, &date_str, region, "s3tables");
+    let signature = get_signature(&signing_key, string_to_sign.as_bytes());
+    let authorization = get_authorization(access_key, &scope, &signed_headers, &signature);
+
+    headers.add(AUTHORIZATION, authorization);
+}
+
 /// Signs and updates query parameters for the given presigned request.
 ///
 /// The `cache` parameter should be the per-client `signing_key_cache` from `SharedClientItems`.
