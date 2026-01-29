@@ -20,6 +20,12 @@
 //! - **AWS SigV4** (default): For MinIO AIStor and AWS S3 Tables
 //! - **Bearer Token**: For OAuth2-based authentication
 //! - **NoAuth**: For testing environments
+//!
+//! # Re-exports from minio-sigv4
+//!
+//! This module re-exports key types from the `minio-sigv4` crate for convenience:
+//! - [`Credentials`]: AWS credentials for SigV4 signing
+//! - [`RestAuth`]: Pluggable authentication trait (for advanced use cases)
 
 use crate::s3::error::Error;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
@@ -27,6 +33,12 @@ use crate::s3::utils::UtcTime;
 use hyper::http::Method;
 use std::fmt::Debug;
 use std::sync::Arc;
+
+// Re-export from minio-sigv4 for convenience
+pub use iceberg_sigv4::Credentials;
+
+// Re-export RestAuth for advanced users who want to use the http::Request-based interface
+pub use iceberg_sigv4::RestAuth;
 
 /// Authorization header name
 const AUTHORIZATION: &str = "authorization";
@@ -41,6 +53,12 @@ const AUTHORIZATION: &str = "authorization";
 ///
 /// Implementations must be `Send + Sync` to support concurrent requests
 /// in async contexts.
+///
+/// # Note
+///
+/// This trait uses a Multimap-based interface for integration with the
+/// existing TablesClient. For new code that works with `http::Request<Bytes>`,
+/// consider using [`RestAuth`] from `minio-sigv4` directly.
 pub trait TablesAuth: Send + Sync + Debug {
     /// Authenticate a request by adding appropriate headers
     ///
@@ -94,22 +112,26 @@ pub trait TablesAuth: Send + Sync + Debug {
 ///     "session-token-value",
 /// );
 /// ```
+///
+/// # Using minio-sigv4 Credentials
+///
+/// You can also construct `SigV4Auth` from `iceberg_sigv4::Credentials`:
+///
+/// ```no_run
+/// use minio::s3tables::auth::{SigV4Auth, Credentials};
+///
+/// let creds = Credentials::new("AKIAEXAMPLE", "secret-key");
+/// let auth = SigV4Auth::from_credentials(creds);
+/// ```
 #[derive(Clone)]
 pub struct SigV4Auth {
-    access_key: String,
-    secret_key: String,
-    session_token: Option<String>,
+    credentials: Credentials,
 }
 
 impl Debug for SigV4Auth {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SigV4Auth")
-            .field("access_key", &self.access_key)
-            .field("secret_key", &"[REDACTED]")
-            .field(
-                "session_token",
-                &self.session_token.as_ref().map(|_| "[REDACTED]"),
-            )
+            .field("credentials", &self.credentials)
             .finish()
     }
 }
@@ -123,9 +145,7 @@ impl SigV4Auth {
     /// * `secret_key` - AWS secret access key
     pub fn new(access_key: impl Into<String>, secret_key: impl Into<String>) -> Self {
         Self {
-            access_key: access_key.into(),
-            secret_key: secret_key.into(),
-            session_token: None,
+            credentials: Credentials::new(access_key, secret_key),
         }
     }
 
@@ -142,25 +162,36 @@ impl SigV4Auth {
         session_token: impl Into<String>,
     ) -> Self {
         Self {
-            access_key: access_key.into(),
-            secret_key: secret_key.into(),
-            session_token: Some(session_token.into()),
+            credentials: Credentials::with_session_token(access_key, secret_key, session_token),
         }
+    }
+
+    /// Create SigV4Auth from existing Credentials
+    ///
+    /// This is useful when you already have `iceberg_sigv4::Credentials` from
+    /// another source.
+    pub fn from_credentials(credentials: Credentials) -> Self {
+        Self { credentials }
     }
 
     /// Get the session token if set
     pub fn session_token(&self) -> Option<&str> {
-        self.session_token.as_deref()
+        self.credentials.session_token()
     }
 
     /// Get the access key
     pub fn access_key(&self) -> &str {
-        &self.access_key
+        self.credentials.access_key()
     }
 
     /// Get the secret key
     pub fn secret_key(&self) -> &str {
-        &self.secret_key
+        self.credentials.secret_key()
+    }
+
+    /// Get a reference to the underlying credentials
+    pub fn credentials(&self) -> &Credentials {
+        &self.credentials
     }
 }
 
@@ -178,7 +209,7 @@ impl TablesAuth for SigV4Auth {
         use crate::s3::header_constants::X_AMZ_SECURITY_TOKEN;
 
         // Add session token header if present
-        if let Some(token) = &self.session_token {
+        if let Some(token) = self.credentials.session_token() {
             headers.add(X_AMZ_SECURITY_TOKEN, token);
         }
 
@@ -190,8 +221,8 @@ impl TablesAuth for SigV4Auth {
             &region_obj,
             headers,
             query_params,
-            &self.access_key,
-            &self.secret_key,
+            self.credentials.access_key(),
+            self.credentials.secret_key(),
             content_sha256,
             date,
         );
@@ -264,7 +295,7 @@ impl BearerAuth {
     pub fn new(token: impl Into<String>) -> Self {
         let token = token.into();
         let token_type = "Bearer".to_string();
-        let auth_header = format!("{} {}", token_type, token);
+        let auth_header = format!("{token_type} {token}");
         Self {
             token,
             token_type,
@@ -281,7 +312,7 @@ impl BearerAuth {
     pub fn with_token_type(token: impl Into<String>, token_type: impl Into<String>) -> Self {
         let token = token.into();
         let token_type = token_type.into();
-        let auth_header = format!("{} {}", token_type, token);
+        let auth_header = format!("{token_type} {token}");
         Self {
             token,
             token_type,
@@ -385,6 +416,15 @@ mod tests {
     }
 
     #[test]
+    fn test_sigv4_auth_from_credentials() {
+        let creds = Credentials::with_session_token("access", "secret", "token");
+        let auth = SigV4Auth::from_credentials(creds);
+        assert_eq!(auth.access_key(), "access");
+        assert_eq!(auth.secret_key(), "secret");
+        assert_eq!(auth.session_token(), Some("token"));
+    }
+
+    #[test]
     fn test_sigv4_auth_debug_redacts_secrets() {
         let auth = SigV4Auth::with_session_token("my-access-key", "my-secret-value", "my-token");
         let debug_str = format!("{:?}", auth);
@@ -463,5 +503,16 @@ mod tests {
         assert_eq!(SigV4Auth::new("a", "b").name(), "SigV4Auth");
         assert_eq!(BearerAuth::new("t").name(), "BearerAuth");
         assert_eq!(NoAuth::new().name(), "NoAuth");
+    }
+
+    #[test]
+    fn test_credentials_reexport() {
+        // Verify that Credentials can be used directly
+        let creds = Credentials::new("access", "secret");
+        assert_eq!(creds.access_key(), "access");
+        assert!(!creds.is_temporary());
+
+        let temp_creds = Credentials::with_session_token("access", "secret", "token");
+        assert!(temp_creds.is_temporary());
     }
 }

@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "crates/iceberg-sigv4"]
+
 [package]
 name = "minio"
 version = "0.3.0"
@@ -24,6 +27,9 @@ http2 = ["reqwest/http2"]
 localhost = []
 # Puffin compression support for Iceberg table compression
 puffin-compression = ["dep:zstd", "dep:lz4_flex"]
+# Enable iceberg-rust type compatibility layer
+# Provides conversions between minio-rs types and iceberg-rust types
+iceberg-compat = ["dep:iceberg"]
 
 [workspace.dependencies]
 uuid = "1.19"
@@ -45,6 +51,7 @@ futures-util = { workspace = true }
 bytes = { workspace = true }
 async-std = { workspace = true, features = ["attributes"] }
 reqwest = { workspace = true, features = ["stream"] }
+iceberg-sigv4 = { path = "crates/iceberg-sigv4" }
 
 async-recursion = "1.1"
 async-stream = "0.3"
@@ -78,6 +85,8 @@ tokio = { workspace = true, optional = true, features = ["rt-multi-thread"] }
 # Puffin compression (optional, for Iceberg table compression)
 zstd = { version = "0.13", optional = true }
 lz4_flex = { version = "0.11", optional = true }
+# iceberg-rust for type compatibility (optional)
+iceberg = { version = "0.7", optional = true }
 
 [dev-dependencies]
 minio-common = { path = "./common" }

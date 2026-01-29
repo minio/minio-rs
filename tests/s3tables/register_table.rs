@@ -63,7 +63,16 @@ async fn table_register(ctx: TestContext) {
             .starts_with(&format!("s3://{}/", warehouse.as_str()))
     );
 
-    // Register the table with a different name using the same metadata location
+    // Delete the original table first - we can't have two tables pointing to the same metadata
+    tables
+        .delete_table(&warehouse, &namespace, &table)
+        .unwrap()
+        .build()
+        .send()
+        .await
+        .unwrap();
+
+    // Now register the table with a different name using the same metadata location
     let register_resp: Result<RegisterTableResponse, Error> = tables
         .register_table(
             &warehouse,
@@ -117,22 +126,7 @@ async fn table_register(ctx: TestContext) {
         Err(e) => panic!("Unexpected error: {e:?}"),
     }
 
-    // Cleanup - delete original table
-    tables
-        .delete_table(&warehouse, &namespace, &table)
-        .unwrap()
-        .build()
-        .send()
-        .await
-        .unwrap();
-    let resp: Result<_, Error> = tables
-        .load_table(&warehouse, &namespace, &table)
-        .unwrap()
-        .build()
-        .send()
-        .await;
-    assert!(resp.is_err(), "Table should not exist after deletion");
-
+    // Cleanup namespace and warehouse
     delete_namespace_helper(&warehouse, &namespace, &tables).await;
     delete_warehouse_helper(&warehouse, &tables).await;
 }

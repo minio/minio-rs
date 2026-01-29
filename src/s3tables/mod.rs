@@ -80,7 +80,11 @@
 pub mod advanced;
 pub mod auth;
 pub mod builders;
+#[cfg(feature = "iceberg-compat")]
+pub mod catalog;
 pub mod client;
+#[cfg(feature = "iceberg-compat")]
+pub mod compat;
 pub mod filter;
 pub mod puffin;
 pub mod response;

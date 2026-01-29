@@ -21,74 +21,10 @@ The test suite validates:
 | **Catalog API Compliance** | `catalog_api_compliance.rs` | Phase 4: HTTP headers, edge cases |
 | **RCK Conformance** | `rck_conformance.rs`, `rck_inspired.rs` | Official Iceberg spec tests |
 | **Advanced** | `advanced/*.rs` | Tier 2 operations, concurrent tests |
-| **DataFusion** | `datafusion_full_integration.rs` | TableProvider integration (optional) |
-
-## Iceberg REST Catalog Compliance
-
-### Multi-Level Namespace Support
-
-The Iceberg REST Catalog specification supports hierarchical namespaces where namespace
-levels are joined with the unit separator character (`\u{001F}`, ASCII 0x1F). For example,
-a namespace `["parent", "child"]` is encoded in URLs as `parent%1Fchild`.
-
-**RCK Test Coverage:** The Apache Iceberg REST Compatibility Kit (RCK) includes the
-`testListNestedNamespaces` test that validates multi-level namespace operations. Our
-SDK passes this test by correctly handling the namespace encoding.
-
-### URL Encoding for AWS SigV4 Signing
-
-The SDK ensures AWS Signature Version 4 compatibility for S3 Tables API requests by
-properly encoding the canonical URI. This is critical for multi-level namespaces because:
-
-1. **URL Encoding:** The namespace path `parent\u{001F}child` becomes `parent%1Fchild` in
-   the URL path
-2. **Canonical URI Encoding:** AWS SigV4 requires the canonical URI to be fully URI-encoded,
-   meaning `%` characters must be encoded as `%25` (so `%1F` becomes `%251F`)
-3. **Server Validation:** MinIO server's signature validation (`signature-v4.go`) applies
-   `s3utils.EncodePath()` to the path after replacing `\u{001F}` with `%1F`, which encodes
-   `%` to `%25`
-
-The SDK's `TablesClient` applies `url_encode_path()` to the signing path in
-`src/s3tables/client/tables_client.rs`, ensuring the client's canonical request matches
-the server's expectation.
-
-### Alignment with RCK and Catalog API Coverage
-
-This implementation ensures the SDK correctly handles:
-
-| RCK/Catalog API Test | SDK Coverage | Status |
-|---------------------|--------------|--------|
-| `testListNestedNamespaces` | Multi-level namespace listing | PASS |
-| `testCreateNamespace` (nested) | Hierarchical namespace creation | PASS |
-| `testLoadNamespaceMetadata` (nested) | Nested namespace metadata retrieval | PASS |
-| Multi-level namespace CRUD | All operations with hierarchical paths | PASS |
-
-The fix aligns the SDK with both the Apache Iceberg REST Catalog specification and
-MinIO's server-side signature validation, ensuring consistent behavior across the
-RCK test suite.
 
 ## Prerequisites
 
-### 1. System Dependencies
-
-The `datafusion` feature (enabled by default) requires system libraries:
-
-**Fedora/RHEL/CentOS:**
-```bash
-sudo dnf install fontconfig-devel
-```
-
-**Ubuntu/Debian:**
-```bash
-sudo apt-get install libfontconfig1-dev
-```
-
-**Alternative:** Run tests without the datafusion feature:
-```bash
-cargo test -p minio --no-default-features --features puffin-compression s3tables:: -- --nocapture
-```
-
-### 2. MinIO Server
+### 1. MinIO Server
 
 You need a running MinIO server with S3 Tables / Iceberg support.
 
@@ -158,53 +94,128 @@ cargo test -p minio s3tables:: -- --test-threads=4
 cargo test -p minio s3tables:: -- --nocapture --test-threads=4
 ```
 
-### Run Specific Test Categories
+### By Test Category
 
+#### Basic Operations
 ```bash
-# Basic operations
 cargo test -p minio s3tables::create_delete -- --nocapture
 cargo test -p minio s3tables::list_warehouses -- --nocapture
 cargo test -p minio s3tables::list_namespaces -- --nocapture
 cargo test -p minio s3tables::list_tables -- --nocapture
+```
 
-# Iceberg compatibility tests (Phases 1-4)
+#### Iceberg Compatibility (Phases 1-4)
+```bash
 cargo test -p minio iceberg_catalog_compat -- --nocapture
 cargo test -p minio iceberg_view_compat -- --nocapture
 cargo test -p minio iceberg_transactions_compat -- --nocapture
 cargo test -p minio catalog_api_compliance -- --nocapture
+```
 
-# RCK conformance tests
+#### RCK Conformance Tests
+```bash
 cargo test -p minio rck_conformance -- --nocapture
 cargo test -p minio rck_inspired -- --nocapture
+```
 
-# Advanced/Tier 2 tests
+#### Advanced/Tier 2 Tests
+```bash
 cargo test -p minio s3tables::advanced -- --nocapture
-
-# Concurrent operations
 cargo test -p minio concurrent_operations -- --nocapture --test-threads=1
-
-# View operations
 cargo test -p minio view_operations -- --nocapture
 ```
 
-### Run with DataFusion Feature
-
-```bash
-# DataFusion TableProvider integration tests
-cargo test -p minio datafusion_full_integration --features datafusion -- --nocapture --test-threads=1
-```
-
 ### Run in Release Mode (Faster)
-
 ```bash
 cargo test --release -p minio s3tables:: -- --test-threads=4
 ```
 
 ### Run a Single Test
-
 ```bash
 cargo test -p minio test_name_here -- --exact --nocapture
 ```
+
+## Test File Reference
+
+### Core Operations
+- `create_delete.rs` - Warehouse/namespace/table lifecycle
+- `list_warehouses.rs` - Warehouse listing and pagination
+- `list_namespaces.rs` - Namespace listing
+- `list_tables.rs` - Table listing
+- `get_warehouse.rs`, `get_namespace.rs` - Resource retrieval
+- `load_table.rs`, `load_table_credentials.rs` - Table loading
+- `namespace_exists.rs`, `table_exists.rs` - Existence checks
+- `name_validation.rs` - Name format validation
+- `error_handling.rs` - Error response handling
+
+### Iceberg Compatibility (Phases 1-4)
+- `iceberg_catalog_compat.rs` - Catalog operations (15 tests)
+- `iceberg_view_compat.rs` - View operations (20 tests)
+- `iceberg_transactions_compat.rs` - Transaction operations (19 tests)
+- `catalog_api_compliance.rs` - HTTP/API compliance (26 tests)
+
+### RCK Conformance
+- `rck_conformance.rs` - Official Iceberg RCK tests (31 tests)
+- `rck_inspired.rs` - Additional spec-inspired tests
+
+### Advanced
+- `advanced/mod.rs` - Tier 2 operation tests
+- `concurrent_operations.rs` - Concurrency testing
+- `view_operations.rs` - View CRUD operations
+- `rename_table.rs` - Table rename operations
+- `register_table.rs`, `register_view.rs` - Registration tests
+- `scan_planning.rs` - Query planning tests
+
+### AWS S3 Tables API Extensions
+- `encryption.rs` - Encryption settings
+- `maintenance.rs` - Maintenance operations
+- `replication.rs` - Cross-region replication
+- `tagging.rs` - Resource tagging
+- `table_policy.rs`, `warehouse_policy.rs` - IAM policies
+- `table_metrics.rs`, `warehouse_metrics.rs` - CloudWatch metrics
+
+### Utilities
+- `common.rs` - Shared test helpers
+- `iceberg_test_data_generator.rs` - Test data generation
+- `iceberg_test_data_creation.rs` - Test data creation tests
+
+## Iceberg REST Catalog Compliance
+
+### Multi-Level Namespace Support
+
+The Iceberg REST Catalog specification supports hierarchical namespaces where namespace
+levels are joined with the unit separator character (`\u{001F}`, ASCII 0x1F). For example,
+a namespace `["parent", "child"]` is encoded in URLs as `parent%1Fchild`.
+
+**RCK Test Coverage:** The Apache Iceberg REST Compatibility Kit (RCK) includes the
+`testListNestedNamespaces` test that validates multi-level namespace operations. Our
+SDK passes this test by correctly handling the namespace encoding.
+
+### URL Encoding for AWS SigV4 Signing
+
+The SDK ensures AWS Signature Version 4 compatibility for S3 Tables API requests by
+properly encoding the canonical URI. This is critical for multi-level namespaces because:
+
+1. **URL Encoding:** The namespace path `parent\u{001F}child` becomes `parent%1Fchild` in
+   the URL path
+2. **Canonical URI Encoding:** AWS SigV4 requires the canonical URI to be fully URI-encoded,
+   meaning `%` characters must be encoded as `%25` (so `%1F` becomes `%251F`)
+3. **Server Validation:** MinIO server's signature validation (`signature-v4.go`) applies
+   `s3utils.EncodePath()` to the path after replacing `\u{001F}` with `%1F`, which encodes
+   `%` to `%25`
+
+The SDK's `TablesClient` applies `url_encode_path()` to the signing path in
+`src/s3tables/client/tables_client.rs`, ensuring the client's canonical request matches
+the server's expectation.
+
+### Alignment with RCK and Catalog API Coverage
+
+| RCK/Catalog API Test | SDK Coverage | Status |
+|---------------------|--------------|--------|
+| `testListNestedNamespaces` | Multi-level namespace listing | PASS |
+| `testCreateNamespace` (nested) | Hierarchical namespace creation | PASS |
+| `testLoadNamespaceMetadata` (nested) | Nested namespace metadata retrieval | PASS |
+| Multi-level namespace CRUD | All operations with hierarchical paths | PASS |
 
 ## Test Configuration
 
@@ -232,7 +243,6 @@ The GitHub Actions workflow (`.github/workflows/s3tables-integration.yml`) runs 
 | `integration-tests-basic` | Core S3 Tables API | Push, PR |
 | `iceberg-compat-tests` | Iceberg Phases 1-4 | Push, PR |
 | `advanced-tests` | Tier 2, concurrent, views | Push, PR |
-| `datafusion-integration` | DataFusion feature | Push, PR |
 | `stress-tests` | Chaos/sustained load | Manual only |
 
 ### Manual Workflow Trigger
@@ -244,53 +254,6 @@ To run stress tests via GitHub Actions:
 3. Click "Run workflow"
 4. Set `run_stress_tests: true`
 5. Optionally set `stress_duration` (default: 120 seconds)
-
-## Test File Reference
-
-### Core Operations
-- `create_delete.rs` - Warehouse/namespace/table lifecycle
-- `list_warehouses.rs` - Warehouse listing and pagination
-- `list_namespaces.rs` - Namespace listing
-- `list_tables.rs` - Table listing
-- `get_warehouse.rs`, `get_namespace.rs` - Resource retrieval
-- `load_table.rs`, `load_table_credentials.rs` - Table loading
-- `namespace_exists.rs`, `table_exists.rs` - Existence checks
-- `name_validation.rs` - Name format validation
-- `error_handling.rs` - Error response handling
-
-### Iceberg Compatibility (Phases 1-4)
-- `iceberg_catalog_compat.rs` - Catalog operations (15 tests)
-- `iceberg_view_compat.rs` - View operations (20 tests)
-- `iceberg_transactions_compat.rs` - Transaction operations (19 tests)
-- `catalog_api_compliance.rs` - HTTP/API compliance (26 tests)
-
-### RCK Conformance
-- `rck_conformance.rs` - Official Iceberg RCK tests
-- `rck_inspired.rs` - Additional spec-inspired tests
-
-### Advanced
-- `advanced/mod.rs` - Tier 2 operation tests
-- `concurrent_operations.rs` - Concurrency testing
-- `view_operations.rs` - View CRUD operations
-- `rename_table.rs` - Table rename operations
-- `register_table.rs`, `register_view.rs` - Registration tests
-- `scan_planning.rs` - Query planning tests
-
-### AWS S3 Tables API Extensions
-- `encryption.rs` - Encryption settings
-- `maintenance.rs` - Maintenance operations
-- `replication.rs` - Cross-region replication
-- `tagging.rs` - Resource tagging
-- `table_policy.rs`, `warehouse_policy.rs` - IAM policies
-- `table_metrics.rs`, `warehouse_metrics.rs` - CloudWatch metrics
-
-### DataFusion Integration
-- `datafusion_full_integration.rs` - Full TableProvider tests (feature-gated)
-
-### Utilities
-- `common.rs` - Shared test helpers
-- `iceberg_test_data_generator.rs` - Test data generation
-- `iceberg_test_data_creation.rs` - Test data creation tests
 
 ## Troubleshooting
 
@@ -355,11 +318,18 @@ use super::common::*;
 
 #[tokio::test]
 async fn test_my_new_feature() {
-    let ctx = TestContext::new_unique().await;
+    let ctx = TestContext::new_from_env();
+    let client = create_tables_client(&ctx);
+    let warehouse = rand_warehouse_name();
+
+    // Setup
+    create_warehouse_helper(&warehouse, &client).await;
 
     // Test implementation
+    // ...
 
-    ctx.cleanup().await;
+    // Cleanup
+    delete_warehouse_helper(&warehouse, &client).await;
 }
 ```
 
