@@ -496,6 +496,10 @@ impl BaseUrl {
             path.push_str(&urlencode_object_key(object.as_str()));
         }
 
+        if path.is_empty() {
+            path.push('/');
+        }
+
         url.host = host;
         url.path = path;
 
@@ -917,7 +921,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(url.host, "mybucket.s3.us-east-1.amazonaws.com");
-        assert_eq!(url.path, "");
+        assert_eq!(url.path, "/");
     }
 
     #[test]
