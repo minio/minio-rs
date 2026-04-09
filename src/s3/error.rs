@@ -1,3 +1,4 @@
+pub use crate::s3::madmin_error_enhanced::MadminServerError;
 use crate::s3::minio_error_response::MinioErrorResponse;
 use crate::s3::types::Region;
 use thiserror::Error;
@@ -52,6 +53,9 @@ pub enum ValidationErr {
 
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
+
+    #[error("Invalid inventory job ID: '{id}' - {reason}")]
+    InvalidInventoryJobId { id: String, reason: String },
 
     #[error("XML error: {message}")]
     XmlError {
@@ -430,6 +434,9 @@ pub enum S3ServerError {
 pub enum Error {
     #[error("{0}")]
     S3Server(#[from] S3ServerError),
+
+    #[error("{0}")]
+    MadminServer(MadminServerError),
 
     #[error("Drive IO error occurred")]
     DriveIo(#[from] IoError),

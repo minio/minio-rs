@@ -362,11 +362,11 @@ pub(crate) fn presign_v4(
     expires: u32,
 ) {
     let scope = get_scope(date, region, "s3");
-    let canonical_headers = "host:".to_string() + host;
+    let canonical_headers = format!("host:{host}");
     let signed_headers = "host";
 
     query_params.add(X_AMZ_ALGORITHM, "AWS4-HMAC-SHA256");
-    query_params.add(X_AMZ_CREDENTIAL, access_key.to_string() + "/" + &scope);
+    query_params.add(X_AMZ_CREDENTIAL, format!("{access_key}/{scope}"));
     query_params.add(X_AMZ_DATE, to_amz_date(date));
     query_params.add(X_AMZ_EXPIRES, expires.to_string());
     query_params.add(X_AMZ_SIGNED_HEADERS, signed_headers.to_string());

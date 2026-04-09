@@ -24,13 +24,13 @@ use minio_common::test_context::TestContext;
 
 #[minio_macros::test]
 async fn bucket_policy(ctx: TestContext, bucket: BucketName) {
-    let config: String = create_bucket_policy_config_example(&bucket);
+    let config = create_bucket_policy_config_example(&bucket);
 
     let resp: PutBucketPolicyResponse = ctx
         .client
         .put_bucket_policy(&bucket)
         .unwrap()
-        .config(config.clone())
+        .config(config)
         .build()
         .send()
         .await
