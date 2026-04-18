@@ -163,9 +163,6 @@ pub struct AppendObjectContent {
     content_stream: ContentStream,
     #[builder(default)]
     part_count: Option<u16>,
-    /// Value of `x-amz-write-offset-bytes`.
-    #[builder(default)]
-    offset_bytes: u64,
     /// Optional checksum algorithm for data integrity verification during append.
     ///
     /// When specified, computes checksums for appended data using the selected algorithm
@@ -191,21 +188,11 @@ pub type AppendObjectContentBldr = AppendObjectContentBuilder<(
     (),
     (),
     (),
-    (),
 )>;
 
 impl AppendObjectContent {
     pub async fn send(mut self) -> Result<AppendObjectResponse, Error> {
         check_sse(&self.sse, &self.client)?;
-
-        {
-            let mut headers: Multimap = match self.extra_headers {
-                Some(ref headers) => headers.clone(),
-                None => Multimap::new(),
-            };
-            headers.add(X_AMZ_WRITE_OFFSET_BYTES, self.offset_bytes.to_string());
-            self.extra_query_params = Some(headers);
-        }
 
         self.content_stream = std::mem::take(&mut self.input_content)
             .to_content_stream()
@@ -331,14 +318,14 @@ impl AppendObjectContent {
             //println!("AppendObjectResponse: object_size={:?}", resp.object_size);
 
             next_offset_bytes = resp.object_size();
+            last_resp = Some(resp);
 
             // Finally check if we are done.
             if buffer_size < part_size {
                 done = true;
-                last_resp = Some(resp);
             }
         }
-        Ok(last_resp.unwrap())
+        Ok(last_resp.expect("send_mpa always uploads at least one part"))
     }
 }
 // endregion: append-object-content

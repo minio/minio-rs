@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use minio::s3::builders::ObjectContent;
+use minio::s3::builders::{MIN_PART_SIZE, ObjectContent};
 use minio::s3::error::{Error, S3ServerError};
 use minio::s3::minio_error_response::MinioErrorCode;
 use minio::s3::response::{
@@ -541,4 +541,44 @@ async fn append_object_content_3(ctx: TestContext, bucket: BucketName) {
 
     sender_handle.await.unwrap();
     uploader_handler.await.unwrap();
+}
+
+/// Regression test: content that is an exact multiple of MIN_PART_SIZE triggers multipart append
+/// where every part fills the buffer completely. The old code exited the loop without setting
+/// last_resp, causing a panic. Verifies the fix returns Ok instead of panicking.
+#[minio_macros::test(skip_if_not_express)]
+async fn append_object_content_exact_part_size_multiple(ctx: TestContext, bucket: BucketName) {
+    let object = rand_object_name();
+
+    let initial_content = "initial";
+    let initial_size = initial_content.len() as u64;
+
+    create_object_helper(initial_content, &bucket, &object, &ctx).await;
+
+    // 2 * MIN_PART_SIZE: both parts are exactly full-sized, exercising the case
+    // where buffer_size == part_size on every iteration and last_resp was never set.
+    let append_size = 2 * MIN_PART_SIZE;
+    let data: ObjectContent =
+        ObjectContent::new_from_stream(RandSrc::new(append_size), Some(append_size));
+    let resp: AppendObjectResponse = ctx
+        .client
+        .append_object_content(&bucket, &object, data)
+        .unwrap()
+        .build()
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.bucket(), Some(&bucket));
+    assert_eq!(resp.object(), Some(&object));
+    assert_eq!(resp.object_size(), initial_size + append_size);
+
+    let resp: StatObjectResponse = ctx
+        .client
+        .stat_object(&bucket, &object)
+        .unwrap()
+        .build()
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.size().unwrap(), initial_size + append_size);
 }
