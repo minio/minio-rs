@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::builders::MAX_MULTIPART_COUNT;
 use crate::s3::client::MinioClient;
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
@@ -32,6 +31,13 @@ use http::Method;
 use std::pin::Pin;
 use std::sync::Arc;
 use typed_builder::TypedBuilder;
+
+/// Maximum number of objects that can be deleted in a single `DeleteObjects` request.
+///
+/// The S3 `DeleteObjects` API rejects requests containing more than 1000 keys.
+/// Streams of objects larger than this are split into multiple requests.
+pub const MAX_DELETE_OBJECTS: usize = 1000;
+
 // region: object-to-delete
 
 /// Specifies an object to be deleted.
@@ -294,6 +300,9 @@ pub type DeleteObjectsBldr = DeleteObjectsBuilder<(
 impl ToS3Request for DeleteObjects {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
+        if self.objects.len() > MAX_DELETE_OBJECTS {
+            return Err(ValidationErr::TooManyDeleteObjects(self.objects.len()));
+        }
 
         let mut data: String = String::from("<Delete>");
         if !self.verbose_mode {
@@ -437,7 +446,7 @@ impl DeleteObjectsStreaming {
         let mut objects = Vec::new();
         while let Some(object) = self.objects.items.next().await {
             objects.push(object);
-            if objects.len() >= MAX_MULTIPART_COUNT as usize {
+            if objects.len() >= MAX_DELETE_OBJECTS {
                 break;
             }
         }
@@ -484,3 +493,60 @@ impl ToStream for DeleteObjectsStreaming {
 }
 
 // endregion: delete-objects-streaming
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::s3::creds::StaticProvider;
+    use crate::s3::http::BaseUrl;
+
+    fn dummy_client() -> MinioClient {
+        let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
+        let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+        MinioClient::new(base_url, Some(provider), None, None).unwrap()
+    }
+
+    fn dummy_object(i: usize) -> ObjectToDelete {
+        ObjectToDelete {
+            key: ObjectKey::new(format!("obj-{i}")).unwrap(),
+            version_id: None,
+        }
+    }
+
+    /// Streaming MAX_DELETE_OBJECTS + 1 objects must produce exactly two requests:
+    /// the first with MAX_DELETE_OBJECTS entries and the second with 1.
+    #[tokio::test]
+    async fn next_request_batches_at_max_delete_objects_boundary() {
+        let items: Vec<ObjectToDelete> = (0..=MAX_DELETE_OBJECTS).map(dummy_object).collect();
+        let mut streaming = DeleteObjectsStreaming::new(
+            dummy_client(),
+            BucketName::new("test-bucket").unwrap(),
+            items.into_iter(),
+        );
+
+        let first = streaming.next_request().await.unwrap().unwrap();
+        assert_eq!(first.objects.len(), MAX_DELETE_OBJECTS);
+
+        let second = streaming.next_request().await.unwrap().unwrap();
+        assert_eq!(second.objects.len(), 1);
+
+        assert!(streaming.next_request().await.unwrap().is_none());
+    }
+
+    /// A full batch of exactly MAX_DELETE_OBJECTS must fit in a single request,
+    /// with no trailing empty request produced.
+    #[tokio::test]
+    async fn next_request_fits_full_batch_in_one_request() {
+        let items: Vec<ObjectToDelete> = (0..MAX_DELETE_OBJECTS).map(dummy_object).collect();
+        let mut streaming = DeleteObjectsStreaming::new(
+            dummy_client(),
+            BucketName::new("test-bucket").unwrap(),
+            items.into_iter(),
+        );
+
+        let only = streaming.next_request().await.unwrap().unwrap();
+        assert_eq!(only.objects.len(), MAX_DELETE_OBJECTS);
+
+        assert!(streaming.next_request().await.unwrap().is_none());
+    }
+}

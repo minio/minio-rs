@@ -115,6 +115,11 @@ pub enum ValidationErr {
     #[error("Too many parts for upload: {0} parts; maximum allowed is MAX_MULTIPART_COUNT parts")]
     TooManyParts(u64),
 
+    #[error(
+        "Too many objects in DeleteObjects request: {0} objects; maximum allowed is MAX_DELETE_OBJECTS (1000)"
+    )]
+    TooManyDeleteObjects(usize),
+
     #[error("{}", sse_tls_required_message(.0))]
     SseTlsRequired(Option<String>),
 
@@ -573,6 +578,14 @@ mod tests {
         let err = ValidationErr::TooManyParts(20000);
         assert!(err.to_string().contains("20000"));
         assert!(err.to_string().contains("maximum allowed"));
+    }
+
+    #[test]
+    fn test_validation_err_too_many_delete_objects() {
+        let err = ValidationErr::TooManyDeleteObjects(1500);
+        let msg = err.to_string();
+        assert!(msg.contains("1500"));
+        assert!(msg.contains("1000"));
     }
 
     #[test]
