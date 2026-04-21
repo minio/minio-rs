@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::s3::builders::{MAX_MULTIPART_COUNT, MAX_PART_SIZE};
 use crate::s3::client::MinioClient;
-use crate::s3::client::{MAX_MULTIPART_COUNT, MAX_PART_SIZE};
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};

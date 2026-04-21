@@ -45,7 +45,9 @@ use std::string::ToString;
 use std::sync::{Arc, OnceLock, RwLock};
 use uuid::Uuid;
 
-use crate::s3::builders::{BucketExists, ComposeSource};
+use crate::s3::builders::{
+    BucketExists, ComposeSource, MAX_MULTIPART_COUNT, MAX_OBJECT_SIZE, MAX_PART_SIZE, MIN_PART_SIZE,
+};
 pub use crate::s3::client::hooks::RequestHooks;
 use crate::s3::creds::Provider;
 #[cfg(feature = "localhost")]
@@ -120,26 +122,6 @@ use std::sync::LazyLock;
 pub static DEFAULT_REGION: LazyLock<Region> =
     LazyLock::new(|| Region::new("us-east-1").expect("default region should be valid"));
 
-/// Minimum allowed size (in bytes) for a multipart upload part (except the last).
-///
-/// Used in multipart uploads to ensure each part (except the final one)
-/// meets the required minimum size for transfer or storage.
-pub const MIN_PART_SIZE: u64 = 5_242_880; // 5 MiB
-
-/// Maximum allowed size (in bytes) for a single multipart upload part.
-///
-/// In multipart uploads, no part can exceed this size limit.
-/// This constraint ensures compatibility with services that enforce
-/// a 5 GiB maximum per part.
-pub const MAX_PART_SIZE: u64 = 5_368_709_120; // 5 GiB
-
-/// Maximum allowed size (in bytes) for a single object upload.
-///
-/// This is the upper limit for the total size of an object stored using
-/// multipart uploads. It applies to the combined size of all parts,
-/// ensuring the object does not exceed 5 TiB.
-pub const MAX_OBJECT_SIZE: u64 = 5_497_558_138_880; // 5 TiB
-
 enum BodyIterator {
     Segmented(crate::s3::segmented_bytes::SegmentedBytesIntoIterator),
     FromVec(std::vec::IntoIter<Bytes>),
@@ -157,12 +139,6 @@ impl Iterator for BodyIterator {
         }
     }
 }
-
-/// Maximum number of parts allowed in a multipart upload.
-///
-/// Multipart uploads are limited to a total of 10,000 parts. If the object
-/// exceeds this count, each part must be larger to remain within the limit.
-pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 
 /// Configuration for the HTTP connection pool.
 ///

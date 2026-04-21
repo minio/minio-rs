@@ -921,9 +921,37 @@ fn into_headers_put_object(
     Ok(map)
 }
 
+/// Minimum allowed size (in bytes) for a multipart upload part (except the last).
+///
+/// Used in multipart uploads to ensure each part (except the final one)
+/// meets the required minimum size for transfer or storage.
 pub const MIN_PART_SIZE: u64 = 5 * 1024 * 1024; // 5 MiB
+
+/// Default size (in bytes) for a multipart upload part when not explicitly specified.
+///
+/// Used as the default part size when the caller does not set one and the object
+/// size is known. For objects large enough that this default would exceed
+/// [`MAX_MULTIPART_COUNT`] parts, the part size is scaled up instead.
+pub const DEFAULT_PART_SIZE: u64 = 16 * 1024 * 1024; // 16 MiB
+
+/// Maximum allowed size (in bytes) for a single multipart upload part.
+///
+/// In multipart uploads, no part can exceed this size limit.
+/// This constraint ensures compatibility with services that enforce
+/// a 5 GiB maximum per part.
 pub const MAX_PART_SIZE: u64 = 1024 * MIN_PART_SIZE; // 5 GiB
+
+/// Maximum allowed size (in bytes) for a single object upload.
+///
+/// This is the upper limit for the total size of an object stored using
+/// multipart uploads. It applies to the combined size of all parts,
+/// ensuring the object does not exceed 5 TiB.
 pub const MAX_OBJECT_SIZE: u64 = 1024 * MAX_PART_SIZE; // 5 TiB
+
+/// Maximum number of parts allowed in a multipart upload.
+///
+/// Multipart uploads are limited to a total of 10,000 parts. If the object
+/// exceeds this count, each part must be larger to remain within the limit.
 pub const MAX_MULTIPART_COUNT: u16 = 10_000;
 
 /// Returns the size of each part to upload and the total number of parts. The
@@ -957,14 +985,16 @@ pub fn calc_part_info(
         // parts will be unknown, so return None for that.
         (Size::Unknown, Size::Known(part_size)) => Ok((part_size, None)),
 
-        // If object size is known, and part size is unknown, calculate part
-        // size.
+        // If object size is known, and part size is unknown, use the default part size.
         (Size::Known(object_size), Size::Unknown) => {
-            // 1. Calculate the minimum part size (i.e., assuming part count is the maximum).
-            let mut psize: u64 = (object_size as f64 / MAX_MULTIPART_COUNT as f64).ceil() as u64;
-
-            // 2. Round up to the nearest multiple of MIN_PART_SIZE.
-            psize = MIN_PART_SIZE * (psize as f64 / MIN_PART_SIZE as f64).ceil() as u64;
+            // Use the default part size unless the object is too large to fit in
+            // MAX_MULTIPART_COUNT parts at that size; in that case, scale up.
+            let mut psize = if object_size > DEFAULT_PART_SIZE * MAX_MULTIPART_COUNT as u64 {
+                let raw = (object_size as f64 / MAX_MULTIPART_COUNT as f64).ceil() as u64;
+                MIN_PART_SIZE * (raw as f64 / MIN_PART_SIZE as f64).ceil() as u64
+            } else {
+                DEFAULT_PART_SIZE
+            };
 
             if psize > object_size {
                 psize = object_size;
@@ -999,6 +1029,59 @@ pub fn calc_part_info(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Objects small enough to fit in MAX_MULTIPART_COUNT parts at DEFAULT_PART_SIZE
+    /// must use DEFAULT_PART_SIZE (not the older MIN_PART_SIZE-rounded value).
+    #[test]
+    fn calc_part_info_uses_default_part_size_below_threshold() {
+        let (psize, count) = calc_part_info(Size::Known(100 * 1024 * 1024), Size::Unknown).unwrap();
+        assert_eq!(psize, DEFAULT_PART_SIZE);
+        assert_eq!(count, Some(7)); // ceil(100 MiB / 16 MiB) = 7
+    }
+
+    /// At the exact threshold (DEFAULT_PART_SIZE * MAX_MULTIPART_COUNT), the default
+    /// is still used and yields exactly MAX_MULTIPART_COUNT parts.
+    #[test]
+    fn calc_part_info_uses_default_at_threshold() {
+        let object_size = DEFAULT_PART_SIZE * MAX_MULTIPART_COUNT as u64;
+        let (psize, count) = calc_part_info(Size::Known(object_size), Size::Unknown).unwrap();
+        assert_eq!(psize, DEFAULT_PART_SIZE);
+        assert_eq!(count, Some(MAX_MULTIPART_COUNT));
+    }
+
+    /// Just above the threshold, the part size must scale up past DEFAULT_PART_SIZE
+    /// to keep the part count within MAX_MULTIPART_COUNT.
+    #[test]
+    fn calc_part_info_scales_up_above_threshold() {
+        let object_size = DEFAULT_PART_SIZE * MAX_MULTIPART_COUNT as u64 + 1;
+        let (psize, count) = calc_part_info(Size::Known(object_size), Size::Unknown).unwrap();
+        assert!(psize > DEFAULT_PART_SIZE);
+        assert_eq!(psize % MIN_PART_SIZE, 0);
+        assert!(count.unwrap() <= MAX_MULTIPART_COUNT);
+    }
+
+    /// At MAX_OBJECT_SIZE (5 TiB), the scale-up path must produce a valid part size
+    /// (multiple of MIN_PART_SIZE, within MAX_PART_SIZE) and not overflow u16.
+    #[test]
+    fn calc_part_info_scales_up_near_max_object_size() {
+        let (psize, count) = calc_part_info(Size::Known(MAX_OBJECT_SIZE), Size::Unknown).unwrap();
+        assert_eq!(psize % MIN_PART_SIZE, 0);
+        assert!((MIN_PART_SIZE..=MAX_PART_SIZE).contains(&psize));
+        let c = count.unwrap();
+        assert!(c > 0 && c <= MAX_MULTIPART_COUNT);
+        assert!(psize.saturating_mul(c as u64) >= MAX_OBJECT_SIZE);
+    }
+
+    /// Objects smaller than DEFAULT_PART_SIZE are uploaded as a single part; psize
+    /// is clamped to object_size (which is fine — single-part uploads don't have
+    /// to satisfy MIN_PART_SIZE).
+    #[test]
+    fn calc_part_info_clamps_small_object_to_single_part() {
+        let (psize, count) = calc_part_info(Size::Known(1024 * 1024), Size::Unknown).unwrap();
+        assert_eq!(psize, 1024 * 1024);
+        assert_eq!(count, Some(1));
+    }
+
     quickcheck! {
         fn test_calc_part_info(object_size: Size, part_size: Size) -> bool {
             let res = calc_part_info(object_size, part_size);
