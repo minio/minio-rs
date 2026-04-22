@@ -555,6 +555,14 @@ pub struct PutObjectContent {
     retention: Option<Retention>,
     #[builder(default = false)]
     legal_hold: bool,
+    /// Size of each part in a multipart upload.
+    ///
+    /// If not specified, defaults to [`DEFAULT_PART_SIZE`] (64 MiB).
+    /// For objects large enough that the default would exceed [`MAX_MULTIPART_COUNT`] parts,
+    /// the part size is automatically scaled up to fit within the limit.
+    /// When the total content size is unknown (for example, when streaming), this value must
+    /// be set explicitly; otherwise part calculation fails with `MissingPartSize`.
+    /// Must be between [`MIN_PART_SIZE`] (5 MiB) and [`MAX_PART_SIZE`] (5 GiB) if explicitly set.
     #[builder(default, setter(into))]
     part_size: Size,
     #[builder(default, setter(into))]
@@ -932,7 +940,7 @@ pub const MIN_PART_SIZE: u64 = 5 * 1024 * 1024; // 5 MiB
 /// Used as the default part size when the caller does not set one and the object
 /// size is known. For objects large enough that this default would exceed
 /// [`MAX_MULTIPART_COUNT`] parts, the part size is scaled up instead.
-pub const DEFAULT_PART_SIZE: u64 = 16 * 1024 * 1024; // 16 MiB
+pub const DEFAULT_PART_SIZE: u64 = 64 * 1024 * 1024; // 64 MiB
 
 /// Maximum allowed size (in bytes) for a single multipart upload part.
 ///
@@ -1036,7 +1044,7 @@ mod tests {
     fn calc_part_info_uses_default_part_size_below_threshold() {
         let (psize, count) = calc_part_info(Size::Known(100 * 1024 * 1024), Size::Unknown).unwrap();
         assert_eq!(psize, DEFAULT_PART_SIZE);
-        assert_eq!(count, Some(7)); // ceil(100 MiB / 16 MiB) = 7
+        assert_eq!(count, Some(2)); // ceil(100 MiB / 64 MiB) = 2
     }
 
     /// At the exact threshold (DEFAULT_PART_SIZE * MAX_MULTIPART_COUNT), the default
