@@ -1,0 +1,225 @@
+name: MinIO Rust Library CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  RUST_LOG: debug
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Run once - same code for both variants
+  check-format:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Check format
+      run: |
+        cargo fmt --all -- --check
+
+  # Run once - same code for both variants
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: clippy
+        run: cargo clippy --all-targets --all-features --workspace -- -D warnings
+
+  # Run once - same code for both variants
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build
+      run: |
+        cargo --version
+        cargo build --bins --examples --tests --benches --verbose
+
+  # Test against AIStor MinIO
+  test-aistor-multi-thread:
+    runs-on: ubuntu-latest
+    needs: [check-format, clippy, build]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate AIStor license secret
+        run: |
+          if [ -z "${{ secrets.AISTOR_LICENSE }}" ]; then
+            echo "❌ ERROR: AISTOR_LICENSE secret is not set or is empty"
+            echo "Please configure the AISTOR_LICENSE secret in GitHub repository settings:"
+            echo "  Settings -> Secrets and variables -> Actions -> New repository secret"
+            exit 1
+          fi
+          echo "✅ AISTOR_LICENSE secret is configured"
+      - name: Start AIStor MinIO server
+        env:
+          MINIO_LICENSE: ${{ secrets.AISTOR_LICENSE }}
+          MINIO_CI_CD: true
+          MINIO_ROOT_USER: minioadmin  # TODO: Change to ${{ secrets.AISTOR_USER }} when secret is set
+          MINIO_ROOT_PASSWORD: minioadmin  # TODO: Change to ${{ secrets.AISTOR_PASSWORD }} when secret is set
+          MINIO_NOTIFY_WEBHOOK_ENABLE_miniojavatest: on
+          MINIO_NOTIFY_WEBHOOK_ENDPOINT_miniojavatest: http://example.org/
+        run: |
+          wget --quiet https://dl.minio.io/aistor/minio/release/linux-amd64/minio
+          chmod +x minio
+          echo "AIStor MinIO Server Version:"
+          ./minio --version
+          mkdir -p /tmp/certs
+          cp ./tests/public.crt ./tests/private.key /tmp/certs/
+
+          # Start server and redirect output to log file
+          ./minio server /tmp/test-xl/{1...4}/ --certs-dir /tmp/certs/ > /tmp/minio.log 2>&1 &
+          MINIO_PID=$!
+          echo "MinIO started with PID: $MINIO_PID"
+
+          # Wait for server to start
+          sleep 5
+
+          # Check if process is still running
+          if ! ps -p $MINIO_PID > /dev/null; then
+            echo "❌ MinIO server process died"
+            echo "=== MinIO Server Log ==="
+            cat /tmp/minio.log
+            exit 1
+          fi
+
+          # Check for FATAL errors in log
+          if grep -q "FATAL" /tmp/minio.log; then
+            echo "❌ MinIO server encountered FATAL error"
+            echo "=== MinIO Server Log ==="
+            cat /tmp/minio.log
+            exit 1
+          fi
+
+          # Additional wait for server to be fully ready
+          sleep 5
+
+          # Final check
+          if ! ps -p $MINIO_PID > /dev/null; then
+            echo "❌ MinIO server process died during startup"
+            echo "=== MinIO Server Log ==="
+            cat /tmp/minio.log
+            exit 1
+          fi
+
+          echo "✅ MinIO server started successfully"
+          echo "=== MinIO Server Log (startup) ==="
+          head -20 /tmp/minio.log
+      - name: Run tests (multi-thread)
+        run: |
+          export SERVER_ENDPOINT=localhost:9000
+          export ACCESS_KEY=minioadmin  # TODO: Change to ${{ secrets.AISTOR_USER }} when secret is set
+          export SECRET_KEY=minioadmin  # TODO: Change to ${{ secrets.AISTOR_PASSWORD }} when secret is set
+          export ENABLE_HTTPS=1
+          export MINIO_SSL_CERT_FILE=./tests/public.crt
+          MINIO_TEST_TOKIO_RUNTIME_FLAVOR="multi_thread" cargo test -- --nocapture
+
+  test-aistor-current-thread:
+    if: false  # Temporarily disabled
+    runs-on: ubuntu-latest
+    needs: [check-format, clippy, build]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate AIStor license secret
+        run: |
+          if [ -z "${{ secrets.AISTOR_LICENSE }}" ]; then
+            echo "❌ ERROR: AISTOR_LICENSE secret is not set or is empty"
+            echo "Please configure the AISTOR_LICENSE secret in GitHub repository settings:"
+            echo "  Settings -> Secrets and variables -> Actions -> New repository secret"
+            exit 1
+          fi
+          echo "✅ AISTOR_LICENSE secret is configured"
+      - name: Start AIStor MinIO server
+        env:
+          MINIO_LICENSE: ${{ secrets.AISTOR_LICENSE }}
+          MINIO_CI_CD: true
+          MINIO_ROOT_USER: minioadmin  # TODO: Change to ${{ secrets.AISTOR_USER }} when secret is set
+          MINIO_ROOT_PASSWORD: minioadmin  # TODO: Change to ${{ secrets.AISTOR_PASSWORD }} when secret is set
+          MINIO_NOTIFY_WEBHOOK_ENABLE_miniojavatest: on
+          MINIO_NOTIFY_WEBHOOK_ENDPOINT_miniojavatest: http://example.org/
+        run: |
+          wget --quiet https://dl.minio.io/aistor/minio/release/linux-amd64/minio
+          chmod +x minio
+          echo "AIStor MinIO Server Version:"
+          ./minio --version
+          mkdir -p /tmp/certs
+          cp ./tests/public.crt ./tests/private.key /tmp/certs/
+
+          # Start server and redirect output to log file
+          ./minio server /tmp/test-xl/{1...4}/ --certs-dir /tmp/certs/ > /tmp/minio.log 2>&1 &
+          MINIO_PID=$!
+          echo "MinIO started with PID: $MINIO_PID"
+
+          # Wait for server to start
+          sleep 5
+
+          # Check if process is still running
+          if ! ps -p $MINIO_PID > /dev/null; then
+            echo "❌ MinIO server process died"
+            echo "=== MinIO Server Log ==="
+            cat /tmp/minio.log
+            exit 1
+          fi
+
+          # Check for FATAL errors in log
+          if grep -q "FATAL" /tmp/minio.log; then
+            echo "❌ MinIO server encountered FATAL error"
+            echo "=== MinIO Server Log ==="
+            cat /tmp/minio.log
+            exit 1
+          fi
+
+          # Additional wait for server to be fully ready
+          sleep 5
+
+          # Final check
+          if ! ps -p $MINIO_PID > /dev/null; then
+            echo "❌ MinIO server process died during startup"
+            echo "=== MinIO Server Log ==="
+            cat /tmp/minio.log
+            exit 1
+          fi
+
+          echo "✅ MinIO server started successfully"
+          echo "=== MinIO Server Log (startup) ==="
+          head -20 /tmp/minio.log
+      - name: Run tests (current-thread)
+        run: |
+          export SERVER_ENDPOINT=localhost:9000
+          export ACCESS_KEY=minioadmin  # TODO: Change to ${{ secrets.AISTOR_USER }} when secret is set
+          export SECRET_KEY=minioadmin  # TODO: Change to ${{ secrets.AISTOR_PASSWORD }} when secret is set
+          export ENABLE_HTTPS=1
+          export MINIO_SSL_CERT_FILE=./tests/public.crt
+          MINIO_TEST_TOKIO_RUNTIME_FLAVOR="current_thread" cargo test -- --nocapture
+
+  # Test against OSS MinIO
+  test-oss-multi-thread:
+    if: false  # Temporarily disabled
+    runs-on: ubuntu-latest
+    needs: [check-format, clippy, build]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start OSS MinIO server
+        run: |
+          wget --quiet https://dl.min.io/server/minio/release/linux-amd64/minio
+          chmod +x minio
+          echo "OSS MinIO Server Version:"
+          ./minio --version
+          mkdir -p /tmp/certs
+          cp ./tests/public.crt ./tests/private.key /tmp/certs/
+          MINIO_CI_CD=true \
+            MINIO_NOTIFY_WEBHOOK_ENABLE_miniojavatest=on \
+            MINIO_NOTIFY_WEBHOOK_ENDPOINT_miniojavatest=http://example.org/ \
+            ./minio server /tmp/test-xl/{1...4}/ --certs-dir /tmp/certs/ &
+          sleep 10
+      - name: Run tests (multi-thread)
+        run: |
+          export SERVER_ENDPOINT=localhost:9000
+          export ACCESS_KEY=minioadmin
+          export SECRET_KEY=minioadmin
+          export ENABLE_HTTPS=1
+          export MINIO_SSL_CERT_FILE=./tests/public.crt
+          MINIO_TEST_TOKIO_RUNTIME_FLAVOR="multi_thread" cargo test -- --nocapture
