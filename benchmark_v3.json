@@ -1,0 +1,10 @@
+{
+  "label": "v3",
+  "object_count": 100000,
+  "upload_duration_secs": 234.2036318,
+  "upload_throughput": 426.9788612219121,
+  "scan_duration_secs": 2.0226115,
+  "scan_throughput": 49441.03205187946,
+  "timestamp": "2026-01-08T15:38:29.434441400+00:00",
+  "endpoint": "http://localhost:9000"
+}
