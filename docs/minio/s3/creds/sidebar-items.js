@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["Credentials",""],["StaticProvider",""]],"trait":[["Provider",""]]};
+window.SIDEBAR_ITEMS = {"struct":["Credentials","StaticProvider"],"trait":["Provider"]};

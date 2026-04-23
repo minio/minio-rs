@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["s3",""]]};
+window.SIDEBAR_ITEMS = {"macro":["impl_from_s3response","impl_from_s3response_with_size","impl_has_s3fields"],"mod":["s3"]};

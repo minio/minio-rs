@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Action","Effect","Principal"],"struct":["BPStatement","BucketPolicy","BucketPolicyArgs","BucketPolicyConfig","ID"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["Client",""]]};
+window.SIDEBAR_ITEMS = {"mod":["hooks"],"static":["DEFAULT_REGION"],"struct":["ConnectionPoolConfig","Method","MinioClient","MinioClientBuilder","Response"]};

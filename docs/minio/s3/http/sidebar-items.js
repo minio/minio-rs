@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["BaseUrl",""],["Url",""]]};
+window.SIDEBAR_ITEMS = {"fn":["match_aws_endpoint","match_aws_s3_endpoint"],"struct":["BaseUrl","Url"]};

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("minio_macros", 0, "A proc macro attribute for writing MinIO tests.")

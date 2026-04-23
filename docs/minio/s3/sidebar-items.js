@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["args",""],["client",""],["creds",""],["error",""],["http",""],["response",""],["signer",""],["sse",""],["types",""],["utils",""]]};
+window.SIDEBAR_ITEMS = {"mod":["aws_chunked","bucket_policy_config","builders","client","creds","error","http","multimap_ext","response","response_traits","segmented_bytes","signer","types","utils"]};

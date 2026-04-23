@@ -1,0 +1,221 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Trait for intercepting and modifying S3 API requests."><title>RequestHooks in minio::s3::client::hooks - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="minio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0 (1159e78c4 2025-09-14)" data-channel="1.90.0" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../../../../static.files/storage-68b7e25d.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../minio/index.html">minio</a><span class="version">0.4.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Request<wbr>Hooks</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#load-balancing" title="Load Balancing">Load Balancing</a></li><li><a href="#telemetry--debug-logging" title="Telemetry &#38; Debug Logging">Telemetry &amp; Debug Logging</a></li></ul></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.name" title="name">name</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.after_execute" title="after_execute">after_execute</a></li><li><a href="#method.before_signing_mut" title="before_signing_mut">before_signing_mut</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In minio::<wbr>s3::<wbr>client::<wbr>hooks</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../../index.html">minio</a>::<wbr><a href="../../index.html">s3</a>::<wbr><a href="../index.html">client</a>::<wbr><a href="index.html">hooks</a></div><h1>Trait <span class="trait">RequestHooks</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../../src/minio/s3/client/hooks.rs.html#169-203">Source</a> </span></div><pre class="rust item-decl"><code>pub trait RequestHooks: <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> {
+    // Required method
+    fn <a href="#tymethod.name" class="fn">name</a>(&amp;self) -&gt; &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.str.html">str</a>;
+
+    // Provided methods
+    fn <a href="#method.before_signing_mut" class="fn">before_signing_mut</a>&lt;'life0, 'life1, 'life2, 'life3, 'life4, 'life5, 'life6, 'life7, 'life8, 'life9, 'async_trait&gt;(
+        &amp;'life0 self,
+        _method: &amp;'life1 <a class="struct" href="../struct.Method.html" title="struct minio::s3::client::Method">Method</a>,
+        _url: &amp;'life2 mut <a class="struct" href="../../http/struct.Url.html" title="struct minio::s3::http::Url">Url</a>,
+        _region: &amp;'life3 <a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.str.html">str</a>,
+        _headers: &amp;'life4 mut <a class="type" href="../../multimap_ext/type.Multimap.html" title="type minio::s3::multimap_ext::Multimap">Multimap</a>,
+        _query_params: &amp;'life5 <a class="type" href="../../multimap_ext/type.Multimap.html" title="type minio::s3::multimap_ext::Multimap">Multimap</a>,
+        _bucket: <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life6 <a class="struct" href="../../types/typed_parameters/struct.BucketName.html" title="struct minio::s3::types::typed_parameters::BucketName">BucketName</a>&gt;,
+        _object: <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life7 <a class="struct" href="../../types/typed_parameters/struct.ObjectKey.html" title="struct minio::s3::types::typed_parameters::ObjectKey">ObjectKey</a>&gt;,
+        _body: <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life8 <a class="struct" href="../../segmented_bytes/struct.SegmentedBytes.html" title="struct minio::s3::segmented_bytes::SegmentedBytes">SegmentedBytes</a>&gt;,
+        _extensions: &amp;'life9 mut <a class="struct" href="struct.Extensions.html" title="struct minio::s3::client::hooks::Extensions">Extensions</a>,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.90.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.90.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.unit.html">()</a>, <a class="enum" href="../../error/enum.Error.html" title="enum minio::s3::error::Error">Error</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait,
+             'life1: 'async_trait,
+             'life2: 'async_trait,
+             'life3: 'async_trait,
+             'life4: 'async_trait,
+             'life5: 'async_trait,
+             'life6: 'async_trait,
+             'life7: 'async_trait,
+             'life8: 'async_trait,
+             'life9: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.after_execute" class="fn">after_execute</a>&lt;'life0, 'life1, 'life2, 'life3, 'life4, 'life5, 'life6, 'life7, 'life8, 'life9, 'async_trait&gt;(
+        &amp;'life0 self,
+        _method: &amp;'life1 <a class="struct" href="../struct.Method.html" title="struct minio::s3::client::Method">Method</a>,
+        _url: &amp;'life2 <a class="struct" href="../../http/struct.Url.html" title="struct minio::s3::http::Url">Url</a>,
+        _region: &amp;'life3 <a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.str.html">str</a>,
+        _headers: &amp;'life4 <a class="type" href="../../multimap_ext/type.Multimap.html" title="type minio::s3::multimap_ext::Multimap">Multimap</a>,
+        _query_params: &amp;'life5 <a class="type" href="../../multimap_ext/type.Multimap.html" title="type minio::s3::multimap_ext::Multimap">Multimap</a>,
+        _bucket: <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life6 <a class="struct" href="../../types/typed_parameters/struct.BucketName.html" title="struct minio::s3::types::typed_parameters::BucketName">BucketName</a>&gt;,
+        _object: <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life7 <a class="struct" href="../../types/typed_parameters/struct.ObjectKey.html" title="struct minio::s3::types::typed_parameters::ObjectKey">ObjectKey</a>&gt;,
+        _resp: &amp;'life8 <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../struct.Response.html" title="struct minio::s3::client::Response">Response</a>, Error&gt;,
+        _extensions: &amp;'life9 mut <a class="struct" href="struct.Extensions.html" title="struct minio::s3::client::hooks::Extensions">Extensions</a>,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.90.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.90.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.unit.html">()</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait,
+             'life1: 'async_trait,
+             'life2: 'async_trait,
+             'life3: 'async_trait,
+             'life4: 'async_trait,
+             'life5: 'async_trait,
+             'life6: 'async_trait,
+             'life7: 'async_trait,
+             'life8: 'async_trait,
+             'life9: 'async_trait</span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Trait for intercepting and modifying S3 API requests.</p>
+<p>Hooks are called in order and can abort requests by returning errors from <code>before_signing_mut</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="load-balancing"><a class="doc-anchor" href="#load-balancing">§</a>Load Balancing</h3>
+<p>Redirect requests across multiple MinIO nodes:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>minio::s3::client::RequestHooks;
+<span class="kw">use </span>minio::s3::http::Url;
+<span class="kw">use </span>minio::s3::error::Error;
+<span class="kw">use </span>minio::s3::multimap_ext::Multimap;
+<span class="kw">use </span>minio::s3::segmented_bytes::SegmentedBytes;
+<span class="kw">use </span>minio::s3::types::{BucketName, ObjectKey};
+<span class="kw">use </span>http::{Method, Extensions};
+<span class="kw">use </span>std::sync::atomic::{AtomicUsize, Ordering};
+<span class="kw">use </span>std::sync::Arc;
+
+<span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">struct </span>LoadBalancerHook {
+    nodes: Vec&lt;String&gt;,
+    counter: Arc&lt;AtomicUsize&gt;,
+}
+
+<span class="kw">impl </span>LoadBalancerHook {
+    <span class="kw">fn </span>new(nodes: Vec&lt;String&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            nodes,
+            counter: Arc::new(AtomicUsize::new(<span class="number">0</span>)),
+        }
+    }
+
+    <span class="kw">fn </span>select_node(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="comment">// Round-robin load balancing
+        </span><span class="kw">let </span>index = <span class="self">self</span>.counter.fetch_add(<span class="number">1</span>, Ordering::SeqCst) % <span class="self">self</span>.nodes.len();
+        <span class="kw-2">&amp;</span><span class="self">self</span>.nodes[index]
+    }
+}
+
+<span class="attr">#[async_trait::async_trait]
+</span><span class="kw">impl </span>RequestHooks <span class="kw">for </span>LoadBalancerHook {
+    <span class="kw">fn </span>name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+        <span class="string">"load-balancer"
+    </span>}
+
+    <span class="kw">async fn </span>before_signing_mut(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _method: <span class="kw-2">&amp;</span>Method,
+        url: <span class="kw-2">&amp;mut </span>Url,
+        _region: <span class="kw-2">&amp;</span>str,
+        _headers: <span class="kw-2">&amp;mut </span>Multimap,
+        _query_params: <span class="kw-2">&amp;</span>Multimap,
+        _bucket: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>BucketName&gt;,
+        _object: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>ObjectKey&gt;,
+        _body: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>SegmentedBytes&gt;,
+        _extensions: <span class="kw-2">&amp;mut </span>Extensions,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="comment">// Select a node based on load balancing strategy
+        </span>url.host = <span class="self">self</span>.select_node().to_string();
+        <span class="comment">// Note: The client will automatically add x-minio-redirect-from
+        // and x-minio-redirect-to headers when URL is modified
+        </span><span class="prelude-val">Ok</span>(())
+    }
+}
+</code></pre></div>
+<h3 id="telemetry--debug-logging"><a class="doc-anchor" href="#telemetry--debug-logging">§</a>Telemetry &amp; Debug Logging</h3>
+<p>Track timing and log request details:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>minio::s3::client::RequestHooks;
+<span class="kw">use </span>minio::s3::error::Error;
+<span class="kw">use </span>minio::s3::http::Url;
+<span class="kw">use </span>minio::s3::multimap_ext::Multimap;
+<span class="kw">use </span>minio::s3::segmented_bytes::SegmentedBytes;
+<span class="kw">use </span>minio::s3::types::{BucketName, ObjectKey};
+<span class="kw">use </span>http::{Method, Extensions};
+<span class="kw">use </span>reqwest::Response;
+<span class="kw">use </span>std::time::Instant;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>LoggingHook;
+
+<span class="attr">#[async_trait::async_trait]
+</span><span class="kw">impl </span>RequestHooks <span class="kw">for </span>LoggingHook {
+    <span class="kw">fn </span>name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str { <span class="string">"logger" </span>}
+
+    <span class="kw">async fn </span>before_signing_mut(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        method: <span class="kw-2">&amp;</span>Method,
+        url: <span class="kw-2">&amp;mut </span>Url,
+        _region: <span class="kw-2">&amp;</span>str,
+        _headers: <span class="kw-2">&amp;mut </span>Multimap,
+        _query_params: <span class="kw-2">&amp;</span>Multimap,
+        _bucket: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>BucketName&gt;,
+        _object: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>ObjectKey&gt;,
+        _body: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>SegmentedBytes&gt;,
+        extensions: <span class="kw-2">&amp;mut </span>Extensions,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="macro">println!</span>(<span class="string">"[REQ] {} {}"</span>, method, url);
+        extensions.insert(Instant::now());
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>after_execute(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _method: <span class="kw-2">&amp;</span>Method,
+        _url: <span class="kw-2">&amp;</span>Url,
+        _region: <span class="kw-2">&amp;</span>str,
+        _headers: <span class="kw-2">&amp;</span>Multimap,
+        _query_params: <span class="kw-2">&amp;</span>Multimap,
+        _bucket: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>BucketName&gt;,
+        _object: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>ObjectKey&gt;,
+        resp: <span class="kw-2">&amp;</span><span class="prelude-ty">Result</span>&lt;Response, reqwest::Error&gt;,
+        extensions: <span class="kw-2">&amp;mut </span>Extensions,
+    ) {
+        <span class="kw">let </span>duration = extensions.get::&lt;Instant&gt;()
+            .map(|start| start.elapsed())
+            .unwrap_or_default();
+
+        <span class="kw">match </span>resp {
+            <span class="prelude-val">Ok</span>(r) =&gt; <span class="macro">println!</span>(<span class="string">"[RESP] {} in {:?}"</span>, r.status(), duration),
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">println!</span>(<span class="string">"[ERR] {} in {:?}"</span>, e, duration),
+        }
+    }
+}
+</code></pre></div>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.name" class="method"><a class="src rightside" href="../../../../src/minio/s3/client/hooks.rs.html#171">Source</a><h4 class="code-header">fn <a href="#tymethod.name" class="fn">name</a>(&amp;self) -&gt; &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.str.html">str</a></h4></section></summary><div class="docblock"><p>Hook name for logging.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.before_signing_mut" class="method"><a class="src rightside" href="../../../../src/minio/s3/client/hooks.rs.html#174-187">Source</a><h4 class="code-header">fn <a href="#method.before_signing_mut" class="fn">before_signing_mut</a>&lt;'life0, 'life1, 'life2, 'life3, 'life4, 'life5, 'life6, 'life7, 'life8, 'life9, 'async_trait&gt;(
+    &amp;'life0 self,
+    _method: &amp;'life1 <a class="struct" href="../struct.Method.html" title="struct minio::s3::client::Method">Method</a>,
+    _url: &amp;'life2 mut <a class="struct" href="../../http/struct.Url.html" title="struct minio::s3::http::Url">Url</a>,
+    _region: &amp;'life3 <a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.str.html">str</a>,
+    _headers: &amp;'life4 mut <a class="type" href="../../multimap_ext/type.Multimap.html" title="type minio::s3::multimap_ext::Multimap">Multimap</a>,
+    _query_params: &amp;'life5 <a class="type" href="../../multimap_ext/type.Multimap.html" title="type minio::s3::multimap_ext::Multimap">Multimap</a>,
+    _bucket: <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life6 <a class="struct" href="../../types/typed_parameters/struct.BucketName.html" title="struct minio::s3::types::typed_parameters::BucketName">BucketName</a>&gt;,
+    _object: <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life7 <a class="struct" href="../../types/typed_parameters/struct.ObjectKey.html" title="struct minio::s3::types::typed_parameters::ObjectKey">ObjectKey</a>&gt;,
+    _body: <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life8 <a class="struct" href="../../segmented_bytes/struct.SegmentedBytes.html" title="struct minio::s3::segmented_bytes::SegmentedBytes">SegmentedBytes</a>&gt;,
+    _extensions: &amp;'life9 mut <a class="struct" href="struct.Extensions.html" title="struct minio::s3::client::hooks::Extensions">Extensions</a>,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.90.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.90.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.unit.html">()</a>, <a class="enum" href="../../error/enum.Error.html" title="enum minio::s3::error::Error">Error</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,
+    'life1: 'async_trait,
+    'life2: 'async_trait,
+    'life3: 'async_trait,
+    'life4: 'async_trait,
+    'life5: 'async_trait,
+    'life6: 'async_trait,
+    'life7: 'async_trait,
+    'life8: 'async_trait,
+    'life9: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Called before signing. Modify URL/headers here. Return error to abort.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.after_execute" class="method"><a class="src rightside" href="../../../../src/minio/s3/client/hooks.rs.html#190-202">Source</a><h4 class="code-header">fn <a href="#method.after_execute" class="fn">after_execute</a>&lt;'life0, 'life1, 'life2, 'life3, 'life4, 'life5, 'life6, 'life7, 'life8, 'life9, 'async_trait&gt;(
+    &amp;'life0 self,
+    _method: &amp;'life1 <a class="struct" href="../struct.Method.html" title="struct minio::s3::client::Method">Method</a>,
+    _url: &amp;'life2 <a class="struct" href="../../http/struct.Url.html" title="struct minio::s3::http::Url">Url</a>,
+    _region: &amp;'life3 <a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.str.html">str</a>,
+    _headers: &amp;'life4 <a class="type" href="../../multimap_ext/type.Multimap.html" title="type minio::s3::multimap_ext::Multimap">Multimap</a>,
+    _query_params: &amp;'life5 <a class="type" href="../../multimap_ext/type.Multimap.html" title="type minio::s3::multimap_ext::Multimap">Multimap</a>,
+    _bucket: <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life6 <a class="struct" href="../../types/typed_parameters/struct.BucketName.html" title="struct minio::s3::types::typed_parameters::BucketName">BucketName</a>&gt;,
+    _object: <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life7 <a class="struct" href="../../types/typed_parameters/struct.ObjectKey.html" title="struct minio::s3::types::typed_parameters::ObjectKey">ObjectKey</a>&gt;,
+    _resp: &amp;'life8 <a class="enum" href="https://doc.rust-lang.org/1.90.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../struct.Response.html" title="struct minio::s3::client::Response">Response</a>, Error&gt;,
+    _extensions: &amp;'life9 mut <a class="struct" href="struct.Extensions.html" title="struct minio::s3::client::hooks::Extensions">Extensions</a>,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.90.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.90.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.unit.html">()</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.90.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,
+    'life1: 'async_trait,
+    'life2: 'async_trait,
+    'life3: 'async_trait,
+    'life4: 'async_trait,
+    'life5: 'async_trait,
+    'life6: 'async_trait,
+    'life7: 'async_trait,
+    'life8: 'async_trait,
+    'life9: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Called after execution. For logging/telemetry. Errors don’t fail the request.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../../../trait.impl/minio/s3/client/hooks/trait.RequestHooks.js" async></script></section></div></main></body></html>

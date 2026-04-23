@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["calculate_encoded_length","calculate_signed_encoded_length","default_chunk_size"],"struct":["AwsChunkedEncoder","RechunkingStream","SignedAwsChunkedEncoder"]};

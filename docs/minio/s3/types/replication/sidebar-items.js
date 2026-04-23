@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["access_control_translation","destination","encryption_config","metrics","object_lock_config","replication_config","replication_rule","replication_time","source_selection_criteria"]};

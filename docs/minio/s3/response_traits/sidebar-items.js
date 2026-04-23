@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["HasBucket","HasChecksumHeaders","HasEtagFromBody","HasEtagFromHeaders","HasIsDeleteMarker","HasObject","HasObjectSize","HasRegion","HasS3Fields","HasTagging","HasVersion"]};

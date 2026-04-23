@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["Error",""]],"struct":[["ErrorResponse",""]]};
+window.SIDEBAR_ITEMS = {"enum":["Error","IoError","NetworkError","S3ServerError","ValidationErr"]};

@@ -1,0 +1,62 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A proc macro attribute for writing MinIO tests."><title>test in minio_macros - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="minio_macros" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0 (1159e78c4 2025-09-14)" data-channel="1.90.0" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../static.files/storage-68b7e25d.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../minio_macros/index.html">minio_<wbr>macros</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">minio_macros</a></div><h1>Attribute Macro <span class="attr">test</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/minio_macros/lib.rs.html#88-119">Source</a> </span></div><pre class="rust item-decl"><code>#[test]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A proc macro attribute for writing MinIO tests.</p>
+<p>This macro extends the <code>#[tokio::test]</code> attribute to provide additional functionality for
+testing MinIO operations. The macro takes care of setting up and tearing down the test
+environment, it automatically creates a bucket for the test if needed and cleans it up after
+the test is done.</p>
+<p>By default, it requires the test function to have two parameters:</p>
+<ul>
+<li><code>ctx: TestContext</code> - The test context which will give you access to a minio-client.</li>
+<li><code>bucket_name: BucketName</code> - The typed bucket name to be used in the test.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>minio_common::test_context::TestContext;
+<span class="kw">use </span>minio::s3::types::BucketName;
+<span class="attr">#[minio_macros::test]
+</span><span class="kw">async fn </span>my_test(ctx: TestContext, bucket_name: BucketName) {
+   <span class="comment">// Your test code here
+</span>}</code></pre></div>
+<p>If the <code>no_bucket</code> argument is provided, the test function must have only one parameter:</p>
+<ul>
+<li><code>ctx: TestContext</code> - The test context which will give you access to a minio-client.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>minio_common::test_context::TestContext;
+<span class="attr">#[minio_macros::test(no_bucket)]
+</span><span class="kw">async fn </span>my_test(ctx: TestContext) {
+   <span class="comment">// Your test code here
+</span>}</code></pre></div>
+<p>The macro also supports additional arguments:</p>
+<ul>
+<li><code>flavor</code>: Specifies the flavor of the Tokio test (e.g., “multi_thread”).</li>
+<li><code>worker_threads</code>: Specifies the number of worker threads for the Tokio test.</li>
+<li><code>bucket_name</code>: Specifies the name of the bucket to be used in the test. If not provided, a random bucket name will be generated.</li>
+<li><code>skip_if_express</code>: If set, the test will be skipped if the MinIO server is running in Express mode.</li>
+<li><code>object_lock</code>: If set, the test bucket is created with <code>.object_lock(true)</code></li>
+<li><code>no_cleanup</code>: If set, the test bucket is not deleted after the test is run.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>minio_common::test_context::TestContext;
+<span class="attr">#[minio_macros::test(skip_if_express)]
+</span><span class="kw">async fn </span>my_test(ctx: TestContext) {
+   <span class="comment">// this test will not run if the MinIO server is running in Express mode
+</span>}</code></pre></div>
+<ul>
+<li><code>skip_if_not_express</code>: If set, the test will be skipped if the MinIO server is NOT running in Express mode.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>minio_common::test_context::TestContext;
+<span class="attr">#[minio_macros::test(skip_if_not_express)]
+</span><span class="kw">async fn </span>my_test(ctx: TestContext) {
+   <span class="comment">// this test will not run if the MinIO server is NOT running in Express mode
+</span>}</code></pre></div>
+<ul>
+<li><code>ignore</code>: Mark the test as ignored (skipped by default). Run with <code>cargo test -- --ignored</code> to include.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>minio_common::test_context::TestContext;
+<span class="kw">use </span>minio::s3::types::BucketName;
+<span class="attr">#[minio_macros::test(ignore = <span class="string">"Requires newer server version"</span>)]
+</span><span class="kw">async fn </span>my_test(ctx: TestContext, bucket_name: BucketName) {
+   <span class="comment">// this test is skipped by default
+</span>}</code></pre></div>
+</div></details></section></div></main></body></html>
