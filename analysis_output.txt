@@ -1,0 +1,32 @@
+# Response File Analysis
+
+Total files analyzed: 144
+
+## Already Refactored: 41 files
+
+## Has Fields: 32 files
+   **Needs refactoring**
+   - get_license_info.rs: GetLicenseInfoResponse
+      • license_info: LicenseInfo
+   - kms_apis.rs: KmsApisResponse
+      • apis: Vec<KMSAPI>
+   - kms_metrics.rs: KmsMetricsResponse
+      • metrics: KMSMetrics
+   - kms_status.rs: KmsStatusResponse
+      • status: KmsStatusInfo
+   - kms_version.rs: KmsVersionResponse
+      • version: KMSVersion
+   ... and 27 more
+
+## No Struct: 23 files
+
+## Stream Response: 3 files
+
+## Type Alias: 45 files
+
+
+**Summary:**
+- Already refactored: 41
+- Type aliases (skip): 45
+- Stream responses (skip): 3
+- **Need refactoring: 32**

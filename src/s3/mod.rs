@@ -22,6 +22,7 @@ pub mod client;
 pub mod creds;
 pub mod error;
 pub mod http;
+pub mod madmin_error_enhanced;
 pub mod multimap_ext;
 mod object_content;
 pub mod response;
