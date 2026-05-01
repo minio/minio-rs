@@ -29,6 +29,7 @@ pub type Multimap = multimap::MultiMap<String, String>;
 fn collapse_spaces(s: &str) -> Cow<'_, str> {
     let trimmed = s.trim();
     if !trimmed.contains("  ") {
+        // TODO what about other whitespace characters?
         return Cow::Borrowed(trimmed);
     }
     let mut result = String::with_capacity(trimmed.len());

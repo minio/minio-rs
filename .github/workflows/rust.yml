@@ -23,12 +23,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
       - name: clippy
         run: cargo clippy --all-targets --all-features --workspace -- -D warnings
   test-multi-thread:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
       - name: Run tests
         run: |
           ./tests/start-server.sh
@@ -38,11 +42,14 @@ jobs:
           export ENABLE_HTTPS=1
           export SERVER_REGION=us-east-1
           export MINIO_SSL_CERT_FILE=./tests/public.crt
-          MINIO_TEST_TOKIO_RUNTIME_FLAVOR="multi_thread" cargo test -- --nocapture
+          # Exclude s3tables tests - they have their own workflow (s3tables-integration.yml)
+          MINIO_TEST_TOKIO_RUNTIME_FLAVOR="multi_thread" cargo test -- --nocapture --skip s3tables
   test-current-thread:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
       - name: Run tests
         run: |
           ./tests/start-server.sh
@@ -52,13 +59,16 @@ jobs:
           export ENABLE_HTTPS=1
           export SERVER_REGION=us-east-1
           export MINIO_SSL_CERT_FILE=./tests/public.crt
-          MINIO_TEST_TOKIO_RUNTIME_FLAVOR="current_thread" cargo test -- --nocapture
+          # Exclude s3tables tests - they have their own workflow (s3tables-integration.yml)
+          MINIO_TEST_TOKIO_RUNTIME_FLAVOR="current_thread" cargo test -- --nocapture --skip s3tables
 
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
     - uses: actions/checkout@v4
+    - name: Install system dependencies
+      run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
     - name: Build
       run: |
         cargo --version
