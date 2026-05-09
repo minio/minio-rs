@@ -229,7 +229,7 @@ impl PostPolicy {
         let v = PostPolicy::trim_dollar(element);
         if v.eq_ignore_ascii_case("success_action_status")
             || v.eq_ignore_ascii_case("content-length-range")
-            || (v.starts_with("x-amz-") && v.starts_with("x-amz-meta-"))
+            || (v.starts_with("x-amz-") && !v.starts_with("x-amz-meta-"))
         {
             return Err(ValidationErr::PostPolicyError(format!(
                 "{element} is unsupported for starts-with condition",
