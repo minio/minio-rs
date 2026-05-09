@@ -48,7 +48,9 @@ pub use basic_types::{
 };
 pub use s3_request::S3Request;
 pub use traits::{FromS3Response, S3Api, ToS3Request, ToStream};
-pub use typed_parameters::{BucketName, ContentType, ETag, ObjectKey, Region, UploadId, VersionId};
+pub use typed_parameters::{
+    BucketName, ContentType, ETag, MaxKeys, ObjectKey, Region, UploadId, VersionId,
+};
 
 // Re-export serialization types
 pub use serialization::{
