@@ -23,6 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install RDMA system deps (required by --all-features)
+        run: |
+          sudo apt-get -qy update
+          sudo apt-get -qy install libibverbs-dev librdmacm-dev libnuma-dev
       - name: clippy
         run: cargo clippy --all-targets --all-features --workspace -- -D warnings
   test-multi-thread:

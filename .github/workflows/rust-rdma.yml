@@ -1,0 +1,50 @@
+name: MinIO Rust Library (RDMA)
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { name: "Ubuntu_RDMA_amd64", os: ubuntu-latest, arch: "amd64" }
+          - { name: "Ubuntu_RDMA_arm64", os: ubuntu-24.04-arm, arch: "arm64" }
+
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get -qy update
+          sudo apt-get -qy install libibverbs-dev librdmacm-dev libnuma-dev libssl-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Build
+        run: cargo build --all-targets --features rdma
+
+      - name: Clippy
+        run: cargo clippy --all-targets --features rdma -- -D warnings
+
+      - name: Test
+        run: cargo test --lib --features rdma
