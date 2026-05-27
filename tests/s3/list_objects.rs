@@ -177,3 +177,132 @@ async fn list_object_2(ctx: TestContext, bucket: BucketName) {
     let object = ObjectKey::try_from("a b+c").unwrap();
     test_list_one_object(&ctx, bucket, object).await;
 }
+
+/// Test that max_keys limits the number of objects per API response page.
+///
+/// This test verifies that when max_keys is set to a small value (e.g., 5),
+/// the API returns at most that many objects per response, and pagination
+/// continues through subsequent pages.
+#[minio_macros::test]
+async fn list_objects_with_max_keys(ctx: TestContext, bucket: BucketName) {
+    const TOTAL_OBJECTS: usize = 15;
+    const MAX_KEYS: u16 = 5;
+
+    for i in 0..TOTAL_OBJECTS {
+        let object = ObjectKey::try_from(format!("max-keys-test-{:03}", i)).unwrap();
+        let content = format!("content-{}", i).into_bytes();
+        ctx.client
+            .put_object_content(&bucket, &object, content)
+            .unwrap()
+            .build()
+            .send()
+            .await
+            .unwrap();
+    }
+
+    let mut stream = ctx
+        .client
+        .list_objects(&bucket)
+        .unwrap()
+        .prefix(Some("max-keys-test-".to_string()))
+        .max_keys(MAX_KEYS)
+        .build()
+        .to_stream()
+        .await;
+
+    let mut page_count = 0;
+    let mut total_received = 0;
+    let mut max_per_page = 0;
+
+    while let Some(result) = stream.next().await {
+        let resp = result.unwrap();
+        let page_size = resp.contents.len();
+        page_count += 1;
+        total_received += page_size;
+
+        assert!(
+            page_size <= MAX_KEYS as usize,
+            "Page {}: received {} objects, but max_keys={} (should receive at most {})",
+            page_count,
+            page_size,
+            MAX_KEYS,
+            MAX_KEYS
+        );
+
+        max_per_page = max_per_page.max(page_size);
+    }
+
+    assert_eq!(
+        total_received, TOTAL_OBJECTS,
+        "Expected to receive {} total objects across all pages, but got {}",
+        TOTAL_OBJECTS, total_received
+    );
+
+    assert!(
+        page_count > 1,
+        "With {} objects and max_keys={}, should have multiple pages, but got {} page(s)",
+        TOTAL_OBJECTS,
+        MAX_KEYS,
+        page_count
+    );
+
+    assert!(
+        max_per_page <= MAX_KEYS as usize,
+        "max_per_page should never exceed MAX_KEYS limit"
+    );
+}
+
+/// Test that max_keys=1 works correctly (edge case).
+#[minio_macros::test]
+async fn list_objects_with_max_keys_one(ctx: TestContext, bucket: BucketName) {
+    const TOTAL_OBJECTS: usize = 5;
+
+    for i in 0..TOTAL_OBJECTS {
+        let object = ObjectKey::try_from(format!("max-keys-one-{:03}", i)).unwrap();
+        ctx.client
+            .put_object_content(&bucket, &object, "x")
+            .unwrap()
+            .build()
+            .send()
+            .await
+            .unwrap();
+    }
+
+    let mut stream = ctx
+        .client
+        .list_objects(&bucket)
+        .unwrap()
+        .prefix(Some("max-keys-one-".to_string()))
+        .max_keys(1)
+        .build()
+        .to_stream()
+        .await;
+
+    let mut page_count = 0;
+    let mut total_received = 0;
+
+    while let Some(result) = stream.next().await {
+        let resp = result.unwrap();
+        page_count += 1;
+        total_received += resp.contents.len();
+
+        assert!(
+            resp.contents.len() <= 1,
+            "With max_keys=1, each page should have at most 1 object"
+        );
+    }
+
+    assert_eq!(
+        total_received, TOTAL_OBJECTS,
+        "Expected to receive all {} objects",
+        TOTAL_OBJECTS
+    );
+
+    assert!(
+        page_count >= TOTAL_OBJECTS,
+        "With max_keys=1 and {} objects, should have at least {} pages, but got {}",
+        TOTAL_OBJECTS,
+        TOTAL_OBJECTS,
+        page_count
+    );
+}

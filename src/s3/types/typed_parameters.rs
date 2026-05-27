@@ -907,6 +907,143 @@ impl From<&ContentType> for ContentType {
     }
 }
 
+/// A validated maximum keys parameter for ListObjects API calls.
+///
+/// Represents the maximum number of objects to return per API response page.
+/// MinIO EOS enforces a hard limit of 1000 objects per response.
+///
+/// Valid range: 1-1000 (inclusive)
+///
+/// # Example
+///
+/// ```
+/// use minio::s3::types::MaxKeys;
+///
+/// // Valid values
+/// let max = MaxKeys::new(10).unwrap();
+/// assert_eq!(max.as_u16(), 10);
+///
+/// let max = MaxKeys::new(1000).unwrap();  // at limit
+///
+/// // Invalid values are rejected
+/// assert!(MaxKeys::new(0).is_err());      // too low
+/// assert!(MaxKeys::new(2000).is_err());   // exceeds limit
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct MaxKeys(u16);
+
+impl MaxKeys {
+    /// Minimum valid max_keys value (MinIO EOS enforces at least 1 object per response).
+    pub const MIN: u16 = 1;
+
+    /// Maximum valid max_keys value (MinIO EOS hard limit: 1000 objects per response).
+    pub const MAX: u16 = 1000;
+
+    /// Creates a new MaxKeys with validation.
+    ///
+    /// Valid range: 1-1000 (inclusive). Values outside this range are rejected.
+    /// MinIO EOS enforces a hard limit of 1000 objects per response.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationErr::InvalidMaxKeys`] if the value is outside the 1-1000 range.
+    pub fn new(value: u16) -> Result<Self, ValidationErr> {
+        if !(Self::MIN..=Self::MAX).contains(&value) {
+            return Err(ValidationErr::InvalidMaxKeys(format!(
+                "must be between {} and {}, got {}",
+                Self::MIN,
+                Self::MAX,
+                value
+            )));
+        }
+        Ok(Self(value))
+    }
+
+    /// Returns the maximum keys value as u16.
+    pub fn as_u16(&self) -> u16 {
+        self.0
+    }
+
+    /// Consumes self and returns the value as u16.
+    pub fn into_inner(self) -> u16 {
+        self.0
+    }
+}
+
+impl Default for MaxKeys {
+    /// Returns MaxKeys with the default value equal to MAX (MinIO EOS hard limit).
+    fn default() -> Self {
+        Self(Self::MAX)
+    }
+}
+
+impl AsRef<u16> for MaxKeys {
+    fn as_ref(&self) -> &u16 {
+        &self.0
+    }
+}
+
+impl fmt::Display for MaxKeys {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::str::FromStr for MaxKeys {
+    type Err = ValidationErr;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let value = s
+            .parse::<u16>()
+            .map_err(|_| ValidationErr::InvalidMaxKeys(format!("not a valid number: {}", s)))?;
+        Self::new(value)
+    }
+}
+
+impl TryFrom<u16> for MaxKeys {
+    type Error = ValidationErr;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<String> for MaxKeys {
+    type Error = ValidationErr;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.as_str().parse()
+    }
+}
+
+impl TryFrom<&str> for MaxKeys {
+    type Error = ValidationErr;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl TryFrom<&String> for MaxKeys {
+    type Error = ValidationErr;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        value.as_str().parse()
+    }
+}
+
+impl From<&MaxKeys> for MaxKeys {
+    fn from(value: &MaxKeys) -> Self {
+        *value
+    }
+}
+
+impl From<MaxKeys> for Option<u16> {
+    fn from(value: MaxKeys) -> Self {
+        Some(value.as_u16())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1052,5 +1189,129 @@ mod tests {
         let bucket = BucketName::new("my-bucket").unwrap();
         let s: &str = bucket.as_ref();
         assert_eq!(s, "my-bucket");
+    }
+
+    #[test]
+    fn test_max_keys_valid_min() {
+        let mk = MaxKeys::new(1).unwrap();
+        assert_eq!(mk.as_u16(), 1);
+    }
+
+    #[test]
+    fn test_max_keys_valid_max() {
+        let mk = MaxKeys::new(1000).unwrap();
+        assert_eq!(mk.as_u16(), 1000);
+    }
+
+    #[test]
+    fn test_max_keys_valid_mid() {
+        let mk = MaxKeys::new(500).unwrap();
+        assert_eq!(mk.as_u16(), 500);
+    }
+
+    #[test]
+    fn test_max_keys_invalid_zero() {
+        assert!(MaxKeys::new(0).is_err());
+    }
+
+    #[test]
+    fn test_max_keys_invalid_over_max() {
+        assert!(MaxKeys::new(1001).is_err());
+    }
+
+    #[test]
+    fn test_max_keys_from_str_valid() {
+        let mk: MaxKeys = "500".parse().unwrap();
+        assert_eq!(mk.as_u16(), 500);
+    }
+
+    #[test]
+    fn test_max_keys_from_str_min() {
+        let mk: MaxKeys = "1".parse().unwrap();
+        assert_eq!(mk.as_u16(), 1);
+    }
+
+    #[test]
+    fn test_max_keys_from_str_max() {
+        let mk: MaxKeys = "1000".parse().unwrap();
+        assert_eq!(mk.as_u16(), 1000);
+    }
+
+    #[test]
+    fn test_max_keys_from_str_invalid_zero() {
+        assert!("0".parse::<MaxKeys>().is_err());
+    }
+
+    #[test]
+    fn test_max_keys_from_str_invalid_over_max() {
+        assert!("1001".parse::<MaxKeys>().is_err());
+    }
+
+    #[test]
+    fn test_max_keys_from_str_invalid_non_numeric() {
+        assert!("abc".parse::<MaxKeys>().is_err());
+    }
+
+    #[test]
+    fn test_max_keys_try_from_valid() {
+        let mk: MaxKeys = 500u16.try_into().unwrap();
+        assert_eq!(mk.as_u16(), 500);
+    }
+
+    #[test]
+    fn test_max_keys_try_from_invalid() {
+        let result: Result<MaxKeys, _> = 0u16.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_max_keys_default() {
+        let mk = MaxKeys::default();
+        assert_eq!(mk.as_u16(), 1000);
+    }
+
+    #[test]
+    fn test_max_keys_display() {
+        let mk = MaxKeys::new(500).unwrap();
+        assert_eq!(format!("{}", mk), "500");
+    }
+
+    #[test]
+    fn test_max_keys_into_inner() {
+        let mk = MaxKeys::new(750).unwrap();
+        let value = mk.into_inner();
+        assert_eq!(value, 750);
+    }
+
+    #[test]
+    fn test_max_keys_as_ref() {
+        let mk = MaxKeys::new(600).unwrap();
+        let value: &u16 = mk.as_ref();
+        assert_eq!(*value, 600);
+    }
+
+    #[test]
+    fn test_max_keys_value_from_option_u16_some() {
+        use crate::s3::builders::MaxKeysValue;
+
+        let mkv: MaxKeysValue = Some(500u16).into();
+        assert!(mkv.validate().unwrap().is_some());
+        assert_eq!(mkv.validate().unwrap().unwrap().as_u16(), 500);
+    }
+
+    #[test]
+    fn test_max_keys_value_from_option_u16_none() {
+        use crate::s3::builders::MaxKeysValue;
+
+        let mkv: MaxKeysValue = None::<u16>.into();
+        assert!(mkv.validate().unwrap().is_none());
+    }
+
+    #[test]
+    fn test_max_keys_value_from_option_u16_invalid() {
+        use crate::s3::builders::MaxKeysValue;
+
+        let mkv: MaxKeysValue = Some(0u16).into();
+        assert!(mkv.validate().is_err());
     }
 }

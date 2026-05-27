@@ -12,6 +12,73 @@
 
 //! Argument builders for ListObject APIs.
 
+use crate::s3::types::MaxKeys;
+
+/// Default maximum keys per ListObjects API response.
+const DEFAULT_MAX_KEYS: u16 = MaxKeys::MAX;
+
+/// Helper enum to accept flexible max_keys arguments (u16, MaxKeys, or Option<MaxKeys>).
+/// This enables ergonomic API calls like `.max_keys(1000)` instead of `.max_keys(Some(MaxKeys::new(1000)?))`.
+///
+/// Validation errors are deferred to request building time (to_s3request) so they can be
+/// properly propagated as ValidationErr rather than panicking.
+///
+/// # Implementation Detail
+///
+/// This type is part of the builder's internal machinery and is exposed only because
+/// `TypedBuilder` requires public field types. Users should not construct this type directly;
+/// instead, use the `.max_keys()` builder method which accepts u16, MaxKeys, or Option<MaxKeys>.
+#[derive(Clone, Debug)]
+pub enum MaxKeysValue {
+    /// Validated MaxKeys value
+    Valid(Option<MaxKeys>),
+    /// Raw u16 value pending validation
+    Pending(u16),
+}
+
+impl MaxKeysValue {
+    /// Validates and extracts the max_keys value, returning errors instead of panicking.
+    pub fn validate(&self) -> Result<Option<MaxKeys>, ValidationErr> {
+        match self {
+            MaxKeysValue::Valid(mk) => Ok(*mk),
+            MaxKeysValue::Pending(v) => MaxKeys::new(*v).map(Some),
+        }
+    }
+}
+
+impl Default for MaxKeysValue {
+    fn default() -> Self {
+        MaxKeysValue::Valid(None)
+    }
+}
+
+impl From<u16> for MaxKeysValue {
+    fn from(value: u16) -> Self {
+        MaxKeysValue::Pending(value)
+    }
+}
+
+impl From<Option<u16>> for MaxKeysValue {
+    fn from(value: Option<u16>) -> Self {
+        match value {
+            Some(v) => MaxKeysValue::Pending(v),
+            None => MaxKeysValue::Valid(None),
+        }
+    }
+}
+
+impl From<MaxKeys> for MaxKeysValue {
+    fn from(value: MaxKeys) -> Self {
+        MaxKeysValue::Valid(Some(value))
+    }
+}
+
+impl From<Option<MaxKeys>> for MaxKeysValue {
+    fn from(value: Option<MaxKeys>) -> Self {
+        MaxKeysValue::Valid(value)
+    }
+}
+
 use crate::s3::client::MinioClient;
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
@@ -30,11 +97,12 @@ fn add_common_list_objects_query_params(
     query_params: &mut Multimap,
     delimiter: Option<String>,
     disable_url_encoding: bool,
-    max_keys: Option<u16>,
+    max_keys: Option<MaxKeys>,
     prefix: Option<String>,
 ) {
     query_params.add("delimiter", delimiter.unwrap_or("".into()));
-    query_params.add("max-keys", max_keys.unwrap_or(1000).to_string());
+    let max_keys_value = max_keys.map(|k| k.as_u16()).unwrap_or(DEFAULT_MAX_KEYS);
+    query_params.add("max-keys", max_keys_value.to_string());
     query_params.add("prefix", prefix.unwrap_or("".into()));
     if !disable_url_encoding {
         query_params.add("encoding-type", "url");
@@ -67,7 +135,7 @@ struct ListObjectsV1 {
     bucket: BucketName,
     delimiter: Option<String>,
     disable_url_encoding: bool,
-    max_keys: Option<u16>,
+    max_keys: MaxKeysValue,
     prefix: Option<String>,
     marker: Option<String>,
 }
@@ -113,6 +181,7 @@ impl S3Api for ListObjectsV1 {
 impl ToS3Request for ListObjectsV1 {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
+        let max_keys = self.max_keys.validate()?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         {
@@ -120,7 +189,7 @@ impl ToS3Request for ListObjectsV1 {
                 &mut query_params,
                 self.delimiter,
                 self.disable_url_encoding,
-                self.max_keys,
+                max_keys,
                 self.prefix,
             );
             if let Some(v) = self.marker {
@@ -172,7 +241,7 @@ struct ListObjectsV2 {
     bucket: BucketName,
     delimiter: Option<String>,
     disable_url_encoding: bool,
-    max_keys: Option<u16>,
+    max_keys: MaxKeysValue,
     prefix: Option<String>,
     start_after: Option<String>,
     continuation_token: Option<String>,
@@ -221,6 +290,7 @@ impl S3Api for ListObjectsV2 {
 impl ToS3Request for ListObjectsV2 {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
+        let max_keys = self.max_keys.validate()?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         {
@@ -229,7 +299,7 @@ impl ToS3Request for ListObjectsV2 {
                 &mut query_params,
                 self.delimiter,
                 self.disable_url_encoding,
-                self.max_keys,
+                max_keys,
                 self.prefix,
             );
             if let Some(v) = self.continuation_token {
@@ -293,7 +363,7 @@ struct ListObjectVersions {
     bucket: BucketName,
     delimiter: Option<String>,
     disable_url_encoding: bool,
-    max_keys: Option<u16>,
+    max_keys: MaxKeysValue,
     prefix: Option<String>,
     key_marker: Option<String>,
     version_id_marker: Option<String>,
@@ -345,6 +415,7 @@ impl S3Api for ListObjectVersions {
 impl ToS3Request for ListObjectVersions {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_bucket_name(&self.bucket, true)?;
+        let max_keys = self.max_keys.validate()?;
 
         let mut query_params: Multimap = insert(self.extra_query_params, "versions");
         {
@@ -352,7 +423,7 @@ impl ToS3Request for ListObjectVersions {
                 &mut query_params,
                 self.delimiter,
                 self.disable_url_encoding,
-                self.max_keys,
+                max_keys,
                 self.prefix,
             );
             if let Some(v) = self.key_marker {
@@ -430,7 +501,7 @@ pub struct ListObjects {
     #[builder(default)]
     disable_url_encoding: bool,
     #[builder(default, setter(into))]
-    max_keys: Option<u16>,
+    max_keys: MaxKeysValue,
     #[builder(default, setter(into))]
     prefix: Option<String>,
 
@@ -485,6 +556,22 @@ pub struct ListObjects {
     include_versions: bool,
 }
 
+impl ListObjects {
+    /// Returns the configured max_keys value.
+    ///
+    /// Returns the explicitly set max_keys, or the effective default (1000).
+    /// The returned value represents the maximum number of objects returned **per API response page**.
+    ///
+    /// When iterating through the stream returned by `.to_stream().await`, you may receive
+    /// multiple pages of results. Each page will contain at most this many objects.
+    ///
+    /// Returns an error if the max_keys value was invalid (e.g., out of valid range).
+    pub fn get_max_keys(&self) -> Result<u16, ValidationErr> {
+        let max_keys = self.max_keys.validate()?;
+        Ok(max_keys.map(|k| k.as_u16()).unwrap_or(DEFAULT_MAX_KEYS))
+    }
+}
+
 /// Builder type alias for [`ListObjects`].
 ///
 /// Constructed via [`ListObjects::builder()`](ListObjects::builder) and used to build a [`ListObjects`] instance.
@@ -528,3 +615,129 @@ impl ToStream for ListObjects {
     }
 }
 // endregion: list-objects
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::s3::multimap_ext::MultimapExt;
+
+    #[test]
+    fn test_max_keys_in_query_params_v1() {
+        let mut query_params: Multimap = Multimap::new();
+        add_common_list_objects_query_params(
+            &mut query_params,
+            None,
+            false,
+            Some(MaxKeys::new(10).unwrap()),
+            None,
+        );
+
+        let query_string = query_params.to_query_string();
+        assert!(
+            query_string.contains("max-keys=10"),
+            "max-keys=10 should be in query string: {query_string}"
+        );
+    }
+
+    #[test]
+    fn test_max_keys_default_in_query_params() {
+        let mut query_params: Multimap = Multimap::new();
+        add_common_list_objects_query_params(&mut query_params, None, false, None, None);
+
+        let query_string = query_params.to_query_string();
+        assert!(
+            query_string.contains(&format!("max-keys={}", DEFAULT_MAX_KEYS)),
+            "max-keys should default to {}: {}",
+            DEFAULT_MAX_KEYS,
+            query_string
+        );
+    }
+
+    #[test]
+    fn test_max_keys_at_limit() {
+        let mut query_params: Multimap = Multimap::new();
+        add_common_list_objects_query_params(
+            &mut query_params,
+            None,
+            false,
+            Some(MaxKeys::new(1000).unwrap()),
+            None,
+        );
+
+        let query_string = query_params.to_query_string();
+        assert!(
+            query_string.contains("max-keys=1000"),
+            "max-keys should support max valid value (1000): {query_string}"
+        );
+    }
+
+    #[test]
+    fn test_max_keys_with_other_params() {
+        let mut query_params: Multimap = Multimap::new();
+        add_common_list_objects_query_params(
+            &mut query_params,
+            Some("/".to_string()),
+            false,
+            Some(MaxKeys::new(25).unwrap()),
+            Some("prefix/".to_string()),
+        );
+
+        let query_string = query_params.to_query_string();
+        assert!(
+            query_string.contains("max-keys=25"),
+            "max-keys=25 should be present"
+        );
+        assert!(
+            query_string.contains("delimiter=%2F"),
+            "delimiter should be URL encoded"
+        );
+        assert!(
+            query_string.contains("prefix=prefix%2F"),
+            "prefix should be URL encoded"
+        );
+    }
+
+    #[test]
+    fn test_max_keys_builder_with_u16() {
+        use crate::s3::creds::StaticProvider;
+        use crate::s3::http::BaseUrl;
+
+        let provider = StaticProvider::new("test", "test", None);
+        let client = MinioClient::new(
+            "http://localhost:9000".parse::<BaseUrl>().unwrap(),
+            Some(provider),
+            None,
+            None,
+        )
+        .unwrap();
+
+        // Ergonomic API: accept u16 directly; bucket requires validation so explicit construction
+        let lo = ListObjects::builder()
+            .client(client)
+            .bucket(BucketName::new("test").unwrap())
+            .max_keys(500)
+            .build();
+        assert_eq!(
+            lo.get_max_keys().unwrap(),
+            500,
+            "max_keys should preserve the provided value"
+        );
+    }
+
+    #[test]
+    fn test_max_keys_invalid_returns_error_not_panic() {
+        // Invalid value (0 is below minimum)
+        let invalid_value = MaxKeysValue::from(0u16);
+        let result = invalid_value.validate();
+
+        // Should return Err, not panic
+        assert!(
+            result.is_err(),
+            "Invalid max_keys value should return error, not panic"
+        );
+        assert!(
+            result.unwrap_err().to_string().contains("max_keys"),
+            "Error message should mention max_keys constraint"
+        );
+    }
+}

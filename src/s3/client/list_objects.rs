@@ -25,6 +25,17 @@ impl MinioClient {
     /// pagination and returns a stream of results. Each result corresponds to
     /// the response of a single listing API call.
     ///
+    /// **Important Limits:**
+    /// - The `max_keys` parameter limits the number of objects returned **per API response page**
+    /// - S3/MinIO enforces a hard maximum of 1000 objects per response page
+    /// - The SDK validates `max_keys`; values outside the range 1..=1000 are rejected with a [`ValidationErr`](crate::s3::error::ValidationErr)
+    /// - There is no way to request unlimited results in a single response page
+    /// - Default value (when not specified): 1000
+    ///
+    /// **Pagination:** When you iterate through the stream, you will automatically receive
+    /// subsequent pages if available. If you want to limit the total number of results,
+    /// collect them and break early.
+    ///
     /// To execute the request, call [`ListObjects::send()`](crate::s3::types::S3Api::send),
     /// which returns a [`Result`] containing a [`ListObjectsResponse`](crate::s3::response::ListObjectsResponse).
     ///
