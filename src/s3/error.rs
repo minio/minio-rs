@@ -63,6 +63,9 @@ pub enum ValidationErr {
     #[error("Invalid object name: {0}")]
     InvalidObjectName(String),
 
+    #[error("Invalid max_keys: {0}")]
+    InvalidMaxKeys(String),
+
     #[error("Invalid upload ID: {0}")]
     InvalidUploadId(String),
 
