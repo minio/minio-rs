@@ -22,8 +22,8 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - { name: "Ubuntu_RDMA_amd64", os: ubuntu-latest, arch: "amd64" }
-          - { name: "Ubuntu_RDMA_arm64", os: ubuntu-24.04-arm, arch: "arm64" }
+          - { name: "Ubuntu_RDMA_amd64", os: ubuntu-latest, arch: "x86_64" }
+          - { name: "Ubuntu_RDMA_arm64", os: ubuntu-24.04-arm, arch: "aarch64" }
 
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
@@ -47,4 +47,6 @@ jobs:
         run: cargo clippy --all-targets --features rdma -- -D warnings
 
       - name: Test
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/vendor/cuobj/lib/${{ matrix.config.arch }}
         run: cargo test --lib --features rdma
