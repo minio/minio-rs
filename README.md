@@ -46,7 +46,50 @@ async fn main() {
 - Full async/await support via [`tokio`]
 - Strongly-typed responses
 - Transparent error handling via `Result<T, Error>`
+- **Admin API support** - Comprehensive MinIO administration operations (166/198 APIs implemented - 84%)
 
+## Admin API
+
+The SDK includes extensive support for MinIO Admin operations through the `MadminClient`. This allows you to programmatically manage MinIO deployments, including:
+
+- **User & Policy Management** - Create users, service accounts, and manage access policies
+- **KMS & Encryption** - Full Key Management Service integration (19/19 APIs - 100%)
+- **Site Replication** - Multi-site disaster recovery setup (15/15 APIs - 100%)
+- **Configuration Management** - Server configuration and settings
+- **Monitoring & Metrics** - Server health, storage usage, and performance metrics
+- **Batch Operations** - Bulk job processing (8/8 APIs - 100%)
+- **Tiering** - Lifecycle management to cloud backends (6/6 APIs - 100%)
+- **Bucket Operations** - Quotas, metadata, and lifecycle management
+
+For detailed usage and examples, see the [Admin API Usage Guide](docs/madmin-usage-guide.md) and [API Status](docs/madmin-api-status.md).
+
+### Admin API Quick Example
+
+```rust
+use minio::madmin::madmin_client::MadminClient;
+use minio::madmin::types::MadminApi;
+use minio::s3::creds::StaticProvider;
+use minio::s3::http::BaseUrl;
+
+#[tokio::main]
+async fn main() {
+    let base_url = "localhost:9000".parse::<BaseUrl>().unwrap();
+    let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+    let admin_client = MadminClient::new(base_url, Some(provider));
+
+    // Get server information
+    let info = admin_client.server_info().send().await.unwrap();
+    println!("MinIO version: {}", info.servers[0].version);
+
+    // List users
+    let users = admin_client.list_users().send().await.unwrap();
+    println!("Total users: {}", users.users.len());
+
+    // Check KMS status
+    let kms = admin_client.kms_status().send().await.unwrap();
+    println!("KMS configured: {}", !kms.name.is_empty());
+}
+```
 
 ## Design
 
@@ -73,9 +116,19 @@ You can find the complete list of examples in the `examples` directory.
 
 * [Download a file from MinIO](examples/file_downloader.rs)
 
-### object_prompt.rs 
+### object_prompt.rs
 
 * [Prompt a file on MinIO](examples/object_prompt.rs)
+
+### Admin API Examples
+
+* [Server Information](examples/madmin_server_info.rs) - Get MinIO server details and health
+* [User Management](examples/madmin_user_management.rs) - Create and manage users
+* [Service Accounts](examples/madmin_service_accounts.rs) - Manage service accounts
+* [Policy Management](examples/madmin_policy_management.rs) - Create and attach policies
+* [Policy Entities](examples/madmin_policy_entities.rs) - Query policy associations
+* [Configuration History](examples/madmin_config_history.rs) - Manage server configuration
+* [Monitoring](examples/madmin_monitoring.rs) - Monitor server health and metrics
 
 
 ## License

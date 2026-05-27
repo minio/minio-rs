@@ -1,0 +1,265 @@
+   Compiling minio v0.3.0 (C:\Source\minio\minio-rs)
+warning: unused imports: `Error` and `ValidationErr`
+  --> src\madmin\response\group_management\set_group_status.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^  ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused imports: `Error` and `ValidationErr`
+  --> src\madmin\response\group_management\update_group_members.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `Error`
+  --> src\madmin\response\monitoring\top_locks.rs:20:24
+   |
+20 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^
+
+warning: unused imports: `Error` and `ValidationErr`
+  --> src\madmin\response\policy_management\add_canned_policy.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `Error`
+  --> src\madmin\response\policy_management\list_canned_policies.rs:20:24
+   |
+20 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^
+
+warning: unused import: `Error`
+  --> src\madmin\response\quota_management\get_bucket_quota.rs:21:24
+   |
+21 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^
+
+warning: unused imports: `Error` and `ValidationErr`
+  --> src\madmin\response\quota_management\set_bucket_quota.rs:20:24
+   |
+20 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `Error`
+  --> src\madmin\response\rebalancing\rebalance_start.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^
+
+warning: unused imports: `Error` and `ValidationErr`
+  --> src\madmin\response\rebalancing\rebalance_stop.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `Error`
+  --> src\madmin\response\replication_management\bucket_replication_diff.rs:21:24
+   |
+21 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^
+
+warning: unused import: `Error`
+  --> src\madmin\response\replication_management\bucket_replication_mrf.rs:21:24
+   |
+21 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^
+
+warning: unused import: `crate::s3::error::Error`
+  --> src\madmin\response\server_info\bucket_scan_info.rs:20:5
+   |
+20 | use crate::s3::error::Error;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Error` and `ValidationErr`
+  --> src\madmin\response\service_control\service_cancel_restart.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^  ^^^^^^^^^^^^^
+
+warning: unused imports: `Error` and `ValidationErr`
+  --> src\madmin\response\service_control\service_restart.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `Error`
+  --> src\madmin\response\site_replication\site_replication_peer_bucket_meta.rs:20:24
+   |
+20 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^
+
+warning: unused import: `Error`
+  --> src\madmin\response\site_replication\site_replication_peer_bucket_ops.rs:20:24
+   |
+20 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^
+
+warning: unused imports: `Error` and `ValidationErr`
+  --> src\madmin\response\user_management\delete_service_account.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^  ^^^^^^^^^^^^^
+
+warning: unused imports: `Error` and `ValidationErr`
+  --> src\madmin\response\user_management\remove_user.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^  ^^^^^^^^^^^^^
+
+warning: unused imports: `Error` and `ValidationErr`
+  --> src\madmin\response\user_management\set_user.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^  ^^^^^^^^^^^^^
+
+warning: unused imports: `Error` and `ValidationErr`
+  --> src\madmin\response\user_management\set_user_status.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `Error`
+  --> src\madmin\response\user_management\temporary_account_info.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^
+
+warning: unused imports: `Error` and `ValidationErr`
+  --> src\madmin\response\user_management\update_service_account.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `Error`
+  --> src\madmin\response\user_management\user_info.rs:19:24
+   |
+19 | use crate::s3::error::{Error, ValidationErr};
+   |                        ^^^^^
+
+   Compiling minio-common v0.1.0 (C:\Source\minio\minio-rs\common)
+warning: `minio` (lib) generated 23 warnings (run `cargo fix --lib -p minio` to apply 23 suggestions)
+error[E0599]: no method named `status` found for struct `UserInfoResponse` in the current scope
+  --> examples\madmin_user_management.rs:78:41
+   |
+78 |     println!("   Status: {}", user_info.status().unwrap());
+   |                                         ^^^^^^ method not found in `UserInfoResponse`
+
+error[E0609]: no field `policy_name` on type `UserInfoResponse`
+  --> examples\madmin_user_management.rs:79:45
+   |
+79 |     println!("   Policies: {:?}", user_info.policy_name);
+   |                                             ^^^^^^^^^^^ unknown field
+
+Some errors have detailed explanations: E0599, E0609.
+For more information about an error, try `rustc --explain E0599`.
+error: could not compile `minio` (example "madmin_user_management") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error[E0599]: no method named `len` found for enum `Result` in the current scope
+  --> examples\madmin_config_history.rs:56:28
+   |
+56 |         response.entries().len()
+   |                            ^^^ method not found in `Result<Vec<ConfigHistoryEntry>, minio::s3::error::Error>`
+   |
+note: the method `len` exists on the type `Vec<ConfigHistoryEntry>`
+  --> /rustc/1159e78c4747b02ef996e55082b704c09b970588\library\alloc\src\vec\mod.rs:2845:5
+help: consider using `Result::expect` to unwrap the `Vec<ConfigHistoryEntry>` value, panicking if the value is a `Result::Err`
+   |
+56 |         response.entries().expect("REASON").len()
+   |                           +++++++++++++++++
+
+error[E0609]: no field `restore_id` on type `&Vec<ConfigHistoryEntry>`
+  --> examples\madmin_config_history.rs:61:59
+   |
+61 |         println!("   [{}] Restore ID: {}", idx + 1, entry.restore_id);
+   |                                                           ^^^^^^^^^^ unknown field
+
+error[E0609]: no field `create_time` on type `&Vec<ConfigHistoryEntry>`
+  --> examples\madmin_config_history.rs:62:46
+   |
+62 |         println!("       Created: {}", entry.create_time);
+   |                                              ^^^^^^^^^^^ unknown field
+
+error[E0609]: no field `data` on type `&Vec<ConfigHistoryEntry>`
+  --> examples\madmin_config_history.rs:63:56
+   |
+63 |         println!("       Data length: {} bytes", entry.data.len());
+   |                                                        ^^^^ unknown field
+
+error[E0609]: no field `restore_id` on type `&Vec<ConfigHistoryEntry>`
+  --> examples\madmin_config_history.rs:67:44
+   |
+67 |             restore_id_to_use = Some(entry.restore_id.clone());
+   |                                            ^^^^^^^^^^ unknown field
+
+error: could not compile `minio` (example "madmin_config_history") due to 5 previous errors
+error[E0615]: attempted to take value of method `info` on type `ServerInfoResponse`
+  --> examples\madmin_monitoring.rs:49:50
+   |
+49 |     println!("   Deployment ID: {}", server_info.info.deployment_id);
+   |                                                  ^^^^ method, not a field
+   |
+help: use parentheses to call the method
+   |
+49 |     println!("   Deployment ID: {}", server_info.info().deployment_id);
+   |                                                      ++
+
+error[E0615]: attempted to take value of method `info` on type `ServerInfoResponse`
+  --> examples\madmin_monitoring.rs:50:41
+   |
+50 |     println!("   Mode: {}", server_info.info.mode);
+   |                                         ^^^^ method, not a field
+   |
+help: use parentheses to call the method
+   |
+50 |     println!("   Mode: {}", server_info.info().mode);
+   |                                             ++
+
+error[E0615]: attempted to take value of method `info` on type `ServerInfoResponse`
+  --> examples\madmin_monitoring.rs:52:41
+   |
+52 |     if let Some(servers) = &server_info.info.servers {
+   |                                         ^^^^ method, not a field
+   |
+help: use parentheses to call the method
+   |
+52 |     if let Some(servers) = &server_info.info().servers {
+   |                                             ++
+
+error[E0615]: attempted to take value of method `account` on type `AccountInfoResponse`
+  --> examples\madmin_monitoring.rs:89:45
+   |
+89 |     println!("   Account: {}", account_info.account.account_name);
+   |                                             ^^^^^^^ method, not a field
+   |
+help: use parentheses to call the method
+   |
+89 |     println!("   Account: {}", account_info.account().account_name);
+   |                                                    ++
+
+error[E0615]: attempted to take value of method `account` on type `AccountInfoResponse`
+  --> examples\madmin_monitoring.rs:92:22
+   |
+92 |         account_info.account.buckets.len()
+   |                      ^^^^^^^ method, not a field
+   |
+help: use parentheses to call the method
+   |
+92 |         account_info.account().buckets.len()
+   |                             ++
+
+error[E0615]: attempted to take value of method `account` on type `AccountInfoResponse`
+  --> examples\madmin_monitoring.rs:98:33
+   |
+98 |     for bucket in &account_info.account.buckets {
+   |                                 ^^^^^^^ method, not a field
+   |
+help: use parentheses to call the method
+   |
+98 |     for bucket in &account_info.account().buckets {
+   |                                        ++
+
+For more information about this error, try `rustc --explain E0615`.
+error: could not compile `minio` (example "madmin_monitoring") due to 6 previous errors
