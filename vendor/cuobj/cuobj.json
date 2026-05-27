@@ -1,0 +1,62 @@
+{
+	// NOTE : Application can override custom configuration via export CUFILE_ENV_PATH_JSON=<filepath>
+    // e.g : export CUFILE_ENV_PATH_JSON="/home/<xxx>/cuobj.json"
+            "logging": {
+                            // log directory, if not enabled will create log file under current working directory
+                            //"dir": "/home/<xxxx>",
+
+                            // NOTICE|ERROR|WARN|INFO|DEBUG|TRACE (in decreasing order of severity)
+                            "level": "TRACE",
+
+                            // max log file size in MB (default: 32, -1 = no limit)
+                            // can also be set via env var CUFILE_LOGFILE_MAX_SIZE_MB
+                            //"max_file_size_mb": 32
+            },
+
+            "execution": {
+                    "parallel_io" : false
+            },
+
+            "properties": {
+     		"allow_compat_mode": true,
+                "use_pci_p2pdma": true,
+		"rdma_peer_type": "dmabuf",
+                            
+                // client-side rdma addr list for user-space file-systems(e.g ["10.0.1.0", "10.0.2.0"])
+                // Replace <client-nic-ip> with your local NIC IPv4 before use.
+                "rdma_dev_addr_list": ["<client-nic-ip>"],
+                //32-bit dc key value in hex
+                //"rdma_dc_key": "0xffeeddcc",
+                //To enable/disable different rdma OPs use the below bit map
+                //Bit 0 - If set enables Local RDMA WRITE
+                //Bit 1 - If set enables Remote RDMA WRITE
+                //Bit 2 - If set enables Remote RDMA READ
+                //Bit 3 - If set enables REMOTE RDMA Atomics
+                //Bit 4 - If set enables Relaxed ordering.
+                //"rdma_access_mask": "0x1f",
+
+                // RDMA Multipath Configuration
+                // Enable multipath for RDMA failover across multiple NICs.
+                // Safe to leave always on: if rdma_dev_addr_list has only
+                // one entry (or backups fail to register), libcufile logs
+                // "prerequisites not met" and falls back to single-path
+                // automatically ("RDMA {read,write} using default path").
+                "rdma_multipath_enabled": true,
+                // Maximum number of backup RDMA devices (0-8)
+                "rdma_max_backup_devices": 2,
+                // Number of IO retries on retryable errors before giving up (0-10)
+                "rdma_io_retry_count": 3,
+                // Delay in ms between IO retries (0-10000)
+                "rdma_io_retry_delay_ms": 100,
+                // Enable automatic failback to primary device when it recovers
+                "rdma_failback_enabled": true,
+                // Minimum delay in ms after failover before attempting failback (0-60000)
+                "rdma_failback_delay_ms": 100,
+                // Health check polling interval in ms (100-60000)
+                "rdma_health_check_interval_ms": 1000,
+                // Enable IBV async event monitoring for fast failure detection
+                "rdma_async_event_monitoring": true,
+                // Consecutive health check failures before marking device unhealthy (1-100)
+                "rdma_unhealthy_threshold": 3
+            }
+}

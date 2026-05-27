@@ -24,6 +24,8 @@ pub mod error;
 pub mod http;
 pub mod multimap_ext;
 mod object_content;
+#[cfg(feature = "rdma")]
+pub mod rdma;
 pub mod response;
 #[macro_use]
 pub mod response_traits;

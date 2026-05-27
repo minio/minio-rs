@@ -22,6 +22,10 @@ ring = ["dep:ring"]
 # Gracefully falls back to HTTP/1.1 when the server doesn't support it.
 http2 = ["reqwest/http2"]
 localhost = []
+# RDMA + NVIDIA GPU Direct Storage support via vendored libcufile/libcuobjclient
+# (vendor/cuobj/). Linux only; links libcufile, libcuobjclient, libibverbs,
+# librdmacm, libnuma at build time.
+rdma = ["dep:libc"]
 
 [workspace.dependencies]
 uuid = "1.19"
@@ -71,6 +75,10 @@ xmltree = "0.12"
 http = { workspace = true }
 thiserror = "2.0"
 typed-builder = "0.23"
+libc = { version = "0.2", optional = true }
+
+[build-dependencies]
+cc = "1.2"
 
 [dev-dependencies]
 minio-common = { path = "./common" }
@@ -100,6 +108,18 @@ name = "append_object"
 
 [[example]]
 name = "load_balancing_with_hooks"
+
+[[example]]
+name = "get_put_rdma"
+required-features = ["rdma"]
+
+[[example]]
+name = "gpu_host_disk"
+required-features = ["rdma"]
+
+[[example]]
+name = "multipart_rdma"
+required-features = ["rdma"]
 
 [[bench]]
 name = "s3-api"
