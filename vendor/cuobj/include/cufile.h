@@ -1,0 +1,740 @@
+/*
+ * Copyright 1993-2023 NVIDIA Corporation.  All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * This source code and/or documentation ("Licensed Deliverables") are
+ * subject to NVIDIA intellectual property rights under U.S. and
+ * international Copyright laws.
+ *
+ * These Licensed Deliverables contained herein is PROPRIETARY and
+ * CONFIDENTIAL to NVIDIA and is being provided under the terms and
+ * conditions of a form of NVIDIA software license agreement by and
+ * between NVIDIA and Licensee ("License Agreement") or electronically
+ * accepted by Licensee.  Notwithstanding any terms or conditions to
+ * the contrary in the License Agreement, reproduction or disclosure
+ * of the Licensed Deliverables to any third party without the express
+ * written consent of NVIDIA is prohibited.
+ *
+ * NOTWITHSTANDING ANY TERMS OR CONDITIONS TO THE CONTRARY IN THE
+ * LICENSE AGREEMENT, NVIDIA MAKES NO REPRESENTATION ABOUT THE
+ * SUITABILITY OF THESE LICENSED DELIVERABLES FOR ANY PURPOSE.  IT IS
+ * PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY OF ANY KIND.
+ * NVIDIA DISCLAIMS ALL WARRANTIES WITH REGARD TO THESE LICENSED
+ * DELIVERABLES, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY,
+ * NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE.
+ * NOTWITHSTANDING ANY TERMS OR CONDITIONS TO THE CONTRARY IN THE
+ * LICENSE AGREEMENT, IN NO EVENT SHALL NVIDIA BE LIABLE FOR ANY
+ * SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, OR ANY
+ * DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+ * WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
+ * ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
+ * OF THESE LICENSED DELIVERABLES.
+ *
+ * U.S. Government End Users.  These Licensed Deliverables are a
+ * "commercial item" as that term is defined at 48 C.F.R. 2.101 (OCT
+ * 1995), consisting of "commercial computer software" and "commercial
+ * computer software documentation" as such terms are used in 48
+ * C.F.R. 12.212 (SEPT 1995) and is provided to the U.S. Government
+ * only as a commercial end item.  Consistent with 48 C.F.R.12.212 and
+ * 48 C.F.R. 227.7202-1 through 227.7202-4 (JUNE 1995), all
+ * U.S. Government End Users acquire the Licensed Deliverables with
+ * only those rights set forth herein.
+ *
+ * Any use of the Licensed Deliverables in individual and commercial
+ * software must include, in the user documentation and internal
+ * comments to the code, the above Disclaimer and U.S. Government End
+ * Users Notice.
+ */
+
+/**
+ * @file cufile.h
+ * @brief  cuFile C APIs
+ *
+ * This file contains all the C APIs to perform GPUDirect Storage supported IO operations
+ */
+
+#if __cplusplus
+extern "C"
+{
+#endif
+
+/// @cond DOXYGEN_SKIP_MACRO
+#ifndef __CUFILE_H_
+#define __CUFILE_H_
+
+#include <stdlib.h>
+#include <stdbool.h>
+
+#include <cuda.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#define CUFILEOP_BASE_ERR 5000
+
+//Note :Data path errors are captured via standard error codes
+#define CUFILEOP_STATUS_ENTRIES \
+	CUFILE_OP(0,                      CU_FILE_SUCCESS, cufile success) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 1,  CU_FILE_DRIVER_NOT_INITIALIZED, nvidia-fs driver is not loaded. Set allow_compat_mode to true in cufile.json file to enable compatible mode) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 2,  CU_FILE_DRIVER_INVALID_PROPS, invalid property) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 3,  CU_FILE_DRIVER_UNSUPPORTED_LIMIT, property range error) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 4,  CU_FILE_DRIVER_VERSION_MISMATCH, nvidia-fs driver version mismatch) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 5,  CU_FILE_DRIVER_VERSION_READ_ERROR, nvidia-fs driver version read error) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 6,  CU_FILE_DRIVER_CLOSING, driver shutdown in progress) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 7,  CU_FILE_PLATFORM_NOT_SUPPORTED, GPUDirect Storage not supported on current platform) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 8,  CU_FILE_IO_NOT_SUPPORTED, GPUDirect Storage not supported on current file) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 9,  CU_FILE_DEVICE_NOT_SUPPORTED, GPUDirect Storage not supported on current GPU) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 10, CU_FILE_NVFS_DRIVER_ERROR, nvidia-fs driver ioctl error) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 11, CU_FILE_CUDA_DRIVER_ERROR, CUDA Driver API error) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 12, CU_FILE_CUDA_POINTER_INVALID, invalid device pointer) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 13, CU_FILE_CUDA_MEMORY_TYPE_INVALID, invalid pointer memory type) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 14, CU_FILE_CUDA_POINTER_RANGE_ERROR, pointer range exceeds allocated address range) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 15, CU_FILE_CUDA_CONTEXT_MISMATCH, cuda context mismatch) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 16, CU_FILE_INVALID_MAPPING_SIZE, access beyond maximum pinned size) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 17, CU_FILE_INVALID_MAPPING_RANGE, access beyond mapped size) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 18, CU_FILE_INVALID_FILE_TYPE, unsupported file type) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 19, CU_FILE_INVALID_FILE_OPEN_FLAG, unsupported file open flags) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 20, CU_FILE_DIO_NOT_SET, fd direct IO not set) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 22, CU_FILE_INVALID_VALUE, invalid arguments) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 23, CU_FILE_MEMORY_ALREADY_REGISTERED, device pointer already registered) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 24, CU_FILE_MEMORY_NOT_REGISTERED, device pointer lookup failure) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 25, CU_FILE_PERMISSION_DENIED, driver or file access error) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 26, CU_FILE_DRIVER_ALREADY_OPEN, driver is already open) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 27, CU_FILE_HANDLE_NOT_REGISTERED, file descriptor is not registered) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 28, CU_FILE_HANDLE_ALREADY_REGISTERED, file descriptor is already registered) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 29, CU_FILE_DEVICE_NOT_FOUND, GPU device not found) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 30, CU_FILE_INTERNAL_ERROR, internal error) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 31, CU_FILE_GETNEWFD_FAILED, failed to obtain new file descriptor) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 33, CU_FILE_NVFS_SETUP_ERROR, NVFS driver initialization error) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 34, CU_FILE_IO_DISABLED, GPUDirect Storage disabled by config on current file)\
+	CUFILE_OP(CUFILEOP_BASE_ERR + 35, CU_FILE_BATCH_SUBMIT_FAILED, failed to submit batch operation)\
+	CUFILE_OP(CUFILEOP_BASE_ERR + 36, CU_FILE_GPU_MEMORY_PINNING_FAILED, failed to allocate pinned GPU Memory) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 37, CU_FILE_BATCH_FULL, queue full for batch operation) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 38, CU_FILE_ASYNC_NOT_SUPPORTED, cuFile stream operation not supported) \
+	CUFILE_OP(CUFILEOP_BASE_ERR + 39, CU_FILE_IO_MAX_ERROR, GPUDirect Storage Max Error)
+
+
+/**
+ * @brief cufileop status enum
+ *
+ * @note on success the error code is set to  @ref CU_FILE_SUCCESS.
+ * @note The error code can be inspected using @ref IS_CUFILE_ERR and @ref CUFILE_ERRSTR.
+ * @note The error code if set to @ref CU_FILE_CUDA_DRIVER_ERROR, then cuda error can be inspected using @ref IS_CUDA_ERR and @ref CU_FILE_CUDA_ERR.
+ * @note Data path errors are captured via standard error codes
+ */
+typedef enum CUfileOpError {
+        /// @cond DOXYGEN_SKIP_MACRO
+	#define CUFILE_OP(code, name, string) name = code,
+	CUFILEOP_STATUS_ENTRIES
+	#undef CUFILE_OP
+        ///@endcond
+} CUfileOpError;
+
+/// @endcond
+
+/**
+ * @brief cufileop status string
+ */
+static inline const char *cufileop_status_error(CUfileOpError status)
+{
+	switch (status) {
+	/// @cond DOXYGEN_SKIP_MACRO
+	#define CUFILE_OP(code, name, string) \
+	case name: return #string;
+	CUFILEOP_STATUS_ENTRIES
+	#undef CUFILE_OP
+	///@endcond
+	default:return "unknown cufile error";
+	}
+}
+
+/**
+ * @brief cufileop status string
+ */
+typedef struct CUfileError {
+
+	CUfileOpError err; // cufile error
+
+	CUresult cu_err; // cuda driver error
+
+}CUfileError_t;
+
+/**
+ * @brief  error macros to inspect error status of type @ref CUfileOpError
+ */
+
+#define IS_CUFILE_ERR(err) \
+	(abs((err)) > CUFILEOP_BASE_ERR)
+
+#define CUFILE_ERRSTR(err) \
+	cufileop_status_error((CUfileOpError)abs((err)))
+
+#define IS_CUDA_ERR(status) \
+	((status).err == CU_FILE_CUDA_DRIVER_ERROR)
+
+#define CU_FILE_CUDA_ERR(status) ((status).cu_err)
+
+/* driver properties */
+typedef enum CUfileDriverStatusFlags {
+        CU_FILE_LUSTRE_SUPPORTED = 0, /*!< Support for DDN LUSTRE */
+
+        CU_FILE_WEKAFS_SUPPORTED = 1, /*!< Support for WEKAFS */
+
+        CU_FILE_NFS_SUPPORTED = 2, /*!< Support for NFS */
+
+        CU_FILE_GPFS_SUPPORTED = 3, /*! < Support for GPFS */
+
+        CU_FILE_NVME_SUPPORTED = 4, /*!< Support for NVMe */
+
+        CU_FILE_NVMEOF_SUPPORTED = 5, /*!< Support for NVMeOF */
+
+        CU_FILE_SCSI_SUPPORTED = 6, /*!< Support for SCSI */
+
+	CU_FILE_SCALEFLUX_CSD_SUPPORTED = 7, /*!< Support for Scaleflux CSD*/
+
+	CU_FILE_NVMESH_SUPPORTED = 8, /*!< Support for NVMesh Block Dev*/
+	CU_FILE_BEEGFS_SUPPORTED = 9, /*!< Support for BeeGFS */
+	CU_FILE_YRCLOUDFILE_SUPPORTED = 10, /*!< Support for YRCloudFile */
+        CU_FILE_NVME_P2P_SUPPORTED = 11,   /*!< Support for NVMe using PCI P2PDMA */
+
+}CUfileDriverStatusFlags_t;
+
+typedef enum CUfileDriverControlFlags {
+        CU_FILE_USE_POLL_MODE = 0 , /*!< use POLL mode. properties.use_poll_mode*/
+
+        CU_FILE_ALLOW_COMPAT_MODE = 1/*!< allow COMPATIBILITY mode. properties.allow_compat_mode*/
+
+}CUfileDriverControlFlags_t;
+
+typedef enum CUfileFeatureFlags {
+        CU_FILE_DYN_ROUTING_SUPPORTED = 0, /*!< Support for Dynamic routing to handle devices across the PCIe bridges */
+
+        CU_FILE_BATCH_IO_SUPPORTED = 1, /*!<  Unsupported */
+
+        CU_FILE_STREAMS_SUPPORTED = 2, /*!<  Unsupported */
+
+        CU_FILE_PARALLEL_IO_SUPPORTED = 3 /*!<  Unsupported */
+}CUfileFeatureFlags_t;
+
+typedef struct CUfileDrvProps {
+        struct {
+                unsigned int major_version;
+
+                unsigned int minor_version;
+
+                size_t poll_thresh_size;
+
+                size_t max_direct_io_size;
+
+                unsigned int dstatusflags;
+
+                unsigned int dcontrolflags;
+
+        } nvfs;
+
+        unsigned int fflags;
+
+        unsigned int max_device_cache_size;
+
+	unsigned int per_buffer_cache_size;
+
+        unsigned int max_device_pinned_mem_size;
+
+        unsigned int max_batch_io_size;
+        unsigned int max_batch_io_timeout_msecs;
+}CUfileDrvProps_t;
+
+typedef struct sockaddr sockaddr_t;
+
+typedef struct cufileRDMAInfo
+{
+        int version;
+        int desc_len;
+        const char *desc_str;
+}cufileRDMAInfo_t;
+
+#define CU_FILE_RDMA_REGISTER 1
+#define CU_FILE_RDMA_RELAXED_ORDERING (1<<1)
+
+
+
+typedef struct CUfileFSOps {
+      /* NULL means discover using fstat */
+      const char* (*fs_type) (const void *handle);
+
+      /* list of host addresses to use,  NULL means no restriction */
+      int (*getRDMADeviceList)(const void *handle, sockaddr_t **hostaddrs);
+
+      /* -1 no pref */
+      int (*getRDMADevicePriority)(const void *handle, char*, size_t,
+                                loff_t, const sockaddr_t* hostaddr);
+
+      /* NULL means try VFS */
+      ssize_t (*read) (const void *handle, char*, size_t, loff_t, const cufileRDMAInfo_t*);
+      ssize_t (*write) (const void *handle, const char *, size_t, loff_t , const cufileRDMAInfo_t*);
+}CUfileFSOps_t;
+
+/* File Handle */
+enum CUfileFileHandleType {
+	CU_FILE_HANDLE_TYPE_OPAQUE_FD = 1,   /*!< Linux based fd */
+
+	CU_FILE_HANDLE_TYPE_OPAQUE_WIN32 = 2, /*!< Windows based handle (unsupported) */
+
+        CU_FILE_HANDLE_TYPE_USERSPACE_FS = 3,  /* Userspace based FS */
+};
+
+typedef struct CUfileDescr_t {
+	enum CUfileFileHandleType type; /* type of file being registered */
+	union {
+		int fd; 		/* Linux   */
+		void *handle; 		/* Windows */
+	} handle;
+        const CUfileFSOps_t *fs_ops;     /* file system operation table */
+}CUfileDescr_t;
+
+/**
+ * @brief File handle type
+ *
+ */
+typedef void* CUfileHandle_t;
+
+
+#pragma GCC visibility push(default)
+
+/**
+ * @brief cuFileHandleRegister is required, and performs extra checking that is memoized to provide increased performance on later cuFile operations.
+ *
+ * @param fh @ref CUfileHandle_t opaque file handle for IO operations
+ * @param descr @ref CUfileDescr_t  file descriptor (OS agnostic)
+ *
+ * @return      CU_FILE_SUCCESS on successful completion. fh will be updated for use in @ref cuFileRead, @ref cuFileWrite, @ref cuFileHandleDeregister
+ * @return      CU_FILE_DRIVER_NOT_INITIALIZED on failure to load driver
+ * @return      CU_FILE_IO_NOT_SUPPORTED -  if filesystem is not supported
+ * @return      CU_FILE_INVALID_VALUE if null or bad api arguments
+ * @return      CU_FILE_INVALID_FILE_OPEN_FLAG if file is opened with unsupported modes like no O_DIRECT
+ * @return      CU_FILE_INVALID_FILE_TYPE if filepath is not valid or is not a regular file
+ * @return      CU_FILE_HANDLE_ALREADY_REGISTERED if file handle/descriptor is already registered
+ *
+ * <b>Description</b>
+ * cuFileHandleRegister registers the open file descriptor for use with cuFile IO operations.
+ *
+ * This API will ensure that the file’s descriptor is checked for GPUDirect Storage support and returns a valid file handle on CU_FILE_SUCCESS.
+ *
+ * @note the file needs to be opened in O_DIRECT mode to support GPUDirect Storage.
+ *
+ * @see cuFileRead
+ * @see cuFileWrite
+ * @see cuFileHandleDeregister
+ *
+ */
+CUfileError_t cuFileHandleRegister(CUfileHandle_t *fh, CUfileDescr_t *descr);
+
+/**
+ * @brief releases a registered filehandle from cuFile
+ *
+ * @param fh @ref CUfileHandle_t file handle
+ *
+ * @return void
+ *
+ * @see cuFileHandleRegister
+ */
+void cuFileHandleDeregister(CUfileHandle_t fh);
+
+/**
+ * @brief register an existing cudaMalloced memory with cuFile to pin for GPUDirect Storage access or 
+ * register host allocated memory with cuFile.
+ *
+ * @param bufPtr_base buffer pointer allocated
+ * @param length  size of memory region from the above specified bufPtr
+ * @param flags   CU_FILE_RDMA_REGISTER
+ *
+ * @return  CU_FILE_SUCCESS on success
+ * @return  CU_FILE_NVFS_DRIVER_ERROR
+ * @return  CU_FILE_INVALID_VALUE
+ * @return  CU_FILE_CUDA_ERROR for unsuported memory type
+ * @return  CU_FILE_MEMORY_ALREADY_REGISTERED on error
+ * @return  CU_FILE_GPU_MEMORY_PINNING_FAILED if not enough pinned memory is available
+ * @note This memory will be use to perform GPU direct DMA from the supported storage.
+ * @warning This API is intended for usecases where the memory is used as streaming buffer that is reused across multiple cuFile IO operations before calling @ref cuFileBufDeregister
+ *
+ * @see cuFileBufDeregister
+ * @see cuFileRead
+ * @see cuFileWrite
+ */
+CUfileError_t cuFileBufRegister(const void *bufPtr_base, size_t length, int flags);
+
+/**
+ * @brief  deregister an already registered device or host memory from cuFile
+ *
+ * @param bufPtr_base  buffer pointer to deregister
+ *
+ * @return  CU_FILE_SUCCESS on success
+ * @return  CU_FILE_INVALID_VALUE on invalid memory pointer or unregistered memory pointer
+ *
+ * @see cuFileBufRegister
+ * @see cuFileRead
+ * @see cuFileWrite
+ */
+
+CUfileError_t cuFileBufDeregister(const void *bufPtr_base);
+
+/**
+ * @brief read data from a registered file handle to a specified device or host memory
+ *
+ * @param fh @ref CUfileHandle_t opaque file handle
+ * @param bufPtr_base  base address of buffer in device or host memory
+ * @param size    size bytes to read
+ * @param file_offset  file-offset from begining of the file
+ * @param bufPtr_offset  offset relative to the bufPtr_base pointer to read into.
+ *
+ * @return  size of bytes successfully read
+ * @return  -1 on error, in which case errno is set to indicate filesystem errors.
+ * @return  all other errors will return a negative integer value of @ref CUfileOpError enum value.
+ *
+ * @note  If the bufPtr is not registered with @ref cuFileBufRegister, the data will be buffered through preallocated pinned buffers if needed.
+ * @note  This is useful for applications that need to perform IO to unaligned file offsets and/or size. This is also recommended
+ *        for cases where the BAR1 memory size is smaller than the size of the allocated memory.
+ *
+ * @see cuFileBufRegister
+ * @see cuFileHandleRegister
+ * @see cuFileWrite
+ */
+
+ssize_t cuFileRead(CUfileHandle_t fh, void *bufPtr_base, size_t size, off_t file_offset, off_t bufPtr_offset);
+
+/**
+ * @brief  write data from a specified device or host memory to a registered file handle
+ *
+ * @param fh @ref CUfileHandle_t opaque file handle
+ * @param bufPtr_base  base address of buffer in device or host memory
+ * @param size    size bytes to write
+ * @param file_offset  file-offset from begining of the file
+ * @param bufPtr_offset  offset relative to the bufPtr_base pointer to write from.
+ *
+ * @return  size of bytes successfully written
+ * @return  -1 on error, in which case errno is set to indicate filesystem errors.
+ * @return  all other errors will return a negative integer value of @ref CUfileOpError enum value.
+ *
+ * @note  If the bufPtr is not registered with @ref cuFileBufRegister, the data will be buffered through preallocated pinned buffers if needed.
+ * @note  This is useful for applications that need to perform IO to unaligned file offsets and/or size. This is also recommended
+ *        for cases where the BAR1 memory size is smaller than the size of the allocated memory.
+ *
+ * @see cuFileBufRegister
+ * @see cuFileHandleRegister
+ * @see cuFileRead
+ */
+
+ssize_t cuFileWrite(CUfileHandle_t fh, const void *bufPtr_base, size_t size, off_t file_offset, off_t bufPtr_offset);
+
+// CUFile Driver APIs
+
+/**
+ * @brief
+ * Initialize the cuFile library and open the nvidia-fs driver
+ *
+ * @return CU_FILE_SUCCESS on success
+ * @return CU_FILE_DRIVER_NOT_INITIALIZED
+ * @return CU_FILE_DRIVER_VERSION_MISMATCH on driver version mismatch error
+ *
+ * @see cuFileDriverClose
+ */
+CUfileError_t cuFileDriverOpen(void);
+
+CUfileError_t cuFileDriverClose(void);
+#define cuFileDriverClose cuFileDriverClose_v2
+/**
+ * @brief
+ * reset the cuFile library and release the nvidia-fs driver
+ *
+ * @return CU_FILE_SUCCESS on success
+ * @return CU_FILE_DRIVER_CLOSING if there are any active IO operations using @ref cuFileRead or @ref cuFileWrite
+ *
+ * @see cuFileDriverOpen
+ */
+CUfileError_t cuFileDriverClose(void);
+
+/**
+ * @brief
+ * returns use count of cufile drivers at that moment by the process.
+ */
+long cuFileUseCount(void);
+
+/**
+ * @brief
+ * Gets the Driver session properties
+ *
+ * @return CU_FILE_SUCCESS on success
+ *
+ * @see cuFileDriverSetPollMode
+ * @see cuFileDriverSetMaxDirectIOSize
+ * @see cuFileDriverSetMaxCacheSize
+ * @see cuFileDriverSetMaxPinnedMemSize
+ */
+CUfileError_t cuFileDriverGetProperties(CUfileDrvProps_t *props);
+
+/**
+ * @brief
+ * Sets whether the Read/Write APIs use polling to do IO operations
+ *
+ * @param  poll boolean to indicate whether to use poll mode or not
+ * @param  poll_threshold_size max IO size to use for POLLING mode in KB
+ *
+ * @return CU_FILE_SUCCESS on success
+ * @return CU_FILE_DRIVER_NOT_INITIALIZED if the driver is not initialized
+ * @return CU_FILE_DRIVER_VERSION_MISMATCH, CU_FILE_DRIVER_UNSUPPORTED_LIMIT on error
+ *
+ * @warning This is an advanced command and should be tuned based on available system memory
+ *
+ * @see cuFileDriverGetProperties
+ */
+CUfileError_t cuFileDriverSetPollMode(bool poll, size_t poll_threshold_size);
+
+/**
+ * @brief
+ * Control parameter to set max IO size(KB) used by the library to talk to nvidia-fs driver
+ *
+ * @param  max_direct_io_size maximum allowed direct io size in KB
+ *
+ * @return CU_FILE_SUCCESS on success
+ * @return CU_FILE_DRIVER_NOT_INITIALIZED if the driver is not initialized
+ * @return CU_FILE_DRIVER_VERSION_MISMATCH, CU_FILE_DRIVER_UNSUPPORTED_LIMIT on error
+ *
+ * @warning This is an advanced command and should be tuned based on available system memory
+ *
+ * @see cuFileDriverGetProperties
+ *
+ */
+CUfileError_t cuFileDriverSetMaxDirectIOSize(size_t max_direct_io_size);
+
+/**
+ * @brief
+ * Control parameter to set maximum GPU memory reserved per device by the library for internal buffering
+ *
+ * @param  max_cache_size The maximum GPU buffer space per device used for internal use in KB
+ *
+ * @return CU_FILE_SUCCESS on success
+ * @return CU_FILE_DRIVER_NOT_INITIALIZED if the driver is not initialized
+ * @return CU_FILE_DRIVER_VERSION_MISMATCH, CU_FILE_DRIVER_UNSUPPORTED_LIMIT on error
+ *
+ * @warning This is an advanced command and should be tuned based on supported GPU memory
+ *
+ * @see cuFileDriverGetProperties
+ */
+CUfileError_t cuFileDriverSetMaxCacheSize(size_t max_cache_size);
+
+/**
+ * @brief
+ * Sets maximum buffer space that is pinned in KB for use by @ref cuFileBufRegister
+ *
+ * @param max_pinned_size maximum buffer space that is pinned in KB
+ *
+ * @return CU_FILE_SUCCESS on success
+ * @return CU_FILE_DRIVER_NOT_INITIALIZED if the driver is not initialized
+ * @return CU_FILE_DRIVER_VERSION_MISMATCH, CU_FILE_DRIVER_UNSUPPORTED_LIMIT on error
+ *
+ * @warning This is an advanced command and should be tuned based on supported GPU memory
+ *
+ * @see cuFileDriverGetProperties
+ *
+ */
+CUfileError_t cuFileDriverSetMaxPinnedMemSize(size_t max_pinned_size);
+
+//Experimental Batch API's
+
+
+typedef enum CUfileOpcode {
+		CUFILE_READ = 0,
+		CUFILE_WRITE
+}CUfileOpcode_t;
+
+typedef enum CUFILEStatus_enum {
+	CUFILE_WAITING = 0x000001,  /* required value prior to submission */
+	CUFILE_PENDING = 0x000002,  /* once enqueued */
+	CUFILE_INVALID = 0x000004,  /* request was ill-formed or could not be enqueued */
+	CUFILE_CANCELED = 0x000008, /* request successfully canceled */
+	CUFILE_COMPLETE = 0x0000010, /* request successfully completed */
+	CUFILE_TIMEOUT = 0x0000020,  /* request timed out */
+	CUFILE_FAILED  = 0x0000040  /* unable to complete */
+}CUfileStatus_t;
+typedef enum cufileBatchMode {
+	CUFILE_BATCH = 1,
+} CUfileBatchMode_t;
+typedef struct CUfileIOParams {
+	CUfileBatchMode_t mode; // Must be the very first field.
+	union {
+		struct  {
+			void *devPtr_base; //This can be a device memory or a host memory pointer.
+			off_t file_offset;
+			off_t devPtr_offset; 
+			size_t size;
+		}batch;
+	}u;
+	CUfileHandle_t fh;
+	CUfileOpcode_t opcode;
+	void *cookie;
+}CUfileIOParams_t;
+typedef struct CUfileIOEvents {
+	void *cookie;
+	CUfileStatus_t   status;      /* status of the operation */
+	size_t ret; /* -ve error or amount of I/O done. */
+}CUfileIOEvents_t;
+
+typedef void* CUfileBatchHandle_t;
+
+CUfileError_t cuFileBatchIOSetUp(CUfileBatchHandle_t *batch_idp, unsigned nr);
+CUfileError_t cuFileBatchIOSubmit(CUfileBatchHandle_t batch_idp, unsigned nr, CUfileIOParams_t *iocbp, unsigned int flags);
+CUfileError_t cuFileBatchIOGetStatus(CUfileBatchHandle_t batch_idp, unsigned min_nr, unsigned* nr,
+				CUfileIOEvents_t *iocbp, struct timespec* timeout);
+CUfileError_t cuFileBatchIOCancel(CUfileBatchHandle_t batch_idp);
+void cuFileBatchIODestroy(CUfileBatchHandle_t batch_idp);
+
+//Async API's with cuda streams
+
+// cuFile stream API registration flags
+// buffer pointer offset is set at submission time
+#define CU_FILE_STREAM_FIXED_BUF_OFFSET         1
+// file offset is set at submission time
+#define CU_FILE_STREAM_FIXED_FILE_OFFSET        2
+// file size is set at submission time
+#define CU_FILE_STREAM_FIXED_FILE_SIZE          4
+// size, offset and buffer offset are 4k aligned
+#define CU_FILE_STREAM_PAGE_ALIGNED_INPUTS      8
+
+/**
+ *@brief
+
+ * @param fh The cuFile handle for the file.
+ * @param bufPtr_base  base address of buffer in device or host memory
+ * @param size_p  pointer to size bytes to read
+ * @note  *size_p if the size is not known at the time of submission, then must provide the max possible size for I/O request.
+ * @param file_offset_p  pointer to file-offset from begining of the file
+ * @param bufPtr_offset_p  pointer to offset relative to the bufPtr_base pointer to read into.
+ * @param bytes_read_p  pointer to the number of bytes that were successfully read.
+ * @param CUstream stream cuda stream for the operation.
+ *
+ * @return  size of bytes successfully read in *bytes_read_p
+ * @return  -1 on error, in which case errno is set to indicate filesystem errors.
+ * @return  all other errors will return a negative integer value of @ref CUfileOpError enum value.
+ *
+ * @note  If the bufPtr_base is not registered with @ref cuFileBufRegister, the data will be buffered through preallocated pinned buffers.
+ * @note  This is useful for applications that need to perform IO to unaligned file offsets and/or size. This is also recommended
+ *        for cases where the BAR1 memory size is smaller than the size of the allocated memory.
+ * @note  If the stream is registered with cuFileStreamRegister, the IO setup and teardown overhead will be reduced.
+ * @note  on cuda stream errors, the user must call cuFileStreamDeregister to release any outstanding cuFile resources for the stream.
+ *
+ *
+ * @see cuFileBufRegister
+ * @see cuFileHandleRegister
+ * @see cuFileRead
+ * @see cuFileStreamRegister
+ * @see cuFileStreamDeregister
+ */
+
+CUfileError_t cuFileReadAsync(CUfileHandle_t fh, void *bufPtr_base,
+                        size_t *size_p, off_t *file_offset_p, off_t *bufPtr_offset_p, ssize_t *bytes_read_p, CUstream stream);
+
+/**
+ *@brief
+
+* @param fh The cuFile handle for the file.
+ * @param bufPtr_base  base address of buffer in device or host memory
+ * @param size_p    pointer to size bytes to write.
+ * @note  *size_p if the size is not known at the time of submission, then must provide the max possible size for I/O request.
+ * @param file_offset_p  pointer to file-offset from begining of the file
+ * @param bufPtr_offset_p  pointer to offset relative to the bufPtr_base pointer to write from.
+ * @param bytes_written_p pointer to the number of bytes that were successfully written.
+ * @param CUstream cuda stream for the operation.
+ *
+ * @return  size of bytes successfully written in *bytes_written_p
+ * @return  -1 on error, in which case errno is set to indicate filesystem errors.
+ * @return  all other errors will return a negative integer value of @ref CUfileOpError enum value.
+ *
+ * @note  If the bufPtr_base is not registered with @ref cuFileBufRegister, the data will be buffered through preallocated pinned buffers.
+ * @note  This is useful for applications that need to perform IO to unaligned file offsets and/or size. This is also recommended
+ *        for cases where the BAR1 memory size is smaller than the size of the allocated memory.
+ * @note  If the stream is registered with cuFileStreamRegister prior to this call, the IO setup and teardown overhead will be reduced.
+ * @note  on cuda stream errors, the user must call cuFileStreamDeregister to release any outstanding cuFile resources for the stream.
+ *
+ * @see cuFileBufRegister
+ * @see cuFileHandleRegister
+ * @see cuFileWrite
+ * @see cuFileStreamRegister
+ * @see cuFileStreamDeregister
+ */
+
+CUfileError_t cuFileWriteAsync(CUfileHandle_t fh, void *bufPtr_base,
+                        size_t *size_p, off_t *file_offset_p, off_t *bufPtr_offset_p, ssize_t *bytes_written_p, CUstream stream);
+
+/**
+ *@brief
+
+ * @param CUstream cuda stream for the operation.
+ * @param flags for the stream to improve the stream execution of IO based on input parameters.
+ * @note  supported FLAGS are
+ * @note CU_FILE_STREAM_FIXED_BUF_OFFSET - buffer pointer offset is set at submission time
+ * @note CU_FILE_STREAM_FIXED_FILE_OFFSET - file offset is set at submission time
+ * @note CU_FILE_STREAM_FIXED_FILE_SIZE  - file size is set at submission time
+ * @note CU_FILE_STREAM_PAGE_ALIGNED_INPUTS - size, offset and buffer offset are 4k aligned
+ *
+ * @note  allocates resources needed to support cuFile operations asynchronously for the cuda stream
+ * @note  This is useful for applications that need to perform IO to unaligned file offsets and/or size. This is also recommended
+ *        for cases where the BAR1 memory size is smaller than the size of the allocated memory.
+ *
+ * @return CU_FILE_SUCCESS on success
+ * @return CU_FILE_DRIVER_NOT_INITIALIZED if the driver is not initialized
+ * @return CU_FILE_INVALID_VALUE if the stream is invalid
+ *
+ * @see cuFileReadAsync
+ * @see cuFileWriteAsync
+ * @see cuFileStreamDeregister
+ */
+
+CUfileError_t cuFileStreamRegister(CUstream stream, unsigned flags);
+
+/**
+ *@brief
+
+ * @param CUstream cuda stream for the operation.
+ *
+ * @note  deallocates resources used by previous cuFile asynchronous operations for the cuda stream
+ * @note  highly recommend to call after cuda stream errors to release any outstanding cuFile resources for this stream
+ * @note  must be called before cuStreamDestroy call for the specified stream.
+ * @note  This is useful for applications that need to perform IO to unaligned file offsets and/or size. This is also recommended
+ *        for cases where the BAR1 memory size is smaller than the size of the allocated memory.
+ *
+ * @return CU_FILE_SUCCESS on success
+ * @return CU_FILE_DRIVER_NOT_INITIALIZED if the driver is not initialized
+ * @return CU_FILE_INVALID_VALUE if the stream is invalid
+ *
+ * @see cuFileReadAsync
+ * @see cuFileWriteAsync
+ * @see cuFileStreamRegister
+ */
+
+CUfileError_t cuFileStreamDeregister(CUstream stream);
+
+/**
+ *@brief
+
+ * @returns cufile library version.
+ * 
+ * @The version is returned as (1000 major + 10 minor).
+ * @For example, CUFILE 1.7.0 would be represented by 1070.
+ * @note  This is useful for applications that need to inquire the library.
+ *
+ * @return CU_FILE_SUCCESS on success
+ * @return CU_FILE_INVALID_VALUE if the input parameter is null.
+ * @return CU_FILE_DRIVER_VERSION_READ_ERROR if the version is not available.
+ *
+ */
+
+CUfileError_t cuFileGetVersion(int *version);
+
+#pragma GCC visibility pop
+
+/// @cond DOXYGEN_SKIP_MACRO
+#endif // CUFILE_H
+/// @endcond
+#ifdef __cplusplus
+}
+#endif
