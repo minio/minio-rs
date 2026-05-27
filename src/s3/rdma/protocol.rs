@@ -116,10 +116,11 @@ pub fn parse_client_nic_from_token(token: &str) -> Option<IpAddr> {
 
 /// Map server's `x-amz-rdma-reply` header to a transfer outcome.
 /// `> 0`: reply code (200/204/206), treat as success.
-/// `0`:   absent/unparseable, treat as `-1` failure.
+/// `0`:   absent or unparseable, treat as `-1` failure (non-RDMA error
+///        such as 403/404 with no reply header).
 /// `-2`:  reply explicitly says 501, server declined RDMA.
 pub fn parse_rdma_reply(reply: &str) -> i32 {
-    if reply.is_empty() || reply == "501" {
+    if reply == "501" {
         return RDMA_NOT_SUPPORTED as i32;
     }
     reply.parse::<i32>().unwrap_or(0)
@@ -387,6 +388,10 @@ pub async fn rdma_get(
         return -1;
     }
 
+    if let Some(etag) = resp_headers.get("etag").and_then(|v| v.to_str().ok()) {
+        ctx.etag = etag.trim_matches('"').to_owned();
+    }
+
     if let Some(bytes_str) = resp_headers
         .get(X_AMZ_RDMA_BYTES_TRANSFERRED)
         .and_then(|v| v.to_str().ok())
@@ -457,7 +462,7 @@ mod tests {
         assert_eq!(parse_rdma_reply("204"), 204);
         assert_eq!(parse_rdma_reply("206"), 206);
         assert_eq!(parse_rdma_reply("501"), RDMA_NOT_SUPPORTED as i32);
-        assert_eq!(parse_rdma_reply(""), RDMA_NOT_SUPPORTED as i32);
+        assert_eq!(parse_rdma_reply(""), 0);
         assert_eq!(parse_rdma_reply("not-a-number"), 0);
     }
 

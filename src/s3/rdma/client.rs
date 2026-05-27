@@ -361,10 +361,7 @@ impl MinioClient {
             .send()
             .await?;
 
-        let final_etag = complete_resp
-            .etag()
-            .map(|t| t.into_inner())
-            .unwrap_or_default();
+        let final_etag = complete_resp.etag()?.into_inner();
 
         Ok(RdmaMultipartResponse {
             etag: final_etag,
