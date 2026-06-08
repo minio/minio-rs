@@ -31,6 +31,8 @@ mod web_identity;
 
 #[cfg(test)]
 pub(crate) mod mock_http;
+#[cfg(test)]
+pub(crate) mod test_support;
 
 pub use assume_role::AssumeRoleProvider;
 pub use chain::ChainProvider;
@@ -329,7 +331,11 @@ pub(crate) fn parse_sts_credentials(
         text("AccessKeyId").ok_or_else(|| xml_error("missing AccessKeyId in STS response"))?;
     let secret_key = text("SecretAccessKey")
         .ok_or_else(|| xml_error("missing SecretAccessKey in STS response"))?;
-    let session_token = text("SessionToken");
+    // STS temporary credentials always carry a session token; treat its absence
+    // as a malformed response rather than caching unusable credentials.
+    let session_token = Some(
+        text("SessionToken").ok_or_else(|| xml_error("missing SessionToken in STS response"))?,
+    );
     let expiration = match text("Expiration") {
         Some(value) => from_iso8601utc(&value)?,
         None => now + Duration::hours(1),

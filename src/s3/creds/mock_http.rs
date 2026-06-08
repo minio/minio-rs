@@ -140,3 +140,54 @@ fn content_length(header_text: &str) -> usize {
 fn find_header_end(data: &[u8]) -> Option<usize> {
     data.windows(4).position(|w| w == b"\r\n\r\n")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn find_header_end_locates_blank_line() {
+        assert_eq!(find_header_end(b"AB\r\n\r\nCD"), Some(2));
+        assert_eq!(find_header_end(b"no terminator\r\n"), None);
+    }
+
+    #[test]
+    fn content_length_parses_when_present() {
+        assert_eq!(
+            content_length("POST / HTTP/1.1\r\nContent-Length: 42\r\n"),
+            42
+        );
+        assert_eq!(content_length("content-length: 7"), 7);
+        assert_eq!(content_length("GET / HTTP/1.1"), 0);
+        assert_eq!(content_length("Content-Length: not-a-number"), 0);
+    }
+
+    #[tokio::test]
+    async fn round_trip_routes_by_method_and_path() {
+        let responder: Responder = Arc::new(|req: &Request| {
+            if req.method == "POST" && req.path == "/echo" {
+                (200, "ok".to_string())
+            } else {
+                (404, String::new())
+            }
+        });
+        let server = start(responder).await;
+        let client = reqwest::Client::new();
+
+        let resp = client
+            .post(format!("{}/echo", server.base_url))
+            .body("hello")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+        assert_eq!(resp.text().await.unwrap(), "ok");
+
+        let resp = client
+            .get(format!("{}/missing", server.base_url))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 404);
+    }
+}

@@ -238,7 +238,9 @@ mod tests {
 
     #[test]
     fn build_request_body_without_role_arn_errors() {
-        // Avoid leaking AWS_ROLE_ARN from the test environment.
+        // Serialize with other env-mutating credential tests, and avoid leaking
+        // AWS_ROLE_ARN from the test environment.
+        let _guard = crate::s3::creds::test_support::ENV_LOCK.blocking_lock();
         let prev = env::var("AWS_ROLE_ARN").ok();
         unsafe { env::remove_var("AWS_ROLE_ARN") };
         let provider = WebIdentityProvider::new("http://localhost:9000");

@@ -402,9 +402,8 @@ mod tests {
     mod network {
         use super::*;
         use crate::s3::creds::mock_http::{self, Request, Responder};
+        use crate::s3::creds::test_support::ENV_LOCK;
         use std::sync::Arc;
-        use std::sync::LazyLock;
-        use tokio::sync::Mutex;
 
         const CREDS_JSON: &str = r#"{
             "Code": "Success",
@@ -413,11 +412,6 @@ mod tests {
             "Token": "IMDSTOKEN",
             "Expiration": "2030-01-01T00:00:00Z"
         }"#;
-
-        // Serializes the network-flow tests: refresh() consults the container
-        // environment variables first, so an ECS test setting them must not run
-        // concurrently with an IMDS test.
-        static NET_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
         fn clear_container_env() {
             for key in [
@@ -432,7 +426,7 @@ mod tests {
 
         #[tokio::test]
         async fn imdsv2_full_flow_uses_token() {
-            let _guard = NET_LOCK.lock().await;
+            let _guard = ENV_LOCK.lock().await;
             clear_container_env();
 
             // Role and credential endpoints require the IMDSv2 token, proving the
@@ -468,7 +462,7 @@ mod tests {
 
         #[tokio::test]
         async fn imdsv1_fallback_when_token_blocked() {
-            let _guard = NET_LOCK.lock().await;
+            let _guard = ENV_LOCK.lock().await;
             clear_container_env();
 
             // Token endpoint is blocked (403, as with IMDSv1-only hosts); the
@@ -497,7 +491,7 @@ mod tests {
 
         #[tokio::test]
         async fn imds_no_role_errors() {
-            let _guard = NET_LOCK.lock().await;
+            let _guard = ENV_LOCK.lock().await;
             clear_container_env();
 
             let responder: Responder = Arc::new(|req: &Request| {
@@ -518,7 +512,7 @@ mod tests {
 
         #[tokio::test]
         async fn ecs_full_uri_flow() {
-            let _guard = NET_LOCK.lock().await;
+            let _guard = ENV_LOCK.lock().await;
             clear_container_env();
 
             let responder: Responder = Arc::new(|req: &Request| {

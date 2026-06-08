@@ -61,10 +61,7 @@ impl Provider for EnvProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    // Serializes tests that mutate process-wide environment variables.
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    use crate::s3::creds::test_support::ENV_LOCK;
 
     fn clear_env() {
         for key in [
@@ -80,7 +77,7 @@ mod tests {
 
     #[test]
     fn reads_primary_variables() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = ENV_LOCK.blocking_lock();
         clear_env();
         unsafe {
             env::set_var("AWS_ACCESS_KEY_ID", "AKID");
@@ -96,7 +93,7 @@ mod tests {
 
     #[test]
     fn falls_back_to_legacy_variables() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = ENV_LOCK.blocking_lock();
         clear_env();
         unsafe {
             env::set_var("AWS_ACCESS_KEY", "LEGACY_AK");
@@ -111,7 +108,7 @@ mod tests {
 
     #[test]
     fn empty_when_unset() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = ENV_LOCK.blocking_lock();
         clear_env();
         let creds = EnvProvider::new().fetch();
         assert!(creds.is_empty());

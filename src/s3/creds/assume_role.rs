@@ -133,7 +133,14 @@ impl AssumeRoleProvider {
     }
 
     /// Builds the form-urlencoded STS request body for the configured options.
-    fn build_request_body(&self) -> String {
+    /// Returns an error when the required `RoleArn` is unset or empty, so a
+    /// configuration mistake fails locally rather than as a remote STS error.
+    fn build_request_body(&self) -> Result<String, ValidationErr> {
+        let role_arn = self
+            .role_arn
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| xml_error("role ARN is required for AssumeRole"))?;
         let session_name = self
             .role_session_name
             .clone()
@@ -142,10 +149,8 @@ impl AssumeRoleProvider {
         serializer
             .append_pair("Action", "AssumeRole")
             .append_pair("Version", STS_VERSION)
-            .append_pair("RoleSessionName", &session_name);
-        if let Some(role_arn) = &self.role_arn {
-            serializer.append_pair("RoleArn", role_arn);
-        }
+            .append_pair("RoleSessionName", &session_name)
+            .append_pair("RoleArn", role_arn);
         if let Some(duration) = self.duration_seconds {
             serializer.append_pair("DurationSeconds", &duration.to_string());
         }
@@ -155,12 +160,12 @@ impl AssumeRoleProvider {
         if let Some(external_id) = &self.external_id {
             serializer.append_pair("ExternalId", external_id);
         }
-        serializer.finish()
+        Ok(serializer.finish())
     }
 
     /// Performs the signed STS exchange and stores the result in the cache.
     pub async fn refresh(&self) -> Result<Credentials, ValidationErr> {
-        let body = self.build_request_body();
+        let body = self.build_request_body()?;
         let url = reqwest::Url::parse(&self.sts_endpoint)
             .map_err(|e| xml_error(&format!("invalid STS endpoint: {e}")))?;
 
@@ -260,12 +265,14 @@ mod tests {
 
     #[test]
     fn build_request_body_minimal() {
-        let provider = AssumeRoleProvider::new("http://localhost:9000", "ak", "sk").unwrap();
-        let params = parse_body(&provider.build_request_body());
+        let provider = AssumeRoleProvider::new("http://localhost:9000", "ak", "sk")
+            .unwrap()
+            .role_arn("arn:aws:iam::123:role/test");
+        let params = parse_body(&provider.build_request_body().unwrap());
         assert_eq!(params["Action"], "AssumeRole");
         assert_eq!(params["Version"], "2011-06-15");
         assert_eq!(params["RoleSessionName"], DEFAULT_SESSION_NAME);
-        assert!(!params.contains_key("RoleArn"));
+        assert_eq!(params["RoleArn"], "arn:aws:iam::123:role/test");
         assert!(!params.contains_key("DurationSeconds"));
     }
 
@@ -278,12 +285,23 @@ mod tests {
             .duration_seconds(3600)
             .policy("{}")
             .external_id("ext-1");
-        let params = parse_body(&provider.build_request_body());
+        let params = parse_body(&provider.build_request_body().unwrap());
         assert_eq!(params["RoleArn"], "arn:aws:iam::123:role/test");
         assert_eq!(params["RoleSessionName"], "sess");
         assert_eq!(params["DurationSeconds"], "3600");
         assert_eq!(params["Policy"], "{}");
         assert_eq!(params["ExternalId"], "ext-1");
+    }
+
+    #[test]
+    fn build_request_body_requires_role_arn() {
+        let provider = AssumeRoleProvider::new("http://localhost:9000", "ak", "sk").unwrap();
+        assert!(provider.build_request_body().is_err());
+
+        let empty = AssumeRoleProvider::new("http://localhost:9000", "ak", "sk")
+            .unwrap()
+            .role_arn("");
+        assert!(empty.build_request_body().is_err());
     }
 
     #[test]
