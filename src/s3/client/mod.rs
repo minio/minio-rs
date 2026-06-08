@@ -481,6 +481,25 @@ impl MinioClient {
             .build()
     }
 
+    /// Primes the configured credential provider, performing any network
+    /// exchange it requires (for example STS or EC2/ECS metadata) and
+    /// refreshing its cached credentials.
+    ///
+    /// Network-backed providers such as [`LdapIdentityProvider`](crate::s3::creds::LdapIdentityProvider),
+    /// [`WebIdentityProvider`](crate::s3::creds::WebIdentityProvider),
+    /// [`IamRoleProvider`](crate::s3::creds::IamRoleProvider), and
+    /// [`ChainProvider`](crate::s3::creds::ChainProvider) return empty
+    /// credentials from the synchronous signing path until they are primed;
+    /// call this once before issuing requests (and again to force a refresh).
+    /// It is a no-op for synchronous providers such as
+    /// [`StaticProvider`](crate::s3::creds::StaticProvider).
+    pub async fn ensure_credentials(&self) -> Result<(), Error> {
+        if let Some(provider) = &self.shared.provider {
+            provider.ensure_credentials().await?;
+        }
+        Ok(())
+    }
+
     /// Returns whether this client uses an AWS host.
     pub fn is_aws_host(&self) -> bool {
         self.shared.base_url.is_aws_host()

@@ -74,6 +74,11 @@ pub struct CreateMultipartUpload {
     /// The checksum is included in response headers for verification.
     #[builder(default, setter(into))]
     checksum_algorithm: Option<ChecksumAlgorithm>,
+
+    /// Optional storage class for the object, sent as the `X-Amz-Storage-Class`
+    /// header. Applies to the whole object assembled from the multipart upload.
+    #[builder(default, setter(into))]
+    storage_class: Option<String>,
 }
 
 /// Builder type for [`CreateMultipartUpload`] that is returned by [`MinioClient::create_multipart_upload`](crate::s3::client::MinioClient::create_multipart_upload).
@@ -86,6 +91,7 @@ pub type CreateMultipartUploadBldr = CreateMultipartUploadBuilder<(
     (),
     (BucketName,),
     (ObjectKey,),
+    (),
     (),
     (),
     (),
@@ -113,6 +119,10 @@ impl ToS3Request for CreateMultipartUpload {
 
         if let Some(algorithm) = self.checksum_algorithm {
             headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
+        }
+
+        if let Some(storage_class) = &self.storage_class {
+            headers.add(X_AMZ_STORAGE_CLASS, storage_class);
         }
 
         Ok(S3Request::builder()
@@ -398,6 +408,13 @@ pub struct UploadPart {
     /// Defaults to false for backwards compatibility.
     #[builder(default = false)]
     use_signed_streaming: bool,
+
+    /// Optional storage class for the object, sent as the `X-Amz-Storage-Class`
+    /// header. Only meaningful for a single-part `PutObject`; for multipart
+    /// uploads the storage class is set on `CreateMultipartUpload`, not on
+    /// individual parts.
+    #[builder(default, setter(into))]
+    storage_class: Option<String>,
 }
 
 /// Builder type for [`UploadPart`] that is returned by [`MinioClient::upload_part`](crate::s3::client::MinioClient::upload_part).
@@ -419,6 +436,7 @@ pub type UploadPartBldr = UploadPartBuilder<(
     (),
     (Option<String>,),
     (Option<u16>,),
+    (),
     (),
     (),
     (),
@@ -473,6 +491,10 @@ impl ToS3Request for UploadPart {
             headers.add(algorithm.header_name(), checksum_value);
         }
 
+        if let Some(storage_class) = &self.storage_class {
+            headers.add(X_AMZ_STORAGE_CLASS, storage_class);
+        }
+
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
 
         if let Some(upload_id) = self.upload_id {
@@ -516,6 +538,33 @@ pub type PutObjectBldr = PutObjectBuilder<((UploadPart,),)>;
 
 impl S3Api for PutObject {
     type S3Response = PutObjectResponse;
+}
+
+impl PutObject {
+    /// Sets the storage class for the object, sent as the `X-Amz-Storage-Class`
+    /// header (e.g. `STANDARD`, `REDUCED_REDUNDANCY`).
+    ///
+    /// Unlike the other write builders, this is a method on the built
+    /// [`PutObject`] rather than on its builder, so it is called *after*
+    /// `.build()`:
+    ///
+    /// ```no_run
+    /// # use minio::s3::{MinioClient, types::S3Api, segmented_bytes::SegmentedBytes};
+    /// # async fn run(client: MinioClient, data: SegmentedBytes) -> Result<(), Box<dyn std::error::Error>> {
+    /// client
+    ///     .put_object("bucket", "object", data)?
+    ///     .build()
+    ///     .storage_class("REDUCED_REDUNDANCY")
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn storage_class(mut self, storage_class: impl Into<String>) -> Self {
+        self.inner.storage_class = Some(storage_class.into());
+        self
+    }
 }
 
 impl ToS3Request for PutObject {
@@ -607,6 +656,12 @@ pub struct PutObjectContent {
     #[builder(default, setter(into))]
     not_match_etag: Option<String>,
 
+    /// Optional storage class for the object, sent as the `X-Amz-Storage-Class`
+    /// header. Applied to the single-part `PutObject` for small objects and to
+    /// `CreateMultipartUpload` for objects uploaded in multiple parts.
+    #[builder(default, setter(into))]
+    storage_class: Option<String>,
+
     // source data
     #[builder(!default, setter(into))] // force required + accept Into<String>
     input_content: ObjectContent,
@@ -629,6 +684,7 @@ pub type PutObjectContentBldr = PutObjectContentBuilder<(
     (),
     (BucketName,),
     (ObjectKey,),
+    (),
     (),
     (),
     (),
@@ -703,6 +759,7 @@ impl PutObjectContent {
                     checksum_algorithm: self.checksum_algorithm,
                     use_trailing_checksum: self.use_trailing_checksum,
                     use_signed_streaming: self.use_signed_streaming,
+                    storage_class: self.storage_class.clone(),
                 })
                 .build()
                 .send()
@@ -731,6 +788,7 @@ impl PutObjectContent {
                 .legal_hold(self.legal_hold)
                 .content_type(self.content_type.clone())
                 .checksum_algorithm(self.checksum_algorithm)
+                .storage_class(self.storage_class.clone())
                 .build()
                 .send()
                 .await?;
@@ -831,6 +889,7 @@ impl PutObjectContent {
                 checksum_algorithm: self.checksum_algorithm,
                 use_trailing_checksum: self.use_trailing_checksum,
                 use_signed_streaming: self.use_signed_streaming,
+                storage_class: None,
             }
             .send()
             .await?;
@@ -1123,6 +1182,57 @@ mod tests {
         let mut headers = Multimap::new();
         add_conditional_etag_headers(&mut headers, &Some("*".to_string()), &None);
         assert_eq!(headers.get(IF_MATCH).map(String::as_str), Some("*"));
+    }
+
+    fn test_client() -> MinioClient {
+        use crate::s3::creds::StaticProvider;
+        use crate::s3::http::BaseUrl;
+        let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+        let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+        MinioClient::new(base_url, Some(provider), None, None).unwrap()
+    }
+
+    #[test]
+    fn put_object_emits_storage_class_header() {
+        let data = SegmentedBytes::from(Bytes::from_static(b"hello"));
+        let req = test_client()
+            .put_object("test-bucket", "test-object", data)
+            .unwrap()
+            .build()
+            .storage_class("REDUCED_REDUNDANCY")
+            .to_s3request()
+            .unwrap();
+        assert_eq!(
+            req.headers.get(X_AMZ_STORAGE_CLASS).map(String::as_str),
+            Some("REDUCED_REDUNDANCY")
+        );
+    }
+
+    #[test]
+    fn put_object_omits_storage_class_by_default() {
+        let data = SegmentedBytes::from(Bytes::from_static(b"hello"));
+        let req = test_client()
+            .put_object("test-bucket", "test-object", data)
+            .unwrap()
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert!(req.headers.get(X_AMZ_STORAGE_CLASS).is_none());
+    }
+
+    #[test]
+    fn create_multipart_upload_emits_storage_class_header() {
+        let req = test_client()
+            .create_multipart_upload("test-bucket", "test-object")
+            .unwrap()
+            .storage_class(Some("GLACIER".to_string()))
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert_eq!(
+            req.headers.get(X_AMZ_STORAGE_CLASS).map(String::as_str),
+            Some("GLACIER")
+        );
     }
 
     /// Objects small enough to fit in MAX_MULTIPART_COUNT parts at DEFAULT_PART_SIZE

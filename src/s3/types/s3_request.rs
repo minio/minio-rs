@@ -53,7 +53,7 @@ pub struct S3Request {
     pub(crate) query_params: Multimap,
 
     #[builder(default)]
-    headers: Multimap,
+    pub(crate) headers: Multimap,
 
     #[builder(default, setter(into))]
     body: Option<Arc<SegmentedBytes>>,

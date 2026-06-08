@@ -17,12 +17,30 @@
 
 use crate::s3::error::ValidationErr;
 use crate::s3::utils::{UtcTime, from_iso8601utc, utc_now};
+use async_trait::async_trait;
 use chrono::Duration;
 use std::sync::RwLock;
 use xmltree::Element;
 
+mod assume_role;
+mod chain;
+mod env;
+mod file;
+mod iam;
+mod web_identity;
+
+#[cfg(test)]
+pub(crate) mod mock_http;
+
+pub use assume_role::AssumeRoleProvider;
+pub use chain::ChainProvider;
+pub use env::EnvProvider;
+pub use file::FileProvider;
+pub use iam::IamRoleProvider;
+pub use web_identity::WebIdentityProvider;
+
 /// STS API version used by the MinIO Security Token Service.
-const STS_VERSION: &str = "2011-06-15";
+pub(crate) const STS_VERSION: &str = "2011-06-15";
 
 /// Fraction of a credential's lifetime that must elapse before it is
 /// refreshed, mirroring Go's `defaultExpiryWindow` of 0.8 (refresh once 80% of
@@ -30,16 +48,63 @@ const STS_VERSION: &str = "2011-06-15";
 const DEFAULT_EXPIRY_WINDOW_RATIO: f64 = 0.8;
 
 /// Credentials containing access key, secret key, and optional session token.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Credentials {
     pub access_key: String,
     pub secret_key: String,
     pub session_token: Option<String>,
 }
 
+impl std::fmt::Debug for Credentials {
+    /// Redacts the secret key and session token so credentials are never
+    /// emitted in plaintext through `Debug` (logs, panics, error chains).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Credentials")
+            .field("access_key", &self.access_key)
+            .field("secret_key", &"<redacted>")
+            .field(
+                "session_token",
+                &self.session_token.as_ref().map(|_| "<redacted>"),
+            )
+            .finish()
+    }
+}
+
+impl Credentials {
+    /// Returns credentials with empty access and secret keys, used by
+    /// network-backed providers before they have been primed.
+    pub(crate) fn empty() -> Self {
+        Credentials {
+            access_key: String::new(),
+            secret_key: String::new(),
+            session_token: None,
+        }
+    }
+
+    /// Returns true when no usable access/secret key pair is present.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.access_key.is_empty() || self.secret_key.is_empty()
+    }
+}
+
 /// Provider trait to fetch credentials.
-pub trait Provider: std::fmt::Debug {
+///
+/// [`fetch`](Provider::fetch) is synchronous and infallible: network-backed
+/// providers return their cached credentials and may yield
+/// [`Credentials::empty`] until primed. [`ensure_credentials`](Provider::ensure_credentials)
+/// performs any network exchange (refreshing the cache) and is what
+/// [`ChainProvider`] awaits to select a working provider before signing.
+#[async_trait]
+pub trait Provider: std::fmt::Debug + Send + Sync {
+    /// Returns the currently available credentials without performing any I/O.
     fn fetch(&self) -> Credentials;
+
+    /// Ensures credentials are available, performing any required network
+    /// exchange or refresh, and returns them. The default implementation
+    /// returns [`Provider::fetch`] for synchronous providers.
+    async fn ensure_credentials(&self) -> Result<Credentials, ValidationErr> {
+        Ok(self.fetch())
+    }
 }
 
 /// Static credential provider.
@@ -68,6 +133,7 @@ impl StaticProvider {
     }
 }
 
+#[async_trait]
 impl Provider for StaticProvider {
     fn fetch(&self) -> Credentials {
         self.creds.clone()
@@ -93,7 +159,6 @@ fn validate_config_name(name: &str) -> Result<(), ValidationErr> {
 /// infallible, the network exchange happens in [`LdapIdentityProvider::refresh`]
 /// (async) and must be primed before the provider is used for signing; see
 /// [`LdapIdentityProvider::fetch_credentials`].
-#[derive(Debug)]
 pub struct LdapIdentityProvider {
     sts_endpoint: String,
     ldap_username: String,
@@ -104,10 +169,25 @@ pub struct LdapIdentityProvider {
     cache: RwLock<Option<CachedCredentials>>,
 }
 
+impl std::fmt::Debug for LdapIdentityProvider {
+    /// Redacts the LDAP password so it is never emitted in plaintext.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LdapIdentityProvider")
+            .field("sts_endpoint", &self.sts_endpoint)
+            .field("ldap_username", &self.ldap_username)
+            .field("ldap_password", &"<redacted>")
+            .field("policy", &self.policy)
+            .field("duration_seconds", &self.duration_seconds)
+            .field("config_name", &self.config_name)
+            .field("cache", &self.cache)
+            .finish()
+    }
+}
+
 #[derive(Clone, Debug)]
-struct CachedCredentials {
-    creds: Credentials,
-    refresh_after: UtcTime,
+pub(crate) struct CachedCredentials {
+    pub(crate) creds: Credentials,
+    pub(crate) refresh_after: UtcTime,
 }
 
 impl LdapIdentityProvider {
@@ -217,18 +297,24 @@ impl LdapIdentityProvider {
     }
 }
 
-fn xml_error(message: &str) -> ValidationErr {
+pub(crate) fn xml_error(message: &str) -> ValidationErr {
     ValidationErr::XmlError {
         message: message.to_string(),
         source: None,
     }
 }
 
-fn parse_ldap_identity_response(xml: &str) -> Result<CachedCredentials, ValidationErr> {
+/// Parses a `Credentials` element nested under `result_element` from an STS XML
+/// response (`AssumeRole*` actions share this layout) into cached credentials
+/// with a computed refresh deadline.
+pub(crate) fn parse_sts_credentials(
+    xml: &str,
+    result_element: &str,
+) -> Result<CachedCredentials, ValidationErr> {
     let now = utc_now();
     let root = Element::parse(xml.as_bytes())?;
     let credentials = root
-        .get_child("AssumeRoleWithLDAPIdentityResult")
+        .get_child(result_element)
         .and_then(|result| result.get_child("Credentials"))
         .ok_or_else(|| xml_error("missing Credentials in STS response"))?;
 
@@ -259,9 +345,13 @@ fn parse_ldap_identity_response(xml: &str) -> Result<CachedCredentials, Validati
     })
 }
 
+fn parse_ldap_identity_response(xml: &str) -> Result<CachedCredentials, ValidationErr> {
+    parse_sts_credentials(xml, "AssumeRoleWithLDAPIdentityResult")
+}
+
 /// Computes the instant after which credentials should be refreshed, applying
 /// the expiry-window ratio to the time remaining until `expiration`.
-fn refresh_deadline(now: UtcTime, expiration: UtcTime) -> UtcTime {
+pub(crate) fn refresh_deadline(now: UtcTime, expiration: UtcTime) -> UtcTime {
     let remaining = expiration - now;
     if remaining <= Duration::zero() {
         return expiration;
@@ -270,6 +360,7 @@ fn refresh_deadline(now: UtcTime, expiration: UtcTime) -> UtcTime {
     now + Duration::milliseconds(elapsed_before_refresh as i64)
 }
 
+#[async_trait]
 impl Provider for LdapIdentityProvider {
     fn fetch(&self) -> Credentials {
         self.cache
@@ -277,11 +368,11 @@ impl Provider for LdapIdentityProvider {
             .unwrap()
             .as_ref()
             .map(|cached| cached.creds.clone())
-            .unwrap_or_else(|| Credentials {
-                access_key: String::new(),
-                secret_key: String::new(),
-                session_token: None,
-            })
+            .unwrap_or_else(Credentials::empty)
+    }
+
+    async fn ensure_credentials(&self) -> Result<Credentials, ValidationErr> {
+        self.fetch_credentials().await
     }
 }
 
@@ -388,6 +479,22 @@ mod tests {
         assert!(creds.access_key.is_empty());
         assert!(creds.secret_key.is_empty());
         assert!(creds.session_token.is_none());
+    }
+
+    #[test]
+    fn debug_redacts_secrets() {
+        let creds = Credentials {
+            access_key: "AKIATEST".to_string(),
+            secret_key: "SUPERSECRET".to_string(),
+            session_token: Some("SECRETTOKEN".to_string()),
+        };
+        let rendered = format!("{creds:?}");
+        assert!(rendered.contains("AKIATEST"));
+        assert!(!rendered.contains("SUPERSECRET"));
+        assert!(!rendered.contains("SECRETTOKEN"));
+
+        let provider = LdapIdentityProvider::new("http://localhost:9000", "alice", "ldap-pass");
+        assert!(!format!("{provider:?}").contains("ldap-pass"));
     }
 
     #[test]
