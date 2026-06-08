@@ -1,0 +1,55 @@
+name: MinIO Rust Library (AIStor features)
+
+# Runs the integration tests for AIStor-only APIs (QoS, Inventory, RenameObject,
+# UpdateObjectEncryption, LDAP STS) against a licensed AIStor server.
+#
+# These features are not available in the community MinIO server used by the main
+# `rust.yml` workflow, so the corresponding integration tests gate themselves on
+# the MINIO_AISTOR environment variable and are skipped elsewhere.
+#
+# Setup: add a repository secret named AISTOR_LICENSE containing a license token.
+# A free-tier token can be read from the public playground with:
+#
+#     mc admin config get play/ subnet
+#
+# The job guards itself off when the secret is absent (e.g. on forks), so it
+# never fails for contributors who cannot provide a license.
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  RUST_LOG: debug
+  CARGO_TERM_COLOR: always
+
+jobs:
+  aistor-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guard on AIStor license
+        id: guard
+        run: |
+          if [ -z "${{ secrets.AISTOR_LICENSE }}" ]; then
+            echo "AISTOR_LICENSE secret not set; skipping AIStor integration tests."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run AIStor integration tests
+        if: steps.guard.outputs.run == 'true'
+        env:
+          MINIO_LICENSE: ${{ secrets.AISTOR_LICENSE }}
+        run: |
+          ./tests/start-aistor-server.sh
+          export SERVER_ENDPOINT=localhost:9000
+          export ACCESS_KEY=minioadmin
+          export SECRET_KEY=minioadmin
+          export ENABLE_HTTPS=1
+          export SERVER_REGION=us-east-1
+          export MINIO_SSL_CERT_FILE=./tests/public.crt
+          export MINIO_AISTOR=1
+          cargo test -- --nocapture
