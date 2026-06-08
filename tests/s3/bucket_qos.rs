@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use minio::s3::builders::{QOSConfig, QOSRule, QOS_CONFIG_VERSION_CURRENT};
+use minio::s3::builders::{QOS_CONFIG_VERSION_CURRENT, QOSConfig, QOSRule};
 use minio::s3::response::{GetBucketQOSResponse, SetBucketQOSResponse};
 use minio::s3::types::{BucketName, S3Api};
 use minio_common::test_context::TestContext;
@@ -23,9 +23,7 @@ use minio_common::test_context::TestContext;
 #[minio_macros::test]
 async fn bucket_qos(ctx: TestContext, bucket: BucketName) {
     if std::env::var("MINIO_AISTOR").is_err() {
-        eprintln!(
-            "skipping bucket_qos: requires AIStor (set MINIO_AISTOR=1)"
-        );
+        eprintln!("skipping bucket_qos: requires AIStor (set MINIO_AISTOR=1)");
         return;
     }
 
@@ -36,7 +34,7 @@ async fn bucket_qos(ctx: TestContext, bucket: BucketName) {
             label: "ingest".to_string(),
             priority: 10,
             object_prefix: "logs/".to_string(),
-            api: "PutObject".to_string(),
+            api: "s3.PutObject".to_string(),
             rate: 100,
             burst: 200,
             limit: "rps".to_string(),
@@ -66,5 +64,5 @@ async fn bucket_qos(ctx: TestContext, bucket: BucketName) {
     assert_eq!(got.rules.len(), 1);
     assert_eq!(got.rules[0].id, "rule-1");
     assert_eq!(got.rules[0].object_prefix, "logs/");
-    assert_eq!(got.rules[0].api, "PutObject");
+    assert_eq!(got.rules[0].api, "s3.PutObject");
 }

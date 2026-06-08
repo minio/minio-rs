@@ -26,9 +26,7 @@ use minio_common::utils::rand_object_name;
 #[minio_macros::test]
 async fn get_object_attributes(ctx: TestContext, bucket: BucketName) {
     if std::env::var("MINIO_AISTOR").is_err() {
-        eprintln!(
-            "skipping get_object_attributes: requires AIStor (set MINIO_AISTOR=1)"
-        );
+        eprintln!("skipping get_object_attributes: requires AIStor (set MINIO_AISTOR=1)");
         return;
     }
 
@@ -63,5 +61,8 @@ async fn get_object_attributes(ctx: TestContext, bucket: BucketName) {
     let attrs = resp.attributes().unwrap();
     assert_eq!(attrs.object_size, size);
     // The body ETag is returned quoted (e.g. "abc..."); only assert presence.
-    assert!(attrs.etag.is_some(), "expected an ETag in object attributes");
+    assert!(
+        attrs.etag.is_some(),
+        "expected an ETag in object attributes"
+    );
 }

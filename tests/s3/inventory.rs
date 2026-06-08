@@ -24,15 +24,13 @@ use minio_common::test_context::TestContext;
 /// YAML template for an inventory config, stores it, then reads it back and
 /// confirms the ID round-trips.
 ///
-/// NOTE: The server may validate the inventory destination when storing the
-/// config; this uses the server-generated template verbatim to avoid feeding
-/// the server a YAML shape it would reject.
+/// NOTE: The server validates the inventory destination when storing the
+/// config, so the generated template's placeholder destination bucket is
+/// rewritten to the (existing) test bucket.
 #[minio_macros::test]
 async fn inventory(ctx: TestContext, bucket: BucketName) {
     if std::env::var("MINIO_AISTOR").is_err() {
-        eprintln!(
-            "skipping inventory: requires AIStor (set MINIO_AISTOR=1)"
-        );
+        eprintln!("skipping inventory: requires AIStor (set MINIO_AISTOR=1)");
         return;
     }
 
@@ -46,7 +44,14 @@ async fn inventory(ctx: TestContext, bucket: BucketName) {
         .send()
         .await
         .unwrap();
-    let yaml_def = resp.yaml().unwrap().to_string();
+    // The generated template uses "mybucket" as a placeholder destination; the
+    // server requires the destination bucket to exist, so point it at the
+    // (already-created) test bucket.
+    let yaml_def = resp
+        .yaml()
+        .unwrap()
+        .to_string()
+        .replace("mybucket", bucket.as_str());
     assert!(!yaml_def.is_empty(), "expected a non-empty YAML template");
 
     let _resp: PutBucketInventoryConfigurationResponse = ctx

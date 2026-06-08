@@ -28,9 +28,7 @@ use minio_common::utils::rand_object_name;
 #[minio_macros::test]
 async fn rename_object(ctx: TestContext, bucket: BucketName) {
     if std::env::var("MINIO_AISTOR").is_err() {
-        eprintln!(
-            "skipping rename_object: requires AIStor (set MINIO_AISTOR=1)"
-        );
+        eprintln!("skipping rename_object: requires AIStor (set MINIO_AISTOR=1)");
         return;
     }
 
