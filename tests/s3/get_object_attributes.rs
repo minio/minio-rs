@@ -25,11 +25,6 @@ use minio_common::utils::rand_object_name;
 /// Verifies the parsed attributes report the object's size and a non-empty ETag.
 #[minio_macros::test]
 async fn get_object_attributes(ctx: TestContext, bucket: BucketName) {
-    if std::env::var("MINIO_AISTOR").is_err() {
-        eprintln!("skipping get_object_attributes: requires AIStor (set MINIO_AISTOR=1)");
-        return;
-    }
-
     let object = rand_object_name();
     let size = 64_u64;
 

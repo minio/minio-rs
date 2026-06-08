@@ -29,11 +29,6 @@ use minio_common::test_context::TestContext;
 /// rewritten to the (existing) test bucket.
 #[minio_macros::test]
 async fn inventory(ctx: TestContext, bucket: BucketName) {
-    if std::env::var("MINIO_AISTOR").is_err() {
-        eprintln!("skipping inventory: requires AIStor (set MINIO_AISTOR=1)");
-        return;
-    }
-
     let id = "inv-test-1";
 
     let resp: GenerateInventoryConfigYamlResponse = ctx

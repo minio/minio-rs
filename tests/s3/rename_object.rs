@@ -27,12 +27,8 @@ use minio_common::utils::rand_object_name;
 /// is gone and the destination exists.
 #[minio_macros::test]
 async fn rename_object(ctx: TestContext, bucket: BucketName) {
-    if std::env::var("MINIO_AISTOR").is_err() {
-        eprintln!("skipping rename_object: requires AIStor (set MINIO_AISTOR=1)");
-        return;
-    }
-
-    let src = rand_object_name();
+    // Source key has a space to exercise rename-source percent-encoding.
+    let src = format!("rename src {}.bin", rand_object_name());
     let dst = rand_object_name();
     let size = 32_u64;
 

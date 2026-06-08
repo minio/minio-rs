@@ -19,6 +19,7 @@ use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::RenameObjectResponse;
 use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request};
+use crate::s3::utils::urlencode_object_key;
 use http::Method;
 use typed_builder::TypedBuilder;
 
@@ -114,12 +115,16 @@ fn conditional_etag_value(etag: &str) -> String {
     }
 }
 
+/// Builds the `x-amz-rename-source` header value as `/{bucket}/{object}`, percent-encoding
+/// the object key (preserving `/`) the same way minio-go encodes `x-amz-copy-source`.
+/// The server decodes it via `url.Parse().Path`, so the key must be encoded here.
 fn rename_source_value(bucket: &str, src_object: &str) -> String {
-    let mut value = String::with_capacity(bucket.len() + src_object.len() + 2);
+    let encoded = urlencode_object_key(src_object);
+    let mut value = String::with_capacity(bucket.len() + encoded.len() + 2);
     value.push('/');
     value.push_str(bucket);
     value.push('/');
-    value.push_str(src_object);
+    value.push_str(&encoded);
     value
 }
 
@@ -217,10 +222,10 @@ mod tests {
     }
 
     #[test]
-    fn rename_source_value_not_url_encoded() {
+    fn rename_source_value_url_encodes_object() {
         assert_eq!(
             rename_source_value("my-bucket", "a b+c?d"),
-            "/my-bucket/a b+c?d"
+            "/my-bucket/a%20b%2Bc%3Fd"
         );
     }
 

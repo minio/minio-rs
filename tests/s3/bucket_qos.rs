@@ -22,11 +22,6 @@ use minio_common::test_context::TestContext;
 /// rule, then reads it back and confirms the rule round-trips.
 #[minio_macros::test]
 async fn bucket_qos(ctx: TestContext, bucket: BucketName) {
-    if std::env::var("MINIO_AISTOR").is_err() {
-        eprintln!("skipping bucket_qos: requires AIStor (set MINIO_AISTOR=1)");
-        return;
-    }
-
     let config = QOSConfig {
         version: QOS_CONFIG_VERSION_CURRENT.to_string(),
         rules: vec![QOSRule {

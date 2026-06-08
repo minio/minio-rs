@@ -24,18 +24,12 @@ use minio_common::utils::rand_object_name;
 /// UpdateObjectEncryption is a MinIO (AIStor) extension that rotates the SSE-KMS
 /// envelope of an existing object in place.
 ///
-/// NOTE: This requires a KMS-backed AIStor deployment and an object already
-/// encrypted with SSE-S3 or SSE-KMS; the `kms_key_arn` must name a key the
-/// server knows. Against a server without KMS configured this request will
-/// fail, so the test only runs when MINIO_AISTOR is set and assumes the AIStor
-/// CI job provides a usable KMS key via UPDATE_OBJECT_ENCRYPTION_KMS_KEY.
+/// NOTE: The success path requires a KMS-backed deployment; the `kms_key_arn`
+/// must name a key the server knows (set UPDATE_OBJECT_ENCRYPTION_KMS_KEY). When
+/// KMS is not configured the request still exercises the full SDK path and the
+/// KMS-key-not-found response is tolerated.
 #[minio_macros::test]
 async fn update_object_encryption(ctx: TestContext, bucket: BucketName) {
-    if std::env::var("MINIO_AISTOR").is_err() {
-        eprintln!("skipping update_object_encryption: requires AIStor (set MINIO_AISTOR=1)");
-        return;
-    }
-
     let kms_key = std::env::var("UPDATE_OBJECT_ENCRYPTION_KMS_KEY")
         .unwrap_or_else(|_| "minio-default-key".to_string());
 
