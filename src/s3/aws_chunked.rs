@@ -65,10 +65,11 @@ use bytes::Bytes;
 use crc_fast::{CrcAlgorithm, Digest as CrcFastDigest};
 use futures_util::Stream;
 #[cfg(feature = "ring")]
-use ring::digest::{Context, SHA256};
+use ring::digest::{Context, SHA256, SHA512};
 use sha1::{Digest as Sha1Digest, Sha1};
 #[cfg(not(feature = "ring"))]
-use sha2::Sha256;
+use sha2::{Sha256, Sha512};
+use std::hash::Hasher;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context as TaskContext, Poll};
@@ -86,6 +87,14 @@ enum StreamingHasher {
     Sha256(Context),
     #[cfg(not(feature = "ring"))]
     Sha256(Sha256),
+    Md5(md5::Context),
+    #[cfg(feature = "ring")]
+    Sha512(Context),
+    #[cfg(not(feature = "ring"))]
+    Sha512(Sha512),
+    XxHash64(twox_hash::XxHash64),
+    XxHash3(twox_hash::XxHash3_64),
+    XxHash128(twox_hash::XxHash3_128),
 }
 
 impl StreamingHasher {
@@ -105,6 +114,18 @@ impl StreamingHasher {
             ChecksumAlgorithm::SHA256 => StreamingHasher::Sha256(Context::new(&SHA256)),
             #[cfg(not(feature = "ring"))]
             ChecksumAlgorithm::SHA256 => StreamingHasher::Sha256(Sha256::new()),
+            ChecksumAlgorithm::MD5 => StreamingHasher::Md5(md5::Context::new()),
+            #[cfg(feature = "ring")]
+            ChecksumAlgorithm::SHA512 => StreamingHasher::Sha512(Context::new(&SHA512)),
+            #[cfg(not(feature = "ring"))]
+            ChecksumAlgorithm::SHA512 => StreamingHasher::Sha512(Sha512::new()),
+            ChecksumAlgorithm::XXHash64 => {
+                StreamingHasher::XxHash64(twox_hash::XxHash64::with_seed(0))
+            }
+            ChecksumAlgorithm::XXHash3 => StreamingHasher::XxHash3(twox_hash::XxHash3_64::new()),
+            ChecksumAlgorithm::XXHash128 => {
+                StreamingHasher::XxHash128(twox_hash::XxHash3_128::new())
+            }
         }
     }
 
@@ -118,6 +139,11 @@ impl StreamingHasher {
             StreamingHasher::Sha256(ctx) => ctx.update(data),
             #[cfg(not(feature = "ring"))]
             StreamingHasher::Sha256(h) => h.update(data),
+            StreamingHasher::Md5(ctx) => ctx.consume(data),
+            StreamingHasher::Sha512(h) => h.update(data),
+            StreamingHasher::XxHash64(h) => h.write(data),
+            StreamingHasher::XxHash3(h) => h.write(data),
+            StreamingHasher::XxHash128(h) => h.write(data),
         }
     }
 
@@ -138,6 +164,17 @@ impl StreamingHasher {
                 let result = h.finalize();
                 b64_encode(&result[..])
             }
+            StreamingHasher::Md5(ctx) => b64_encode(ctx.finalize().as_slice()),
+            #[cfg(feature = "ring")]
+            StreamingHasher::Sha512(ctx) => b64_encode(ctx.finish().as_ref()),
+            #[cfg(not(feature = "ring"))]
+            StreamingHasher::Sha512(h) => {
+                let result = h.finalize();
+                b64_encode(&result[..])
+            }
+            StreamingHasher::XxHash64(h) => b64_encode(h.finish().to_be_bytes()),
+            StreamingHasher::XxHash3(h) => b64_encode(h.finish().to_be_bytes()),
+            StreamingHasher::XxHash128(h) => b64_encode(h.finish_128().to_be_bytes()),
         }
     }
 }
@@ -302,9 +339,13 @@ pub fn calculate_encoded_length(
     let trailer_header_len = algorithm.header_name().len() as u64;
     let checksum_b64_len = match algorithm {
         ChecksumAlgorithm::CRC32 | ChecksumAlgorithm::CRC32C => 8, // 4 bytes -> 8 chars base64
-        ChecksumAlgorithm::CRC64NVME => 12,                        // 8 bytes -> 12 chars base64
+        ChecksumAlgorithm::CRC64NVME | ChecksumAlgorithm::XXHash64 | ChecksumAlgorithm::XXHash3 => {
+            12
+        } // 8 bytes -> 12 chars base64
         ChecksumAlgorithm::SHA1 => 28,                             // 20 bytes -> 28 chars base64
         ChecksumAlgorithm::SHA256 => 44,                           // 32 bytes -> 44 chars base64
+        ChecksumAlgorithm::MD5 | ChecksumAlgorithm::XXHash128 => 24, // 16 bytes -> 24 chars base64
+        ChecksumAlgorithm::SHA512 => 88,                           // 64 bytes -> 88 chars base64
     };
     let trailer_len = trailer_header_len + 1 + checksum_b64_len + 4; // +1 for ":", +4 for "\r\n\r\n"
 
@@ -578,9 +619,13 @@ pub fn calculate_signed_encoded_length(
     let trailer_header_len = algorithm.header_name().to_lowercase().len() as u64;
     let checksum_b64_len = match algorithm {
         ChecksumAlgorithm::CRC32 | ChecksumAlgorithm::CRC32C => 8,
-        ChecksumAlgorithm::CRC64NVME => 12,
+        ChecksumAlgorithm::CRC64NVME | ChecksumAlgorithm::XXHash64 | ChecksumAlgorithm::XXHash3 => {
+            12
+        }
         ChecksumAlgorithm::SHA1 => 28,
         ChecksumAlgorithm::SHA256 => 44,
+        ChecksumAlgorithm::MD5 | ChecksumAlgorithm::XXHash128 => 24,
+        ChecksumAlgorithm::SHA512 => 88,
     };
     let checksum_trailer = trailer_header_len + 1 + checksum_b64_len + 2; // +1 for ":", +2 for "\r\n"
 

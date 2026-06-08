@@ -84,6 +84,8 @@ pub const X_AMZ_CONTENT_SHA256: &str = "X-Amz-Content-SHA256";
 
 pub const X_AMZ_SECURITY_TOKEN: &str = "X-Amz-Security-Token";
 
+pub const X_AMZ_S3SESSION_TOKEN: &str = "X-Amz-S3session-Token";
+
 pub const X_AMZ_SERVER_SIDE_ENCRYPTION: &str = "X-Amz-Server-Side-Encryption";
 
 pub const X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT: &str = "X-Amz-Server-Side-Encryption-Context";
@@ -120,7 +122,23 @@ pub const X_AMZ_CHECKSUM_SHA256: &str = "X-Amz-Checksum-SHA256";
 
 pub const X_AMZ_CHECKSUM_CRC64NVME: &str = "X-Amz-Checksum-CRC64NVME";
 
+pub const X_AMZ_CHECKSUM_MD5: &str = "X-Amz-Checksum-MD5";
+
+pub const X_AMZ_CHECKSUM_SHA512: &str = "X-Amz-Checksum-SHA512";
+
+pub const X_AMZ_CHECKSUM_XXHASH64: &str = "X-Amz-Checksum-XXHASH64";
+
+pub const X_AMZ_CHECKSUM_XXHASH3: &str = "X-Amz-Checksum-XXHASH3";
+
+pub const X_AMZ_CHECKSUM_XXHASH128: &str = "X-Amz-Checksum-XXHASH128";
+
 pub const X_AMZ_CHECKSUM_TYPE: &str = "X-Amz-Checksum-Type";
+
+pub const X_AMZ_OBJECT_ATTRIBUTES: &str = "X-Amz-Object-Attributes";
+
+pub const X_AMZ_MAX_PARTS: &str = "X-Amz-Max-Parts";
+
+pub const X_AMZ_PART_NUMBER_MARKER: &str = "X-Amz-Part-Number-Marker";
 
 pub const X_AMZ_TRAILER: &str = "X-Amz-Trailer";
 

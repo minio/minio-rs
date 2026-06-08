@@ -319,6 +319,7 @@ fn sign_v4(
 /// Signs and updates headers for the given S3 request parameters.
 ///
 /// The `cache` parameter should be the per-client `signing_key_cache` from `SharedClientItems`.
+#[allow(dead_code)]
 pub(crate) fn sign_v4_s3(
     cache: &RwLock<SigningKeyCache>,
     method: &Method,
@@ -353,7 +354,6 @@ pub(crate) fn sign_v4_s3(
 /// becomes part of the credential scope (`.../<region>/<service_type>/aws4_request`).
 ///
 /// The `cache` parameter should be the per-client `signing_key_cache` from `SharedClientItems`.
-#[allow(dead_code)]
 pub(crate) fn sign_v4_with_service_type(
     cache: &RwLock<SigningKeyCache>,
     service_type: &str,
@@ -397,7 +397,46 @@ pub(crate) fn presign_v4(
     date: UtcTime,
     expires: u32,
 ) {
-    let scope = get_scope(date, region, "s3");
+    presign_v4_with_service_type(
+        cache,
+        "s3",
+        method,
+        host,
+        uri,
+        region,
+        query_params,
+        access_key,
+        secret_key,
+        date,
+        expires,
+    )
+}
+
+/// Signs and updates query parameters for the given presigned request using a custom service type.
+///
+/// Unlike [`presign_v4`], which hardcodes the `"s3"` service, this allows presigning for
+/// alternate service types such as `"s3-outposts"`. The `service_type` becomes part of the
+/// credential scope (`.../<region>/<service_type>/aws4_request`).
+///
+/// Note: any session-token query parameter (e.g. `X-Amz-Security-Token` or, for Outposts,
+/// `X-Amz-S3session-Token`) must be added to `query_params` by the caller before invoking
+/// this function so that it is included in the canonical request.
+///
+/// The `cache` parameter should be the per-client `signing_key_cache` from `SharedClientItems`.
+pub(crate) fn presign_v4_with_service_type(
+    cache: &RwLock<SigningKeyCache>,
+    service_type: &str,
+    method: &Method,
+    host: &str,
+    uri: &str,
+    region: &Region,
+    query_params: &mut Multimap,
+    access_key: &str,
+    secret_key: &str,
+    date: UtcTime,
+    expires: u32,
+) {
+    let scope = get_scope(date, region, service_type);
     let canonical_headers = "host:".to_string() + host;
     let signed_headers = "host";
 
@@ -417,7 +456,7 @@ pub(crate) fn presign_v4(
         "UNSIGNED-PAYLOAD",
     );
     let string_to_sign = get_string_to_sign(date, &scope, &canonical_request_hash);
-    let signing_key = get_signing_key(cache, secret_key, date, region, "s3");
+    let signing_key = get_signing_key(cache, secret_key, date, region, service_type);
     let signature = get_signature(&signing_key, string_to_sign.as_bytes());
 
     query_params.add(X_AMZ_SIGNATURE, signature);
@@ -548,6 +587,7 @@ pub fn sign_trailer(
 /// each chunk during streaming.
 ///
 /// The `cache` parameter should be the per-client `signing_key_cache` from `SharedClientItems`.
+#[allow(dead_code)]
 pub(crate) fn sign_v4_s3_with_context(
     cache: &RwLock<SigningKeyCache>,
     method: &Method,
@@ -560,7 +600,43 @@ pub(crate) fn sign_v4_s3_with_context(
     content_sha256: &str,
     date: UtcTime,
 ) -> ChunkSigningContext {
-    let scope = get_scope(date, region, "s3");
+    sign_v4_with_service_type_and_context(
+        cache,
+        "s3",
+        method,
+        uri,
+        region,
+        headers,
+        query_params,
+        access_key,
+        secret_key,
+        content_sha256,
+        date,
+    )
+}
+
+/// Signs request and returns context for chunk signing using a custom service type.
+///
+/// Like [`sign_v4_s3_with_context`] but the credential scope uses the given
+/// `service_type` (e.g. `"s3-outposts"`). The resulting [`ChunkSigningContext`]
+/// carries that scope, so subsequent [`sign_chunk`]/[`sign_trailer`] calls produce
+/// signatures bound to the same service.
+///
+/// The `cache` parameter should be the per-client `signing_key_cache` from `SharedClientItems`.
+pub(crate) fn sign_v4_with_service_type_and_context(
+    cache: &RwLock<SigningKeyCache>,
+    service_type: &str,
+    method: &Method,
+    uri: &str,
+    region: &Region,
+    headers: &mut Multimap,
+    query_params: &Multimap,
+    access_key: &str,
+    secret_key: &str,
+    content_sha256: &str,
+    date: UtcTime,
+) -> ChunkSigningContext {
+    let scope = get_scope(date, region, service_type);
     let (signed_headers, canonical_headers) = headers.get_canonical_headers();
     let canonical_query_string = query_params.get_canonical_query_string();
     let canonical_request_hash = get_canonical_request_hash(
@@ -572,7 +648,7 @@ pub(crate) fn sign_v4_s3_with_context(
         content_sha256,
     );
     let string_to_sign = get_string_to_sign(date, &scope, &canonical_request_hash);
-    let signing_key = get_signing_key(cache, secret_key, date, region, "s3");
+    let signing_key = get_signing_key(cache, secret_key, date, region, service_type);
     let signature = get_signature(&signing_key, string_to_sign.as_bytes());
     let authorization = get_authorization(access_key, &scope, &signed_headers, &signature);
 
@@ -886,6 +962,79 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_sign_v4_with_service_type_outposts_scope() {
+        let cache = test_cache();
+        let region = Region::new("eu-central-1").unwrap();
+        let mut headers = Multimap::new();
+        let date = get_test_date();
+        let content_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        let access_key = "AKID";
+        let secret_key = "SECRET";
+
+        headers.add(
+            HOST,
+            "myap-123.op-xyz.s3-outposts.eu-central-1.amazonaws.com",
+        );
+        headers.add(X_AMZ_CONTENT_SHA256, content_sha256);
+        headers.add(X_AMZ_DATE, "20130524T000000Z");
+
+        let query_params = Multimap::new();
+
+        sign_v4_with_service_type(
+            &cache,
+            "s3-outposts",
+            &Method::GET,
+            "/bucket/key",
+            &region,
+            &mut headers,
+            &query_params,
+            access_key,
+            secret_key,
+            content_sha256,
+            date,
+        );
+
+        let auth_header = headers.get("Authorization").unwrap();
+        assert!(auth_header.contains("/eu-central-1/s3-outposts/aws4_request"));
+        assert!(!auth_header.contains("/s3/aws4_request"));
+    }
+
+    #[test]
+    fn test_sign_v4_with_service_type_and_context_outposts_scope() {
+        let cache = test_cache();
+        let region = Region::new("us-west-2").unwrap();
+        let mut headers = Multimap::new();
+        let date = get_test_date();
+        let content_sha256 = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER";
+        let access_key = "AKID";
+        let secret_key = "SECRET";
+
+        headers.add(HOST, "myap.op-xyz.s3-outposts.us-west-2.amazonaws.com");
+        headers.add(X_AMZ_CONTENT_SHA256, content_sha256);
+        headers.add(X_AMZ_DATE, "20130524T000000Z");
+
+        let query_params = Multimap::new();
+
+        let context = sign_v4_with_service_type_and_context(
+            &cache,
+            "s3-outposts",
+            &Method::PUT,
+            "/bucket/key",
+            &region,
+            &mut headers,
+            &query_params,
+            access_key,
+            secret_key,
+            content_sha256,
+            date,
+        );
+
+        assert_eq!(context.scope, "20130524/us-west-2/s3-outposts/aws4_request");
+        let auth_header = headers.get("Authorization").unwrap();
+        assert!(auth_header.contains("/us-west-2/s3-outposts/aws4_request"));
+    }
+
     // ===========================
     // presign_v4 Tests (Public API)
     // ===========================
@@ -1017,6 +1166,35 @@ mod tests {
         assert!(credential.contains("/us-east-1/"));
         assert!(credential.contains("/s3/"));
         assert!(credential.contains("/aws4_request"));
+    }
+
+    #[test]
+    fn test_presign_v4_with_service_type_outposts_scope() {
+        let cache = test_cache();
+        let region = Region::new("eu-central-1").unwrap();
+        let mut query_params = Multimap::new();
+        let access_key = "AKID";
+        let secret_key = "SECRET";
+        let date = get_test_date();
+
+        presign_v4_with_service_type(
+            &cache,
+            "s3-outposts",
+            &Method::GET,
+            "myap.op-xyz.s3-outposts.eu-central-1.amazonaws.com",
+            "/bucket/key",
+            &region,
+            &mut query_params,
+            access_key,
+            secret_key,
+            date,
+            3600,
+        );
+
+        let credential = query_params.get("X-Amz-Credential").unwrap();
+        assert!(credential.contains("/eu-central-1/s3-outposts/aws4_request"));
+        assert!(!credential.contains("/s3/aws4_request"));
+        assert!(query_params.contains_key("X-Amz-Signature"));
     }
 
     // ===========================

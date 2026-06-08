@@ -14,13 +14,16 @@
 // limitations under the License.
 
 use crate::s3::client::MinioClient;
-use crate::s3::error::{Error, ValidationErr};
+use crate::s3::error::{Error, S3ServerError, ValidationErr};
 use crate::s3::header_constants::*;
+use crate::s3::minio_error_response::MinioErrorCode;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::{DeleteError, DeleteObjectResponse, DeleteObjectsResponse};
+use crate::s3::response_traits::{HasIsDeleteMarker, HasVersion};
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{
-    BucketName, ListEntry, ObjectKey, Region, S3Api, S3Request, ToS3Request, ToStream, VersionId,
+    BucketName, FromS3Response, ListEntry, ObjectKey, Region, S3Api, S3Request, ToS3Request,
+    ToStream, VersionId,
 };
 use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
 use async_trait::async_trait;
@@ -279,8 +282,119 @@ pub struct DeleteObjects {
     verbose_mode: bool,
 }
 
+#[async_trait]
 impl S3Api for DeleteObjects {
     type S3Response = DeleteObjectsResponse;
+
+    async fn send(self) -> Result<Self::S3Response, Error> {
+        if self.client.shared.base_url.is_google_endpoint() {
+            return self.send_single_deletes().await;
+        }
+        let mut req: S3Request = self.to_s3request()?;
+        let resp: Result<reqwest::Response, Error> = req.execute().await;
+        DeleteObjectsResponse::from_s3response(req, resp).await
+    }
+}
+
+impl DeleteObjects {
+    /// Builds one single-object [`DeleteObject`] request per object.
+    ///
+    /// Used for endpoints that do not support the S3 multi-object delete API (e.g. GCS),
+    /// which require each object to be deleted with an individual DELETE request.
+    fn to_single_requests(&self) -> Vec<DeleteObject> {
+        self.objects
+            .iter()
+            .map(|object| {
+                DeleteObject::builder()
+                    .client(self.client.clone())
+                    .bucket(&self.bucket)
+                    .object(object.clone())
+                    .bypass_governance_mode(self.bypass_governance_mode)
+                    .region(self.region.clone())
+                    .extra_headers(self.extra_headers.clone())
+                    .extra_query_params(self.extra_query_params.clone())
+                    .build()
+            })
+            .collect()
+    }
+
+    /// Deletes objects one-by-one using single DELETE requests and synthesizes a
+    /// [`DeleteObjectsResponse`] from the per-object results.
+    ///
+    /// GCS does not support the S3 multi-object delete API. Missing objects/versions are
+    /// not treated as errors and are skipped, mirroring the multi-object delete behavior.
+    async fn send_single_deletes(self) -> Result<DeleteObjectsResponse, Error> {
+        check_bucket_name(&self.bucket, true)?;
+        if self.objects.len() > MAX_DELETE_OBJECTS {
+            return Err(ValidationErr::TooManyDeleteObjects(self.objects.len()).into());
+        }
+
+        let verbose_mode = self.verbose_mode;
+        let requests = self.to_single_requests();
+
+        let mut body = String::from(r#"<?xml version="1.0" encoding="UTF-8"?><DeleteResult>"#);
+        for request in requests {
+            let object = request.object.clone();
+            match request.send().await {
+                Ok(resp) => {
+                    if verbose_mode {
+                        let delete_marker = resp.is_delete_marker().unwrap_or(false);
+                        body.push_str("<Deleted><Key>");
+                        body.push_str(object.key.as_str());
+                        body.push_str("</Key>");
+                        if let Some(v) = object.version_id.as_ref() {
+                            body.push_str("<VersionId>");
+                            body.push_str(v.as_str());
+                            body.push_str("</VersionId>");
+                        }
+                        if delete_marker {
+                            body.push_str("<DeleteMarker>true</DeleteMarker>");
+                            if let Some(v) = resp.version_id() {
+                                body.push_str("<DeleteMarkerVersionId>");
+                                body.push_str(v.as_str());
+                                body.push_str("</DeleteMarkerVersionId>");
+                            }
+                        }
+                        body.push_str("</Deleted>");
+                    }
+                }
+                Err(Error::S3Server(S3ServerError::S3Error(e))) => {
+                    let code = e.code();
+                    let not_found = matches!(code, MinioErrorCode::NoSuchKey)
+                        || matches!(&code, MinioErrorCode::OtherError(c) if c == "NoSuchVersion");
+                    if not_found {
+                        continue;
+                    }
+                    body.push_str("<Error><Key>");
+                    body.push_str(object.key.as_str());
+                    body.push_str("</Key>");
+                    if let Some(v) = object.version_id.as_ref() {
+                        body.push_str("<VersionId>");
+                        body.push_str(v.as_str());
+                        body.push_str("</VersionId>");
+                    }
+                    body.push_str("<Code>");
+                    body.push_str(&code.to_string());
+                    body.push_str("</Code><Message>");
+                    body.push_str(e.message().as_deref().unwrap_or_default());
+                    body.push_str("</Message></Error>");
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        body.push_str("</DeleteResult>");
+
+        let synthetic = http::Response::new(Bytes::from(body));
+        let request = DeleteObjects::builder()
+            .client(self.client)
+            .bucket(self.bucket)
+            .objects(Vec::new())
+            .region(self.region)
+            .build()
+            .to_s3request()?;
+        DeleteObjectsResponse::from_s3response(request, Ok(reqwest::Response::from(synthetic)))
+            .await
+    }
 }
 
 /// Builder type for [`DeleteObjects`] that is returned by [`MinioClient::delete_objects`](crate::s3::client::MinioClient::delete_objects).
@@ -549,5 +663,43 @@ mod tests {
         assert_eq!(only.objects.len(), MAX_DELETE_OBJECTS);
 
         assert!(streaming.next_request().await.unwrap().is_none());
+    }
+
+    fn gcs_client() -> MinioClient {
+        let base_url: BaseUrl = "https://storage.googleapis.com".parse().unwrap();
+        let provider = StaticProvider::new("access", "secret", None);
+        MinioClient::new(base_url, Some(provider), None, None).unwrap()
+    }
+
+    fn delete_objects(client: MinioClient, count: usize) -> DeleteObjects {
+        DeleteObjects::builder()
+            .client(client)
+            .bucket(BucketName::new("test-bucket").unwrap())
+            .objects((0..count).map(dummy_object).collect::<Vec<_>>())
+            .build()
+    }
+
+    /// The GCS fallback must produce exactly one single-object DELETE request per object,
+    /// each a valid DELETE request without the bulk `?delete` query parameter.
+    #[test]
+    fn gcs_path_produces_one_request_per_object() {
+        let count = 5;
+        let requests = delete_objects(gcs_client(), count).to_single_requests();
+        assert_eq!(requests.len(), count);
+
+        for request in requests {
+            let s3req = request.to_s3request().unwrap();
+            assert!(!s3req.query_params.contains_key("delete"));
+            assert_eq!(s3req.bucket.as_ref().unwrap().as_str(), "test-bucket");
+        }
+    }
+
+    /// The non-GCS path must still build a single bulk multi-object delete POST request
+    /// carrying the `?delete` query parameter.
+    #[test]
+    fn non_gcs_path_builds_bulk_request() {
+        let s3req = delete_objects(dummy_client(), 5).to_s3request().unwrap();
+        assert!(s3req.query_params.contains_key("delete"));
+        assert_eq!(s3req.bucket.as_ref().unwrap().as_str(), "test-bucket");
     }
 }

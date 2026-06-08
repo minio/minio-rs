@@ -316,16 +316,8 @@ pub trait HasChecksumHeaders: HasS3Fields {
     /// - Verify integrity after downloading to disk
     #[inline]
     fn get_checksum(&self, algorithm: ChecksumAlgorithm) -> Option<String> {
-        let header_name = match algorithm {
-            ChecksumAlgorithm::CRC32 => X_AMZ_CHECKSUM_CRC32,
-            ChecksumAlgorithm::CRC32C => X_AMZ_CHECKSUM_CRC32C,
-            ChecksumAlgorithm::SHA1 => X_AMZ_CHECKSUM_SHA1,
-            ChecksumAlgorithm::SHA256 => X_AMZ_CHECKSUM_SHA256,
-            ChecksumAlgorithm::CRC64NVME => X_AMZ_CHECKSUM_CRC64NVME,
-        };
-
         self.headers()
-            .get(header_name)
+            .get(algorithm.header_name())
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string())
     }

@@ -53,10 +53,16 @@ impl S3Api for GetRegion {
 
 impl ToS3Request for GetRegion {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
+        let region =
+            if self.client.shared.is_outposts && !self.client.shared.base_url.region.is_empty() {
+                self.client.shared.base_url.region.clone()
+            } else {
+                DEFAULT_REGION.clone()
+            };
         Ok(S3Request::builder()
             .client(self.client)
             .method(Method::GET)
-            .region(Some(DEFAULT_REGION.clone()))
+            .region(Some(region))
             .bucket(self.bucket)
             .query_params(insert(self.extra_query_params, "location"))
             .headers(self.extra_headers.unwrap_or_default())

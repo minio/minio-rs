@@ -47,7 +47,8 @@ use uuid::Uuid;
 use xmltree::Element;
 
 use crate::s3::builders::{
-    BucketExists, ComposeSource, MAX_MULTIPART_COUNT, MAX_OBJECT_SIZE, MAX_PART_SIZE, MIN_PART_SIZE,
+    BucketExists, ComposeSource, MAX_MULTIPART_COUNT, MAX_OBJECT_SIZE, MIN_PART_SIZE,
+    effective_part_size,
 };
 pub use crate::s3::client::hooks::RequestHooks;
 use crate::s3::creds::Provider;
@@ -61,7 +62,9 @@ use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::*;
 use crate::s3::response_traits::{HasEtagFromHeaders, HasS3Fields};
 use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::signer::{SigningKeyCache, sign_v4_s3, sign_v4_s3_with_context};
+use crate::s3::signer::{
+    SigningKeyCache, sign_v4_with_service_type, sign_v4_with_service_type_and_context,
+};
 use crate::s3::types::{BucketName, ObjectKey};
 use crate::s3::utils::{
     ChecksumAlgorithm, EMPTY_SHA256, check_ssec_with_log, sha256_hash_sb, to_amz_date, utc_now,
@@ -69,6 +72,7 @@ use crate::s3::utils::{
 
 mod append_object;
 mod bucket_exists;
+mod bucket_qos;
 mod copy_object;
 mod create_bucket;
 mod delete_bucket;
@@ -89,6 +93,7 @@ mod get_bucket_replication;
 mod get_bucket_tagging;
 mod get_bucket_versioning;
 mod get_object;
+mod get_object_attributes;
 mod get_object_legal_hold;
 mod get_object_lock_config;
 mod get_object_prompt;
@@ -115,6 +120,7 @@ mod put_object_retention;
 mod put_object_tagging;
 mod select_object_content;
 mod stat_object;
+mod update_object_encryption;
 
 use super::types::{Region, S3Api};
 use std::sync::LazyLock;
@@ -423,6 +429,7 @@ impl MinioClientBuilder {
         Ok(MinioClient {
             http_client: builder.build().map_err(ValidationErr::from)?,
             shared: Arc::new(SharedClientItems {
+                is_outposts: self.base_url.is_outposts(),
                 base_url: self.base_url,
                 provider: self.provider,
                 client_hooks: self.client_hooks,
@@ -540,7 +547,9 @@ impl MinioClient {
     pub(crate) async fn calculate_part_count(
         &self,
         sources: &mut [ComposeSource],
+        part_size: Option<u64>,
     ) -> Result<u16, Error> {
+        let part_size = effective_part_size(part_size)?;
         let mut object_size = 0_u64;
         let mut i = 0;
         let mut part_count = 0_u16;
@@ -597,13 +606,13 @@ impl MinioClient {
                 return Err(ValidationErr::InvalidObjectSize(object_size).into());
             }
 
-            if size > MAX_PART_SIZE {
-                let mut count = size / MAX_PART_SIZE;
-                let mut last_part_size = size - (count * MAX_PART_SIZE);
+            if size > part_size {
+                let mut count = size / part_size;
+                let mut last_part_size = size - (count * part_size);
                 if last_part_size > 0 {
                     count += 1;
                 } else {
-                    last_part_size = MAX_PART_SIZE;
+                    last_part_size = part_size;
                 }
 
                 if last_part_size < MIN_PART_SIZE && sources_len != 1 && i != sources_len {
@@ -747,7 +756,15 @@ impl MinioClient {
             headers.add("x-minio-redirect-to", url.to_string());
         }
 
-        // For signed streaming, we need the signing context for chunk signatures
+        // For signed streaming, we need the signing context for chunk signatures.
+        // S3 on Outposts is signed with the "s3-outposts" service name; all other
+        // endpoints use "s3". The override to SignatureV4 that the AWS SDKs apply for
+        // Outposts is implicit here since this client always signs with V4.
+        let service_type = if self.shared.is_outposts {
+            "s3-outposts"
+        } else {
+            "s3"
+        };
         let chunk_signing_context = if let Some(p) = &self.shared.provider {
             let creds = p.fetch();
             if creds.session_token.is_some() {
@@ -755,9 +772,9 @@ impl MinioClient {
             }
 
             if use_signed_trailing {
-                // Use the version that returns chunk signing context
-                Some(sign_v4_s3_with_context(
+                Some(sign_v4_with_service_type_and_context(
                     &self.shared.signing_key_cache,
+                    service_type,
                     method,
                     &url.path,
                     region,
@@ -769,9 +786,9 @@ impl MinioClient {
                     date,
                 ))
             } else {
-                // Standard signing without context
-                sign_v4_s3(
+                sign_v4_with_service_type(
                     &self.shared.signing_key_cache,
+                    service_type,
                     method,
                     &url.path,
                     region,
@@ -1002,8 +1019,13 @@ impl MinioClient {
                 if let Some(token) = &creds.session_token {
                     headers.add(X_AMZ_SECURITY_TOKEN, token);
                 }
-                sign_v4_s3(
+                sign_v4_with_service_type(
                     &self.shared.signing_key_cache,
+                    if self.shared.is_outposts {
+                        "s3-outposts"
+                    } else {
+                        "s3"
+                    },
                     &method,
                     &url.path,
                     region,
@@ -1216,8 +1238,13 @@ impl MinioClient {
                 headers.add(X_AMZ_SECURITY_TOKEN, token);
             }
 
-            sign_v4_s3(
+            sign_v4_with_service_type(
                 &self.shared.signing_key_cache,
+                if self.shared.is_outposts {
+                    "s3-outposts"
+                } else {
+                    "s3"
+                },
                 &Method::GET,
                 &url.path,
                 region,
@@ -1280,6 +1307,9 @@ impl MinioClient {
 #[derive(Debug)]
 pub(crate) struct SharedClientItems {
     pub(crate) base_url: BaseUrl,
+    /// Whether the endpoint is S3 on Outposts, computed once at construction.
+    /// Outposts requests are signed with the `s3-outposts` service name.
+    pub(crate) is_outposts: bool,
     pub(crate) provider: Option<Arc<dyn Provider + Send + Sync + 'static>>,
     client_hooks: Vec<Arc<dyn RequestHooks + Send + Sync + 'static>>,
     region_map: DashMap<String, String>,

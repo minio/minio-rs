@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::s3::builders::{MAX_MULTIPART_COUNT, MAX_PART_SIZE};
+use crate::s3::builders::{MAX_MULTIPART_COUNT, MAX_PART_SIZE, MIN_PART_SIZE};
 use crate::s3::client::MinioClient;
 use crate::s3::error::{Error, ValidationErr};
 use crate::s3::header_constants::*;
@@ -498,6 +498,8 @@ pub struct ComposeObjectInternal {
     sources: Vec<ComposeSource>,
     #[builder(default, setter(into))]
     checksum_algorithm: Option<ChecksumAlgorithm>,
+    #[builder(default, setter(into))]
+    part_size: Option<u64>,
 }
 
 /// Builder type for [`ComposeObjectInternal`] that is returned by `compose_object_internal` method.
@@ -518,17 +520,24 @@ pub type ComposeObjectInternalBldr = ComposeObjectInternalBuilder<(
     (),
     (),
     (),
+    (),
 )>;
 
 impl ComposeObjectInternal {
     #[async_recursion]
     pub async fn send(self) -> (Result<ComposeObjectResponse, Error>, Option<UploadId>) {
         let mut sources = self.sources;
-        let part_count: u16 = match self.client.calculate_part_count(&mut sources).await {
+        let part_count: u16 = match self
+            .client
+            .calculate_part_count(&mut sources, self.part_size)
+            .await
+        {
             Ok(v) => v,
             Err(e) => return (Err(e), None),
         };
         let sources = sources; // Note: make sources readonly
+
+        let part_size = self.part_size.unwrap_or(MAX_PART_SIZE);
 
         if (part_count == 1) && sources[0].offset.is_none() && sources[0].length.is_none() {
             // the provided data contains one part: no need to use multipart upload,
@@ -624,7 +633,7 @@ impl ComposeObjectInternal {
                 let mut headers = source.get_headers();
                 headers.add_multimap(ssec_headers.clone());
 
-                if size <= MAX_PART_SIZE {
+                if size <= part_size {
                     part_number += 1;
                     if let Some(l) = source.length {
                         headers.add(
@@ -669,7 +678,7 @@ impl ComposeObjectInternal {
                         .and_then(|alg| resp.get_checksum(alg).map(|v| (alg, v)));
                     parts.push(PartInfo::new(part_number, etag, size, checksum));
                 } else {
-                    let part_ranges = calculate_part_ranges(offset, size, MAX_PART_SIZE);
+                    let part_ranges = calculate_part_ranges(offset, size, part_size);
                     for (part_offset, length) in part_ranges {
                         part_number += 1;
                         let end_bytes = part_offset + length - 1;
@@ -775,6 +784,8 @@ pub struct ComposeObject {
     sources: Vec<ComposeSource>,
     #[builder(default, setter(into))]
     checksum_algorithm: Option<ChecksumAlgorithm>,
+    #[builder(default, setter(into))]
+    part_size: Option<u64>,
 }
 
 /// Builder type for [`ComposeObject`] that is returned by [`MinioClient::compose_object`](crate::s3::client::MinioClient::compose_object).
@@ -794,6 +805,7 @@ pub type ComposeObjectBldr = ComposeObjectBuilder<(
     (),
     (),
     (Vec<ComposeSource>,),
+    (),
     (),
 )>;
 
@@ -815,6 +827,7 @@ impl ComposeObject {
             .legal_hold(self.legal_hold)
             .sources(self.sources)
             .checksum_algorithm(self.checksum_algorithm)
+            .part_size(self.part_size)
             .build()
             .send()
             .await;
@@ -1116,6 +1129,19 @@ fn into_headers_copy_object(
 ///
 /// # Returns
 /// Vector of (offset, length) tuples for each part
+/// Resolves the part size to use for a compose operation.
+///
+/// An explicit `part_size` must lie within `[MIN_PART_SIZE, MAX_PART_SIZE]`; when
+/// unset the operation falls back to `MAX_PART_SIZE`, preserving prior behavior.
+pub(crate) fn effective_part_size(part_size: Option<u64>) -> Result<u64, ValidationErr> {
+    match part_size {
+        Some(v) if v < MIN_PART_SIZE => Err(ValidationErr::InvalidMinPartSize(v)),
+        Some(v) if v > MAX_PART_SIZE => Err(ValidationErr::InvalidMaxPartSize(v)),
+        Some(v) => Ok(v),
+        None => Ok(MAX_PART_SIZE),
+    }
+}
+
 fn calculate_part_ranges(
     start_offset: u64,
     total_size: u64,
@@ -1219,5 +1245,51 @@ mod tests {
                 assert_eq!(*length, 5000, "Part {} should be max_part_size", i);
             }
         }
+    }
+
+    #[test]
+    fn test_effective_part_size_unset_defaults_to_max() {
+        assert_eq!(effective_part_size(None).unwrap(), MAX_PART_SIZE);
+    }
+
+    #[test]
+    fn test_effective_part_size_in_range_used_verbatim() {
+        let custom = 64 * 1024 * 1024;
+        assert_eq!(effective_part_size(Some(custom)).unwrap(), custom);
+        assert_eq!(
+            effective_part_size(Some(MIN_PART_SIZE)).unwrap(),
+            MIN_PART_SIZE
+        );
+        assert_eq!(
+            effective_part_size(Some(MAX_PART_SIZE)).unwrap(),
+            MAX_PART_SIZE
+        );
+    }
+
+    #[test]
+    fn test_effective_part_size_out_of_range_rejected() {
+        match effective_part_size(Some(MIN_PART_SIZE - 1)) {
+            Err(ValidationErr::InvalidMinPartSize(v)) => assert_eq!(v, MIN_PART_SIZE - 1),
+            other => panic!("expected InvalidMinPartSize, got {other:?}"),
+        }
+        match effective_part_size(Some(MAX_PART_SIZE + 1)) {
+            Err(ValidationErr::InvalidMaxPartSize(v)) => assert_eq!(v, MAX_PART_SIZE + 1),
+            other => panic!("expected InvalidMaxPartSize, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_calculate_part_ranges_custom_part_size_splits_accordingly() {
+        let total_size: u64 = 25_000;
+        let default_ranges = calculate_part_ranges(0, total_size, MAX_PART_SIZE);
+        assert_eq!(default_ranges, vec![(0, total_size)]);
+
+        let custom_ranges = calculate_part_ranges(0, total_size, 10_000);
+        assert_eq!(
+            custom_ranges,
+            vec![(0, 10_000), (10_000, 10_000), (20_000, 5_000)]
+        );
+        let total: u64 = custom_ranges.iter().map(|(_, len)| len).sum();
+        assert_eq!(total, total_size);
     }
 }

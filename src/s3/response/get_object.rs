@@ -33,10 +33,11 @@ use futures_util::{Stream, TryStreamExt};
 use http::HeaderMap;
 use http::header::LAST_MODIFIED;
 #[cfg(feature = "ring")]
-use ring::digest::{Context, SHA256};
+use ring::digest::{Context, SHA256, SHA512};
 use sha1::{Digest as Sha1Digest, Sha1};
 #[cfg(not(feature = "ring"))]
-use sha2::Sha256;
+use sha2::{Sha256, Sha512};
+use std::hash::Hasher;
 use std::io;
 use std::mem;
 use std::pin::Pin;
@@ -65,6 +66,14 @@ enum ChecksumHasher {
     Sha256(Context),
     #[cfg(not(feature = "ring"))]
     Sha256(Sha256),
+    Md5(md5::Context),
+    #[cfg(feature = "ring")]
+    Sha512(Context),
+    #[cfg(not(feature = "ring"))]
+    Sha512(Sha512),
+    XxHash64(twox_hash::XxHash64),
+    XxHash3(twox_hash::XxHash3_64),
+    XxHash128(twox_hash::XxHash3_128),
 }
 
 impl ChecksumHasher {
@@ -92,6 +101,18 @@ impl ChecksumHasher {
             ChecksumAlgorithm::SHA256 => ChecksumHasher::Sha256(Context::new(&SHA256)),
             #[cfg(not(feature = "ring"))]
             ChecksumAlgorithm::SHA256 => ChecksumHasher::Sha256(Sha256::new()),
+            ChecksumAlgorithm::MD5 => ChecksumHasher::Md5(md5::Context::new()),
+            #[cfg(feature = "ring")]
+            ChecksumAlgorithm::SHA512 => ChecksumHasher::Sha512(Context::new(&SHA512)),
+            #[cfg(not(feature = "ring"))]
+            ChecksumAlgorithm::SHA512 => ChecksumHasher::Sha512(Sha512::new()),
+            ChecksumAlgorithm::XXHash64 => {
+                ChecksumHasher::XxHash64(twox_hash::XxHash64::with_seed(0))
+            }
+            ChecksumAlgorithm::XXHash3 => ChecksumHasher::XxHash3(twox_hash::XxHash3_64::new()),
+            ChecksumAlgorithm::XXHash128 => {
+                ChecksumHasher::XxHash128(twox_hash::XxHash3_128::new())
+            }
         }
     }
 
@@ -113,6 +134,11 @@ impl ChecksumHasher {
             ChecksumHasher::Sha256(ctx) => ctx.update(data),
             #[cfg(not(feature = "ring"))]
             ChecksumHasher::Sha256(hasher) => hasher.update(data),
+            ChecksumHasher::Md5(ctx) => ctx.consume(data),
+            ChecksumHasher::Sha512(hasher) => hasher.update(data),
+            ChecksumHasher::XxHash64(hasher) => hasher.write(data),
+            ChecksumHasher::XxHash3(hasher) => hasher.write(data),
+            ChecksumHasher::XxHash128(hasher) => hasher.write(data),
         }
     }
 
@@ -142,6 +168,17 @@ impl ChecksumHasher {
                 let result = hasher.finalize();
                 b64_encode(&result[..])
             }
+            ChecksumHasher::Md5(ctx) => b64_encode(ctx.finalize().as_slice()),
+            #[cfg(feature = "ring")]
+            ChecksumHasher::Sha512(ctx) => b64_encode(ctx.finish().as_ref()),
+            #[cfg(not(feature = "ring"))]
+            ChecksumHasher::Sha512(hasher) => {
+                let result = hasher.finalize();
+                b64_encode(&result[..])
+            }
+            ChecksumHasher::XxHash64(hasher) => b64_encode(hasher.finish().to_be_bytes()),
+            ChecksumHasher::XxHash3(hasher) => b64_encode(hasher.finish().to_be_bytes()),
+            ChecksumHasher::XxHash128(hasher) => b64_encode(hasher.finish_128().to_be_bytes()),
         }
     }
 }

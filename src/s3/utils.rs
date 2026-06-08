@@ -26,10 +26,10 @@ use lazy_static::lazy_static;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use regex::Regex;
 #[cfg(feature = "ring")]
-use ring::digest::{Context, SHA256};
+use ring::digest::{Context, SHA256, SHA512};
 use sha1::{Digest as Sha1Digest, Sha1};
 #[cfg(not(feature = "ring"))]
-use sha2::Sha256;
+use sha2::{Sha256, Sha512};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -189,6 +189,11 @@ pub enum ChecksumAlgorithm {
     SHA1,
     SHA256,
     CRC64NVME,
+    MD5,
+    SHA512,
+    XXHash64,
+    XXHash3,
+    XXHash128,
 }
 
 impl ChecksumAlgorithm {
@@ -200,6 +205,11 @@ impl ChecksumAlgorithm {
             ChecksumAlgorithm::SHA1 => "SHA1",
             ChecksumAlgorithm::SHA256 => "SHA256",
             ChecksumAlgorithm::CRC64NVME => "CRC64NVME",
+            ChecksumAlgorithm::MD5 => "MD5",
+            ChecksumAlgorithm::SHA512 => "SHA512",
+            ChecksumAlgorithm::XXHash64 => "XXHASH64",
+            ChecksumAlgorithm::XXHash3 => "XXHASH3",
+            ChecksumAlgorithm::XXHash128 => "XXHASH128",
         }
     }
 
@@ -212,6 +222,11 @@ impl ChecksumAlgorithm {
             ChecksumAlgorithm::SHA1 => X_AMZ_CHECKSUM_SHA1,
             ChecksumAlgorithm::SHA256 => X_AMZ_CHECKSUM_SHA256,
             ChecksumAlgorithm::CRC64NVME => X_AMZ_CHECKSUM_CRC64NVME,
+            ChecksumAlgorithm::MD5 => X_AMZ_CHECKSUM_MD5,
+            ChecksumAlgorithm::SHA512 => X_AMZ_CHECKSUM_SHA512,
+            ChecksumAlgorithm::XXHash64 => X_AMZ_CHECKSUM_XXHASH64,
+            ChecksumAlgorithm::XXHash3 => X_AMZ_CHECKSUM_XXHASH3,
+            ChecksumAlgorithm::XXHash128 => X_AMZ_CHECKSUM_XXHASH128,
         }
     }
 }
@@ -228,6 +243,11 @@ impl ChecksumAlgorithm {
 /// - `"SHA1"` / `"sha1"` - SHA-1 hash
 /// - `"SHA256"` / `"sha256"` - SHA-256 hash
 /// - `"CRC64NVME"` / `"crc64nvme"` - CRC-64/NVME checksum
+/// - `"MD5"` / `"md5"` - MD5 hash
+/// - `"SHA512"` / `"sha512"` - SHA-512 hash
+/// - `"XXHASH64"` / `"xxhash64"` - XXHash64 checksum
+/// - `"XXHASH3"` / `"xxhash3"` - XXH3-64 checksum
+/// - `"XXHASH128"` / `"xxhash128"` - XXH3-128 checksum
 ///
 /// # Errors
 ///
@@ -242,7 +262,12 @@ impl FromStr for ChecksumAlgorithm {
             "SHA1" => Ok(ChecksumAlgorithm::SHA1),
             "SHA256" => Ok(ChecksumAlgorithm::SHA256),
             "CRC64NVME" => Ok(ChecksumAlgorithm::CRC64NVME),
-            _ => Err(format!("Unknown checksum algorithm: {}", s)),
+            "MD5" => Ok(ChecksumAlgorithm::MD5),
+            "SHA512" => Ok(ChecksumAlgorithm::SHA512),
+            "XXHASH64" => Ok(ChecksumAlgorithm::XXHash64),
+            "XXHASH3" => Ok(ChecksumAlgorithm::XXHash3),
+            "XXHASH128" => Ok(ChecksumAlgorithm::XXHash128),
+            _ => Err(format!("Unknown checksum algorithm: {s}")),
         }
     }
 }
@@ -287,6 +312,39 @@ pub fn crc64nvme_checksum(data: &[u8]) -> String {
     b64_encode(crc64nvme(data).to_be_bytes())
 }
 
+/// Computes MD5 hash and returns base64-encoded value (for checksums, not content-MD5).
+pub fn md5_checksum(data: &[u8]) -> String {
+    b64_encode(md5::compute(data).as_slice())
+}
+
+/// Computes SHA512 hash and returns base64-encoded value.
+pub fn sha512_checksum(data: &[u8]) -> String {
+    #[cfg(feature = "ring")]
+    {
+        b64_encode(ring::digest::digest(&SHA512, data).as_ref())
+    }
+    #[cfg(not(feature = "ring"))]
+    {
+        let result = Sha512::new_with_prefix(data).finalize();
+        b64_encode(&result[..])
+    }
+}
+
+/// Computes XXHash64 checksum and returns base64-encoded value.
+pub fn xxhash64_checksum(data: &[u8]) -> String {
+    b64_encode(twox_hash::XxHash64::oneshot(0, data).to_be_bytes())
+}
+
+/// Computes XXH3-64 checksum and returns base64-encoded value.
+pub fn xxhash3_checksum(data: &[u8]) -> String {
+    b64_encode(twox_hash::XxHash3_64::oneshot(data).to_be_bytes())
+}
+
+/// Computes XXH3-128 checksum and returns base64-encoded value.
+pub fn xxhash128_checksum(data: &[u8]) -> String {
+    b64_encode(twox_hash::XxHash3_128::oneshot(data).to_be_bytes())
+}
+
 /// Computes checksum based on the specified algorithm for contiguous byte slices.
 ///
 /// This function computes checksums on already-materialized `&[u8]` data. Use this when:
@@ -323,6 +381,11 @@ pub fn compute_checksum(algorithm: ChecksumAlgorithm, data: &[u8]) -> String {
         ChecksumAlgorithm::SHA1 => sha1_hash(data),
         ChecksumAlgorithm::SHA256 => sha256_checksum(data),
         ChecksumAlgorithm::CRC64NVME => crc64nvme_checksum(data),
+        ChecksumAlgorithm::MD5 => md5_checksum(data),
+        ChecksumAlgorithm::SHA512 => sha512_checksum(data),
+        ChecksumAlgorithm::XXHash64 => xxhash64_checksum(data),
+        ChecksumAlgorithm::XXHash3 => xxhash3_checksum(data),
+        ChecksumAlgorithm::XXHash128 => xxhash128_checksum(data),
     }
 }
 
@@ -419,6 +482,55 @@ pub fn compute_checksum_sb(algorithm: ChecksumAlgorithm, sb: &Arc<SegmentedBytes
                 digest.update(data.as_ref());
             }
             b64_encode(digest.finalize().to_be_bytes())
+        }
+        ChecksumAlgorithm::MD5 => {
+            let mut ctx = md5::Context::new();
+            for data in sb.iter() {
+                ctx.consume(data.as_ref());
+            }
+            b64_encode(ctx.finalize().as_slice())
+        }
+        ChecksumAlgorithm::SHA512 => {
+            #[cfg(feature = "ring")]
+            {
+                let mut context = Context::new(&SHA512);
+                for data in sb.iter() {
+                    context.update(data.as_ref());
+                }
+                b64_encode(context.finish().as_ref())
+            }
+            #[cfg(not(feature = "ring"))]
+            {
+                let mut hasher = Sha512::new();
+                for data in sb.iter() {
+                    hasher.update(data.as_ref());
+                }
+                let result = hasher.finalize();
+                b64_encode(&result[..])
+            }
+        }
+        ChecksumAlgorithm::XXHash64 => {
+            use std::hash::Hasher as _;
+            let mut hasher = twox_hash::XxHash64::with_seed(0);
+            for data in sb.iter() {
+                hasher.write(data.as_ref());
+            }
+            b64_encode(hasher.finish().to_be_bytes())
+        }
+        ChecksumAlgorithm::XXHash3 => {
+            use std::hash::Hasher as _;
+            let mut hasher = twox_hash::XxHash3_64::new();
+            for data in sb.iter() {
+                hasher.write(data.as_ref());
+            }
+            b64_encode(hasher.finish().to_be_bytes())
+        }
+        ChecksumAlgorithm::XXHash128 => {
+            let mut hasher = twox_hash::XxHash3_128::new();
+            for data in sb.iter() {
+                hasher.write(data.as_ref());
+            }
+            b64_encode(hasher.finish_128().to_be_bytes())
         }
     }
 }
@@ -590,6 +702,51 @@ mod tests {
         assert_eq!(ChecksumAlgorithm::CRC32C.as_str(), "CRC32C");
         assert_eq!(ChecksumAlgorithm::SHA1.as_str(), "SHA1");
         assert_eq!(ChecksumAlgorithm::SHA256.as_str(), "SHA256");
+        assert_eq!(ChecksumAlgorithm::CRC64NVME.as_str(), "CRC64NVME");
+        assert_eq!(ChecksumAlgorithm::MD5.as_str(), "MD5");
+        assert_eq!(ChecksumAlgorithm::SHA512.as_str(), "SHA512");
+        assert_eq!(ChecksumAlgorithm::XXHash64.as_str(), "XXHASH64");
+        assert_eq!(ChecksumAlgorithm::XXHash3.as_str(), "XXHASH3");
+        assert_eq!(ChecksumAlgorithm::XXHash128.as_str(), "XXHASH128");
+    }
+
+    #[test]
+    fn test_checksum_algorithm_as_str_from_str_roundtrip() {
+        for algo in [
+            ChecksumAlgorithm::CRC32,
+            ChecksumAlgorithm::CRC32C,
+            ChecksumAlgorithm::SHA1,
+            ChecksumAlgorithm::SHA256,
+            ChecksumAlgorithm::CRC64NVME,
+            ChecksumAlgorithm::MD5,
+            ChecksumAlgorithm::SHA512,
+            ChecksumAlgorithm::XXHash64,
+            ChecksumAlgorithm::XXHash3,
+            ChecksumAlgorithm::XXHash128,
+        ] {
+            assert_eq!(algo.as_str().parse::<ChecksumAlgorithm>().unwrap(), algo);
+        }
+    }
+
+    #[test]
+    fn test_checksum_algorithm_header_name() {
+        assert_eq!(ChecksumAlgorithm::MD5.header_name(), "X-Amz-Checksum-MD5");
+        assert_eq!(
+            ChecksumAlgorithm::SHA512.header_name(),
+            "X-Amz-Checksum-SHA512"
+        );
+        assert_eq!(
+            ChecksumAlgorithm::XXHash64.header_name(),
+            "X-Amz-Checksum-XXHASH64"
+        );
+        assert_eq!(
+            ChecksumAlgorithm::XXHash3.header_name(),
+            "X-Amz-Checksum-XXHASH3"
+        );
+        assert_eq!(
+            ChecksumAlgorithm::XXHash128.header_name(),
+            "X-Amz-Checksum-XXHASH128"
+        );
     }
 
     #[test]
@@ -609,6 +766,26 @@ mod tests {
         assert_eq!(
             "sha256".parse::<ChecksumAlgorithm>().unwrap(),
             ChecksumAlgorithm::SHA256
+        );
+        assert_eq!(
+            "md5".parse::<ChecksumAlgorithm>().unwrap(),
+            ChecksumAlgorithm::MD5
+        );
+        assert_eq!(
+            "SHA512".parse::<ChecksumAlgorithm>().unwrap(),
+            ChecksumAlgorithm::SHA512
+        );
+        assert_eq!(
+            "xxhash64".parse::<ChecksumAlgorithm>().unwrap(),
+            ChecksumAlgorithm::XXHash64
+        );
+        assert_eq!(
+            "XXHASH3".parse::<ChecksumAlgorithm>().unwrap(),
+            ChecksumAlgorithm::XXHash3
+        );
+        assert_eq!(
+            "xxhash128".parse::<ChecksumAlgorithm>().unwrap(),
+            ChecksumAlgorithm::XXHash128
         );
         assert!("invalid".parse::<ChecksumAlgorithm>().is_err());
     }
@@ -631,6 +808,28 @@ mod tests {
 
         assert_ne!(crc32_result, crc32c_result);
         assert_ne!(sha1_result, sha256_result);
+    }
+
+    #[test]
+    fn test_compute_checksum_new_algorithms_known_answers() {
+        let data = b"hello world";
+        let cases = [
+            (ChecksumAlgorithm::MD5, "XrY7u+Ae7tCTyyK7j1rNww=="),
+            (
+                ChecksumAlgorithm::SHA512,
+                "MJ7MSJwS1utMxA9QyQLytNDtd+5RGnx6m808qG1M2G+YndNbxf9JlnDaNCVbRbDP2DDoH2Bdz33FVC6TrpzXbw==",
+            ),
+            (ChecksumAlgorithm::XXHash64, "RatnNLIeaWg="),
+            (ChecksumAlgorithm::XXHash3, "1Eex6kDmmIs="),
+            (ChecksumAlgorithm::XXHash128, "340J6T+HSQCpm4d1zBW2xw=="),
+        ];
+        for (algo, expected) in cases {
+            assert_eq!(
+                compute_checksum(algo, data),
+                expected,
+                "unexpected checksum for {algo:?}"
+            );
+        }
     }
 
     #[test]
@@ -1052,6 +1251,11 @@ mod tests {
             ChecksumAlgorithm::CRC64NVME,
             ChecksumAlgorithm::SHA1,
             ChecksumAlgorithm::SHA256,
+            ChecksumAlgorithm::MD5,
+            ChecksumAlgorithm::SHA512,
+            ChecksumAlgorithm::XXHash64,
+            ChecksumAlgorithm::XXHash3,
+            ChecksumAlgorithm::XXHash128,
         ] {
             let from_bytes = compute_checksum(algo, test_data);
             let from_sb = compute_checksum_sb(algo, &sb);

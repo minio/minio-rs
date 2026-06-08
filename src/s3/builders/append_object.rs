@@ -104,16 +104,7 @@ impl ToS3Request for AppendObject {
         if let Some(algorithm) = self.checksum_algorithm {
             let checksum_value = compute_checksum_sb(algorithm, &self.data);
             headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
-
-            match algorithm {
-                ChecksumAlgorithm::CRC32 => headers.add(X_AMZ_CHECKSUM_CRC32, checksum_value),
-                ChecksumAlgorithm::CRC32C => headers.add(X_AMZ_CHECKSUM_CRC32C, checksum_value),
-                ChecksumAlgorithm::SHA1 => headers.add(X_AMZ_CHECKSUM_SHA1, checksum_value),
-                ChecksumAlgorithm::SHA256 => headers.add(X_AMZ_CHECKSUM_SHA256, checksum_value),
-                ChecksumAlgorithm::CRC64NVME => {
-                    headers.add(X_AMZ_CHECKSUM_CRC64NVME, checksum_value)
-                }
-            }
+            headers.add(algorithm.header_name(), checksum_value);
         }
 
         Ok(S3Request::builder()
