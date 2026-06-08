@@ -38,6 +38,7 @@ pub struct ListEntry {
     pub is_prefix: bool,
     pub is_delete_marker: bool,
     pub encoding_type: Option<String>,
+    pub checksum_algorithm: Option<String>,
 }
 
 #[derive(Clone, Debug)]

@@ -28,6 +28,8 @@ pub const POLICY: &str = "policy";
 
 pub const X_MINIO_DEPLOYMENT_ID: &str = "X-Minio-Deployment-Id";
 
+pub const X_MINIO_SOURCE_MTIME: &str = "X-Minio-Source-Mtime";
+
 pub const X_AMZ_VERSION_ID: &str = "X-Amz-Version-Id";
 pub const X_AMZ_ID_2: &str = "X-Amz-Id-2";
 pub const X_AMZ_WRITE_OFFSET_BYTES: &str = "X-Amz-Write-Offset-Bytes";
@@ -82,6 +84,8 @@ pub const X_AMZ_CONTENT_SHA256: &str = "X-Amz-Content-SHA256";
 
 pub const X_AMZ_SECURITY_TOKEN: &str = "X-Amz-Security-Token";
 
+pub const X_AMZ_S3SESSION_TOKEN: &str = "X-Amz-S3session-Token";
+
 pub const X_AMZ_SERVER_SIDE_ENCRYPTION: &str = "X-Amz-Server-Side-Encryption";
 
 pub const X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT: &str = "X-Amz-Server-Side-Encryption-Context";
@@ -118,7 +122,33 @@ pub const X_AMZ_CHECKSUM_SHA256: &str = "X-Amz-Checksum-SHA256";
 
 pub const X_AMZ_CHECKSUM_CRC64NVME: &str = "X-Amz-Checksum-CRC64NVME";
 
+pub const X_AMZ_CHECKSUM_MD5: &str = "X-Amz-Checksum-MD5";
+
+pub const X_AMZ_CHECKSUM_SHA512: &str = "X-Amz-Checksum-SHA512";
+
+pub const X_AMZ_CHECKSUM_XXHASH64: &str = "X-Amz-Checksum-XXHASH64";
+
+pub const X_AMZ_CHECKSUM_XXHASH3: &str = "X-Amz-Checksum-XXHASH3";
+
+pub const X_AMZ_CHECKSUM_XXHASH128: &str = "X-Amz-Checksum-XXHASH128";
+
 pub const X_AMZ_CHECKSUM_TYPE: &str = "X-Amz-Checksum-Type";
+
+pub const X_AMZ_OBJECT_ATTRIBUTES: &str = "X-Amz-Object-Attributes";
+
+pub const X_AMZ_MAX_PARTS: &str = "X-Amz-Max-Parts";
+
+pub const X_AMZ_PART_NUMBER_MARKER: &str = "X-Amz-Part-Number-Marker";
+
+pub const X_AMZ_RENAME_SOURCE: &str = "x-amz-rename-source";
+
+pub const X_AMZ_RENAME_SOURCE_IF_MATCH: &str = "x-amz-rename-source-if-match";
+
+pub const X_AMZ_RENAME_SOURCE_IF_NONE_MATCH: &str = "x-amz-rename-source-if-none-match";
+
+pub const X_AMZ_RENAME_SOURCE_IF_MODIFIED_SINCE: &str = "x-amz-rename-source-if-modified-since";
+
+pub const X_AMZ_RENAME_SOURCE_IF_UNMODIFIED_SINCE: &str = "x-amz-rename-source-if-unmodified-since";
 
 pub const X_AMZ_TRAILER: &str = "X-Amz-Trailer";
 

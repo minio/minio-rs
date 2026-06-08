@@ -460,7 +460,7 @@ impl From<ListObjects> for ListObjectVersions {
             disable_url_encoding: value.disable_url_encoding,
             max_keys: value.max_keys,
             prefix: value.prefix,
-            key_marker: value.key_marker,
+            key_marker: value.key_marker.or(value.start_after),
             version_id_marker: value.version_id_marker,
             include_user_metadata: value.include_user_metadata,
         }
@@ -721,6 +721,107 @@ mod tests {
             lo.get_max_keys().unwrap(),
             500,
             "max_keys should preserve the provided value"
+        );
+    }
+
+    #[test]
+    fn test_list_object_versions_honors_start_after() {
+        use crate::s3::creds::StaticProvider;
+        use crate::s3::http::BaseUrl;
+
+        let provider = StaticProvider::new("test", "test", None);
+        let client = MinioClient::new(
+            "http://localhost:9000".parse::<BaseUrl>().unwrap(),
+            Some(provider),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let list_objects = ListObjects::builder()
+            .client(client)
+            .bucket(BucketName::new("test-bucket").unwrap())
+            .start_after("b.txt".to_string())
+            .include_versions(true)
+            .recursive(true)
+            .build();
+
+        let request = ListObjectVersions::from(list_objects)
+            .to_s3request()
+            .unwrap();
+        let query_string = request.query_params.to_query_string();
+
+        assert!(
+            query_string.contains("key-marker=b.txt"),
+            "start_after should seed key-marker=b.txt in query string: {query_string}"
+        );
+    }
+
+    #[test]
+    fn test_list_object_versions_explicit_key_marker_wins_over_start_after() {
+        use crate::s3::creds::StaticProvider;
+        use crate::s3::http::BaseUrl;
+
+        let provider = StaticProvider::new("test", "test", None);
+        let client = MinioClient::new(
+            "http://localhost:9000".parse::<BaseUrl>().unwrap(),
+            Some(provider),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let list_objects = ListObjects::builder()
+            .client(client)
+            .bucket(BucketName::new("test-bucket").unwrap())
+            .start_after("b.txt".to_string())
+            .key_marker("c.txt".to_string())
+            .include_versions(true)
+            .build();
+
+        let request = ListObjectVersions::from(list_objects)
+            .to_s3request()
+            .unwrap();
+        let query_string = request.query_params.to_query_string();
+
+        assert!(
+            query_string.contains("key-marker=c.txt"),
+            "explicit key_marker should win over start_after: {query_string}"
+        );
+        assert!(
+            !query_string.contains("key-marker=b.txt"),
+            "start_after should not override an explicit key_marker: {query_string}"
+        );
+    }
+
+    #[test]
+    fn test_list_object_versions_omits_start_after_when_unset() {
+        use crate::s3::creds::StaticProvider;
+        use crate::s3::http::BaseUrl;
+
+        let provider = StaticProvider::new("test", "test", None);
+        let client = MinioClient::new(
+            "http://localhost:9000".parse::<BaseUrl>().unwrap(),
+            Some(provider),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let list_objects = ListObjects::builder()
+            .client(client)
+            .bucket(BucketName::new("test-bucket").unwrap())
+            .include_versions(true)
+            .build();
+
+        let request = ListObjectVersions::from(list_objects)
+            .to_s3request()
+            .unwrap();
+        let query_string = request.query_params.to_query_string();
+
+        assert!(
+            !query_string.contains("key-marker"),
+            "key-marker should be absent when start_after is unset: {query_string}"
         );
     }
 

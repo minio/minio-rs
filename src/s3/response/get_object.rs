@@ -16,21 +16,28 @@
 use crate::impl_has_s3fields;
 use crate::s3::builders::ObjectContent;
 use crate::s3::error::{Error, ValidationErr};
+use crate::s3::header_constants::{CONTENT_ENCODING, X_MINIO_SOURCE_MTIME};
 use crate::s3::response_traits::{
-    HasBucket, HasChecksumHeaders, HasEtagFromHeaders, HasObject, HasRegion, HasVersion,
+    HasBucket, HasChecksumHeaders, HasEtagFromHeaders, HasObject, HasRegion, HasS3Fields,
+    HasVersion,
 };
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::{ChecksumAlgorithm, b64_encode, compute_checksum};
+use crate::s3::utils::{
+    ChecksumAlgorithm, UtcTime, b64_encode, compute_checksum, from_http_header_value,
+};
 use async_trait::async_trait;
 use bytes::Bytes;
+use chrono::{DateTime, Utc};
 use crc_fast::{CrcAlgorithm, Digest as CrcFastDigest};
 use futures_util::{Stream, TryStreamExt};
 use http::HeaderMap;
+use http::header::LAST_MODIFIED;
 #[cfg(feature = "ring")]
-use ring::digest::{Context, SHA256};
+use ring::digest::{Context, SHA256, SHA512};
 use sha1::{Digest as Sha1Digest, Sha1};
 #[cfg(not(feature = "ring"))]
-use sha2::Sha256;
+use sha2::{Sha256, Sha512};
+use std::hash::Hasher;
 use std::io;
 use std::mem;
 use std::pin::Pin;
@@ -59,6 +66,14 @@ enum ChecksumHasher {
     Sha256(Context),
     #[cfg(not(feature = "ring"))]
     Sha256(Sha256),
+    Md5(md5::Context),
+    #[cfg(feature = "ring")]
+    Sha512(Context),
+    #[cfg(not(feature = "ring"))]
+    Sha512(Sha512),
+    XxHash64(twox_hash::XxHash64),
+    XxHash3(twox_hash::XxHash3_64),
+    XxHash128(twox_hash::XxHash3_128),
 }
 
 impl ChecksumHasher {
@@ -86,6 +101,18 @@ impl ChecksumHasher {
             ChecksumAlgorithm::SHA256 => ChecksumHasher::Sha256(Context::new(&SHA256)),
             #[cfg(not(feature = "ring"))]
             ChecksumAlgorithm::SHA256 => ChecksumHasher::Sha256(Sha256::new()),
+            ChecksumAlgorithm::MD5 => ChecksumHasher::Md5(md5::Context::new()),
+            #[cfg(feature = "ring")]
+            ChecksumAlgorithm::SHA512 => ChecksumHasher::Sha512(Context::new(&SHA512)),
+            #[cfg(not(feature = "ring"))]
+            ChecksumAlgorithm::SHA512 => ChecksumHasher::Sha512(Sha512::new()),
+            ChecksumAlgorithm::XXHash64 => {
+                ChecksumHasher::XxHash64(twox_hash::XxHash64::with_seed(0))
+            }
+            ChecksumAlgorithm::XXHash3 => ChecksumHasher::XxHash3(twox_hash::XxHash3_64::new()),
+            ChecksumAlgorithm::XXHash128 => {
+                ChecksumHasher::XxHash128(twox_hash::XxHash3_128::new())
+            }
         }
     }
 
@@ -107,6 +134,11 @@ impl ChecksumHasher {
             ChecksumHasher::Sha256(ctx) => ctx.update(data),
             #[cfg(not(feature = "ring"))]
             ChecksumHasher::Sha256(hasher) => hasher.update(data),
+            ChecksumHasher::Md5(ctx) => ctx.consume(data),
+            ChecksumHasher::Sha512(hasher) => hasher.update(data),
+            ChecksumHasher::XxHash64(hasher) => hasher.write(data),
+            ChecksumHasher::XxHash3(hasher) => hasher.write(data),
+            ChecksumHasher::XxHash128(hasher) => hasher.write(data),
         }
     }
 
@@ -136,6 +168,17 @@ impl ChecksumHasher {
                 let result = hasher.finalize();
                 b64_encode(&result[..])
             }
+            ChecksumHasher::Md5(ctx) => b64_encode(ctx.finalize().as_slice()),
+            #[cfg(feature = "ring")]
+            ChecksumHasher::Sha512(ctx) => b64_encode(ctx.finish().as_ref()),
+            #[cfg(not(feature = "ring"))]
+            ChecksumHasher::Sha512(hasher) => {
+                let result = hasher.finalize();
+                b64_encode(&result[..])
+            }
+            ChecksumHasher::XxHash64(hasher) => b64_encode(hasher.finish().to_be_bytes()),
+            ChecksumHasher::XxHash3(hasher) => b64_encode(hasher.finish().to_be_bytes()),
+            ChecksumHasher::XxHash128(hasher) => b64_encode(hasher.finish_128().to_be_bytes()),
         }
     }
 }
@@ -363,6 +406,43 @@ impl GetObjectResponse {
     pub fn has_composite_checksum(&self) -> bool {
         self.is_composite_checksum()
     }
+
+    /// Returns the last modified time of the object.
+    ///
+    /// When the `X-Minio-Source-Mtime` header is present and non-empty, its
+    /// RFC3339 value takes precedence over `Last-Modified` so that server-side
+    /// copies preserve the source object's modification time.
+    pub fn last_modified(&self) -> Result<Option<UtcTime>, ValidationErr> {
+        last_modified_from_headers(self.headers())
+    }
+
+    /// Returns the content encoding of the object (header-value of `Content-Encoding`).
+    ///
+    /// Returns `None` when the header is absent or empty after trimming.
+    pub fn content_encoding(&self) -> Option<String> {
+        content_encoding_from_headers(self.headers())
+    }
+}
+
+fn last_modified_from_headers(headers: &HeaderMap) -> Result<Option<UtcTime>, ValidationErr> {
+    if let Some(v) = headers.get(X_MINIO_SOURCE_MTIME) {
+        let s = v.to_str()?;
+        if !s.is_empty() {
+            return Ok(Some(DateTime::parse_from_rfc3339(s)?.with_timezone(&Utc)));
+        }
+    }
+    match headers.get(LAST_MODIFIED) {
+        Some(v) => Ok(Some(from_http_header_value(v.to_str()?)?)),
+        None => Ok(None),
+    }
+}
+
+fn content_encoding_from_headers(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(CONTENT_ENCODING)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 #[async_trait]
@@ -379,5 +459,79 @@ impl FromS3Response for GetObjectResponse {
             resp,
             verify_checksum: true, // Default to auto-verify
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{content_encoding_from_headers, last_modified_from_headers};
+    use crate::s3::header_constants::{CONTENT_ENCODING, X_MINIO_SOURCE_MTIME};
+    use chrono::{DateTime, Utc};
+    use http::HeaderMap;
+    use http::header::LAST_MODIFIED;
+
+    fn headers(pairs: &[(&str, &str)]) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        for (k, v) in pairs {
+            h.insert(
+                http::header::HeaderName::from_bytes(k.as_bytes()).unwrap(),
+                v.parse().unwrap(),
+            );
+        }
+        h
+    }
+
+    #[test]
+    fn content_encoding_present() {
+        let h = headers(&[(CONTENT_ENCODING, "gzip")]);
+        assert_eq!(content_encoding_from_headers(&h), Some("gzip".to_string()));
+    }
+
+    #[test]
+    fn content_encoding_absent() {
+        let h = headers(&[]);
+        assert_eq!(content_encoding_from_headers(&h), None);
+    }
+
+    #[test]
+    fn content_encoding_whitespace_only_is_none() {
+        let h = headers(&[(CONTENT_ENCODING, "   ")]);
+        assert_eq!(content_encoding_from_headers(&h), None);
+    }
+
+    #[test]
+    fn content_encoding_surrounding_whitespace_trimmed() {
+        let h = headers(&[(CONTENT_ENCODING, "  gzip  ")]);
+        assert_eq!(content_encoding_from_headers(&h), Some("gzip".to_string()));
+    }
+
+    #[test]
+    fn last_modified_source_mtime_overrides() {
+        let h = headers(&[
+            (X_MINIO_SOURCE_MTIME, "2024-01-15T10:30:45.123456789Z"),
+            (LAST_MODIFIED.as_str(), "Mon, 15 Jan 2024 10:30:45 GMT"),
+        ]);
+        let expected = DateTime::parse_from_rfc3339("2024-01-15T10:30:45.123456789Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(last_modified_from_headers(&h).unwrap(), Some(expected));
+    }
+
+    #[test]
+    fn last_modified_empty_source_mtime_falls_back() {
+        let h = headers(&[
+            (X_MINIO_SOURCE_MTIME, ""),
+            (LAST_MODIFIED.as_str(), "Mon, 15 Jan 2024 10:30:45 GMT"),
+        ]);
+        let expected = DateTime::parse_from_rfc3339("2024-01-15T10:30:45Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(last_modified_from_headers(&h).unwrap(), Some(expected));
+    }
+
+    #[test]
+    fn last_modified_none_when_absent() {
+        let h = headers(&[]);
+        assert_eq!(last_modified_from_headers(&h).unwrap(), None);
     }
 }

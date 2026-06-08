@@ -20,13 +20,17 @@ mod client_config;
 
 // Object operations
 mod append_object;
+mod conditional_put;
 mod get_object;
+mod get_object_attributes;
 mod object_checksums;
 mod object_compose;
 mod object_copy;
 mod object_delete;
 mod object_put;
+mod rename_object;
 mod test_checksums;
+mod update_object_encryption;
 mod upload_download_object;
 
 // Bucket operations
@@ -38,8 +42,10 @@ mod list_buckets;
 mod bucket_encryption;
 mod bucket_lifecycle;
 mod bucket_policy;
+mod bucket_qos;
 mod bucket_tagging;
 mod bucket_versioning;
+mod inventory;
 
 // Bucket replication & notifications
 mod bucket_notification;

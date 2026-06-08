@@ -263,5 +263,26 @@ fn test_checksum_algorithm_from_str() {
 
     // Test invalid
     assert!(ChecksumAlgorithm::from_str("INVALID").is_err());
-    assert!(ChecksumAlgorithm::from_str("MD5").is_err());
+
+    // Newer algorithms are now supported
+    assert_eq!(
+        ChecksumAlgorithm::from_str("MD5").unwrap(),
+        ChecksumAlgorithm::MD5
+    );
+    assert_eq!(
+        ChecksumAlgorithm::from_str("SHA512").unwrap(),
+        ChecksumAlgorithm::SHA512
+    );
+    assert_eq!(
+        ChecksumAlgorithm::from_str("XXHASH64").unwrap(),
+        ChecksumAlgorithm::XXHash64
+    );
+    assert_eq!(
+        ChecksumAlgorithm::from_str("XXHASH3").unwrap(),
+        ChecksumAlgorithm::XXHash3
+    );
+    assert_eq!(
+        ChecksumAlgorithm::from_str("XXHASH128").unwrap(),
+        ChecksumAlgorithm::XXHash128
+    );
 }

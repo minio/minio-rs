@@ -128,6 +128,7 @@ fn parse_list_objects_contents(
             .map(|x| parse_tags(x))
             .transpose()?;
         let is_delete_marker = content.name() == "DeleteMarker";
+        let checksum_algorithm = content.get_child_text("ChecksumAlgorithm");
 
         contents.push(ListEntry {
             name: key,
@@ -144,6 +145,7 @@ fn parse_list_objects_contents(
             is_prefix: false,
             is_delete_marker,
             encoding_type: etype,
+            checksum_algorithm,
         });
     }
 
@@ -175,6 +177,7 @@ fn parse_list_objects_common_prefixes(
             is_prefix: true,
             is_delete_marker: false,
             encoding_type: encoding_type.as_ref().cloned(),
+            checksum_algorithm: None,
         });
     }
 
@@ -496,5 +499,45 @@ impl From<ListObjectsV1Response> for ListObjectsResponse {
             version_id_marker: None,
             next_version_id_marker: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_contents(xml: &str) -> Vec<ListEntry> {
+        let xmltree_root = xmltree::Element::parse(xml.as_bytes()).unwrap();
+        let root = Element::from(&xmltree_root);
+        let mut contents: Vec<ListEntry> = Vec::new();
+        parse_list_objects_contents(&mut contents, &root, "Contents", &None, false).unwrap();
+        contents
+    }
+
+    #[test]
+    fn parses_checksum_algorithm_from_contents() {
+        let xml = r#"<ListBucketResult>
+            <Contents>
+                <Key>obj</Key>
+                <LastModified>2024-01-01T00:00:00.000Z</LastModified>
+                <ChecksumAlgorithm>CRC32C</ChecksumAlgorithm>
+            </Contents>
+        </ListBucketResult>"#;
+        let contents = parse_contents(xml);
+        assert_eq!(contents.len(), 1);
+        assert_eq!(contents[0].checksum_algorithm.as_deref(), Some("CRC32C"));
+    }
+
+    #[test]
+    fn checksum_algorithm_absent_is_none() {
+        let xml = r#"<ListBucketResult>
+            <Contents>
+                <Key>obj</Key>
+                <LastModified>2024-01-01T00:00:00.000Z</LastModified>
+            </Contents>
+        </ListBucketResult>"#;
+        let contents = parse_contents(xml);
+        assert_eq!(contents.len(), 1);
+        assert_eq!(contents[0].checksum_algorithm, None);
     }
 }

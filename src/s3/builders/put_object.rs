@@ -220,6 +220,22 @@ pub struct CompleteMultipartUpload {
     /// and all UploadPart operations. Supported algorithms: CRC32, CRC32C, SHA1, SHA256, CRC64NVME.
     #[builder(default, setter(into))]
     checksum_algorithm: Option<ChecksumAlgorithm>,
+
+    /// ETag the object must currently match for the completion to succeed.
+    ///
+    /// MinIO-specific optimistic-locking extension; emitted as an `If-Match`
+    /// header. A literal `"*"` matches any existing object, while a concrete
+    /// ETag is sent quoted.
+    #[builder(default, setter(into))]
+    match_etag: Option<String>,
+
+    /// ETag the object must NOT match for the completion to succeed.
+    ///
+    /// MinIO-specific optimistic-locking extension; emitted as an
+    /// `If-None-Match` header. A literal `"*"` requires the object to not
+    /// exist, while a concrete ETag is sent quoted.
+    #[builder(default, setter(into))]
+    not_match_etag: Option<String>,
 }
 
 /// Builder type for [`CompleteMultipartUpload`] that is returned by [`MinioClient::complete_multipart_upload`](crate::s3::client::MinioClient::complete_multipart_upload).
@@ -234,6 +250,8 @@ pub type CompleteMultipartUploadBldr = CompleteMultipartUploadBuilder<(
     (ObjectKey,),
     (UploadId,),
     (Vec<PartInfo>,),
+    (),
+    (),
     (),
 )>;
 
@@ -266,26 +284,14 @@ impl ToS3Request for CompleteMultipartUpload {
                 data.extend_from_slice(part.etag.as_str().as_bytes());
                 data.extend_from_slice(b"</ETag>");
                 if let Some((algorithm, ref value)) = part.checksum {
-                    let (open_tag, close_tag) = match algorithm {
-                        ChecksumAlgorithm::CRC32 => {
-                            (&b"<ChecksumCRC32>"[..], &b"</ChecksumCRC32>"[..])
-                        }
-                        ChecksumAlgorithm::CRC32C => {
-                            (&b"<ChecksumCRC32C>"[..], &b"</ChecksumCRC32C>"[..])
-                        }
-                        ChecksumAlgorithm::SHA1 => {
-                            (&b"<ChecksumSHA1>"[..], &b"</ChecksumSHA1>"[..])
-                        }
-                        ChecksumAlgorithm::SHA256 => {
-                            (&b"<ChecksumSHA256>"[..], &b"</ChecksumSHA256>"[..])
-                        }
-                        ChecksumAlgorithm::CRC64NVME => {
-                            (&b"<ChecksumCRC64NVME>"[..], &b"</ChecksumCRC64NVME>"[..])
-                        }
-                    };
-                    data.extend_from_slice(open_tag);
+                    let name = algorithm.as_str();
+                    data.extend_from_slice(b"<Checksum");
+                    data.extend_from_slice(name.as_bytes());
+                    data.extend_from_slice(b">");
                     data.extend_from_slice(value.as_bytes());
-                    data.extend_from_slice(close_tag);
+                    data.extend_from_slice(b"</Checksum");
+                    data.extend_from_slice(name.as_bytes());
+                    data.extend_from_slice(b">");
                 }
                 data.extend_from_slice(b"</Part>");
             }
@@ -301,6 +307,8 @@ impl ToS3Request for CompleteMultipartUpload {
             if let Some(algorithm) = self.checksum_algorithm {
                 headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
             }
+
+            add_conditional_etag_headers(&mut headers, &self.match_etag, &self.not_match_etag);
         }
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.add("uploadId", self.upload_id.as_str());
@@ -315,6 +323,7 @@ impl ToS3Request for CompleteMultipartUpload {
             .query_params(query_params)
             .headers(headers)
             .body(body)
+            .expect_200_ok_with_error(true)
             .build())
     }
 }
@@ -461,16 +470,7 @@ impl ToS3Request for UploadPart {
         {
             let checksum_value = compute_checksum_sb(algorithm, &self.data);
             headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
-
-            match algorithm {
-                ChecksumAlgorithm::CRC32 => headers.add(X_AMZ_CHECKSUM_CRC32, checksum_value),
-                ChecksumAlgorithm::CRC32C => headers.add(X_AMZ_CHECKSUM_CRC32C, checksum_value),
-                ChecksumAlgorithm::SHA1 => headers.add(X_AMZ_CHECKSUM_SHA1, checksum_value),
-                ChecksumAlgorithm::SHA256 => headers.add(X_AMZ_CHECKSUM_SHA256, checksum_value),
-                ChecksumAlgorithm::CRC64NVME => {
-                    headers.add(X_AMZ_CHECKSUM_CRC64NVME, checksum_value)
-                }
-            }
+            headers.add(algorithm.header_name(), checksum_value);
         }
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
@@ -591,6 +591,22 @@ pub struct PutObjectContent {
     #[builder(default = false)]
     use_signed_streaming: bool,
 
+    /// ETag the object must currently match for the upload to succeed.
+    ///
+    /// MinIO-specific optimistic-locking extension; emitted as an `If-Match`
+    /// header on the write. A literal `"*"` matches any existing object, while
+    /// a concrete ETag is sent quoted.
+    #[builder(default, setter(into))]
+    match_etag: Option<String>,
+
+    /// ETag the object must NOT match for the upload to succeed.
+    ///
+    /// MinIO-specific optimistic-locking extension; emitted as an
+    /// `If-None-Match` header on the write. A literal `"*"` requires the object
+    /// to not exist, while a concrete ETag is sent quoted.
+    #[builder(default, setter(into))]
+    not_match_etag: Option<String>,
+
     // source data
     #[builder(!default, setter(into))] // force required + accept Into<String>
     input_content: ObjectContent,
@@ -613,6 +629,8 @@ pub type PutObjectContentBldr = PutObjectContentBuilder<(
     (),
     (BucketName,),
     (ObjectKey,),
+    (),
+    (),
     (),
     (),
     (),
@@ -662,10 +680,13 @@ impl PutObjectContent {
         {
             let size = seg_bytes.len() as u64;
 
+            let mut put_headers = self.extra_headers.clone().unwrap_or_default();
+            add_conditional_etag_headers(&mut put_headers, &self.match_etag, &self.not_match_etag);
+
             let resp: PutObjectResponse = PutObject::builder()
                 .inner(UploadPart {
                     client: self.client.clone(),
-                    extra_headers: self.extra_headers.clone(),
+                    extra_headers: Some(put_headers),
                     extra_query_params: self.extra_query_params.clone(),
                     bucket: self.bucket.clone(),
                     object: self.object.clone(),
@@ -853,6 +874,8 @@ impl PutObjectContent {
             parts,
             upload_id,
             checksum_algorithm: self.checksum_algorithm,
+            match_etag: self.match_etag,
+            not_match_etag: self.not_match_etag,
         }
         .send()
         .await?;
@@ -862,6 +885,29 @@ impl PutObjectContent {
 }
 
 // endregion: put-object-content
+
+fn add_conditional_etag_headers(
+    headers: &mut Multimap,
+    match_etag: &Option<String>,
+    not_match_etag: &Option<String>,
+) {
+    if let Some(etag) = match_etag {
+        let value = if etag == "*" {
+            etag.clone()
+        } else {
+            format!("\"{etag}\"")
+        };
+        headers.add(IF_MATCH, value);
+    }
+    if let Some(etag) = not_match_etag {
+        let value = if etag == "*" {
+            etag.clone()
+        } else {
+            format!("\"{etag}\"")
+        };
+        headers.add(IF_NONE_MATCH, value);
+    }
+}
 
 fn into_headers_put_object(
     extra_headers: Option<Multimap>,
@@ -952,9 +998,9 @@ pub const MAX_PART_SIZE: u64 = 1024 * MIN_PART_SIZE; // 5 GiB
 /// Maximum allowed size (in bytes) for a single object upload.
 ///
 /// This is the upper limit for the total size of an object stored using
-/// multipart uploads. It applies to the combined size of all parts,
-/// ensuring the object does not exceed 5 TiB.
-pub const MAX_OBJECT_SIZE: u64 = 1024 * MAX_PART_SIZE; // 5 TiB
+/// multipart uploads. It is derived from [`MAX_PART_SIZE`] times
+/// [`MAX_MULTIPART_COUNT`], allowing objects up to ~48.83 TiB.
+pub const MAX_OBJECT_SIZE: u64 = MAX_PART_SIZE * MAX_MULTIPART_COUNT as u64; // ~48.83 TiB
 
 /// Maximum number of parts allowed in a multipart upload.
 ///
@@ -1038,6 +1084,47 @@ pub fn calc_part_info(
 mod tests {
     use super::*;
 
+    #[test]
+    fn conditional_etag_wildcard_is_unquoted() {
+        let mut headers = Multimap::new();
+        add_conditional_etag_headers(&mut headers, &None, &Some("*".to_string()));
+        assert_eq!(headers.get(IF_NONE_MATCH).map(String::as_str), Some("*"));
+        assert!(headers.get(IF_MATCH).is_none());
+    }
+
+    #[test]
+    fn conditional_etag_concrete_is_quoted() {
+        let mut headers = Multimap::new();
+        add_conditional_etag_headers(&mut headers, &Some("abc".to_string()), &None);
+        assert_eq!(headers.get(IF_MATCH).map(String::as_str), Some("\"abc\""));
+        assert!(headers.get(IF_NONE_MATCH).is_none());
+    }
+
+    #[test]
+    fn conditional_etag_absent_emits_nothing() {
+        let mut headers = Multimap::new();
+        add_conditional_etag_headers(&mut headers, &None, &None);
+        assert!(headers.get(IF_MATCH).is_none());
+        assert!(headers.get(IF_NONE_MATCH).is_none());
+    }
+
+    #[test]
+    fn conditional_etag_none_match_concrete_is_quoted() {
+        let mut headers = Multimap::new();
+        add_conditional_etag_headers(&mut headers, &None, &Some("def".to_string()));
+        assert_eq!(
+            headers.get(IF_NONE_MATCH).map(String::as_str),
+            Some("\"def\"")
+        );
+    }
+
+    #[test]
+    fn conditional_etag_match_wildcard_is_unquoted() {
+        let mut headers = Multimap::new();
+        add_conditional_etag_headers(&mut headers, &Some("*".to_string()), &None);
+        assert_eq!(headers.get(IF_MATCH).map(String::as_str), Some("*"));
+    }
+
     /// Objects small enough to fit in MAX_MULTIPART_COUNT parts at DEFAULT_PART_SIZE
     /// must use DEFAULT_PART_SIZE (not the older MIN_PART_SIZE-rounded value).
     #[test]
@@ -1068,8 +1155,8 @@ mod tests {
         assert!(count.unwrap() <= MAX_MULTIPART_COUNT);
     }
 
-    /// At MAX_OBJECT_SIZE (5 TiB), the scale-up path must produce a valid part size
-    /// (multiple of MIN_PART_SIZE, within MAX_PART_SIZE) and not overflow u16.
+    /// At MAX_OBJECT_SIZE (~48.83 TiB), the scale-up path must produce a valid part
+    /// size (multiple of MIN_PART_SIZE, within MAX_PART_SIZE) and not overflow u16.
     #[test]
     fn calc_part_info_scales_up_near_max_object_size() {
         let (psize, count) = calc_part_info(Size::Known(MAX_OBJECT_SIZE), Size::Unknown).unwrap();
@@ -1088,6 +1175,29 @@ mod tests {
         let (psize, count) = calc_part_info(Size::Known(1024 * 1024), Size::Unknown).unwrap();
         assert_eq!(psize, 1024 * 1024);
         assert_eq!(count, Some(1));
+    }
+
+    /// A size between the old 5 TiB limit and the new ~48.83 TiB limit is accepted
+    /// when an adequate part size is supplied.
+    #[test]
+    fn calc_part_info_accepts_size_above_legacy_5tib_limit() {
+        let object_size = 2048 * MAX_PART_SIZE; // 10 TiB, above the old 5 TiB cap
+        let (psize, count) =
+            calc_part_info(Size::Known(object_size), Size::Known(MAX_PART_SIZE)).unwrap();
+        assert_eq!(psize, MAX_PART_SIZE);
+        let c = count.unwrap();
+        assert!(c > 0 && c <= MAX_MULTIPART_COUNT);
+    }
+
+    /// The exact maximum object size is accepted, but one byte beyond it is rejected.
+    #[test]
+    fn calc_part_info_rejects_size_above_max_object_size() {
+        assert!(calc_part_info(Size::Known(MAX_OBJECT_SIZE), Size::Known(MAX_PART_SIZE)).is_ok());
+
+        match calc_part_info(Size::Known(MAX_OBJECT_SIZE + 1), Size::Known(MAX_PART_SIZE)) {
+            Err(ValidationErr::InvalidObjectSize(v)) => assert_eq!(v, MAX_OBJECT_SIZE + 1),
+            other => panic!("expected InvalidObjectSize, got {other:?}"),
+        }
     }
 
     quickcheck! {

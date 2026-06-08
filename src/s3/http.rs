@@ -32,6 +32,8 @@ lazy_static! {
     static ref AWS_ELB_ENDPOINT_REGEX: Regex =
         Regex::new(r"^[a-z_\d-]{1,63}\.[a-z_\d-]{1,63}\.elb\.amazonaws\.com$").unwrap();
     static ref AWS_S3_PREFIX_REGEX: Regex = Regex::new(AWS_S3_PREFIX).unwrap();
+    static ref AWS_S3_OUTPOSTS_REGEX: Regex =
+        Regex::new(r"^(.+)\.s3-outposts\.([a-z0-9-]+)\.amazonaws\.com$").unwrap();
 }
 
 /// Represents HTTP URL.
@@ -134,6 +136,23 @@ pub fn match_aws_s3_endpoint(value: &str) -> bool {
     true
 }
 
+/// Returns true when the host is an S3 on Outposts endpoint.
+///
+/// Outposts endpoints follow the form `<prefix>.s3-outposts.<region>.amazonaws.com`
+/// and are signed with the `s3-outposts` service name rather than `s3`.
+pub fn is_outposts_host(value: &str) -> bool {
+    AWS_S3_OUTPOSTS_REGEX.is_match(value.to_lowercase().as_str())
+}
+
+/// Extracts the AWS region from an S3 on Outposts host.
+///
+/// Returns `None` when the host is not an Outposts endpoint.
+pub fn outposts_region_from_host(value: &str) -> Option<String> {
+    AWS_S3_OUTPOSTS_REGEX
+        .captures(value.to_lowercase().as_str())
+        .and_then(|caps| caps.get(2).map(|m| m.as_str().to_string()))
+}
+
 fn get_aws_info(
     host: &str,
     https: bool,
@@ -154,6 +173,13 @@ fn get_aws_info(
             .get(token.rfind('.').unwrap() + 1..)
             .unwrap()
             .to_string();
+        return Ok(());
+    }
+
+    if let Some(outposts_region) = outposts_region_from_host(host) {
+        // S3 on Outposts keeps the supplied host (path-style, no rewrite) by
+        // leaving aws_domain_suffix empty; only the region is extracted here.
+        *region = outposts_region;
         return Ok(());
     }
 
@@ -362,6 +388,22 @@ impl BaseUrl {
         !self.aws_domain_suffix.is_empty()
     }
 
+    /// Checks base URL is an S3 on Outposts endpoint.
+    ///
+    /// Outposts requests are signed with the `s3-outposts` service name and the
+    /// host is preserved as-is (path-style, never rewritten to a virtual-hosted form).
+    pub fn is_outposts(&self) -> bool {
+        is_outposts_host(&self.host)
+    }
+
+    /// Checks base URL is a Google Cloud Storage host.
+    ///
+    /// GCS does not support the S3 multi-object delete API, so callers route bulk
+    /// deletes to serialized single DELETE requests for these endpoints.
+    pub(crate) fn is_google_endpoint(&self) -> bool {
+        self.host == "storage.googleapis.com" || self.host.ends_with(".googleapis.com")
+    }
+
     /// Returns the base URL as a string (e.g., "http://localhost:9000" or "https://minio.example.com")
     pub fn to_url_string(&self) -> String {
         let scheme = if self.https { "https" } else { "http" };
@@ -527,6 +569,82 @@ mod tests {
     use super::*;
     use crate::s3::multimap_ext::Multimap;
     use hyper::http::Method;
+
+    // ===========================
+    // S3 on Outposts Tests
+    // ===========================
+
+    #[test]
+    fn test_is_outposts_host_true() {
+        let hosts = [
+            "test-access-point-000000000000.op-00000000000000000.s3-outposts.eu-central-1.amazonaws.com",
+            "myap-123456789012.op-0ab1c2d3e4f5.s3-outposts.us-west-2.amazonaws.com",
+            "accesspoint-account.op-outpostid.s3-outposts.eu-north-1.amazonaws.com",
+        ];
+        for host in hosts {
+            assert!(is_outposts_host(host), "expected outposts host: {host}");
+        }
+    }
+
+    #[test]
+    fn test_is_outposts_host_false() {
+        let hosts = [
+            "s3.amazonaws.com",
+            "s3.eu-west-1.amazonaws.com",
+            "storage.googleapis.com",
+            "minio.example.com",
+        ];
+        for host in hosts {
+            assert!(!is_outposts_host(host), "unexpected outposts host: {host}");
+        }
+    }
+
+    #[test]
+    fn test_outposts_region_from_host() {
+        assert_eq!(
+            outposts_region_from_host(
+                "test-access-point-000000000000.op-00000000000000000.s3-outposts.eu-central-1.amazonaws.com"
+            )
+            .as_deref(),
+            Some("eu-central-1")
+        );
+        assert_eq!(
+            outposts_region_from_host(
+                "myap-123456789012.op-0ab1c2d3e4f5.s3-outposts.us-west-2.amazonaws.com"
+            )
+            .as_deref(),
+            Some("us-west-2")
+        );
+        assert_eq!(outposts_region_from_host("s3.amazonaws.com"), None);
+    }
+
+    #[test]
+    fn test_outposts_endpoint_is_not_aws_s3_endpoint() {
+        // Routing guarantee: Outposts hosts must NOT match the AWS S3 endpoint
+        // detector, otherwise the host would be rewritten to a virtual-hosted form.
+        let hosts = [
+            "test-access-point-000000000000.op-00000000000000000.s3-outposts.eu-central-1.amazonaws.com",
+            "myap-123456789012.op-0ab1c2d3e4f5.s3-outposts.us-west-2.amazonaws.com",
+        ];
+        for host in hosts {
+            assert!(
+                !match_aws_s3_endpoint(host),
+                "outposts host wrongly matched s3 endpoint: {host}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_outposts_base_url_path_style_and_region() {
+        let base_url: BaseUrl =
+            "https://myap-123456789012.op-0ab1c2d3e4f5.s3-outposts.us-west-2.amazonaws.com"
+                .parse()
+                .unwrap();
+        assert!(base_url.is_outposts());
+        assert!(!base_url.is_aws_host());
+        assert!(!base_url.virtual_style);
+        assert_eq!(base_url.region.as_str(), "us-west-2");
+    }
 
     // ===========================
     // Url Tests
@@ -815,6 +933,27 @@ mod tests {
         assert_eq!(base.region, Region::new_empty());
         assert!(base.is_aws_host());
         assert!(base.virtual_style);
+    }
+
+    #[test]
+    fn test_baseurl_is_google_endpoint() {
+        let cases: &[(&str, bool)] = &[
+            ("https://storage.googleapis.com", true),
+            ("storage.googleapis.com", true),
+            ("https://foo.googleapis.com", true),
+            ("https://s3.amazonaws.com", false),
+            ("http://localhost:9000", false),
+            ("https://minio.example.com", false),
+            ("https://googleapis.com.evil.example.com", false),
+        ];
+        for (endpoint, expected) in cases {
+            let base: BaseUrl = endpoint.parse().unwrap();
+            assert_eq!(
+                base.is_google_endpoint(),
+                *expected,
+                "endpoint {endpoint} expected is_google_endpoint={expected}"
+            );
+        }
     }
 
     #[test]

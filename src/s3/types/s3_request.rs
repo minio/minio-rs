@@ -72,6 +72,11 @@ pub struct S3Request {
     #[builder(default = false)]
     pub(crate) use_signed_streaming: bool,
 
+    /// When true, a 2xx response carrying a root-level `<Error>` XML body is treated
+    /// as a server error (e.g. `SlowDownWrite`) rather than a successful response.
+    #[builder(default = false)]
+    pub(crate) expect_200_ok_with_error: bool,
+
     /// region computed by [`S3Request::execute`]
     #[builder(default, setter(skip))]
     pub(crate) inner_region: Region,
@@ -117,6 +122,7 @@ impl S3Request {
                     self.body.as_ref().map(Arc::clone),
                     self.trailing_checksum,
                     self.use_signed_streaming,
+                    self.expect_200_ok_with_error,
                 )
                 .await
         }

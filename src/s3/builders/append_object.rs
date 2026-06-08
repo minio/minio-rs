@@ -104,16 +104,7 @@ impl ToS3Request for AppendObject {
         if let Some(algorithm) = self.checksum_algorithm {
             let checksum_value = compute_checksum_sb(algorithm, &self.data);
             headers.add(X_AMZ_CHECKSUM_ALGORITHM, algorithm.as_str().to_string());
-
-            match algorithm {
-                ChecksumAlgorithm::CRC32 => headers.add(X_AMZ_CHECKSUM_CRC32, checksum_value),
-                ChecksumAlgorithm::CRC32C => headers.add(X_AMZ_CHECKSUM_CRC32C, checksum_value),
-                ChecksumAlgorithm::SHA1 => headers.add(X_AMZ_CHECKSUM_SHA1, checksum_value),
-                ChecksumAlgorithm::SHA256 => headers.add(X_AMZ_CHECKSUM_SHA256, checksum_value),
-                ChecksumAlgorithm::CRC64NVME => {
-                    headers.add(X_AMZ_CHECKSUM_CRC64NVME, checksum_value)
-                }
-            }
+            headers.add(algorithm.header_name(), checksum_value);
         }
 
         Ok(S3Request::builder()
@@ -234,6 +225,7 @@ impl AppendObjectContent {
         if (object_size.is_unknown() && (seg_bytes.len() as u64) < part_size)
             || n_expected_parts == Some(1)
         {
+            let appended_len = seg_bytes.len() as u64;
             let ao = AppendObject {
                 client: self.client,
                 extra_headers: self.extra_headers,
@@ -246,7 +238,13 @@ impl AppendObjectContent {
                 data: Arc::new(seg_bytes),
                 checksum_algorithm: self.checksum_algorithm,
             };
-            ao.send().await
+            let resp = ao.send().await?;
+            let expected = current_file_size + appended_len;
+            let got = resp.object_size_checked()?;
+            if got != expected {
+                return Err(ValidationErr::AppendObjectSizeMismatch { expected, got }.into());
+            }
+            Ok(resp)
         } else if let Some(expected) = object_size.value()
             && (seg_bytes.len() as u64) < part_size
         {
@@ -315,9 +313,14 @@ impl AppendObjectContent {
                 .checksum_algorithm(self.checksum_algorithm)
                 .build();
             let resp: AppendObjectResponse = append_object.send().await?;
-            //println!("AppendObjectResponse: object_size={:?}", resp.object_size);
 
-            next_offset_bytes = resp.object_size();
+            let expected = next_offset_bytes + buffer_size;
+            let got = resp.object_size_checked()?;
+            if got != expected {
+                return Err(ValidationErr::AppendObjectSizeMismatch { expected, got }.into());
+            }
+
+            next_offset_bytes = got;
             last_resp = Some(resp);
 
             // Finally check if we are done.

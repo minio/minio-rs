@@ -19,7 +19,7 @@ use crate::s3::error::Error;
 use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::GetPresignedObjectUrlResponse;
-use crate::s3::signer::presign_v4;
+use crate::s3::signer::{presign_v4, presign_v4_with_service_type};
 use crate::s3::types::{BucketName, ObjectKey, Region, VersionId};
 use crate::s3::utils::{UtcTime, utc_now};
 use http::Method;
@@ -99,18 +99,34 @@ impl GetPresignedObjectUrl {
                 _ => utc_now(),
             };
 
-            presign_v4(
-                &self.client.shared.signing_key_cache,
-                &self.method,
-                &url.host_header_value(),
-                &url.path,
-                &region,
-                &mut query_params,
-                &creds.access_key,
-                &creds.secret_key,
-                date,
-                self.expiry_seconds.unwrap_or(DEFAULT_EXPIRY_SECONDS),
-            );
+            if self.client.shared.is_outposts {
+                presign_v4_with_service_type(
+                    &self.client.shared.signing_key_cache,
+                    "s3-outposts",
+                    &self.method,
+                    &url.host_header_value(),
+                    &url.path,
+                    &region,
+                    &mut query_params,
+                    &creds.access_key,
+                    &creds.secret_key,
+                    date,
+                    self.expiry_seconds.unwrap_or(DEFAULT_EXPIRY_SECONDS),
+                );
+            } else {
+                presign_v4(
+                    &self.client.shared.signing_key_cache,
+                    &self.method,
+                    &url.host_header_value(),
+                    &url.path,
+                    &region,
+                    &mut query_params,
+                    &creds.access_key,
+                    &creds.secret_key,
+                    date,
+                    self.expiry_seconds.unwrap_or(DEFAULT_EXPIRY_SECONDS),
+                );
+            }
 
             url.query = query_params;
         }
