@@ -111,9 +111,7 @@ impl ToS3Request for ObjectAttributes {
         );
 
         let mut query_params: Multimap = insert(self.extra_query_params, "attributes");
-        let version_id = self
-            .version_id
-            .map(|v| VersionId::new(v).expect("valid version id"));
+        let version_id = self.version_id.map(VersionId::new).transpose()?;
         query_params.add_version(version_id);
 
         Ok(S3Request::builder()

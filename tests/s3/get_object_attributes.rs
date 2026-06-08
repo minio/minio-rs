@@ -55,9 +55,11 @@ async fn get_object_attributes(ctx: TestContext, bucket: BucketName) {
 
     let attrs = resp.attributes().unwrap();
     assert_eq!(attrs.object_size, size);
-    // The body ETag is returned quoted (e.g. "abc..."); only assert presence.
+    // The body ETag may be returned quoted (e.g. "abc..."); assert it is non-empty.
+    let etag = attrs.etag.as_deref().unwrap_or_default();
     assert!(
-        attrs.etag.is_some(),
-        "expected an ETag in object attributes"
+        !etag.trim_matches('"').is_empty(),
+        "expected a non-empty ETag in object attributes, got {:?}",
+        attrs.etag
     );
 }

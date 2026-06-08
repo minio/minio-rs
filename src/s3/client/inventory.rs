@@ -168,7 +168,7 @@ impl MinioClient {
         loop {
             let result = self
                 .list_bucket_inventory_configurations(&bucket)?
-                .continuation_token(continuation_token)
+                .continuation_token(continuation_token.clone())
                 .build()
                 .send()
                 .await?
@@ -176,7 +176,9 @@ impl MinioClient {
 
             all.extend(result.items);
 
-            if result.next_continuation_token.is_empty() {
+            if result.next_continuation_token.is_empty()
+                || result.next_continuation_token == continuation_token
+            {
                 break;
             }
             continuation_token = result.next_continuation_token;

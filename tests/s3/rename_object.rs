@@ -56,24 +56,7 @@ async fn rename_object(ctx: TestContext, bucket: BucketName) {
     assert_eq!(resp.bucket(), Some(&bucket));
     assert_eq!(resp.object(), Some(&dst));
 
-    // Servers without RenameObject support silently treat the request as a plain
-    // (empty) PutObject, leaving the source in place. Skip the rename assertions
-    // on such servers; exercise them fully where RenameObject is implemented.
-    let src_present = ctx
-        .client
-        .stat_object(&bucket, &src)
-        .unwrap()
-        .build()
-        .send()
-        .await
-        .is_ok();
-    if src_present {
-        eprintln!(
-            "skipping rename_object assertions: server does not implement RenameObject (source still present)"
-        );
-        return;
-    }
-
+    // The destination now holds the source's data...
     let resp: StatObjectResponse = ctx
         .client
         .stat_object(&bucket, &dst)
@@ -84,4 +67,18 @@ async fn rename_object(ctx: TestContext, bucket: BucketName) {
         .unwrap();
     assert_eq!(resp.object(), Some(&dst));
     assert_eq!(resp.size().unwrap(), size);
+
+    // ...and the source no longer exists.
+    let src_gone = ctx
+        .client
+        .stat_object(&bucket, &src)
+        .unwrap()
+        .build()
+        .send()
+        .await
+        .is_err();
+    assert!(
+        src_gone,
+        "source object should no longer exist after rename"
+    );
 }

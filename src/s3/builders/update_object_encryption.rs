@@ -94,7 +94,7 @@ fn object_encryption_xml(kms_key_arn: &str, bucket_key_enabled: Option<bool>) ->
 
 impl ToS3Request for UpdateObjectEncryption {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        if self.kms_key_arn.is_empty() {
+        if self.kms_key_arn.trim().is_empty() {
             return Err(ValidationErr::StrError {
                 message: "KMSKeyArn is required for UpdateObjectEncryption".into(),
                 source: None,

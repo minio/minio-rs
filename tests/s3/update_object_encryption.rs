@@ -72,10 +72,7 @@ async fn update_object_encryption(ctx: TestContext, bucket: BucketName) {
             // failure, so require a server-side KMS/encryption rejection.
             let msg = e.to_string().to_lowercase();
             assert!(
-                msg.contains("kms")
-                    || msg.contains("key")
-                    || msg.contains("encryption")
-                    || msg.contains("not supported"),
+                msg.contains("kms") || msg.contains("encryption") || msg.contains("not supported"),
                 "unexpected error from update_object_encryption: {e}"
             );
             eprintln!(

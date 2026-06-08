@@ -41,6 +41,14 @@ use typed_builder::TypedBuilder;
 /// Streams of objects larger than this are split into multiple requests.
 pub const MAX_DELETE_OBJECTS: usize = 1000;
 
+/// Minimal XML text escaping for response bodies synthesized from user-controlled
+/// values (object keys, version ids, error messages) on the single-DELETE path.
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
 // region: object-to-delete
 
 /// Specifies an object to be deleted.
@@ -340,18 +348,18 @@ impl DeleteObjects {
                     if verbose_mode {
                         let delete_marker = resp.is_delete_marker().unwrap_or(false);
                         body.push_str("<Deleted><Key>");
-                        body.push_str(object.key.as_str());
+                        body.push_str(&xml_escape(object.key.as_str()));
                         body.push_str("</Key>");
                         if let Some(v) = object.version_id.as_ref() {
                             body.push_str("<VersionId>");
-                            body.push_str(v.as_str());
+                            body.push_str(&xml_escape(v.as_str()));
                             body.push_str("</VersionId>");
                         }
                         if delete_marker {
                             body.push_str("<DeleteMarker>true</DeleteMarker>");
                             if let Some(v) = resp.version_id() {
                                 body.push_str("<DeleteMarkerVersionId>");
-                                body.push_str(v.as_str());
+                                body.push_str(&xml_escape(v.as_str()));
                                 body.push_str("</DeleteMarkerVersionId>");
                             }
                         }
@@ -366,17 +374,17 @@ impl DeleteObjects {
                         continue;
                     }
                     body.push_str("<Error><Key>");
-                    body.push_str(object.key.as_str());
+                    body.push_str(&xml_escape(object.key.as_str()));
                     body.push_str("</Key>");
                     if let Some(v) = object.version_id.as_ref() {
                         body.push_str("<VersionId>");
-                        body.push_str(v.as_str());
+                        body.push_str(&xml_escape(v.as_str()));
                         body.push_str("</VersionId>");
                     }
                     body.push_str("<Code>");
-                    body.push_str(&code.to_string());
+                    body.push_str(&xml_escape(&code.to_string()));
                     body.push_str("</Code><Message>");
-                    body.push_str(e.message().as_deref().unwrap_or_default());
+                    body.push_str(&xml_escape(e.message().as_deref().unwrap_or_default()));
                     body.push_str("</Message></Error>");
                 }
                 Err(e) => return Err(e),

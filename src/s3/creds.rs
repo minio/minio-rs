@@ -177,6 +177,7 @@ impl LdapIdentityProvider {
             .post(&self.sts_endpoint)
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)
+            .timeout(std::time::Duration::from_secs(60))
             .send()
             .await
             .map_err(ValidationErr::from)?;
