@@ -31,6 +31,12 @@ jobs:
         run: cargo clippy --all-targets --all-features --workspace -- -D warnings
   test-multi-thread:
     runs-on: ubuntu-latest
+    # AIStor requires a valid license for ALL S3 operations. The secret is
+    # withheld from PRs originating in forks, so these server-backed tests
+    # cannot pass there until fork handling is decided (see start-server.sh,
+    # which fails fast when no valid license is present).
+    env:
+      MINIO_LICENSE: ${{ secrets.AISTOR_LICENSE }}
     steps:
       - uses: actions/checkout@v4
       - name: Run tests
@@ -45,6 +51,8 @@ jobs:
           MINIO_TEST_TOKIO_RUNTIME_FLAVOR="multi_thread" cargo test -- --nocapture
   test-current-thread:
     runs-on: ubuntu-latest
+    env:
+      MINIO_LICENSE: ${{ secrets.AISTOR_LICENSE }}
     steps:
       - uses: actions/checkout@v4
       - name: Run tests

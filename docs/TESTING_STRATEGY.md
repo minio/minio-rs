@@ -180,6 +180,32 @@ cargo test --lib property_tests
 cargo test --test integration_tests -- --ignored
 ```
 
+CI starts a local server with `tests/start-server.sh`, which downloads the
+**AIStor** build (`dl.min.io/aistor/minio/...`) rather than the OSS server so
+that licensed features (Express, Inventory, Tables) can be exercised.
+
+**A valid license is required for all S3 operations.** Unlike the OSS server,
+AIStor denies every S3 request when no valid license is present (the server
+logs `No valid license found, running in offline mode`). A missing, empty,
+stale, or invalid license therefore fails the entire integration suite, not
+just licensed-feature tests. `start-server.sh` detects this and fails fast with
+a clear message.
+
+Provide the license via the `MINIO_LICENSE` environment variable before
+launching the server:
+```bash
+export MINIO_LICENSE="<your-aistor-license-jwt>"
+./tests/start-server.sh
+```
+
+In the canonical repository's CI the license is supplied by the
+**`AISTOR_LICENSE`** GitHub Actions secret, which the workflow maps onto the
+`MINIO_LICENSE` environment variable the server reads. GitHub withholds secrets
+from workflows triggered by PRs from forks, so server-backed integration tests
+cannot run on fork PRs; fork contributors set their own `AISTOR_LICENSE` secret
+(or local `MINIO_LICENSE` env var) to run them. A license can be obtained from
+min.io.
+
 ### Coverage Report
 ```bash
 cargo llvm-cov --lib --tests --html --output-dir target/coverage
