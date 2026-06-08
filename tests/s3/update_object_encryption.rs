@@ -65,13 +65,18 @@ async fn update_object_encryption(ctx: TestContext, bucket: BucketName) {
             assert_eq!(resp.object(), Some(&object));
         }
         Err(e) => {
-            // A deployment without the named KMS key reports a KMS key-not-found
-            // error; the request still reached the handler and was signed/parsed,
-            // which validates the SDK path. Any non-KMS error is a real failure.
+            // Without a provisioned KMS key (or on a plain object that was not
+            // SSE-encrypted to begin with) the server rejects the change; the
+            // request still reached the handler and was signed/parsed, which
+            // validates the SDK path. A signing/parse/transport error is a real
+            // failure, so require a server-side KMS/encryption rejection.
             let msg = e.to_string().to_lowercase();
             assert!(
-                msg.contains("kms") || msg.contains("key"),
-                "unexpected non-KMS error from update_object_encryption: {e}"
+                msg.contains("kms")
+                    || msg.contains("key")
+                    || msg.contains("encryption")
+                    || msg.contains("not supported"),
+                "unexpected error from update_object_encryption: {e}"
             );
             eprintln!(
                 "update_object_encryption reached the server but KMS key is not provisioned ({e}); set UPDATE_OBJECT_ENCRYPTION_KMS_KEY to a valid key to exercise the success path"

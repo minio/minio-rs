@@ -3,7 +3,7 @@
 set -x
 set -e
 
-wget --quiet https://dl.min.io/server/minio/release/linux-amd64/minio
+wget --quiet https://dl.min.io/aistor/minio/edge/linux-amd64/minio
 chmod +x minio
 
 echo "MinIO Server Version:"
