@@ -479,6 +479,23 @@ mod tests {
     }
 
     #[test]
+    fn parse_response_missing_session_token_errors() {
+        let xml = r#"<AssumeRoleWithLDAPIdentityResponse>
+  <AssumeRoleWithLDAPIdentityResult>
+    <Credentials>
+      <AccessKeyId>AKIATEST</AccessKeyId>
+      <SecretAccessKey>SECRETTEST</SecretAccessKey>
+      <Expiration>2030-01-01T00:00:00Z</Expiration>
+    </Credentials>
+  </AssumeRoleWithLDAPIdentityResult>
+</AssumeRoleWithLDAPIdentityResponse>"#;
+        assert!(matches!(
+            parse_ldap_identity_response(xml),
+            Err(ValidationErr::XmlError { .. })
+        ));
+    }
+
+    #[test]
     fn fetch_returns_empty_before_priming() {
         let provider = LdapIdentityProvider::new("http://localhost:9000", "u", "p");
         let creds = provider.fetch();
