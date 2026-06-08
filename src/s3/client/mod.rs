@@ -481,6 +481,25 @@ impl MinioClient {
             .build()
     }
 
+    /// Primes the configured credential provider, performing any network
+    /// exchange it requires (for example STS or EC2/ECS metadata) and
+    /// refreshing its cached credentials.
+    ///
+    /// The request and presign paths already prime the provider automatically
+    /// before signing, so calling this is optional. Use it to pre-warm a
+    /// network-backed provider (such as
+    /// [`IamRoleProvider`](crate::s3::creds::IamRoleProvider) or
+    /// [`ChainProvider`](crate::s3::creds::ChainProvider)) before the first
+    /// request, or to surface a credential-fetch error eagerly. It is a no-op
+    /// for synchronous providers such as
+    /// [`StaticProvider`](crate::s3::creds::StaticProvider).
+    pub async fn ensure_credentials(&self) -> Result<(), Error> {
+        if let Some(provider) = &self.shared.provider {
+            provider.ensure_credentials().await?;
+        }
+        Ok(())
+    }
+
     /// Returns whether this client uses an AWS host.
     pub fn is_aws_host(&self) -> bool {
         self.shared.base_url.is_aws_host()
@@ -768,7 +787,7 @@ impl MinioClient {
             "s3"
         };
         let chunk_signing_context = if let Some(p) = &self.shared.provider {
-            let creds = p.fetch();
+            let creds = p.ensure_credentials().await?;
             if creds.session_token.is_some() {
                 headers.add(X_AMZ_SECURITY_TOKEN, creds.session_token.unwrap());
             }
@@ -1017,7 +1036,7 @@ impl MinioClient {
             let date = utc_now();
             headers.add(X_AMZ_DATE, to_amz_date(date));
             if let Some(p) = &self.shared.provider {
-                let creds = p.fetch();
+                let creds = p.ensure_credentials().await?;
                 if let Some(token) = &creds.session_token {
                     headers.add(X_AMZ_SECURITY_TOKEN, token);
                 }
@@ -1235,7 +1254,7 @@ impl MinioClient {
 
         // Sign the request if we have credentials
         if let Some(provider) = &self.shared.provider {
-            let creds = provider.fetch();
+            let creds = provider.ensure_credentials().await?;
             if let Some(token) = &creds.session_token {
                 headers.add(X_AMZ_SECURITY_TOKEN, token);
             }
@@ -1500,5 +1519,58 @@ mod tests {
         );
         let root = Element::parse(body.clone().reader()).unwrap();
         assert_ne!(root.name, "Error");
+    }
+
+    use crate::s3::creds::{Credentials, Provider, StaticProvider};
+    use crate::s3::error::ValidationErr;
+    use crate::s3::http::BaseUrl;
+
+    #[derive(Debug)]
+    struct FakeProvider {
+        fail: bool,
+    }
+
+    #[async_trait::async_trait]
+    impl Provider for FakeProvider {
+        fn fetch(&self) -> Credentials {
+            Credentials::empty()
+        }
+        async fn ensure_credentials(&self) -> Result<Credentials, ValidationErr> {
+            if self.fail {
+                Err(ValidationErr::StrError {
+                    message: "provider unavailable".into(),
+                    source: None,
+                })
+            } else {
+                Ok(Credentials {
+                    access_key: "AK".into(),
+                    secret_key: "SK".into(),
+                    session_token: None,
+                })
+            }
+        }
+    }
+
+    fn client_with<P: Provider + Send + Sync + 'static>(provider: Option<P>) -> MinioClient {
+        let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+        MinioClient::new(base_url, provider, None, None).unwrap()
+    }
+
+    #[tokio::test]
+    async fn ensure_credentials_primes_present_provider() {
+        let client = client_with(Some(FakeProvider { fail: false }));
+        assert!(client.ensure_credentials().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ensure_credentials_is_noop_without_provider() {
+        let client = client_with(None::<StaticProvider>);
+        assert!(client.ensure_credentials().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ensure_credentials_propagates_provider_error() {
+        let client = client_with(Some(FakeProvider { fail: true }));
+        assert!(client.ensure_credentials().await.is_err());
     }
 }

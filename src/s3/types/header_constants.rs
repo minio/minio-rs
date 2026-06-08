@@ -112,6 +112,8 @@ pub const X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5: &str =
 
 pub const X_AMZ_CHECKSUM_ALGORITHM: &str = "X-Amz-Checksum-Algorithm";
 
+pub const X_AMZ_CHECKSUM_MODE: &str = "X-Amz-Checksum-Mode";
+
 pub const X_AMZ_CHECKSUM_CRC32: &str = "X-Amz-Checksum-CRC32";
 
 pub const X_AMZ_CHECKSUM_CRC32C: &str = "X-Amz-Checksum-CRC32C";
@@ -141,6 +143,8 @@ pub const X_AMZ_MAX_PARTS: &str = "X-Amz-Max-Parts";
 pub const X_AMZ_PART_NUMBER_MARKER: &str = "X-Amz-Part-Number-Marker";
 
 pub const X_AMZ_RENAME_SOURCE: &str = "x-amz-rename-source";
+
+pub const X_AMZ_STORAGE_CLASS: &str = "X-Amz-Storage-Class";
 
 pub const X_AMZ_RENAME_SOURCE_IF_MATCH: &str = "x-amz-rename-source-if-match";
 

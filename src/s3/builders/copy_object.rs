@@ -332,6 +332,11 @@ pub struct CopyObject {
     /// SHA1, SHA256, CRC64NVME. The checksum value is included in response headers for verification.
     #[builder(default, setter(into))]
     checksum_algorithm: Option<crate::s3::utils::ChecksumAlgorithm>,
+    /// Optional storage class for the destination object, sent as the
+    /// `X-Amz-Storage-Class` header. Applies to both the direct copy and the
+    /// multipart (compose) path used for sources larger than 5 GiB.
+    #[builder(default, setter(into))]
+    storage_class: Option<String>,
 }
 
 /// Builder type for [`CopyObject`] that is returned by [`MinioClient::copy_object`](crate::s3::client::MinioClient::copy_object).
@@ -354,6 +359,7 @@ pub type CopyObjectBldr = CopyObjectBuilder<(
     (),
     (),
     (),
+    (),
 )>;
 
 impl CopyObject {
@@ -361,9 +367,15 @@ impl CopyObject {
     ///
     /// Functionally related to the [S3Api::send()](crate::s3::types::S3Api::send) method, but
     /// specifically tailored for the `CopyObject` operation.
-    pub async fn send(self) -> Result<CopyObjectResponse, Error> {
+    pub async fn send(mut self) -> Result<CopyObjectResponse, Error> {
         check_sse(&self.sse, &self.client)?;
         check_ssec(&self.source.ssec, &self.client)?;
+
+        if let Some(storage_class) = self.storage_class.take() {
+            let mut headers = self.headers.take().unwrap_or_default();
+            headers.add(X_AMZ_STORAGE_CLASS, storage_class);
+            self.headers = Some(headers);
+        }
 
         let source = self.source.clone();
 

@@ -59,6 +59,13 @@ pub struct GetObject {
     modified_since: Option<UtcTime>,
     #[builder(default, setter(into))]
     unmodified_since: Option<UtcTime>,
+
+    /// When true, requests the server to return the object's stored checksum by
+    /// sending `x-amz-checksum-mode: ENABLED`. For multipart objects the value
+    /// is the checksum of part checksums. The checksum is exposed on the
+    /// response via [`HasChecksumHeaders`](crate::s3::response_traits::HasChecksumHeaders).
+    #[builder(default = false)]
+    enable_checksum: bool,
 }
 
 /// Builder type alias for [`GetObject`].
@@ -71,6 +78,7 @@ pub type GetObjectBldr = GetObjectBuilder<(
     (),
     (BucketName,),
     (ObjectKey,),
+    (),
     (),
     (),
     (),
@@ -128,6 +136,10 @@ impl ToS3Request for GetObject {
             if let Some(v) = &self.ssec {
                 headers.add_multimap(v.headers());
             }
+
+            if self.enable_checksum {
+                headers.add(X_AMZ_CHECKSUM_MODE, "ENABLED");
+            }
         }
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
@@ -145,5 +157,44 @@ impl ToS3Request for GetObject {
             .query_params(query_params)
             .headers(headers)
             .build())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::s3::creds::StaticProvider;
+    use crate::s3::http::BaseUrl;
+
+    fn test_client() -> MinioClient {
+        let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+        let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+        MinioClient::new(base_url, Some(provider), None, None).unwrap()
+    }
+
+    #[test]
+    fn enable_checksum_emits_header() {
+        let req = test_client()
+            .get_object("test-bucket", "test-object")
+            .unwrap()
+            .enable_checksum(true)
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert_eq!(
+            req.headers.get(X_AMZ_CHECKSUM_MODE).map(String::as_str),
+            Some("ENABLED")
+        );
+    }
+
+    #[test]
+    fn checksum_header_absent_by_default() {
+        let req = test_client()
+            .get_object("test-bucket", "test-object")
+            .unwrap()
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert!(req.headers.get(X_AMZ_CHECKSUM_MODE).is_none());
     }
 }

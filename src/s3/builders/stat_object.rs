@@ -21,7 +21,6 @@ use crate::s3::response::StatObjectResponse;
 use crate::s3::sse::{Sse, SseCustomerKey};
 use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId};
 use crate::s3::utils::{UtcTime, check_ssec, to_http_header_value};
-use async_trait::async_trait;
 use http::Method;
 use typed_builder::TypedBuilder;
 
@@ -64,6 +63,13 @@ pub struct StatObject {
     modified_since: Option<UtcTime>,
     #[builder(default, setter(into))]
     unmodified_since: Option<UtcTime>,
+
+    /// When true, requests the server to return the object's stored checksum by
+    /// sending `x-amz-checksum-mode: ENABLED`. For multipart objects the value
+    /// is the checksum of part checksums. The checksum is exposed on the
+    /// response via [`HasChecksumHeaders`](crate::s3::response_traits::HasChecksumHeaders).
+    #[builder(default = false)]
+    enable_checksum: bool,
 }
 
 /// Builder type for [`StatObject`] that is returned by [`MinioClient::stat_object`](crate::s3::client::MinioClient::stat_object).
@@ -82,13 +88,13 @@ pub type StatObjectBldr = StatObjectBuilder<(
     (),
     (),
     (),
+    (),
 )>;
 
 impl S3Api for StatObject {
     type S3Response = StatObjectResponse;
 }
 
-#[async_trait]
 impl ToS3Request for StatObject {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_ssec(&self.ssec, &self.client)?;
@@ -110,6 +116,9 @@ impl ToS3Request for StatObject {
             if let Some(v) = self.ssec {
                 headers.add_multimap(v.headers());
             }
+            if self.enable_checksum {
+                headers.add(X_AMZ_CHECKSUM_MODE, "ENABLED");
+            }
         }
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
@@ -124,5 +133,44 @@ impl ToS3Request for StatObject {
             .query_params(query_params)
             .headers(headers)
             .build())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::s3::creds::StaticProvider;
+    use crate::s3::http::BaseUrl;
+
+    fn test_client() -> MinioClient {
+        let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+        let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+        MinioClient::new(base_url, Some(provider), None, None).unwrap()
+    }
+
+    #[test]
+    fn enable_checksum_emits_header() {
+        let req = test_client()
+            .stat_object("test-bucket", "test-object")
+            .unwrap()
+            .enable_checksum(true)
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert_eq!(
+            req.headers.get(X_AMZ_CHECKSUM_MODE).map(String::as_str),
+            Some("ENABLED")
+        );
+    }
+
+    #[test]
+    fn checksum_header_absent_by_default() {
+        let req = test_client()
+            .stat_object("test-bucket", "test-object")
+            .unwrap()
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert!(req.headers.get(X_AMZ_CHECKSUM_MODE).is_none());
     }
 }
