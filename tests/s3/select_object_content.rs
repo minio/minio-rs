@@ -40,14 +40,29 @@ async fn select_object_content_s3(ctx: TestContext, bucket: BucketName) {
 
     let select_request: SelectRequest = create_select_content_request();
 
-    let mut resp: SelectObjectContentResponse = ctx
+    let send_result = ctx
         .client
         .select_object_content(&bucket, &object, select_request)
         .unwrap()
         .build()
         .send()
-        .await
-        .unwrap();
+        .await;
+    let mut resp: SelectObjectContentResponse = match send_result {
+        Ok(r) => r,
+        Err(e) => {
+            // AIStor does not support the S3 Select API; skip where the server
+            // rejects it. A signing/parse/transport error is still a failure.
+            let msg = e.to_string().to_lowercase();
+            assert!(
+                msg.contains("not allowed")
+                    || msg.contains("not implemented")
+                    || msg.contains("notimplemented"),
+                "unexpected error from select_object_content: {e}"
+            );
+            eprintln!("skipping select_object_content_s3: server does not support S3 Select ({e})");
+            return;
+        }
+    };
     let mut got = String::new();
     let mut buf = [0_u8; 512];
     loop {
