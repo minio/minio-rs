@@ -315,6 +315,7 @@ impl ToS3Request for CompleteMultipartUpload {
             .query_params(query_params)
             .headers(headers)
             .body(body)
+            .expect_200_ok_with_error(true)
             .build())
     }
 }
@@ -952,9 +953,9 @@ pub const MAX_PART_SIZE: u64 = 1024 * MIN_PART_SIZE; // 5 GiB
 /// Maximum allowed size (in bytes) for a single object upload.
 ///
 /// This is the upper limit for the total size of an object stored using
-/// multipart uploads. It applies to the combined size of all parts,
-/// ensuring the object does not exceed 5 TiB.
-pub const MAX_OBJECT_SIZE: u64 = 1024 * MAX_PART_SIZE; // 5 TiB
+/// multipart uploads. It is derived from [`MAX_PART_SIZE`] times
+/// [`MAX_MULTIPART_COUNT`], allowing objects up to ~48.83 TiB.
+pub const MAX_OBJECT_SIZE: u64 = MAX_PART_SIZE * MAX_MULTIPART_COUNT as u64; // ~48.83 TiB
 
 /// Maximum number of parts allowed in a multipart upload.
 ///
@@ -1068,8 +1069,8 @@ mod tests {
         assert!(count.unwrap() <= MAX_MULTIPART_COUNT);
     }
 
-    /// At MAX_OBJECT_SIZE (5 TiB), the scale-up path must produce a valid part size
-    /// (multiple of MIN_PART_SIZE, within MAX_PART_SIZE) and not overflow u16.
+    /// At MAX_OBJECT_SIZE (~48.83 TiB), the scale-up path must produce a valid part
+    /// size (multiple of MIN_PART_SIZE, within MAX_PART_SIZE) and not overflow u16.
     #[test]
     fn calc_part_info_scales_up_near_max_object_size() {
         let (psize, count) = calc_part_info(Size::Known(MAX_OBJECT_SIZE), Size::Unknown).unwrap();
@@ -1088,6 +1089,29 @@ mod tests {
         let (psize, count) = calc_part_info(Size::Known(1024 * 1024), Size::Unknown).unwrap();
         assert_eq!(psize, 1024 * 1024);
         assert_eq!(count, Some(1));
+    }
+
+    /// A size between the old 5 TiB limit and the new ~48.83 TiB limit is accepted
+    /// when an adequate part size is supplied.
+    #[test]
+    fn calc_part_info_accepts_size_above_legacy_5tib_limit() {
+        let object_size = 2048 * MAX_PART_SIZE; // 10 TiB, above the old 5 TiB cap
+        let (psize, count) =
+            calc_part_info(Size::Known(object_size), Size::Known(MAX_PART_SIZE)).unwrap();
+        assert_eq!(psize, MAX_PART_SIZE);
+        let c = count.unwrap();
+        assert!(c > 0 && c <= MAX_MULTIPART_COUNT);
+    }
+
+    /// The exact maximum object size is accepted, but one byte beyond it is rejected.
+    #[test]
+    fn calc_part_info_rejects_size_above_max_object_size() {
+        assert!(calc_part_info(Size::Known(MAX_OBJECT_SIZE), Size::Known(MAX_PART_SIZE)).is_ok());
+
+        match calc_part_info(Size::Known(MAX_OBJECT_SIZE + 1), Size::Known(MAX_PART_SIZE)) {
+            Err(ValidationErr::InvalidObjectSize(v)) => assert_eq!(v, MAX_OBJECT_SIZE + 1),
+            other => panic!("expected InvalidObjectSize, got {other:?}"),
+        }
     }
 
     quickcheck! {

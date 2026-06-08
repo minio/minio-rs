@@ -16,16 +16,22 @@
 use crate::impl_has_s3fields;
 use crate::s3::builders::ObjectContent;
 use crate::s3::error::{Error, ValidationErr};
+use crate::s3::header_constants::{CONTENT_ENCODING, X_MINIO_SOURCE_MTIME};
 use crate::s3::response_traits::{
-    HasBucket, HasChecksumHeaders, HasEtagFromHeaders, HasObject, HasRegion, HasVersion,
+    HasBucket, HasChecksumHeaders, HasEtagFromHeaders, HasObject, HasRegion, HasS3Fields,
+    HasVersion,
 };
 use crate::s3::types::{FromS3Response, S3Request};
-use crate::s3::utils::{ChecksumAlgorithm, b64_encode, compute_checksum};
+use crate::s3::utils::{
+    ChecksumAlgorithm, UtcTime, b64_encode, compute_checksum, from_http_header_value,
+};
 use async_trait::async_trait;
 use bytes::Bytes;
+use chrono::{DateTime, Utc};
 use crc_fast::{CrcAlgorithm, Digest as CrcFastDigest};
 use futures_util::{Stream, TryStreamExt};
 use http::HeaderMap;
+use http::header::LAST_MODIFIED;
 #[cfg(feature = "ring")]
 use ring::digest::{Context, SHA256};
 use sha1::{Digest as Sha1Digest, Sha1};
@@ -363,6 +369,43 @@ impl GetObjectResponse {
     pub fn has_composite_checksum(&self) -> bool {
         self.is_composite_checksum()
     }
+
+    /// Returns the last modified time of the object.
+    ///
+    /// When the `X-Minio-Source-Mtime` header is present and non-empty, its
+    /// RFC3339 value takes precedence over `Last-Modified` so that server-side
+    /// copies preserve the source object's modification time.
+    pub fn last_modified(&self) -> Result<Option<UtcTime>, ValidationErr> {
+        last_modified_from_headers(self.headers())
+    }
+
+    /// Returns the content encoding of the object (header-value of `Content-Encoding`).
+    ///
+    /// Returns `None` when the header is absent or empty after trimming.
+    pub fn content_encoding(&self) -> Option<String> {
+        content_encoding_from_headers(self.headers())
+    }
+}
+
+fn last_modified_from_headers(headers: &HeaderMap) -> Result<Option<UtcTime>, ValidationErr> {
+    if let Some(v) = headers.get(X_MINIO_SOURCE_MTIME) {
+        let s = v.to_str()?;
+        if !s.is_empty() {
+            return Ok(Some(DateTime::parse_from_rfc3339(s)?.with_timezone(&Utc)));
+        }
+    }
+    match headers.get(LAST_MODIFIED) {
+        Some(v) => Ok(Some(from_http_header_value(v.to_str()?)?)),
+        None => Ok(None),
+    }
+}
+
+fn content_encoding_from_headers(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(CONTENT_ENCODING)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 #[async_trait]
@@ -379,5 +422,79 @@ impl FromS3Response for GetObjectResponse {
             resp,
             verify_checksum: true, // Default to auto-verify
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{content_encoding_from_headers, last_modified_from_headers};
+    use crate::s3::header_constants::{CONTENT_ENCODING, X_MINIO_SOURCE_MTIME};
+    use chrono::{DateTime, Utc};
+    use http::HeaderMap;
+    use http::header::LAST_MODIFIED;
+
+    fn headers(pairs: &[(&str, &str)]) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        for (k, v) in pairs {
+            h.insert(
+                http::header::HeaderName::from_bytes(k.as_bytes()).unwrap(),
+                v.parse().unwrap(),
+            );
+        }
+        h
+    }
+
+    #[test]
+    fn content_encoding_present() {
+        let h = headers(&[(CONTENT_ENCODING, "gzip")]);
+        assert_eq!(content_encoding_from_headers(&h), Some("gzip".to_string()));
+    }
+
+    #[test]
+    fn content_encoding_absent() {
+        let h = headers(&[]);
+        assert_eq!(content_encoding_from_headers(&h), None);
+    }
+
+    #[test]
+    fn content_encoding_whitespace_only_is_none() {
+        let h = headers(&[(CONTENT_ENCODING, "   ")]);
+        assert_eq!(content_encoding_from_headers(&h), None);
+    }
+
+    #[test]
+    fn content_encoding_surrounding_whitespace_trimmed() {
+        let h = headers(&[(CONTENT_ENCODING, "  gzip  ")]);
+        assert_eq!(content_encoding_from_headers(&h), Some("gzip".to_string()));
+    }
+
+    #[test]
+    fn last_modified_source_mtime_overrides() {
+        let h = headers(&[
+            (X_MINIO_SOURCE_MTIME, "2024-01-15T10:30:45.123456789Z"),
+            (LAST_MODIFIED.as_str(), "Mon, 15 Jan 2024 10:30:45 GMT"),
+        ]);
+        let expected = DateTime::parse_from_rfc3339("2024-01-15T10:30:45.123456789Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(last_modified_from_headers(&h).unwrap(), Some(expected));
+    }
+
+    #[test]
+    fn last_modified_empty_source_mtime_falls_back() {
+        let h = headers(&[
+            (X_MINIO_SOURCE_MTIME, ""),
+            (LAST_MODIFIED.as_str(), "Mon, 15 Jan 2024 10:30:45 GMT"),
+        ]);
+        let expected = DateTime::parse_from_rfc3339("2024-01-15T10:30:45Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(last_modified_from_headers(&h).unwrap(), Some(expected));
+    }
+
+    #[test]
+    fn last_modified_none_when_absent() {
+        let h = headers(&[]);
+        assert_eq!(last_modified_from_headers(&h).unwrap(), None);
     }
 }

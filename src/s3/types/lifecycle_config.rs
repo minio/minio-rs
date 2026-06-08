@@ -78,7 +78,9 @@ impl LifecycleConfig {
             data.push_str("</Status>");
 
             // Filter
-            data.push_str(&rule.filter.to_xml());
+            if !rule.filter.is_null() {
+                data.push_str(&rule.filter.to_xml());
+            }
 
             // AbortIncompleteMultipartUpload
             if let Some(days) = rule.abort_incomplete_multipart_upload_days_after_initiation {
@@ -499,4 +501,47 @@ fn parse_iso8601(date_str: &str) -> Result<chrono::DateTime<chrono::Utc>, Valida
         .map_err(|e| {
             ValidationErr::xml_error_with_source(format!("Invalid date format: {date_str}"), e)
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_filter_omits_filter_element() {
+        let config = LifecycleConfig {
+            rules: vec![LifecycleRule {
+                id: "rule1".to_string(),
+                status: true,
+                filter: Filter::default(),
+                expiration_days: Some(30),
+                ..Default::default()
+            }],
+        };
+
+        let xml = config.to_xml();
+        assert!(!xml.contains("<Filter>"));
+        assert!(!xml.contains("</Filter>"));
+        assert!(xml.contains("<Days>30</Days>"));
+    }
+
+    #[test]
+    fn non_empty_filter_emits_filter_element() {
+        let config = LifecycleConfig {
+            rules: vec![LifecycleRule {
+                id: "rule1".to_string(),
+                status: true,
+                filter: Filter {
+                    and_operator: None,
+                    prefix: Some("logs/".to_string()),
+                    tag: None,
+                },
+                expiration_days: Some(30),
+                ..Default::default()
+            }],
+        };
+
+        let xml = config.to_xml();
+        assert!(xml.contains("<Filter><Prefix>logs/</Prefix></Filter>"));
+    }
 }

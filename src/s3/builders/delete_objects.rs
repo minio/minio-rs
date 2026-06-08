@@ -341,6 +341,7 @@ impl ToS3Request for DeleteObjects {
             .query_params(insert(self.extra_query_params, "delete"))
             .headers(headers)
             .body(body)
+            .expect_200_ok_with_error(true)
             .build())
     }
 }

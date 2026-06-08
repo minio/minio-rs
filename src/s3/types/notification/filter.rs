@@ -96,6 +96,13 @@ impl Filter {
         Err(ValidationErr::InvalidFilter(self.to_xml()))
     }
 
+    pub fn is_null(&self) -> bool {
+        let and_is_empty = self.and_operator.as_ref().is_none_or(|and| {
+            and.prefix.is_none() && and.tags.as_ref().is_none_or(|tags| tags.is_empty())
+        });
+        and_is_empty && self.prefix.is_none() && self.tag.is_none()
+    }
+
     pub fn to_xml(&self) -> String {
         let mut data = String::from("<Filter>");
         if let Some(and_op) = &self.and_operator {
@@ -137,5 +144,79 @@ impl Filter {
         data.push_str("</Filter>");
 
         data
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_null_for_default_filter() {
+        assert!(Filter::default().is_null());
+    }
+
+    #[test]
+    fn is_null_for_empty_and_operator() {
+        let filter = Filter {
+            and_operator: Some(AndOperator {
+                prefix: None,
+                tags: Some(HashMap::new()),
+            }),
+            prefix: None,
+            tag: None,
+        };
+        assert!(filter.is_null());
+    }
+
+    #[test]
+    fn is_not_null_with_prefix() {
+        let filter = Filter {
+            and_operator: None,
+            prefix: Some("logs/".to_string()),
+            tag: None,
+        };
+        assert!(!filter.is_null());
+    }
+
+    #[test]
+    fn is_not_null_with_tag() {
+        let filter = Filter {
+            and_operator: None,
+            prefix: None,
+            tag: Some(Tag {
+                key: "k".to_string(),
+                value: "v".to_string(),
+            }),
+        };
+        assert!(!filter.is_null());
+    }
+
+    #[test]
+    fn is_not_null_with_and_prefix() {
+        let filter = Filter {
+            and_operator: Some(AndOperator {
+                prefix: Some("logs/".to_string()),
+                tags: None,
+            }),
+            prefix: None,
+            tag: None,
+        };
+        assert!(!filter.is_null());
+    }
+
+    #[test]
+    fn is_not_null_with_and_tags() {
+        let mut tags = HashMap::new();
+        tags.insert("k".to_string(), "v".to_string());
+        let filter = Filter {
+            and_operator: Some(AndOperator {
+                prefix: None,
+                tags: Some(tags),
+            }),
+            prefix: None,
+            tag: None,
+        };
+        assert!(!filter.is_null());
     }
 }

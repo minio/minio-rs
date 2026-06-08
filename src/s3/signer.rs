@@ -346,6 +346,42 @@ pub(crate) fn sign_v4_s3(
     )
 }
 
+/// Signs and updates headers for the given request using a custom service type.
+///
+/// Unlike [`sign_v4_s3`], which hardcodes the `"s3"` service, this allows signing
+/// for alternate service types such as `"sts"` or `"s3-outposts"`. The `service_type`
+/// becomes part of the credential scope (`.../<region>/<service_type>/aws4_request`).
+///
+/// The `cache` parameter should be the per-client `signing_key_cache` from `SharedClientItems`.
+#[allow(dead_code)]
+pub(crate) fn sign_v4_with_service_type(
+    cache: &RwLock<SigningKeyCache>,
+    service_type: &str,
+    method: &Method,
+    uri: &str,
+    region: &Region,
+    headers: &mut Multimap,
+    query_params: &Multimap,
+    access_key: &str,
+    secret_key: &str,
+    content_sha256: &str,
+    date: UtcTime,
+) {
+    sign_v4(
+        cache,
+        service_type,
+        method,
+        uri,
+        region,
+        headers,
+        query_params,
+        access_key,
+        secret_key,
+        content_sha256,
+        date,
+    )
+}
+
 /// Signs and updates query parameters for the given presigned request.
 ///
 /// The `cache` parameter should be the per-client `signing_key_cache` from `SharedClientItems`.
@@ -751,6 +787,103 @@ mod tests {
         );
 
         assert!(headers.contains_key("Authorization"));
+    }
+
+    // ===========================
+    // sign_v4_with_service_type Tests
+    // ===========================
+
+    #[test]
+    fn test_sign_v4_with_service_type_uses_service_in_scope() {
+        let cache = test_cache();
+        let method = Method::POST;
+        let uri = "/";
+        let region = Region::new("us-east-1").unwrap();
+        let mut headers = Multimap::new();
+        let date = get_test_date();
+        let content_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        let access_key = "AKIAIOSFODNN7EXAMPLE";
+        let secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+
+        headers.add(HOST, "sts.amazonaws.com");
+        headers.add(X_AMZ_CONTENT_SHA256, content_sha256);
+        headers.add(X_AMZ_DATE, "20130524T000000Z");
+
+        let query_params = Multimap::new();
+
+        sign_v4_with_service_type(
+            &cache,
+            "sts",
+            &method,
+            uri,
+            &region,
+            &mut headers,
+            &query_params,
+            access_key,
+            secret_key,
+            content_sha256,
+            date,
+        );
+
+        let auth_header = headers.get("Authorization").unwrap();
+        assert!(auth_header.starts_with("AWS4-HMAC-SHA256 Credential="));
+        assert!(auth_header.contains(&format!("Credential={access_key}/")));
+        assert!(auth_header.contains("/20130524/us-east-1/sts/aws4_request,"));
+        assert!(!auth_header.contains("/s3/aws4_request"));
+    }
+
+    #[test]
+    fn test_sign_v4_with_service_type_s3_matches_sign_v4_s3() {
+        let method = Method::GET;
+        let uri = "/bucket/key";
+        let region = Region::default();
+        let date = get_test_date();
+        let content_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        let access_key = "test_key";
+        let secret_key = "test_secret";
+        let query_params = Multimap::new();
+
+        let mut headers_s3 = Multimap::new();
+        headers_s3.add(HOST, "example.com");
+        headers_s3.add(X_AMZ_CONTENT_SHA256, content_sha256);
+        headers_s3.add(X_AMZ_DATE, "20130524T000000Z");
+
+        let mut headers_typed = Multimap::new();
+        headers_typed.add(HOST, "example.com");
+        headers_typed.add(X_AMZ_CONTENT_SHA256, content_sha256);
+        headers_typed.add(X_AMZ_DATE, "20130524T000000Z");
+
+        sign_v4_s3(
+            &test_cache(),
+            &method,
+            uri,
+            &region,
+            &mut headers_s3,
+            &query_params,
+            access_key,
+            secret_key,
+            content_sha256,
+            date,
+        );
+
+        sign_v4_with_service_type(
+            &test_cache(),
+            "s3",
+            &method,
+            uri,
+            &region,
+            &mut headers_typed,
+            &query_params,
+            access_key,
+            secret_key,
+            content_sha256,
+            date,
+        );
+
+        assert_eq!(
+            headers_s3.get("Authorization"),
+            headers_typed.get("Authorization")
+        );
     }
 
     // ===========================

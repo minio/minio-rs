@@ -30,7 +30,7 @@
 //! minio = { version = "0.3", default-features = false, features = ["default-tls", "default-crypto"] }
 //! ```
 
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 use dashmap::DashMap;
 use http::HeaderMap;
 pub use hyper::http::Method;
@@ -44,6 +44,7 @@ use std::path::{Path, PathBuf};
 use std::string::ToString;
 use std::sync::{Arc, OnceLock, RwLock};
 use uuid::Uuid;
+use xmltree::Element;
 
 use crate::s3::builders::{
     BucketExists, ComposeSource, MAX_MULTIPART_COUNT, MAX_OBJECT_SIZE, MAX_PART_SIZE, MIN_PART_SIZE,
@@ -642,6 +643,7 @@ impl MinioClient {
         body: Option<Arc<SegmentedBytes>>,
         trailing_checksum: Option<ChecksumAlgorithm>,
         use_signed_streaming: bool,
+        expect_200_ok_with_error: bool,
         retry: bool,
     ) -> Result<reqwest::Response, Error> {
         use crate::s3::aws_chunked::{
@@ -848,12 +850,29 @@ impl MinioClient {
         )
         .await;
 
-        let resp = resp.map_err(ValidationErr::from)?;
+        let mut resp = resp.map_err(ValidationErr::from)?;
         if resp.status().is_success() {
-            return Ok(resp);
+            if !expect_200_ok_with_error {
+                return Ok(resp);
+            }
+
+            let status = resp.status();
+            let headers: HeaderMap = mem::take(resp.headers_mut());
+            let body: Bytes = resp.bytes().await.map_err(ValidationErr::HttpError)?;
+
+            if let Ok(root) = Element::parse(body.clone().reader())
+                && root.name == "Error"
+            {
+                let e = MinioErrorResponse::new_from_body(body, headers)?;
+                return Err(Error::S3Server(S3ServerError::S3Error(Box::new(e))));
+            }
+
+            let mut rebuilt = http::Response::new(body);
+            *rebuilt.status_mut() = status;
+            *rebuilt.headers_mut() = headers;
+            return Ok(reqwest::Response::from(rebuilt));
         }
 
-        let mut resp = resp;
         let status_code = resp.status().as_u16();
         let headers: HeaderMap = mem::take(resp.headers_mut());
         let body: Bytes = resp.bytes().await.map_err(ValidationErr::HttpError)?;
@@ -891,6 +910,7 @@ impl MinioClient {
         data: Option<Arc<SegmentedBytes>>,
         trailing_checksum: Option<ChecksumAlgorithm>,
         use_signed_streaming: bool,
+        expect_200_ok_with_error: bool,
     ) -> Result<reqwest::Response, Error> {
         let resp: Result<reqwest::Response, Error> = self
             .execute_internal(
@@ -903,6 +923,7 @@ impl MinioClient {
                 data.as_ref().map(Arc::clone),
                 trailing_checksum,
                 use_signed_streaming,
+                expect_200_ok_with_error,
                 true,
             )
             .await;
@@ -929,6 +950,7 @@ impl MinioClient {
             data,
             trailing_checksum,
             use_signed_streaming,
+            expect_200_ok_with_error,
             false,
         )
         .await
@@ -1410,5 +1432,41 @@ impl SharedClientItems {
             bucket.cloned(),
             object.cloned(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_200_ok_with_error_body_is_recognized() {
+        let body = Bytes::from_static(
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>SlowDownWrite</Code>
+  <Message>Resource requested is unwritable, please reduce your request rate</Message>
+</Error>"#,
+        );
+        let root = Element::parse(body.clone().reader()).unwrap();
+        assert_eq!(root.name, "Error");
+
+        let e = MinioErrorResponse::new_from_body(body, HeaderMap::new()).unwrap();
+        assert_eq!(
+            e.code(),
+            MinioErrorCode::OtherError("slowdownwrite".to_string())
+        );
+    }
+
+    #[test]
+    fn test_200_ok_normal_body_is_not_error() {
+        let body = Bytes::from_static(
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<DeleteResult>
+  <Deleted><Key>obj1</Key></Deleted>
+</DeleteResult>"#,
+        );
+        let root = Element::parse(body.clone().reader()).unwrap();
+        assert_ne!(root.name, "Error");
     }
 }

@@ -235,6 +235,20 @@ pub trait HasObjectSize: HasS3Fields {
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(0)
     }
+
+    /// Returns the size of the object in bytes, requiring the `x-amz-object-size` header.
+    ///
+    /// Unlike [`object_size`](HasObjectSize::object_size), a missing or unparseable header is
+    /// treated as an error rather than defaulting to `0`. A server that omits this header on an
+    /// append does not support appends and may have overwritten the object.
+    #[inline]
+    fn object_size_checked(&self) -> Result<u64, ValidationErr> {
+        self.headers()
+            .get(X_AMZ_OBJECT_SIZE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok())
+            .ok_or(ValidationErr::AppendObjectNotSupported)
+    }
 }
 
 /// Provides access to the `x-amz-delete-marker` header value.
@@ -358,5 +372,63 @@ pub trait HasChecksumHeaders: HasS3Fields {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http::HeaderValue;
+
+    struct Dummy {
+        headers: HeaderMap,
+    }
+
+    impl HasS3Fields for Dummy {
+        fn request(&self) -> &S3Request {
+            unimplemented!()
+        }
+        fn headers(&self) -> &HeaderMap {
+            &self.headers
+        }
+        fn body(&self) -> &Bytes {
+            unimplemented!()
+        }
+    }
+
+    impl HasObjectSize for Dummy {}
+
+    fn dummy_with_size(value: &str) -> Dummy {
+        let mut headers = HeaderMap::new();
+        headers.insert(X_AMZ_OBJECT_SIZE, HeaderValue::from_str(value).unwrap());
+        Dummy { headers }
+    }
+
+    #[test]
+    fn test_object_size_checked_present() {
+        let d = dummy_with_size("4096");
+        assert_eq!(d.object_size_checked().unwrap(), 4096);
+        assert_eq!(d.object_size(), 4096);
+    }
+
+    #[test]
+    fn test_object_size_checked_absent() {
+        let d = Dummy {
+            headers: HeaderMap::new(),
+        };
+        assert!(matches!(
+            d.object_size_checked(),
+            Err(ValidationErr::AppendObjectNotSupported)
+        ));
+        assert_eq!(d.object_size(), 0);
+    }
+
+    #[test]
+    fn test_object_size_checked_unparseable() {
+        let d = dummy_with_size("not-a-number");
+        assert!(matches!(
+            d.object_size_checked(),
+            Err(ValidationErr::AppendObjectNotSupported)
+        ));
     }
 }

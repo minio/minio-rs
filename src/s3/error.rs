@@ -100,7 +100,7 @@ pub enum ValidationErr {
     #[error("Part size {0} is not supported; maximum allowed 5GiB")]
     InvalidMaxPartSize(u64),
 
-    #[error("Object size {0} is not supported; maximum allowed 5TiB")]
+    #[error("Object size {0} is not supported; maximum allowed 48.83TiB")]
     InvalidObjectSize(u64),
 
     #[error("Valid part size must be provided when object size is unknown")]
@@ -131,6 +131,12 @@ pub enum ValidationErr {
 
     #[error("Not enough data in the stream; expected: {expected}, got: {got} bytes")]
     InsufficientData { expected: u64, got: u64 },
+
+    #[error("server does not support appends. Object has been overwritten")]
+    AppendObjectNotSupported,
+
+    #[error("server returned incorrect object size; expected: {expected}, got: {got}")]
+    AppendObjectSizeMismatch { expected: u64, got: u64 },
 
     #[error("Invalid legal hold: {0}")]
     InvalidLegalHold(String),
@@ -550,7 +556,7 @@ mod tests {
         let err = ValidationErr::InvalidObjectSize(10_000_000_000_000_000);
         assert_eq!(
             err.to_string(),
-            "Object size 10000000000000000 is not supported; maximum allowed 5TiB"
+            "Object size 10000000000000000 is not supported; maximum allowed 48.83TiB"
         );
     }
 
@@ -626,6 +632,27 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "Not enough data in the stream; expected: 1000, got: 500 bytes"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_append_object_not_supported() {
+        let err = ValidationErr::AppendObjectNotSupported;
+        assert_eq!(
+            err.to_string(),
+            "server does not support appends. Object has been overwritten"
+        );
+    }
+
+    #[test]
+    fn test_validation_err_append_object_size_mismatch() {
+        let err = ValidationErr::AppendObjectSizeMismatch {
+            expected: 2048,
+            got: 1024,
+        };
+        assert_eq!(
+            err.to_string(),
+            "server returned incorrect object size; expected: 2048, got: 1024"
         );
     }
 

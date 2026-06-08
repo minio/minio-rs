@@ -28,6 +28,8 @@ pub const POLICY: &str = "policy";
 
 pub const X_MINIO_DEPLOYMENT_ID: &str = "X-Minio-Deployment-Id";
 
+pub const X_MINIO_SOURCE_MTIME: &str = "X-Minio-Source-Mtime";
+
 pub const X_AMZ_VERSION_ID: &str = "X-Amz-Version-Id";
 pub const X_AMZ_ID_2: &str = "X-Amz-Id-2";
 pub const X_AMZ_WRITE_OFFSET_BYTES: &str = "X-Amz-Write-Offset-Bytes";
