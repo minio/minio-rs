@@ -140,6 +140,16 @@ pub const X_AMZ_MAX_PARTS: &str = "X-Amz-Max-Parts";
 
 pub const X_AMZ_PART_NUMBER_MARKER: &str = "X-Amz-Part-Number-Marker";
 
+pub const X_AMZ_RENAME_SOURCE: &str = "x-amz-rename-source";
+
+pub const X_AMZ_RENAME_SOURCE_IF_MATCH: &str = "x-amz-rename-source-if-match";
+
+pub const X_AMZ_RENAME_SOURCE_IF_NONE_MATCH: &str = "x-amz-rename-source-if-none-match";
+
+pub const X_AMZ_RENAME_SOURCE_IF_MODIFIED_SINCE: &str = "x-amz-rename-source-if-modified-since";
+
+pub const X_AMZ_RENAME_SOURCE_IF_UNMODIFIED_SINCE: &str = "x-amz-rename-source-if-unmodified-since";
+
 pub const X_AMZ_TRAILER: &str = "X-Amz-Trailer";
 
 pub const X_AMZ_DECODED_CONTENT_LENGTH: &str = "X-Amz-Decoded-Content-Length";
