@@ -229,6 +229,29 @@ impl std::fmt::Display for MinioErrorCode {
     }
 }
 
+impl MinioErrorCode {
+    /// Map an HTTP status code to the most appropriate error code without body context.
+    ///
+    /// Used as a shared fallback by both `MinioErrorResponse::from_status_and_message`
+    /// and `create_minio_error_response` to keep status→code classification consistent.
+    /// Callers with additional context (e.g. bucket/object presence) should override
+    /// the 404 result after calling this.
+    pub fn from_http_status(status: u16) -> Self {
+        match status {
+            400 => Self::BadRequest,
+            401 | 403 => Self::AccessDenied,
+            404 => Self::ResourceNotFound,
+            405 | 501 => Self::MethodNotAllowed,
+            409 => Self::ResourceConflict,
+            412 => Self::PreconditionFailed,
+            429 => Self::SlowDown,
+            500 => Self::InternalError,
+            502 | 503 | 504 => Self::ServiceUnavailable,
+            _ => Self::OtherError(format!("HTTP {status}")),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test_error_code {
     use super::*;
@@ -291,16 +314,11 @@ impl MinioErrorResponse {
     ///
     /// Used for fast-path operations where full error details aren't available.
     pub fn from_status_and_message(status_code: u16, message: String) -> Self {
-        let code = match status_code {
-            404 => MinioErrorCode::NoSuchKey,
-            403 | 401 => MinioErrorCode::AccessDenied,
-            400 => MinioErrorCode::BadRequest,
-            409 => MinioErrorCode::ResourceConflict,
-            412 => MinioErrorCode::PreconditionFailed,
-            429 | 503 => MinioErrorCode::SlowDown,
-            500 => MinioErrorCode::InternalError,
-            502 | 504 => MinioErrorCode::ServiceUnavailable,
-            _ => MinioErrorCode::OtherError(format!("HTTP {status_code}")),
+        // 404 defaults to NoSuchKey rather than the generic ResourceNotFound
+        let code = if status_code == 404 {
+            MinioErrorCode::NoSuchKey
+        } else {
+            MinioErrorCode::from_http_status(status_code)
         };
         Self {
             headers: HeaderMap::new(),

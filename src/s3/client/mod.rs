@@ -1446,24 +1446,18 @@ impl SharedClientItems {
                 MinioErrorCode::MethodNotAllowed,
                 "The specified method is not allowed against this resource".into(),
             ),
-            409 => (MinioErrorCode::ResourceConflict, "Resource conflict".into()),
-            412 => (
-                MinioErrorCode::PreconditionFailed,
-                "Precondition failed".into(),
-            ),
-            429 | 503 => (MinioErrorCode::SlowDown, "Slow down".into()),
-            500 => (
-                MinioErrorCode::InternalError,
-                "Internal server error".into(),
-            ),
-            502 | 504 => (
-                MinioErrorCode::ServiceUnavailable,
-                "Service unavailable".into(),
-            ),
-            _ => (
-                MinioErrorCode::OtherError(format!("HTTP {http_status_code}")),
-                format!("Unexpected HTTP status {http_status_code}"),
-            ),
+            _ => {
+                let code = MinioErrorCode::from_http_status(http_status_code);
+                let message = match http_status_code {
+                    409 => "Resource conflict".into(),
+                    412 => "Precondition failed".into(),
+                    429 => "Slow down".into(),
+                    500 => "Internal server error".into(),
+                    502 | 503 | 504 => "Service unavailable".into(),
+                    _ => format!("Unexpected HTTP status {http_status_code}"),
+                };
+                (code, message)
+            }
         };
 
         let request_id = match headers.get(X_AMZ_REQUEST_ID) {
