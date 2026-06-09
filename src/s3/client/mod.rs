@@ -1453,7 +1453,7 @@ impl SharedClientItems {
                     412 => "Precondition failed".into(),
                     429 => "Slow down".into(),
                     500 => "Internal server error".into(),
-                    502 | 503 | 504 => "Service unavailable".into(),
+                    502..=504 => "Service unavailable".into(),
                     _ => format!("Unexpected HTTP status {http_status_code}"),
                 };
                 (code, message)

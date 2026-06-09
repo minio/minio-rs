@@ -246,7 +246,7 @@ impl MinioErrorCode {
             412 => Self::PreconditionFailed,
             429 => Self::SlowDown,
             500 => Self::InternalError,
-            502 | 503 | 504 => Self::ServiceUnavailable,
+            502..=504 => Self::ServiceUnavailable,
             _ => Self::OtherError(format!("HTTP {status}")),
         }
     }
