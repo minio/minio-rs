@@ -178,7 +178,7 @@ impl FromStr for MinioErrorCode {
             "preconditionfailed" => Ok(MinioErrorCode::PreconditionFailed),
             "serviceunavailable" => Ok(MinioErrorCode::ServiceUnavailable),
 
-            v => Ok(MinioErrorCode::OtherError(v.to_owned())),
+            _ => Ok(MinioErrorCode::OtherError(s.to_owned())),
         }
     }
 }

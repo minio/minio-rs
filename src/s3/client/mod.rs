@@ -1511,7 +1511,7 @@ mod tests {
         let e = MinioErrorResponse::new_from_body(body, HeaderMap::new(), 200).unwrap();
         assert_eq!(
             e.code(),
-            MinioErrorCode::OtherError("slowdownwrite".to_string())
+            MinioErrorCode::OtherError("SlowDownWrite".to_string())
         );
     }
 
