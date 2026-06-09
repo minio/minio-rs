@@ -54,7 +54,7 @@ pub use crate::s3::client::hooks::RequestHooks;
 use crate::s3::creds::Provider;
 #[cfg(feature = "localhost")]
 use crate::s3::creds::StaticProvider;
-use crate::s3::error::{Error, IoError, NetworkError, S3ServerError, ValidationErr};
+use crate::s3::error::{Error, IoError, S3ServerError, ValidationErr};
 use crate::s3::header_constants::*;
 use crate::s3::http::{BaseUrl, Url};
 use crate::s3::minio_error_response::{MinioErrorCode, MinioErrorResponse};
@@ -901,7 +901,7 @@ impl MinioClient {
             if let Ok(root) = Element::parse(body.clone().reader())
                 && root.name == "Error"
             {
-                let e = MinioErrorResponse::new_from_body(body, headers)?;
+                let e = MinioErrorResponse::new_from_body(body, headers, status.as_u16())?;
                 return Err(Error::S3Server(S3ServerError::S3Error(Box::new(e))));
             }
 
@@ -1293,20 +1293,23 @@ impl MinioClient {
             return Ok(resp);
         }
 
-        // Handle error response
-        let status = resp.status();
-        Err(Error::S3Server(S3ServerError::S3Error(Box::new(
-            MinioErrorResponse::from_status_and_message(
-                status.as_u16(),
-                format!(
-                    "GET object failed with status {} ({}): {}/{}",
-                    status.as_u16(),
-                    status.canonical_reason().unwrap_or("Unknown"),
-                    bucket,
-                    object
-                ),
-            ),
-        ))))
+        // Handle error response - consume body to extract structured error info
+        let mut resp = resp;
+        let status_code = resp.status().as_u16();
+        let headers: HeaderMap = mem::take(resp.headers_mut());
+        let body: Bytes = resp.bytes().await.map_err(ValidationErr::from)?;
+
+        let e = self.shared.create_minio_error_response(
+            body,
+            status_code,
+            headers,
+            &Method::GET,
+            &url.path,
+            Some(&bucket_typed),
+            Some(&object_typed),
+            false,
+        )?;
+        Err(Error::S3Server(S3ServerError::S3Error(Box::new(e))))
     }
 
     /// create an example client for testing on localhost
@@ -1411,7 +1414,7 @@ impl SharedClientItems {
                 .map_err(Error::Validation)?; // ValidationErr -> Error
 
             return if content_type.to_lowercase().contains("application/xml") {
-                MinioErrorResponse::new_from_body(body, headers)
+                MinioErrorResponse::new_from_body(body, headers, http_status_code)
             } else {
                 Err(Error::S3Server(S3ServerError::InvalidServerResponse {
                     message: format!(
@@ -1443,15 +1446,17 @@ impl SharedClientItems {
                 MinioErrorCode::MethodNotAllowed,
                 "The specified method is not allowed against this resource".into(),
             ),
-            409 => match bucket {
-                Some(_) => (MinioErrorCode::NoSuchBucket, "Bucket does not exist".into()),
-                None => (
-                    MinioErrorCode::ResourceConflict,
-                    "Request resource conflicts".into(),
-                ),
-            },
             _ => {
-                return Err(Error::Network(NetworkError::ServerError(http_status_code)));
+                let code = MinioErrorCode::from_http_status(http_status_code);
+                let message = match http_status_code {
+                    409 => "Resource conflict".into(),
+                    412 => "Precondition failed".into(),
+                    429 => "Slow down".into(),
+                    500 => "Internal server error".into(),
+                    502..=504 => "Service unavailable".into(),
+                    _ => format!("Unexpected HTTP status {http_status_code}"),
+                };
+                (code, message)
             }
         };
 
@@ -1482,6 +1487,7 @@ impl SharedClientItems {
             host_id,
             bucket.cloned(),
             object.cloned(),
+            http_status_code,
         ))
     }
 }
@@ -1502,7 +1508,7 @@ mod tests {
         let root = Element::parse(body.clone().reader()).unwrap();
         assert_eq!(root.name, "Error");
 
-        let e = MinioErrorResponse::new_from_body(body, HeaderMap::new()).unwrap();
+        let e = MinioErrorResponse::new_from_body(body, HeaderMap::new(), 200).unwrap();
         assert_eq!(
             e.code(),
             MinioErrorCode::OtherError("slowdownwrite".to_string())

@@ -95,6 +95,14 @@ pub enum MinioErrorCode {
     InvalidWriteOffset,
     /// Attempted to use S3 DeleteBucket API on a warehouse bucket (S3 Tables)
     WarehouseBucketOperationNotSupported,
+    /// Server is overloaded; client should back off and retry
+    SlowDown,
+    /// Server encountered an internal error
+    InternalError,
+    /// A precondition specified in the request headers was not satisfied
+    PreconditionFailed,
+    /// Service is temporarily unavailable (e.g. HTTP 502/503/504)
+    ServiceUnavailable,
 
     OtherError(String), // This is a catch-all for any error code not explicitly defined
 }
@@ -124,6 +132,10 @@ const ALL_MINIO_ERROR_CODE: &[MinioErrorCode] = &[
     MinioErrorCode::BucketAlreadyOwnedByYou,
     MinioErrorCode::InvalidWriteOffset,
     MinioErrorCode::WarehouseBucketOperationNotSupported,
+    MinioErrorCode::SlowDown,
+    MinioErrorCode::InternalError,
+    MinioErrorCode::PreconditionFailed,
+    MinioErrorCode::ServiceUnavailable,
     //MinioErrorCode::OtherError("".to_string()),
 ];
 
@@ -161,6 +173,10 @@ impl FromStr for MinioErrorCode {
             "warehousebucketoperationnotsupported" => {
                 Ok(MinioErrorCode::WarehouseBucketOperationNotSupported)
             }
+            "slowdown" => Ok(MinioErrorCode::SlowDown),
+            "internalerror" => Ok(MinioErrorCode::InternalError),
+            "preconditionfailed" => Ok(MinioErrorCode::PreconditionFailed),
+            "serviceunavailable" => Ok(MinioErrorCode::ServiceUnavailable),
 
             v => Ok(MinioErrorCode::OtherError(v.to_owned())),
         }
@@ -204,7 +220,34 @@ impl std::fmt::Display for MinioErrorCode {
             MinioErrorCode::WarehouseBucketOperationNotSupported => {
                 write!(f, "WarehouseBucketOperationNotSupported")
             }
+            MinioErrorCode::SlowDown => write!(f, "SlowDown"),
+            MinioErrorCode::InternalError => write!(f, "InternalError"),
+            MinioErrorCode::PreconditionFailed => write!(f, "PreconditionFailed"),
+            MinioErrorCode::ServiceUnavailable => write!(f, "ServiceUnavailable"),
             MinioErrorCode::OtherError(msg) => write!(f, "{msg}"),
+        }
+    }
+}
+
+impl MinioErrorCode {
+    /// Map an HTTP status code to the most appropriate error code without body context.
+    ///
+    /// Used as a shared fallback by both `MinioErrorResponse::from_status_and_message`
+    /// and `create_minio_error_response` to keep status→code classification consistent.
+    /// Callers with additional context (e.g. bucket/object presence) should override
+    /// the 404 result after calling this.
+    pub fn from_http_status(status: u16) -> Self {
+        match status {
+            400 => Self::BadRequest,
+            401 | 403 => Self::AccessDenied,
+            404 => Self::ResourceNotFound,
+            405 | 501 => Self::MethodNotAllowed,
+            409 => Self::ResourceConflict,
+            412 => Self::PreconditionFailed,
+            429 => Self::SlowDown,
+            500 => Self::InternalError,
+            502..=504 => Self::ServiceUnavailable,
+            _ => Self::OtherError(format!("HTTP {status}")),
         }
     }
 }
@@ -239,6 +282,7 @@ pub struct MinioErrorResponse {
     host_id: String,
     bucket: Option<BucketName>,
     object: Option<ObjectKey>,
+    http_status_code: u16,
 }
 
 impl MinioErrorResponse {
@@ -251,6 +295,7 @@ impl MinioErrorResponse {
         host_id: String,
         bucket: Option<BucketName>,
         object: Option<ObjectKey>,
+        http_status_code: u16,
     ) -> Self {
         Self {
             headers,
@@ -261,6 +306,7 @@ impl MinioErrorResponse {
             host_id,
             bucket,
             object,
+            http_status_code,
         }
     }
 
@@ -268,13 +314,11 @@ impl MinioErrorResponse {
     ///
     /// Used for fast-path operations where full error details aren't available.
     pub fn from_status_and_message(status_code: u16, message: String) -> Self {
-        let code = match status_code {
-            404 => MinioErrorCode::NoSuchKey,
-            403 => MinioErrorCode::AccessDenied,
-            401 => MinioErrorCode::AccessDenied,
-            400 => MinioErrorCode::BadRequest,
-            409 => MinioErrorCode::ResourceConflict,
-            _ => MinioErrorCode::OtherError(format!("HTTP {}", status_code)),
+        // 404 defaults to NoSuchKey rather than the generic ResourceNotFound
+        let code = if status_code == 404 {
+            MinioErrorCode::NoSuchKey
+        } else {
+            MinioErrorCode::from_http_status(status_code)
         };
         Self {
             headers: HeaderMap::new(),
@@ -285,10 +329,15 @@ impl MinioErrorResponse {
             host_id: String::new(),
             bucket: None,
             object: None,
+            http_status_code: status_code,
         }
     }
 
-    pub fn new_from_body(body: Bytes, headers: HeaderMap) -> Result<Self, Error> {
+    pub fn new_from_body(
+        body: Bytes,
+        headers: HeaderMap,
+        http_status_code: u16,
+    ) -> Result<Self, Error> {
         let root = Element::parse(body.reader()).map_err(ValidationErr::from)?;
         Ok(Self {
             headers,
@@ -299,9 +348,13 @@ impl MinioErrorResponse {
             host_id: get_text_default(&root, "HostId"),
             bucket: get_text_option(&root, "BucketName").and_then(|s| BucketName::new(s).ok()),
             object: get_text_option(&root, "Key").and_then(|s| ObjectKey::new(s).ok()),
+            http_status_code,
         })
     }
 
+    pub fn http_status(&self) -> u16 {
+        self.http_status_code
+    }
     pub fn headers(&self) -> &HeaderMap {
         &self.headers
     }
