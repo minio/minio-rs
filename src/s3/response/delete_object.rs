@@ -115,7 +115,7 @@ fn parse_delete_objects(body: &Bytes, headers: &HeaderMap) -> Result<Vec<DeleteR
     let root = Element::parse(body.clone().reader()).map_err(ValidationErr::from)?;
 
     if root.name == "Error" {
-        let e = MinioErrorResponse::new_from_body(body.clone(), headers.clone())?;
+        let e = MinioErrorResponse::new_from_body(body.clone(), headers.clone(), 200)?;
         return Err(Error::S3Server(S3ServerError::S3Error(Box::new(e))));
     }
 
