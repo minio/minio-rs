@@ -263,6 +263,8 @@ pub struct MinioClientBuilder {
     app_info: Option<(String, String)>,
     /// Skip region lookup for MinIO servers (region is not used by MinIO).
     skip_region_lookup: bool,
+    /// Sign requests with `UNSIGNED-PAYLOAD` instead of hashing the body.
+    unsigned_payload: bool,
     /// HTTP connection pool configuration.
     connection_pool_config: ConnectionPoolConfig,
 }
@@ -279,6 +281,7 @@ impl MinioClientBuilder {
             ignore_cert_check: None,
             app_info: None,
             skip_region_lookup: false,
+            unsigned_payload: false,
             connection_pool_config: ConnectionPoolConfig::default(),
         }
     }
@@ -342,6 +345,16 @@ impl MinioClientBuilder {
     /// ```
     pub fn skip_region_lookup(mut self, skip: bool) -> Self {
         self.skip_region_lookup = skip;
+        self
+    }
+
+    /// Sign PUT/POST requests with `x-amz-content-sha256: UNSIGNED-PAYLOAD`
+    /// instead of computing a SHA-256 over the request body. Skips a full
+    /// hashing pass per upload; rely on TLS and/or wire checksums for
+    /// integrity. Ignored for aws-chunked (trailing checksum) uploads, which
+    /// already use a streaming payload marker.
+    pub fn unsigned_payload(mut self, unsigned: bool) -> Self {
+        self.unsigned_payload = unsigned;
         self
     }
 
@@ -438,6 +451,7 @@ impl MinioClientBuilder {
                 region_map: Default::default(),
                 express: Default::default(),
                 skip_region_lookup: self.skip_region_lookup,
+                unsigned_payload: self.unsigned_payload,
                 signing_key_cache: RwLock::new(SigningKeyCache::new()),
             }),
         })
@@ -738,6 +752,7 @@ impl MinioClient {
                     headers.add(CONTENT_LENGTH, raw_len.to_string());
                     match body {
                         None => EMPTY_SHA256.into(),
+                        Some(_) if self.shared.unsigned_payload => "UNSIGNED-PAYLOAD".into(),
                         Some(ref v) => {
                             let clone = v.clone();
                             async_std::task::spawn_blocking(move || sha256_hash_sb(clone)).await
@@ -1023,6 +1038,7 @@ impl MinioClient {
                     headers.add(CONTENT_LENGTH, len.to_string());
                     match data {
                         None => EMPTY_SHA256.into(),
+                        Some(_) if self.shared.unsigned_payload => "UNSIGNED-PAYLOAD".into(),
                         Some(ref v) => {
                             let clone = v.clone();
                             async_std::task::spawn_blocking(move || sha256_hash_sb(clone)).await
@@ -1339,6 +1355,8 @@ pub(crate) struct SharedClientItems {
     region_map: DashMap<String, String>,
     express: OnceLock<bool>,
     pub(crate) skip_region_lookup: bool,
+    /// Sign PUT/POST bodies as `UNSIGNED-PAYLOAD` (no SHA-256 body hash).
+    pub(crate) unsigned_payload: bool,
     /// Cached precomputation of AWS Signature V4 signing keys.
     /// Stored per-client to support multiple clients with different credentials
     /// in the same process.
