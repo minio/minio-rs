@@ -39,6 +39,9 @@ pub struct ListEntry {
     pub is_delete_marker: bool,
     pub encoding_type: Option<String>,
     pub checksum_algorithm: Option<String>,
+    /// MinIO `<Internal><AccessTime>` (ListObjectsV2 with `metadata=true` on a
+    /// server started with `--lazy-access-time`). `None` on plain S3 or when not tracked.
+    pub access_time: Option<UtcTime>,
 }
 
 #[derive(Clone, Debug)]

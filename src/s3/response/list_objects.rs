@@ -129,6 +129,11 @@ fn parse_list_objects_contents(
             .transpose()?;
         let is_delete_marker = content.name() == "DeleteMarker";
         let checksum_algorithm = content.get_child_text("ChecksumAlgorithm");
+        let access_time = content
+            .get_child("Internal")
+            .and_then(|internal| internal.get_child_text("AccessTime"))
+            .map(|s| from_iso8601utc(&s))
+            .transpose()?;
 
         contents.push(ListEntry {
             name: key,
@@ -146,6 +151,7 @@ fn parse_list_objects_contents(
             is_delete_marker,
             encoding_type: etype,
             checksum_algorithm,
+            access_time,
         });
     }
 
@@ -178,6 +184,7 @@ fn parse_list_objects_common_prefixes(
             is_delete_marker: false,
             encoding_type: encoding_type.as_ref().cloned(),
             checksum_algorithm: None,
+            access_time: None,
         });
     }
 
@@ -539,5 +546,37 @@ mod tests {
         let contents = parse_contents(xml);
         assert_eq!(contents.len(), 1);
         assert_eq!(contents[0].checksum_algorithm, None);
+    }
+
+    #[test]
+    fn parses_access_time_from_internal() {
+        let xml = r#"<ListBucketResult>
+            <Contents>
+                <Key>obj</Key>
+                <LastModified>2024-01-01T00:00:00.000Z</LastModified>
+                <Internal>
+                    <AccessTime>2024-01-15T12:45:30Z</AccessTime>
+                </Internal>
+            </Contents>
+        </ListBucketResult>"#;
+        let contents = parse_contents(xml);
+        assert_eq!(contents.len(), 1);
+        assert_eq!(
+            contents[0].access_time,
+            Some(from_iso8601utc("2024-01-15T12:45:30Z").unwrap())
+        );
+    }
+
+    #[test]
+    fn access_time_absent_is_none() {
+        let xml = r#"<ListBucketResult>
+            <Contents>
+                <Key>obj</Key>
+                <LastModified>2024-01-01T00:00:00.000Z</LastModified>
+            </Contents>
+        </ListBucketResult>"#;
+        let contents = parse_contents(xml);
+        assert_eq!(contents.len(), 1);
+        assert_eq!(contents[0].access_time, None);
     }
 }
