@@ -80,6 +80,12 @@ pub struct RenameObject {
     /// `If-Unmodified-Since` on the destination (HTTP-date), sent verbatim.
     #[builder(default, setter(into))]
     dst_unmodified_since: Option<String>,
+    /// `x-amz-rename-recursive` (MinIO extension). When `true`, the rename is a
+    /// recursive prefix rename: every object under the source directory prefix
+    /// is moved into the destination prefix in one server-side request. Both
+    /// `src_object` and `dst_object` must be directory prefixes (trailing `/`).
+    #[builder(default)]
+    recursive: bool,
 }
 
 /// Builder type for [`RenameObject`] that is returned by [`MinioClient::rename_object`](crate::s3::client::MinioClient::rename_object).
@@ -93,6 +99,7 @@ pub type RenameObjectBldr = RenameObjectBuilder<(
     (BucketName,),
     (ObjectKey,),
     (ObjectKey,),
+    (),
     (),
     (),
     (),
@@ -194,6 +201,10 @@ impl ToS3Request for RenameObject {
         }
         if let Some(v) = self.dst_unmodified_since {
             headers.add(IF_UNMODIFIED_SINCE, v);
+        }
+
+        if self.recursive {
+            headers.add(X_AMZ_RENAME_RECURSIVE, "true");
         }
 
         Ok(S3Request::builder()
