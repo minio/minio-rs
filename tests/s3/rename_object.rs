@@ -144,6 +144,9 @@ async fn rename_prefix(ctx: TestContext, bucket: BucketName) {
             .send()
             .await
             .is_err();
-        assert!(src_gone, "source child {child} should be gone after recursive rename");
+        assert!(
+            src_gone,
+            "source child {child} should be gone after recursive rename"
+        );
     }
 }
