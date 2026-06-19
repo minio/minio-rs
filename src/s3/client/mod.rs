@@ -1534,6 +1534,37 @@ mod tests {
     }
 
     #[test]
+    fn test_200_ok_whitespaced_keepalive_error_is_recognized() {
+        // AIStor keep-alive (CompleteMultipartUpload / RenamePrefix) writes the
+        // XML declaration first, then streams whitespace while the operation
+        // runs, then the final body. On a slow rename that rolls back, the body
+        // is `<?xml?>` + keep-alive spaces + `<Error>`. The 200-with-error path
+        // must still recognise it.
+        let body = Bytes::from_static(
+            b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n          \
+<Error><Code>InternalError</Code><Message>rename rolled back</Message></Error>",
+        );
+        let root = Element::parse(body.clone().reader()).unwrap();
+        assert_eq!(root.name, "Error");
+
+        // The same body must also parse into a structured error (this is what
+        // the 200-with-error path returns to the caller).
+        let e = MinioErrorResponse::new_from_body(body, HeaderMap::new(), 200).unwrap();
+        assert_eq!(e.code(), MinioErrorCode::InternalError);
+    }
+
+    #[test]
+    fn test_200_ok_whitespaced_keepalive_success_is_not_error() {
+        // The success counterpart: `<?xml?>` + spaces + `<RenamePrefixResult>`.
+        let body = Bytes::from_static(
+            b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n          \
+<RenamePrefixResult><Moved>3</Moved></RenamePrefixResult>",
+        );
+        let root = Element::parse(body.clone().reader()).unwrap();
+        assert_eq!(root.name, "RenamePrefixResult");
+    }
+
+    #[test]
     fn test_200_ok_normal_body_is_not_error() {
         let body = Bytes::from_static(
             br#"<?xml version="1.0" encoding="UTF-8"?>

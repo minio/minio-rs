@@ -80,6 +80,12 @@ pub struct RenameObject {
     /// `If-Unmodified-Since` on the destination (HTTP-date), sent verbatim.
     #[builder(default, setter(into))]
     dst_unmodified_since: Option<String>,
+    /// `x-amz-rename-recursive` (MinIO extension). When `true`, the rename is a
+    /// recursive prefix rename: every object under the source directory prefix
+    /// is moved into the destination prefix in one server-side request. Both
+    /// `src_object` and `dst_object` must be directory prefixes (trailing `/`).
+    #[builder(default)]
+    recursive: bool,
 }
 
 /// Builder type for [`RenameObject`] that is returned by [`MinioClient::rename_object`](crate::s3::client::MinioClient::rename_object).
@@ -93,6 +99,7 @@ pub type RenameObjectBldr = RenameObjectBuilder<(
     (BucketName,),
     (ObjectKey,),
     (ObjectKey,),
+    (),
     (),
     (),
     (),
@@ -115,14 +122,15 @@ fn conditional_etag_value(etag: &str) -> String {
     }
 }
 
-/// Builds the `x-amz-rename-source` header value as `/{bucket}/{object}`, percent-encoding
-/// the object key (preserving `/`) the same way minio-go encodes `x-amz-copy-source`.
-/// The server decodes it via `url.Parse().Path`, so the key must be encoded here.
-fn rename_source_value(bucket: &str, src_object: &str) -> String {
+/// Builds the `x-amz-rename-source` header value as `/{object}` — the source
+/// **key only**, with no bucket qualifier. AIStor addresses the rename source by
+/// key within the request bucket (same-bucket rename); the whole header value is
+/// the key and any slashes are key prefixes. The server decodes it via
+/// `url.Parse().Path` then `trimLeadingSlash`, so the key is percent-encoded here
+/// (preserving `/`) and prefixed with a single leading slash.
+fn rename_source_value(src_object: &str) -> String {
     let encoded = urlencode_object_key(src_object);
-    let mut value = String::with_capacity(bucket.len() + encoded.len() + 2);
-    value.push('/');
-    value.push_str(bucket);
+    let mut value = String::with_capacity(encoded.len() + 1);
     value.push('/');
     value.push_str(&encoded);
     value
@@ -164,7 +172,7 @@ impl ToS3Request for RenameObject {
 
         headers.add(
             X_AMZ_RENAME_SOURCE,
-            rename_source_value(self.bucket.as_str(), self.src_object.as_str()),
+            rename_source_value(self.src_object.as_str()),
         );
 
         if let Some(etag) = &self.src_match_etag {
@@ -196,6 +204,10 @@ impl ToS3Request for RenameObject {
             headers.add(IF_UNMODIFIED_SINCE, v);
         }
 
+        if self.recursive {
+            headers.add(X_AMZ_RENAME_RECURSIVE, "true");
+        }
+
         Ok(S3Request::builder()
             .client(self.client)
             .method(Method::PUT)
@@ -215,18 +227,13 @@ mod tests {
 
     #[test]
     fn rename_source_value_format() {
-        assert_eq!(
-            rename_source_value("my-bucket", "src/object.txt"),
-            "/my-bucket/src/object.txt"
-        );
+        // Key only, no bucket qualifier.
+        assert_eq!(rename_source_value("src/object.txt"), "/src/object.txt");
     }
 
     #[test]
     fn rename_source_value_url_encodes_object() {
-        assert_eq!(
-            rename_source_value("my-bucket", "a b+c?d"),
-            "/my-bucket/a%20b%2Bc%3Fd"
-        );
+        assert_eq!(rename_source_value("a b+c?d"), "/a%20b%2Bc%3Fd");
     }
 
     #[test]

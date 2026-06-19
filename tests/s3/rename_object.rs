@@ -82,3 +82,71 @@ async fn rename_object(ctx: TestContext, bucket: BucketName) {
         "source object should no longer exist after rename"
     );
 }
+
+/// Recursive prefix rename (MinIO/AIStor extension): `x-amz-rename-recursive: true`
+/// renames every object under the source directory prefix into the destination
+/// prefix in one server-side request. Source and destination are directory
+/// prefixes (trailing `/`); afterwards every child exists under the destination
+/// and none remain under the source.
+#[minio_macros::test]
+async fn rename_prefix(ctx: TestContext, bucket: BucketName) {
+    let base = rand_object_name();
+    let src_prefix = format!("{base}-src/");
+    let dst_prefix = format!("{base}-dst/");
+    let children = ["a.bin", "nested/b.bin", "nested/deep/c.bin"];
+    let size = 16_u64;
+
+    for child in children {
+        let resp: PutObjectContentResponse = ctx
+            .client
+            .put_object_content(
+                &bucket,
+                format!("{src_prefix}{child}"),
+                ObjectContent::new_from_stream(RandSrc::new(size), Some(size)),
+            )
+            .unwrap()
+            .build()
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.object_size(), size);
+    }
+
+    let resp: RenameObjectResponse = ctx
+        .client
+        .rename_object(&bucket, &src_prefix, &dst_prefix)
+        .unwrap()
+        .recursive(true)
+        .build()
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.bucket(), Some(&bucket));
+
+    for child in children {
+        // Every child now exists under the destination prefix...
+        let moved: StatObjectResponse = ctx
+            .client
+            .stat_object(&bucket, format!("{dst_prefix}{child}"))
+            .unwrap()
+            .build()
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(moved.size().unwrap(), size);
+
+        // ...and is gone from the source prefix.
+        let src_gone = ctx
+            .client
+            .stat_object(&bucket, format!("{src_prefix}{child}"))
+            .unwrap()
+            .build()
+            .send()
+            .await
+            .is_err();
+        assert!(
+            src_gone,
+            "source child {child} should be gone after recursive rename"
+        );
+    }
+}
