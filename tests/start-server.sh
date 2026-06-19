@@ -39,10 +39,18 @@ set -x
 
 # Wait until the server is actually ready rather than sleeping a fixed time, so
 # slow/fast container startup does not make CI flaky.
+ready=0
 for _ in $(seq 1 60); do
     if curl --silent --show-error --fail --cacert ./tests/public.crt \
         https://localhost:9000/minio/health/ready >/dev/null; then
+        ready=1
         break
     fi
     sleep 1
 done
+
+if [ "${ready}" -ne 1 ]; then
+    echo "MinIO did not become ready within 60 seconds" >&2
+    docker logs minio-test >&2 || true
+    exit 1
+fi

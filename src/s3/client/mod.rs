@@ -1546,6 +1546,11 @@ mod tests {
         );
         let root = Element::parse(body.clone().reader()).unwrap();
         assert_eq!(root.name, "Error");
+
+        // The same body must also parse into a structured error (this is what
+        // the 200-with-error path returns to the caller).
+        let e = MinioErrorResponse::new_from_body(body, HeaderMap::new(), 200).unwrap();
+        assert_eq!(e.code(), MinioErrorCode::InternalError);
     }
 
     #[test]
@@ -1556,7 +1561,7 @@ mod tests {
 <RenamePrefixResult><Moved>3</Moved></RenamePrefixResult>",
         );
         let root = Element::parse(body.clone().reader()).unwrap();
-        assert_ne!(root.name, "Error");
+        assert_eq!(root.name, "RenamePrefixResult");
     }
 
     #[test]
