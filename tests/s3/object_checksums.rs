@@ -1241,11 +1241,7 @@ async fn test_all_trailing_checksum_algorithms(ctx: TestContext, bucket: BucketN
 }
 
 /// Test trailing checksum with larger data to exercise chunked encoding.
-///
-/// NOTE: This test requires a newer MinIO server that supports trailing checksums.
-/// Older servers may fail with "IncompleteBody" errors.
-/// Run with `cargo test -- --ignored` to include this test.
-#[minio_macros::test(ignore = "Requires newer MinIO server with trailing checksum support")]
+#[minio_macros::test]
 async fn upload_download_large_data_with_trailing_checksum(ctx: TestContext, bucket: BucketName) {
     let object = rand_object_name();
     // Use 100KB which is larger than the 64KB default chunk size
@@ -1805,13 +1801,7 @@ async fn multipart_upload_with_checksum_crc64nvme(ctx: TestContext, bucket: Buck
 }
 
 /// Test multipart upload with trailing checksums.
-///
-/// NOTE: This test requires a newer MinIO server that supports trailing checksums
-/// with multipart uploads. Older servers may fail with "IncompleteBody" errors.
-/// Run with `cargo test -- --ignored` to include this test.
-#[minio_macros::test(
-    ignore = "Requires newer MinIO server with trailing checksum + multipart support"
-)]
+#[minio_macros::test]
 async fn multipart_upload_with_trailing_checksum(ctx: TestContext, bucket: BucketName) {
     let object = rand_object_name();
     // 6MB to ensure multipart upload
@@ -1921,11 +1911,15 @@ async fn multipart_upload_all_checksum_algorithms(ctx: TestContext, bucket: Buck
 
 /// Test compose with multiple sources and checksums (creates multipart with composite checksum).
 ///
-/// NOTE: This test requires a newer MinIO server that supports compose operations
-/// with checksum verification. Older servers may fail because they don't properly
-/// store/return checksums on source objects needed for compose validation.
-/// Run with `cargo test -- --ignored` to include this test.
-#[minio_macros::test(ignore = "Requires newer MinIO server with compose + checksum support")]
+/// Ignored pending a server fix (miniohq/aistor#5924): CompleteMultipartUpload on
+/// a checksummed MPU requires each part to carry its checksum, but AIStor's
+/// UploadPartCopy (`CopyPartResult`) returns only ETag + LastModified — no
+/// checksum (unlike AWS S3) — so the client cannot supply the copied part's
+/// checksum on Complete and the server rejects with InvalidPart. Enable once
+/// CopyPartResult returns the part checksum.
+#[minio_macros::test(
+    ignore = "compose+checksum blocked on miniohq/aistor#5924: CopyPartResult omits the part checksum, so Complete fails with InvalidPart"
+)]
 async fn compose_multiple_sources_with_checksum(ctx: TestContext, bucket: BucketName) {
     let src_object1 = rand_object_name();
     let src_object2 = rand_object_name();
