@@ -246,6 +246,22 @@ pub struct CompleteMultipartUpload {
     /// exist, while a concrete ETag is sent quoted.
     #[builder(default, setter(into))]
     not_match_etag: Option<String>,
+
+    /// User-defined metadata applied to the completed object.
+    ///
+    /// MinIO-specific extension: AWS S3 only accepts `x-amz-meta-*` at
+    /// CreateMultipartUpload time, but MinIO also honors it here. Each key
+    /// must start with `x-amz-meta-` and is emitted as its own header.
+    #[builder(default, setter(into))]
+    user_metadata: Option<Multimap>,
+
+    /// Object tags applied to the completed object.
+    ///
+    /// MinIO-specific extension: AWS S3 only accepts tagging at
+    /// CreateMultipartUpload time, but MinIO also honors it here. Emitted as
+    /// the `x-amz-tagging` header.
+    #[builder(default, setter(into))]
+    tags: Option<HashMap<String, String>>,
 }
 
 /// Builder type for [`CompleteMultipartUpload`] that is returned by [`MinioClient::complete_multipart_upload`](crate::s3::client::MinioClient::complete_multipart_upload).
@@ -260,6 +276,8 @@ pub type CompleteMultipartUploadBldr = CompleteMultipartUploadBuilder<(
     (ObjectKey,),
     (UploadId,),
     (Vec<PartInfo>,),
+    (),
+    (),
     (),
     (),
     (),
@@ -319,6 +337,17 @@ impl ToS3Request for CompleteMultipartUpload {
             }
 
             add_conditional_etag_headers(&mut headers, &self.match_etag, &self.not_match_etag);
+
+            if let Some(v) = self.user_metadata {
+                add_user_metadata_headers(&mut headers, v)?;
+            }
+
+            if let Some(v) = self.tags {
+                let tagging = encode_tags(&v);
+                if !tagging.is_empty() {
+                    headers.add(X_AMZ_TAGGING, tagging);
+                }
+            }
         }
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
         query_params.add("uploadId", self.upload_id.as_str());
@@ -935,6 +964,8 @@ impl PutObjectContent {
             checksum_algorithm: self.checksum_algorithm,
             match_etag: self.match_etag,
             not_match_etag: self.not_match_etag,
+            user_metadata: None,
+            tags: None,
         }
         .send()
         .await?;
@@ -968,6 +999,26 @@ fn add_conditional_etag_headers(
     }
 }
 
+fn add_user_metadata_headers(
+    map: &mut Multimap,
+    user_metadata: Multimap,
+) -> Result<(), ValidationErr> {
+    for (k, _) in user_metadata.iter() {
+        if k.is_empty() {
+            return Err(ValidationErr::InvalidUserMetadata(
+                "user metadata key cannot be empty".into(),
+            ));
+        }
+        if !k.starts_with("x-amz-meta-") {
+            return Err(ValidationErr::InvalidUserMetadata(format!(
+                "user metadata key '{k}' does not start with 'x-amz-meta-'",
+            )));
+        }
+    }
+    map.add_multimap(user_metadata);
+    Ok(())
+}
+
 fn into_headers_put_object(
     extra_headers: Option<Multimap>,
     user_metadata: Option<Multimap>,
@@ -984,20 +1035,7 @@ fn into_headers_put_object(
     }
 
     if let Some(v) = user_metadata {
-        // Validate it.
-        for (k, _) in v.iter() {
-            if k.is_empty() {
-                return Err(ValidationErr::InvalidUserMetadata(
-                    "user metadata key cannot be empty".into(),
-                ));
-            }
-            if !k.starts_with("x-amz-meta-") {
-                return Err(ValidationErr::InvalidUserMetadata(format!(
-                    "user metadata key '{k}' does not start with 'x-amz-meta-'",
-                )));
-            }
-        }
-        map.add_multimap(v);
+        add_user_metadata_headers(&mut map, v)?;
     }
 
     if let Some(v) = sse {
@@ -1233,6 +1271,65 @@ mod tests {
             req.headers.get(X_AMZ_STORAGE_CLASS).map(String::as_str),
             Some("GLACIER")
         );
+    }
+
+    fn complete_parts() -> Vec<PartInfo> {
+        vec![PartInfo {
+            number: 1,
+            etag: "d41d8cd98f00b204e9800998ecf8427e".parse().unwrap(),
+            size: 5,
+            checksum: None,
+        }]
+    }
+
+    #[test]
+    fn complete_multipart_upload_emits_user_metadata_and_tagging() {
+        let mut meta = Multimap::new();
+        meta.add("x-amz-meta-key", "value");
+        let mut tags = HashMap::new();
+        tags.insert("env".to_string(), "prod".to_string());
+
+        let req = test_client()
+            .complete_multipart_upload("test-bucket", "test-object", "upload-id", complete_parts())
+            .unwrap()
+            .user_metadata(meta)
+            .tags(tags)
+            .build()
+            .to_s3request()
+            .unwrap();
+
+        assert_eq!(
+            req.headers.get("x-amz-meta-key").map(String::as_str),
+            Some("value")
+        );
+        assert_eq!(
+            req.headers.get(X_AMZ_TAGGING).map(String::as_str),
+            Some("env=prod")
+        );
+    }
+
+    #[test]
+    fn complete_multipart_upload_omits_metadata_and_tagging_by_default() {
+        let req = test_client()
+            .complete_multipart_upload("test-bucket", "test-object", "upload-id", complete_parts())
+            .unwrap()
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert!(req.headers.get(X_AMZ_TAGGING).is_none());
+    }
+
+    #[test]
+    fn complete_multipart_upload_rejects_invalid_user_metadata() {
+        let mut meta = Multimap::new();
+        meta.add("invalid-key", "value");
+        let err = test_client()
+            .complete_multipart_upload("test-bucket", "test-object", "upload-id", complete_parts())
+            .unwrap()
+            .user_metadata(meta)
+            .build()
+            .to_s3request();
+        assert!(matches!(err, Err(ValidationErr::InvalidUserMetadata(_))));
     }
 
     /// Objects small enough to fit in MAX_MULTIPART_COUNT parts at DEFAULT_PART_SIZE
