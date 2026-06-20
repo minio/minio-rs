@@ -247,6 +247,7 @@ struct ListObjectsV2 {
     continuation_token: Option<String>,
     fetch_owner: bool,
     include_user_metadata: bool,
+    unsorted: bool,
 }
 
 #[async_trait]
@@ -314,6 +315,12 @@ impl ToS3Request for ListObjectsV2 {
             if self.include_user_metadata {
                 query_params.add("metadata", "true");
             }
+            // MinIO extension: skip the server-side cross-set/pool sorted merge
+            // and return entries in an unspecified order — faster for callers
+            // (e.g. a FUSE readdir) that do not need lexicographic ordering.
+            if self.unsorted {
+                query_params.add("unsorted", "true");
+            }
         }
 
         Ok(S3Request::builder()
@@ -343,6 +350,7 @@ impl From<ListObjects> for ListObjectsV2 {
             continuation_token: value.continuation_token,
             fetch_owner: value.fetch_owner,
             include_user_metadata: value.include_user_metadata,
+            unsorted: value.unsorted,
         }
     }
 }
@@ -527,6 +535,12 @@ pub struct ListObjects {
     #[builder(default)]
     include_user_metadata: bool,
 
+    /// Used only with ListObjectsV2. MinIO extension: ask the server to skip
+    /// the cross-set/pool sorted merge and return entries in an unspecified
+    /// order. Faster for callers that do not need lexicographic ordering.
+    #[builder(default)]
+    unsorted: bool,
+
     // Options specific to ListObjectVersions.
     /// Used only with GetObjectVersions.
     #[builder(default, setter(into))]
@@ -581,6 +595,7 @@ pub type ListObjectBldr = ListObjectsBuilder<(
     (),
     (),
     (BucketName,),
+    (),
     (),
     (),
     (),
@@ -822,6 +837,62 @@ mod tests {
         assert!(
             !query_string.contains("key-marker"),
             "key-marker should be absent when start_after is unset: {query_string}"
+        );
+    }
+
+    #[test]
+    fn test_list_objects_v2_metadata_and_unsorted_query_params() {
+        use crate::s3::creds::StaticProvider;
+        use crate::s3::http::BaseUrl;
+
+        let provider = StaticProvider::new("test", "test", None);
+        let client = MinioClient::new(
+            "http://localhost:9000".parse::<BaseUrl>().unwrap(),
+            Some(provider),
+            None,
+            None,
+        )
+        .unwrap();
+
+        // Both MinIO extensions enabled.
+        let list_objects = ListObjects::builder()
+            .client(client.clone())
+            .bucket(BucketName::new("test-bucket").unwrap())
+            .include_user_metadata(true)
+            .unsorted(true)
+            .build();
+        let query_string = ListObjectsV2::from(list_objects)
+            .to_s3request()
+            .unwrap()
+            .query_params
+            .to_query_string();
+        assert!(query_string.contains("list-type=2"), "{query_string}");
+        assert!(
+            query_string.contains("metadata=true"),
+            "metadata extension missing: {query_string}"
+        );
+        assert!(
+            query_string.contains("unsorted=true"),
+            "unsorted extension missing: {query_string}"
+        );
+
+        // Defaults off → neither extension param is emitted.
+        let plain = ListObjects::builder()
+            .client(client)
+            .bucket(BucketName::new("test-bucket").unwrap())
+            .build();
+        let plain_qs = ListObjectsV2::from(plain)
+            .to_s3request()
+            .unwrap()
+            .query_params
+            .to_query_string();
+        assert!(
+            !plain_qs.contains("metadata="),
+            "metadata must be absent by default: {plain_qs}"
+        );
+        assert!(
+            !plain_qs.contains("unsorted="),
+            "unsorted must be absent by default: {plain_qs}"
         );
     }
 
