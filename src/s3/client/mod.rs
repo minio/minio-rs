@@ -197,6 +197,23 @@ pub struct ConnectionPoolConfig {
     /// Reduces latency for small requests but may reduce throughput on
     /// high-bandwidth, high-latency links. Default: true
     pub tcp_nodelay: bool,
+
+    /// Maximum time to wait for a TCP connection to be established.
+    ///
+    /// Bounds a black-holed (silently dropped) connect, which otherwise stalls
+    /// on the OS SYN-retry budget (~127s on default Linux). `None` leaves it
+    /// unbounded. Default: 10 seconds.
+    pub connect_timeout: Option<std::time::Duration>,
+
+    /// Maximum time to wait for the next chunk of a response body (a per-read
+    /// idle timeout, NOT a total request timeout).
+    ///
+    /// Bounds a connection that goes silent mid-transfer (server dies on an
+    /// established socket), which otherwise stalls on the OS retransmit budget
+    /// (~13-15 min on default Linux). Because it resets on each received chunk,
+    /// it does NOT cap a legitimately long large-object transfer. `None` leaves
+    /// it unbounded. Default: 60 seconds.
+    pub read_timeout: Option<std::time::Duration>,
 }
 
 impl Default for ConnectionPoolConfig {
@@ -206,6 +223,8 @@ impl Default for ConnectionPoolConfig {
             idle_timeout: std::time::Duration::from_secs(90),
             tcp_keepalive: std::time::Duration::from_secs(60),
             tcp_nodelay: true,
+            connect_timeout: Some(std::time::Duration::from_secs(10)),
+            read_timeout: Some(std::time::Duration::from_secs(60)),
         }
     }
 }
@@ -242,6 +261,20 @@ impl ConnectionPoolConfig {
     /// Disable for better throughput on high-bandwidth, high-latency links.
     pub fn tcp_nodelay(mut self, enable: bool) -> Self {
         self.tcp_nodelay = enable;
+        self
+    }
+
+    /// Set the connection-establishment timeout (`None` = unbounded).
+    pub fn connect_timeout(mut self, timeout: Option<std::time::Duration>) -> Self {
+        self.connect_timeout = timeout;
+        self
+    }
+
+    /// Set the per-read body-idle timeout (`None` = unbounded). Resets on each
+    /// received chunk, so it bounds a stalled connection without capping a long
+    /// legitimate transfer.
+    pub fn read_timeout(mut self, timeout: Option<std::time::Duration>) -> Self {
+        self.read_timeout = timeout;
         self
     }
 }
@@ -398,6 +431,17 @@ impl MinioClientBuilder {
             .tcp_keepalive(pool_config.tcp_keepalive)
             .pool_max_idle_per_host(pool_config.max_idle_per_host)
             .pool_idle_timeout(pool_config.idle_timeout);
+
+        // Bound silent (black-holed) connections so a dead endpoint fails fast
+        // into the caller's retry loop instead of stalling on OS TCP timeouts.
+        // `read_timeout` is a per-read idle timeout (resets each body chunk), so
+        // it does not cap a legitimately long large-object transfer.
+        if let Some(connect_timeout) = pool_config.connect_timeout {
+            builder = builder.connect_timeout(connect_timeout);
+        }
+        if let Some(read_timeout) = pool_config.read_timeout {
+            builder = builder.read_timeout(read_timeout);
+        }
 
         // HTTP/2 adaptive window improves throughput when server supports HTTP/2.
         // Has no effect with HTTP/1.1-only servers (graceful fallback).
