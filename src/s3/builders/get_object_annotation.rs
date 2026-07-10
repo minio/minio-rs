@@ -17,8 +17,10 @@ use crate::s3::client::MinioClient;
 use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::GetObjectAnnotationResponse;
-use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId};
-use crate::s3::utils::{insert, validate_annotation_name};
+use crate::s3::types::{
+    AnnotationName, BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId,
+};
+use crate::s3::utils::insert;
 use http::Method;
 use typed_builder::TypedBuilder;
 
@@ -42,7 +44,7 @@ pub struct GetObjectAnnotation {
     #[builder(setter(into), !default)]
     object: ObjectKey,
     #[builder(setter(into), !default)]
-    annotation_name: String,
+    annotation_name: AnnotationName,
     #[builder(default, setter(into))]
     version_id: Option<VersionId>,
 }
@@ -56,7 +58,7 @@ pub type GetObjectAnnotationBldr = GetObjectAnnotationBuilder<(
     (),
     (BucketName,),
     (ObjectKey,),
-    (String,),
+    (AnnotationName,),
     (),
 )>;
 
@@ -66,10 +68,8 @@ impl S3Api for GetObjectAnnotation {
 
 impl ToS3Request for GetObjectAnnotation {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        validate_annotation_name(&self.annotation_name)?;
-
         let mut query_params: Multimap = insert(self.extra_query_params, "annotation");
-        query_params.add("annotationName", self.annotation_name);
+        query_params.add("annotationName", self.annotation_name.into_inner());
         query_params.add_version(self.version_id);
 
         Ok(S3Request::builder()
@@ -81,5 +81,42 @@ impl ToS3Request for GetObjectAnnotation {
             .object(self.object)
             .headers(self.extra_headers.unwrap_or_default())
             .build())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::s3::creds::StaticProvider;
+    use crate::s3::http::BaseUrl;
+
+    fn test_client() -> MinioClient {
+        let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+        let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+        MinioClient::new(base_url, Some(provider), None, None).unwrap()
+    }
+
+    #[test]
+    fn sets_annotation_query_params() {
+        let req = test_client()
+            .get_object_annotation("bucket", "object", "review")
+            .unwrap()
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert!(req.query_params.contains_key("annotation"));
+        assert_eq!(
+            req.query_params.get("annotationName").map(String::as_str),
+            Some("review")
+        );
+    }
+
+    #[test]
+    fn empty_name_is_rejected_at_construction() {
+        assert!(
+            test_client()
+                .get_object_annotation("bucket", "object", "")
+                .is_err()
+        );
     }
 }

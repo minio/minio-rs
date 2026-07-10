@@ -16,7 +16,7 @@
 use crate::s3::builders::{DeleteObjectAnnotation, DeleteObjectAnnotationBldr};
 use crate::s3::client::MinioClient;
 use crate::s3::error::ValidationErr;
-use crate::s3::types::{BucketName, ObjectKey};
+use crate::s3::types::{AnnotationName, BucketName, ObjectKey};
 
 impl MinioClient {
     /// Creates a [`DeleteObjectAnnotation`] request builder that permanently
@@ -37,12 +37,13 @@ impl MinioClient {
         B::Error: Into<ValidationErr>,
         O: TryInto<ObjectKey>,
         O::Error: Into<ValidationErr>,
-        N: Into<String>,
+        N: TryInto<AnnotationName>,
+        N::Error: Into<ValidationErr>,
     {
         Ok(DeleteObjectAnnotation::builder()
             .client(self.clone())
             .bucket(bucket.try_into().map_err(Into::into)?)
             .object(object.try_into().map_err(Into::into)?)
-            .annotation_name(annotation_name))
+            .annotation_name(annotation_name.try_into().map_err(Into::into)?))
     }
 }

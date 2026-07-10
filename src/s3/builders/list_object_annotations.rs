@@ -70,3 +70,44 @@ impl ToS3Request for ListObjectAnnotations {
             .build())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::s3::creds::StaticProvider;
+    use crate::s3::http::BaseUrl;
+    use crate::s3::types::VersionId;
+
+    fn test_client() -> MinioClient {
+        let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+        let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+        MinioClient::new(base_url, Some(provider), None, None).unwrap()
+    }
+
+    #[test]
+    fn sets_annotation_query_without_name() {
+        let req = test_client()
+            .list_object_annotations("bucket", "object")
+            .unwrap()
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert!(req.query_params.contains_key("annotation"));
+        assert!(!req.query_params.contains_key("annotationName"));
+    }
+
+    #[test]
+    fn version_id_is_propagated() {
+        let req = test_client()
+            .list_object_annotations("bucket", "object")
+            .unwrap()
+            .version_id(Some(VersionId::new("v1").unwrap()))
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert_eq!(
+            req.query_params.get("versionId").map(String::as_str),
+            Some("v1")
+        );
+    }
+}

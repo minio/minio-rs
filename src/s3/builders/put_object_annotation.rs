@@ -19,8 +19,10 @@ use crate::s3::header_constants::X_AMZ_OBJECT_IF_MATCH;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::PutObjectAnnotationResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
-use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId};
-use crate::s3::utils::{insert, validate_annotation_name, validate_annotation_payload_len};
+use crate::s3::types::{
+    AnnotationName, BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId,
+};
+use crate::s3::utils::{insert, validate_annotation_payload_len};
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -47,7 +49,7 @@ pub struct PutObjectAnnotation {
     #[builder(setter(into), !default)]
     object: ObjectKey,
     #[builder(setter(into), !default)]
-    annotation_name: String,
+    annotation_name: AnnotationName,
     #[builder(setter(into), !default)]
     payload: Bytes,
     #[builder(default, setter(into))]
@@ -67,7 +69,7 @@ pub type PutObjectAnnotationBldr = PutObjectAnnotationBuilder<(
     (),
     (BucketName,),
     (ObjectKey,),
-    (String,),
+    (AnnotationName,),
     (Bytes,),
     (),
     (),
@@ -79,11 +81,10 @@ impl S3Api for PutObjectAnnotation {
 
 impl ToS3Request for PutObjectAnnotation {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        validate_annotation_name(&self.annotation_name)?;
         validate_annotation_payload_len(self.payload.len())?;
 
         let mut query_params: Multimap = insert(self.extra_query_params, "annotation");
-        query_params.add("annotationName", self.annotation_name);
+        query_params.add("annotationName", self.annotation_name.into_inner());
         query_params.add_version(self.version_id);
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
@@ -103,5 +104,64 @@ impl ToS3Request for PutObjectAnnotation {
             .headers(headers)
             .body(body)
             .build())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::s3::creds::StaticProvider;
+    use crate::s3::http::BaseUrl;
+
+    fn test_client() -> MinioClient {
+        let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+        let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+        MinioClient::new(base_url, Some(provider), None, None).unwrap()
+    }
+
+    #[test]
+    fn sets_annotation_query_params() {
+        let req = test_client()
+            .put_object_annotation("bucket", "object", "review", Bytes::from_static(b"hello"))
+            .unwrap()
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert!(req.query_params.contains_key("annotation"));
+        assert_eq!(
+            req.query_params.get("annotationName").map(String::as_str),
+            Some("review")
+        );
+    }
+
+    #[test]
+    fn if_match_sets_conditional_header() {
+        let req = test_client()
+            .put_object_annotation("bucket", "object", "review", Bytes::from_static(b"x"))
+            .unwrap()
+            .if_match(Some("\"etag\"".to_string()))
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert!(req.headers.contains_key(X_AMZ_OBJECT_IF_MATCH));
+    }
+
+    #[test]
+    fn empty_payload_is_rejected() {
+        let result = test_client()
+            .put_object_annotation("bucket", "object", "review", Bytes::new())
+            .unwrap()
+            .build()
+            .to_s3request();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn empty_name_is_rejected_at_construction() {
+        assert!(
+            test_client()
+                .put_object_annotation("bucket", "object", "", Bytes::from_static(b"x"))
+                .is_err()
+        );
     }
 }

@@ -42,6 +42,7 @@ impl GetObjectAnnotationResponse {
 
     /// Consume the response, returning the annotation payload bytes.
     #[inline]
+    #[must_use]
     pub fn into_payload(self) -> Bytes {
         self.body
     }

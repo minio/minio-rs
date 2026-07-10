@@ -138,4 +138,11 @@ mod tests {
     fn empty_body_yields_no_annotations() {
         assert!(parse_annotations(&Bytes::new()).unwrap().is_empty());
     }
+
+    #[test]
+    fn malformed_xml_errors() {
+        // Truncated/unclosed document must surface an error, not panic.
+        let bad = Bytes::from_static(b"<ListObjectAnnotationsOutput><Annotation>");
+        assert!(parse_annotations(&bad).is_err());
+    }
 }
