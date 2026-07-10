@@ -108,22 +108,28 @@ mod tests {
     }
 
     #[test]
-    fn sets_annotation_query_params() {
+    fn builds_delete_request() {
         let req = test_client()
             .delete_object_annotation("bucket", "object", "review")
             .unwrap()
+            .version_id(Some(VersionId::new("v1").unwrap()))
             .build()
             .to_s3request()
             .unwrap();
+        assert_eq!(req.method, Method::DELETE);
         assert!(req.query_params.contains_key("annotation"));
         assert_eq!(
             req.query_params.get("annotationName").map(String::as_str),
             Some("review")
         );
+        assert_eq!(
+            req.query_params.get("versionId").map(String::as_str),
+            Some("v1")
+        );
     }
 
     #[test]
-    fn if_match_sets_conditional_header() {
+    fn if_match_sets_exact_conditional_header() {
         let req = test_client()
             .delete_object_annotation("bucket", "object", "review")
             .unwrap()
@@ -131,6 +137,9 @@ mod tests {
             .build()
             .to_s3request()
             .unwrap();
-        assert!(req.headers.contains_key(X_AMZ_OBJECT_IF_MATCH));
+        assert_eq!(
+            req.headers.get(X_AMZ_OBJECT_IF_MATCH).map(String::as_str),
+            Some("\"etag\"")
+        );
     }
 }

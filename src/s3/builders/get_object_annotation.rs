@@ -88,6 +88,7 @@ impl ToS3Request for GetObjectAnnotation {
 mod tests {
     use super::*;
     use crate::s3::creds::StaticProvider;
+    use crate::s3::header_constants::X_AMZ_OBJECT_IF_MATCH;
     use crate::s3::http::BaseUrl;
 
     fn test_client() -> MinioClient {
@@ -97,18 +98,26 @@ mod tests {
     }
 
     #[test]
-    fn sets_annotation_query_params() {
+    fn builds_get_request() {
         let req = test_client()
             .get_object_annotation("bucket", "object", "review")
             .unwrap()
+            .version_id(Some(VersionId::new("v1").unwrap()))
             .build()
             .to_s3request()
             .unwrap();
+        assert_eq!(req.method, Method::GET);
         assert!(req.query_params.contains_key("annotation"));
         assert_eq!(
             req.query_params.get("annotationName").map(String::as_str),
             Some("review")
         );
+        assert_eq!(
+            req.query_params.get("versionId").map(String::as_str),
+            Some("v1")
+        );
+        // GET carries no conditional header.
+        assert!(!req.headers.contains_key(X_AMZ_OBJECT_IF_MATCH));
     }
 
     #[test]

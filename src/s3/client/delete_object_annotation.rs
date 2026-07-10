@@ -47,3 +47,41 @@ impl MinioClient {
             .annotation_name(annotation_name.try_into().map_err(Into::into)?))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::s3::MinioClient;
+    use crate::s3::creds::StaticProvider;
+    use crate::s3::http::BaseUrl;
+    use crate::s3::types::ToS3Request;
+
+    fn test_client() -> MinioClient {
+        let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+        let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+        MinioClient::new(base_url, Some(provider), None, None).unwrap()
+    }
+
+    #[test]
+    fn client_method_wires_the_request() {
+        let req = test_client()
+            .delete_object_annotation("bucket", "object", "review")
+            .unwrap()
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert!(req.query_params.contains_key("annotation"));
+        assert_eq!(
+            req.query_params.get("annotationName").map(String::as_str),
+            Some("review")
+        );
+    }
+
+    #[test]
+    fn client_method_rejects_empty_name() {
+        assert!(
+            test_client()
+                .delete_object_annotation("bucket", "object", "")
+                .is_err()
+        );
+    }
+}

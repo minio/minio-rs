@@ -92,6 +92,7 @@ mod tests {
             .build()
             .to_s3request()
             .unwrap();
+        assert_eq!(req.method, Method::GET);
         assert!(req.query_params.contains_key("annotation"));
         assert!(!req.query_params.contains_key("annotationName"));
     }

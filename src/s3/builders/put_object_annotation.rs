@@ -112,6 +112,8 @@ mod tests {
     use super::*;
     use crate::s3::creds::StaticProvider;
     use crate::s3::http::BaseUrl;
+    use crate::s3::types::VersionId;
+    use crate::s3::utils::MAX_ANNOTATION_PAYLOAD_BYTES;
 
     fn test_client() -> MinioClient {
         let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
@@ -120,22 +122,29 @@ mod tests {
     }
 
     #[test]
-    fn sets_annotation_query_params() {
+    fn builds_put_request() {
         let req = test_client()
             .put_object_annotation("bucket", "object", "review", Bytes::from_static(b"hello"))
             .unwrap()
+            .version_id(Some(VersionId::new("v1").unwrap()))
             .build()
             .to_s3request()
             .unwrap();
+        assert_eq!(req.method, Method::PUT);
         assert!(req.query_params.contains_key("annotation"));
         assert_eq!(
             req.query_params.get("annotationName").map(String::as_str),
             Some("review")
         );
+        assert_eq!(
+            req.query_params.get("versionId").map(String::as_str),
+            Some("v1")
+        );
+        assert!(req.body.is_some());
     }
 
     #[test]
-    fn if_match_sets_conditional_header() {
+    fn if_match_sets_exact_conditional_header() {
         let req = test_client()
             .put_object_annotation("bucket", "object", "review", Bytes::from_static(b"x"))
             .unwrap()
@@ -143,13 +152,27 @@ mod tests {
             .build()
             .to_s3request()
             .unwrap();
-        assert!(req.headers.contains_key(X_AMZ_OBJECT_IF_MATCH));
+        assert_eq!(
+            req.headers.get(X_AMZ_OBJECT_IF_MATCH).map(String::as_str),
+            Some("\"etag\"")
+        );
     }
 
     #[test]
     fn empty_payload_is_rejected() {
         let result = test_client()
             .put_object_annotation("bucket", "object", "review", Bytes::new())
+            .unwrap()
+            .build()
+            .to_s3request();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn oversized_payload_is_rejected() {
+        let big = vec![0u8; MAX_ANNOTATION_PAYLOAD_BYTES + 1];
+        let result = test_client()
+            .put_object_annotation("bucket", "object", "review", Bytes::from(big))
             .unwrap()
             .build()
             .to_s3request();
