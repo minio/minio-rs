@@ -330,6 +330,135 @@ impl From<&ObjectKey> for ObjectKey {
     }
 }
 
+/// Maximum length of an object-annotation name, in bytes.
+pub const MAX_ANNOTATION_NAME_BYTES: usize = 512;
+
+/// A validated object-annotation name.
+///
+/// Validated at construction: non-empty and ≤512 bytes. The server enforces
+/// the full naming rules (allowed characters, reserved prefixes). Once
+/// constructed, an `AnnotationName` is guaranteed to satisfy these bounds.
+///
+/// # Example
+///
+/// ```
+/// use minio::s3::types::AnnotationName;
+///
+/// let name = AnnotationName::new("review-status").unwrap();
+/// assert_eq!(name.as_str(), "review-status");
+///
+/// assert!(AnnotationName::new("").is_err());
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct AnnotationName(String);
+
+impl AnnotationName {
+    /// Creates a new validated annotation name.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationErr::InvalidAnnotationName`] if the name is empty or
+    /// exceeds [`MAX_ANNOTATION_NAME_BYTES`].
+    pub fn new(name: impl Into<String>) -> Result<Self, ValidationErr> {
+        let name = name.into();
+        if name.is_empty() {
+            return Err(ValidationErr::InvalidAnnotationName(
+                "must not be empty".to_string(),
+            ));
+        }
+        if name.len() > MAX_ANNOTATION_NAME_BYTES {
+            return Err(ValidationErr::InvalidAnnotationName(format!(
+                "exceeds {MAX_ANNOTATION_NAME_BYTES} bytes"
+            )));
+        }
+        Ok(Self(name))
+    }
+
+    /// Returns the annotation name as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consumes self and returns the annotation name as a `String`.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl AsRef<str> for AnnotationName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for AnnotationName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::str::FromStr for AnnotationName {
+    type Err = ValidationErr;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::new(s)
+    }
+}
+
+impl TryFrom<String> for AnnotationName {
+    type Error = ValidationErr;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&str> for AnnotationName {
+    type Error = ValidationErr;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&String> for AnnotationName {
+    type Error = ValidationErr;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        Self::new(value.as_str())
+    }
+}
+
+impl From<&AnnotationName> for AnnotationName {
+    fn from(value: &AnnotationName) -> Self {
+        value.clone()
+    }
+}
+
+#[cfg(test)]
+mod annotation_name_tests {
+    use super::AnnotationName;
+
+    #[test]
+    fn rejects_empty() {
+        assert!(AnnotationName::new("").is_err());
+    }
+
+    #[test]
+    fn rejects_too_long() {
+        let too_long = "a".repeat(513);
+        assert!(AnnotationName::new(too_long).is_err());
+    }
+
+    #[test]
+    fn accepts_valid() {
+        let name = AnnotationName::new("review-status").unwrap();
+        assert_eq!(name.as_str(), "review-status");
+        let max = "a".repeat(512);
+        assert!(AnnotationName::new(max).is_ok());
+    }
+}
+
 /// A validated S3 version ID.
 ///
 /// Version IDs are validated at construction time:

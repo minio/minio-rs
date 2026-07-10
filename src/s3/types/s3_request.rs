@@ -32,7 +32,7 @@ pub struct S3Request {
     pub(crate) client: MinioClient,
 
     #[builder(!default)] // force required
-    method: Method,
+    pub(crate) method: Method,
 
     #[builder(default)]
     region: Option<Region>,
@@ -56,7 +56,7 @@ pub struct S3Request {
     pub(crate) headers: Multimap,
 
     #[builder(default, setter(into))]
-    body: Option<Arc<SegmentedBytes>>,
+    pub(crate) body: Option<Arc<SegmentedBytes>>,
 
     /// Optional trailing checksum algorithm for streaming uploads.
     ///

@@ -1687,6 +1687,45 @@ pub fn insert(data: Option<Multimap>, key: impl Into<String>) -> Multimap {
     result
 }
 
+/// Maximum size of a single object-annotation payload (1 MiB).
+pub const MAX_ANNOTATION_PAYLOAD_BYTES: usize = 1 << 20;
+
+/// Client-side validation of an annotation payload size (1 byte to 1 MiB).
+pub fn validate_annotation_payload_len(len: usize) -> Result<(), ValidationErr> {
+    if len == 0 {
+        return Err(ValidationErr::InvalidAnnotationPayload(
+            "must be at least 1 byte".into(),
+        ));
+    }
+    if len > MAX_ANNOTATION_PAYLOAD_BYTES {
+        return Err(ValidationErr::InvalidAnnotationPayload(
+            "exceeds the 1 MiB maximum".into(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod annotation_payload_tests {
+    use super::{MAX_ANNOTATION_PAYLOAD_BYTES, validate_annotation_payload_len};
+
+    #[test]
+    fn rejects_empty() {
+        assert!(validate_annotation_payload_len(0).is_err());
+    }
+
+    #[test]
+    fn rejects_too_large() {
+        assert!(validate_annotation_payload_len(MAX_ANNOTATION_PAYLOAD_BYTES + 1).is_err());
+    }
+
+    #[test]
+    fn accepts_valid() {
+        assert!(validate_annotation_payload_len(1).is_ok());
+        assert!(validate_annotation_payload_len(MAX_ANNOTATION_PAYLOAD_BYTES).is_ok());
+    }
+}
+
 pub mod xml {
     use crate::s3::error::ValidationErr;
     use std::collections::HashMap;
