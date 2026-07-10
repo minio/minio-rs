@@ -63,6 +63,12 @@ pub enum ValidationErr {
     #[error("Invalid object name: {0}")]
     InvalidObjectName(String),
 
+    #[error("Invalid annotation name: {0}")]
+    InvalidAnnotationName(String),
+
+    #[error("Invalid annotation payload: {0}")]
+    InvalidAnnotationPayload(String),
+
     #[error("Invalid max_keys: {0}")]
     InvalidMaxKeys(String),
 

@@ -1687,6 +1687,44 @@ pub fn insert(data: Option<Multimap>, key: impl Into<String>) -> Multimap {
     result
 }
 
+/// Maximum length of an object-annotation name, in bytes.
+pub const MAX_ANNOTATION_NAME_BYTES: usize = 512;
+
+/// Maximum size of a single object-annotation payload (1 MiB).
+pub const MAX_ANNOTATION_PAYLOAD_BYTES: usize = 1 << 20;
+
+/// Minimal client-side validation of an annotation name: non-empty and within
+/// the length limit. The server enforces the full naming rules (allowed
+/// characters, reserved prefixes).
+pub fn validate_annotation_name(name: &str) -> Result<(), ValidationErr> {
+    if name.is_empty() {
+        return Err(ValidationErr::InvalidAnnotationName(
+            "must not be empty".into(),
+        ));
+    }
+    if name.len() > MAX_ANNOTATION_NAME_BYTES {
+        return Err(ValidationErr::InvalidAnnotationName(format!(
+            "exceeds {MAX_ANNOTATION_NAME_BYTES} bytes"
+        )));
+    }
+    Ok(())
+}
+
+/// Client-side validation of an annotation payload size (1 byte to 1 MiB).
+pub fn validate_annotation_payload_len(len: usize) -> Result<(), ValidationErr> {
+    if len == 0 {
+        return Err(ValidationErr::InvalidAnnotationPayload(
+            "must be at least 1 byte".into(),
+        ));
+    }
+    if len > MAX_ANNOTATION_PAYLOAD_BYTES {
+        return Err(ValidationErr::InvalidAnnotationPayload(
+            "exceeds the 1 MiB maximum".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub mod xml {
     use crate::s3::error::ValidationErr;
     use std::collections::HashMap;

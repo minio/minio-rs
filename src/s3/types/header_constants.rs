@@ -156,6 +156,8 @@ pub const X_AMZ_RENAME_SOURCE_IF_UNMODIFIED_SINCE: &str = "x-amz-rename-source-i
 
 pub const X_AMZ_RENAME_RECURSIVE: &str = "x-amz-rename-recursive";
 
+pub const X_AMZ_OBJECT_IF_MATCH: &str = "x-amz-object-if-match";
+
 pub const X_AMZ_TRAILER: &str = "X-Amz-Trailer";
 
 pub const X_AMZ_DECODED_CONTENT_LENGTH: &str = "X-Amz-Decoded-Content-Length";
