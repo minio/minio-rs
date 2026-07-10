@@ -6,7 +6,7 @@ set -e
 # Always test against the AIStor :edge image, which carries the latest AIStor
 # extensions the integration tests exercise (RenameObject/RenamePrefix,
 # UpdateObjectEncryption, QoS, Inventory, LDAP STS).
-MINIO_IMAGE="registry.min.dev/aistor/minio:edge"
+MINIO_IMAGE="registry.k5.min.dev/aistor/minio:edge"
 docker pull "${MINIO_IMAGE}"
 
 echo "MinIO Server Version:"
