@@ -347,6 +347,65 @@ pub(crate) fn sign_v4_s3(
     )
 }
 
+/// Signs an arbitrary HTTP request with AWS Signature V4 as service `"s3"` and
+/// returns the complete set of headers to send with it.
+///
+/// This is a self-contained entry point for signing requests to non-object S3
+/// APIs served on the same endpoint (for example the AIStor Memory API under
+/// `/_mem/v1`). Unlike [`sign_v4_s3`], it owns its signing-key cache and adds
+/// the mandatory `host`, `x-amz-date`, `x-amz-content-sha256` and (when a
+/// session token is supplied) `x-amz-security-token` headers before signing, so
+/// callers outside the SDK do not have to replicate the SDK's header prep.
+///
+/// - `method` / `path`: the request line; `path` is the URL-encoded path only.
+/// - `host`: the value for the `Host` header (e.g. `localhost:9000`).
+/// - `region`: the SigV4 credential-scope region.
+/// - `query_params`: canonicalized into the signature (may be empty).
+/// - `extra_headers`: additional headers to fold into the signature (e.g.
+///   `content-type`, `content-length`); may be empty.
+/// - `payload_sha256`: lowercase-hex SHA-256 of the request body. Use
+///   [`crate::s3::utils::EMPTY_SHA256`] for an empty body.
+///
+/// The returned [`Multimap`] contains every header (including the signed ones
+/// and the `Authorization` header) that must accompany the request.
+pub fn sign_v4_s3_request(
+    method: &Method,
+    host: &str,
+    path: &str,
+    region: &str,
+    query_params: &Multimap,
+    extra_headers: &Multimap,
+    access_key: &str,
+    secret_key: &str,
+    session_token: Option<&str>,
+    payload_sha256: &str,
+    date: UtcTime,
+) -> Multimap {
+    let mut headers = extra_headers.clone();
+    headers.add(HOST, host);
+    headers.add(X_AMZ_DATE, to_amz_date(date));
+    headers.add(X_AMZ_CONTENT_SHA256, payload_sha256);
+    if let Some(token) = session_token {
+        headers.add(X_AMZ_SECURITY_TOKEN, token);
+    }
+
+    let cache = RwLock::new(SigningKeyCache::new());
+    let region = Region::new(region.to_owned()).unwrap_or_default();
+    sign_v4_s3(
+        &cache,
+        method,
+        path,
+        &region,
+        &mut headers,
+        query_params,
+        access_key,
+        secret_key,
+        payload_sha256,
+        date,
+    );
+    headers
+}
+
 /// Signs and updates headers for the given request using a custom service type.
 ///
 /// Unlike [`sign_v4_s3`], which hardcodes the `"s3"` service, this allows signing
