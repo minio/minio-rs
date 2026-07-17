@@ -381,6 +381,41 @@ pub fn sign_v4_s3_request(
     payload_sha256: &str,
     date: UtcTime,
 ) -> Multimap {
+    sign_v4_service_request(
+        "s3",
+        method,
+        host,
+        path,
+        region,
+        query_params,
+        extra_headers,
+        access_key,
+        secret_key,
+        session_token,
+        payload_sha256,
+        date,
+    )
+}
+
+/// Like [`sign_v4_s3_request`] but signs for an arbitrary `service` type (e.g.
+/// `"s3tables"` for the Iceberg REST catalog, or `"sts"` for STS actions). The
+/// `service` becomes part of the credential scope
+/// (`.../<region>/<service>/aws4_request`).
+#[allow(clippy::too_many_arguments)]
+pub fn sign_v4_service_request(
+    service: &str,
+    method: &Method,
+    host: &str,
+    path: &str,
+    region: &str,
+    query_params: &Multimap,
+    extra_headers: &Multimap,
+    access_key: &str,
+    secret_key: &str,
+    session_token: Option<&str>,
+    payload_sha256: &str,
+    date: UtcTime,
+) -> Multimap {
     let mut headers = extra_headers.clone();
     headers.add(HOST, host);
     headers.add(X_AMZ_DATE, to_amz_date(date));
@@ -391,8 +426,9 @@ pub fn sign_v4_s3_request(
 
     let cache = RwLock::new(SigningKeyCache::new());
     let region = Region::new(region.to_owned()).unwrap_or_default();
-    sign_v4_s3(
+    sign_v4_with_service_type(
         &cache,
+        service,
         method,
         path,
         &region,
