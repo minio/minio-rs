@@ -347,99 +347,98 @@ pub(crate) fn sign_v4_s3(
     )
 }
 
-/// Signs an arbitrary HTTP request with AWS Signature V4 as service `"s3"` and
-/// returns the complete set of headers to send with it.
+/// Parameters for signing a single request with [`RequestSigner::sign`].
 ///
-/// This is a self-contained entry point for signing requests to non-object S3
-/// APIs served on the same endpoint (for example the AIStor Memory API under
-/// `/_mem/v1`). Unlike [`sign_v4_s3`], it owns its signing-key cache and adds
-/// the mandatory `host`, `x-amz-date`, `x-amz-content-sha256` and (when a
-/// session token is supplied) `x-amz-security-token` headers before signing, so
-/// callers outside the SDK do not have to replicate the SDK's header prep.
-///
-/// - `method` / `path`: the request line; `path` is the URL-encoded path only.
-/// - `host`: the value for the `Host` header (e.g. `localhost:9000`).
-/// - `region`: the SigV4 credential-scope region.
-/// - `query_params`: canonicalized into the signature (may be empty).
-/// - `extra_headers`: additional headers to fold into the signature (e.g.
-///   `content-type`, `content-length`); may be empty.
-/// - `payload_sha256`: lowercase-hex SHA-256 of the request body. Use
-///   [`crate::s3::utils::EMPTY_SHA256`] for an empty body.
-///
-/// The returned [`Multimap`] contains every header (including the signed ones
-/// and the `Authorization` header) that must accompany the request.
-pub fn sign_v4_s3_request(
-    method: &Method,
-    host: &str,
-    path: &str,
-    region: &str,
-    query_params: &Multimap,
-    extra_headers: &Multimap,
-    access_key: &str,
-    secret_key: &str,
-    session_token: Option<&str>,
-    payload_sha256: &str,
-    date: UtcTime,
-) -> Multimap {
-    sign_v4_service_request(
-        "s3",
-        method,
-        host,
-        path,
-        region,
-        query_params,
-        extra_headers,
-        access_key,
-        secret_key,
-        session_token,
-        payload_sha256,
-        date,
-    )
+/// Consolidates the request fields into one struct rather than a long argument
+/// list. `extra_headers` is taken by value: the signer mutates it in place
+/// (adding the signed headers) and returns it, so callers pass owned headers and
+/// avoid an internal clone.
+pub struct SignRequestOptions<'a> {
+    /// SigV4 service for the credential scope: `"s3"` (Memory API), `"s3tables"`
+    /// (Iceberg REST catalog), `"sts"`, etc.
+    pub service: &'a str,
+    /// HTTP method.
+    pub method: &'a Method,
+    /// Value for the `Host` header (e.g. `localhost:9000`).
+    pub host: &'a str,
+    /// URL-encoded request path only.
+    pub path: &'a str,
+    /// SigV4 credential-scope region.
+    pub region: &'a str,
+    /// Query parameters canonicalized into the signature (may be empty).
+    pub query_params: &'a Multimap,
+    /// Additional headers to fold into the signature (e.g. `content-type`,
+    /// `content-length`); may be empty. Consumed and returned with the signed
+    /// headers added.
+    pub extra_headers: Multimap,
+    /// Access key id.
+    pub access_key: &'a str,
+    /// Secret access key.
+    pub secret_key: &'a str,
+    /// Optional session token (STS temporary credentials).
+    pub session_token: Option<&'a str>,
+    /// Lowercase-hex SHA-256 of the request body. Use
+    /// [`crate::s3::utils::EMPTY_SHA256`] for an empty body.
+    pub payload_sha256: &'a str,
+    /// Request timestamp.
+    pub date: UtcTime,
 }
 
-/// Like [`sign_v4_s3_request`] but signs for an arbitrary `service` type (e.g.
-/// `"s3tables"` for the Iceberg REST catalog, or `"sts"` for STS actions). The
-/// `service` becomes part of the credential scope
-/// (`.../<region>/<service>/aws4_request`).
-#[allow(clippy::too_many_arguments)]
-pub fn sign_v4_service_request(
-    service: &str,
-    method: &Method,
-    host: &str,
-    path: &str,
-    region: &str,
-    query_params: &Multimap,
-    extra_headers: &Multimap,
-    access_key: &str,
-    secret_key: &str,
-    session_token: Option<&str>,
-    payload_sha256: &str,
-    date: UtcTime,
-) -> Multimap {
-    let mut headers = extra_headers.clone();
-    headers.add(HOST, host);
-    headers.add(X_AMZ_DATE, to_amz_date(date));
-    headers.add(X_AMZ_CONTENT_SHA256, payload_sha256);
-    if let Some(token) = session_token {
-        headers.add(X_AMZ_SECURITY_TOKEN, token);
+/// A reusable SigV4 request signer for non-object S3 APIs served on the same
+/// endpoint — for example the AIStor Memory API (`/_mem/v1`), the Tables/Iceberg
+/// REST catalog (`/_iceberg/v1`, service `s3tables`), or STS.
+///
+/// Holds a signing-key cache that is **reused across calls**, so a caller that
+/// signs many requests (e.g. one signer per API client) amortizes the HMAC-SHA256
+/// key derivation. Construct one and keep it for the lifetime of the client.
+///
+/// [`sign`](RequestSigner::sign) adds the mandatory `host`, `x-amz-date`,
+/// `x-amz-content-sha256` and (when a session token is supplied)
+/// `x-amz-security-token` headers before signing, so callers outside the SDK do
+/// not replicate the SDK's header prep.
+#[derive(Debug, Default)]
+pub struct RequestSigner {
+    cache: RwLock<SigningKeyCache>,
+}
+
+impl RequestSigner {
+    /// Create a signer with a fresh signing-key cache.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            cache: RwLock::new(SigningKeyCache::new()),
+        }
     }
 
-    let cache = RwLock::new(SigningKeyCache::new());
-    let region = Region::new(region.to_owned()).unwrap_or_default();
-    sign_v4_with_service_type(
-        &cache,
-        service,
-        method,
-        path,
-        &region,
-        &mut headers,
-        query_params,
-        access_key,
-        secret_key,
-        payload_sha256,
-        date,
-    );
-    headers
+    /// Sign a request and return every header (including the signed ones and the
+    /// `Authorization` header) that must accompany it. Reuses this signer's
+    /// signing-key cache.
+    #[must_use]
+    pub fn sign(&self, opts: SignRequestOptions<'_>) -> Multimap {
+        let mut headers = opts.extra_headers;
+        headers.add(HOST, opts.host);
+        headers.add(X_AMZ_DATE, to_amz_date(opts.date));
+        headers.add(X_AMZ_CONTENT_SHA256, opts.payload_sha256);
+        if let Some(token) = opts.session_token {
+            headers.add(X_AMZ_SECURITY_TOKEN, token);
+        }
+
+        let region = Region::new(opts.region.to_owned()).unwrap_or_default();
+        sign_v4_with_service_type(
+            &self.cache,
+            opts.service,
+            opts.method,
+            opts.path,
+            &region,
+            &mut headers,
+            opts.query_params,
+            opts.access_key,
+            opts.secret_key,
+            opts.payload_sha256,
+            opts.date,
+        );
+        headers
+    }
 }
 
 /// Signs and updates headers for the given request using a custom service type.
@@ -760,7 +759,9 @@ pub(crate) fn sign_v4_with_service_type_and_context(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::s3::header_constants::{HOST, X_AMZ_CONTENT_SHA256, X_AMZ_DATE};
+    use crate::s3::header_constants::{
+        HOST, X_AMZ_CONTENT_SHA256, X_AMZ_DATE, X_AMZ_SECURITY_TOKEN,
+    };
     use crate::s3::multimap_ext::{Multimap, MultimapExt};
     use chrono::{TimeZone, Utc};
     use hyper::http::Method;
@@ -1593,5 +1594,133 @@ mod tests {
         assert_eq!(context.date_time, cloned.date_time);
         assert_eq!(context.scope, cloned.scope);
         assert_eq!(context.seed_signature, cloned.seed_signature);
+    }
+
+    // ===========================
+    // RequestSigner Tests (Public API)
+    // ===========================
+
+    const TEST_ACCESS_KEY: &str = "AKIAIOSFODNN7EXAMPLE";
+    const TEST_SECRET_KEY: &str = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+    const TEST_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+    fn base_opts<'a>(service: &'a str, extra_headers: Multimap) -> SignRequestOptions<'a> {
+        SignRequestOptions {
+            service,
+            method: &Method::GET,
+            host: "localhost:9000",
+            path: "/_mem/v1/cortexes",
+            region: "us-east-1",
+            query_params: EMPTY_QUERY.get_or_init(Multimap::new),
+            extra_headers,
+            access_key: TEST_ACCESS_KEY,
+            secret_key: TEST_SECRET_KEY,
+            session_token: None,
+            payload_sha256: TEST_SHA256,
+            date: get_test_date(),
+        }
+    }
+
+    use std::sync::OnceLock;
+    static EMPTY_QUERY: OnceLock<Multimap> = OnceLock::new();
+
+    #[test]
+    fn request_signer_adds_mandatory_headers_and_authorization() {
+        let signer = RequestSigner::new();
+        let headers = signer.sign(base_opts("s3", Multimap::new()));
+
+        assert_eq!(
+            headers.get_vec(HOST).map(Vec::as_slice),
+            Some(&["localhost:9000".to_string()][..])
+        );
+        assert!(headers.contains_key(X_AMZ_DATE), "x-amz-date must be added");
+        assert_eq!(
+            headers.get_vec(X_AMZ_CONTENT_SHA256).map(Vec::as_slice),
+            Some(&[TEST_SHA256.to_string()][..])
+        );
+        let auth = headers
+            .get_vec("Authorization")
+            .expect("authorization header");
+        assert!(
+            auth[0].starts_with("AWS4-HMAC-SHA256 Credential="),
+            "auth: {}",
+            auth[0]
+        );
+    }
+
+    #[test]
+    fn request_signer_preserves_extra_headers() {
+        let signer = RequestSigner::new();
+        let mut extra = Multimap::new();
+        extra.add("content-type", "application/json");
+        let headers = signer.sign(base_opts("s3", extra));
+
+        assert_eq!(
+            headers.get_vec("content-type").map(Vec::as_slice),
+            Some(&["application/json".to_string()][..])
+        );
+        // content-type is folded into the signature's SignedHeaders list.
+        let auth = &headers.get_vec("Authorization").unwrap()[0];
+        assert!(
+            auth.contains("content-type"),
+            "signed headers must include content-type: {auth}"
+        );
+    }
+
+    #[test]
+    fn request_signer_scopes_by_service() {
+        let signer = RequestSigner::new();
+        let s3_auth = signer
+            .sign(base_opts("s3", Multimap::new()))
+            .get_vec("Authorization")
+            .unwrap()[0]
+            .clone();
+        let tables_auth = signer
+            .sign(base_opts("s3tables", Multimap::new()))
+            .get_vec("Authorization")
+            .unwrap()[0]
+            .clone();
+
+        assert!(
+            s3_auth.contains("/us-east-1/s3/aws4_request"),
+            "s3 scope: {s3_auth}"
+        );
+        assert!(
+            tables_auth.contains("/us-east-1/s3tables/aws4_request"),
+            "s3tables scope: {tables_auth}"
+        );
+        // Different service => different signature.
+        assert_ne!(s3_auth, tables_auth);
+    }
+
+    #[test]
+    fn request_signer_adds_session_token_header() {
+        let signer = RequestSigner::new();
+        let mut opts = base_opts("s3", Multimap::new());
+        opts.session_token = Some("SESSIONTOKEN123");
+        let headers = signer.sign(opts);
+
+        assert_eq!(
+            headers.get_vec(X_AMZ_SECURITY_TOKEN).map(Vec::as_slice),
+            Some(&["SESSIONTOKEN123".to_string()][..])
+        );
+    }
+
+    #[test]
+    fn request_signer_reuses_cache_deterministically() {
+        // Two signs with the same signer (shared cache) and identical inputs
+        // must produce identical signatures — exercises the reused cache path.
+        let signer = RequestSigner::new();
+        let a = signer
+            .sign(base_opts("s3", Multimap::new()))
+            .get_vec("Authorization")
+            .unwrap()[0]
+            .clone();
+        let b = signer
+            .sign(base_opts("s3", Multimap::new()))
+            .get_vec("Authorization")
+            .unwrap()[0]
+            .clone();
+        assert_eq!(a, b);
     }
 }
