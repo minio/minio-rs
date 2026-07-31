@@ -803,7 +803,9 @@ impl MinioClient {
                         Some(_) if self.shared.unsigned_payload => "UNSIGNED-PAYLOAD".into(),
                         Some(ref v) => {
                             let clone = v.clone();
-                            async_std::task::spawn_blocking(move || sha256_hash_sb(clone)).await
+                            tokio::task::spawn_blocking(move || sha256_hash_sb(clone))
+                                .await
+                                .map_err(|e| IoError::IOError(e.into()))?
                         }
                     }
                 }
@@ -851,8 +853,8 @@ impl MinioClient {
         };
         let chunk_signing_context = if let Some(p) = &self.shared.provider {
             let creds = p.ensure_credentials().await?;
-            if creds.session_token.is_some() {
-                headers.add(X_AMZ_SECURITY_TOKEN, creds.session_token.unwrap());
+            if let Some(session_token) = creds.session_token {
+                headers.add(X_AMZ_SECURITY_TOKEN, session_token);
             }
 
             if use_signed_trailing {
@@ -1089,7 +1091,9 @@ impl MinioClient {
                         Some(_) if self.shared.unsigned_payload => "UNSIGNED-PAYLOAD".into(),
                         Some(ref v) => {
                             let clone = v.clone();
-                            async_std::task::spawn_blocking(move || sha256_hash_sb(clone)).await
+                            tokio::task::spawn_blocking(move || sha256_hash_sb(clone))
+                                .await
+                                .map_err(|e| IoError::IOError(e.into()))?
                         }
                     }
                 }

@@ -29,7 +29,7 @@ use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::types::Region;
 use crate::s3::utils::{UtcTime, hex_encode, sha256_hash, to_amz_date, to_signer_date};
 #[cfg(not(feature = "ring"))]
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use hyper::http::Method;
 #[cfg(feature = "ring")]
 use ring::hmac;

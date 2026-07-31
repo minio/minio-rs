@@ -14,11 +14,11 @@
 // limitations under the License.
 
 use crate::s3::segmented_bytes::SegmentedBytes;
-use async_std::io::{ReadExt, WriteExt};
 use bytes::Bytes;
 use futures_util::stream::{self, Stream, StreamExt};
 use std::path::PathBuf;
-use std::{fs, path::Path, pin::Pin};
+use std::{path::Path, pin::Pin};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -160,7 +160,7 @@ impl ObjectContent {
             ObjectContentInner::Stream(r, size) => Ok((r, size)),
 
             ObjectContentInner::FilePath(path) => {
-                let mut file = async_std::fs::File::open(&path).await?;
+                let mut file = tokio::fs::File::open(&path).await?;
                 let metadata = file.metadata().await?;
                 let size = metadata.len();
 
@@ -216,14 +216,14 @@ impl ObjectContent {
     /// If the file already exists, it will be replaced. If the parent directory
     /// does not exist, an attempt to create it will be made.
     pub async fn to_file(self, file_path: &Path) -> IoResult<u64> {
-        if file_path.is_dir() {
+        if is_dir(file_path).await {
             return Err(std::io::Error::other("path is a directory"));
         }
         let parent_dir = file_path.parent().ok_or(std::io::Error::other(format!(
             "path {file_path:?} does not have a parent directory"
         )))?;
-        if !parent_dir.is_dir() {
-            async_std::fs::create_dir_all(parent_dir).await?;
+        if !is_dir(parent_dir).await {
+            tokio::fs::create_dir_all(parent_dir).await?;
         }
         let file_name = file_path.file_name().ok_or(std::io::Error::other(
             "could not get filename-component of path",
@@ -233,7 +233,7 @@ impl ObjectContent {
         let tmp_file_path = parent_dir.join(tmp_file_name);
 
         let mut total_bytes_written = 0;
-        let mut fp = async_std::fs::OpenOptions::new()
+        let mut fp = tokio::fs::OpenOptions::new()
             .write(true)
             .create(true) // Ensures that the file will be created if it does not already exist
             .truncate(true) // Clears the contents (truncates the file size to 0) before writing
@@ -249,9 +249,18 @@ impl ObjectContent {
             fp.write_all(&bytes).await?;
         }
         fp.flush().await?;
-        fs::rename(&tmp_file_path, file_path)?;
+        tokio::fs::rename(&tmp_file_path, file_path).await?;
         Ok(total_bytes_written)
     }
+}
+
+/// Reports whether `path` exists and is a directory. A path whose metadata cannot
+/// be read is reported as not a directory.
+async fn is_dir(path: &Path) -> bool {
+    tokio::fs::metadata(path)
+        .await
+        .map(|m| m.is_dir())
+        .unwrap_or(false)
 }
 
 pub struct ContentStream {
@@ -327,5 +336,80 @@ impl ContentStream {
             }
         }
         Ok(segmented_bytes)
+    }
+}
+
+#[cfg(test)]
+mod to_file_tests {
+    use super::*;
+
+    fn temp_path(suffix: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("minio-rs-{}-{suffix}", Uuid::new_v4()))
+    }
+
+    #[tokio::test]
+    async fn writes_to_a_path_that_does_not_exist() {
+        let path = temp_path("new.txt");
+
+        let written = ObjectContent::from("hello, world")
+            .to_file(&path)
+            .await
+            .expect("writing to a path that does not exist must succeed");
+
+        assert_eq!(written, 12);
+        assert_eq!(tokio::fs::read(&path).await.unwrap(), b"hello, world");
+        tokio::fs::remove_file(&path).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn creates_missing_parent_directories() {
+        let root = temp_path("nested");
+        let path = root.join("a").join("b").join("out.txt");
+
+        let written = ObjectContent::from("nested").to_file(&path).await.unwrap();
+
+        assert_eq!(written, 6);
+        assert_eq!(tokio::fs::read(&path).await.unwrap(), b"nested");
+        tokio::fs::remove_dir_all(&root).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rejects_a_path_that_is_a_directory() {
+        let dir = temp_path("adir");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+
+        let err = ObjectContent::from("x").to_file(&dir).await.unwrap_err();
+
+        assert!(err.to_string().contains("path is a directory"), "{err}");
+        tokio::fs::remove_dir_all(&dir).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn replaces_an_existing_file() {
+        let path = temp_path("replace.txt");
+        tokio::fs::write(&path, b"stale contents").await.unwrap();
+
+        let written = ObjectContent::from("new").to_file(&path).await.unwrap();
+
+        assert_eq!(written, 3);
+        assert_eq!(tokio::fs::read(&path).await.unwrap(), b"new");
+        tokio::fs::remove_file(&path).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn leaves_no_temporary_file_behind() {
+        let dir = temp_path("tmpcheck");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let path = dir.join("out.txt");
+
+        ObjectContent::from("data").to_file(&path).await.unwrap();
+
+        let mut names = Vec::new();
+        let mut entries = tokio::fs::read_dir(&dir).await.unwrap();
+        while let Some(entry) = entries.next_entry().await.unwrap() {
+            names.push(entry.file_name().to_string_lossy().into_owned());
+        }
+        assert_eq!(names, vec!["out.txt".to_string()]);
+        tokio::fs::remove_dir_all(&dir).await.unwrap();
     }
 }

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_std::stream::StreamExt;
+use futures_util::StreamExt;
 use minio::s3::builders::ObjectToDelete;
 use minio::s3::response::{
     DeleteObjectResponse, DeleteObjectsResponse, DeleteResult, PutObjectContentResponse,

@@ -17,7 +17,7 @@ use http::{Response as HttpResponse, StatusCode};
 use minio::s3::error::Error;
 
 use minio::s3::types::{BucketName, ObjectKey};
-use rand::Rng;
+use rand::RngExt;
 use rand::distr::StandardUniform;
 use uuid::Uuid;
 

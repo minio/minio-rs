@@ -5,7 +5,7 @@
 **minio-rs** is a MinIO Rust SDK for Amazon S3 compatible cloud storage. It provides a strongly-typed, async-first interface to MinIO and S3-compatible object storage APIs using a request builder pattern with full async/await support via tokio.
 
 - **Language**: Rust (edition 2024)
-- **Rust Version**: 1.88.0 (specified in `rust-toolchain.toml`)
+- **Rust Version**: 1.95.0 (specified in `rust-toolchain.toml`)
 - **Project Type**: Library crate with examples, integration tests, and benchmarks
 - **Repository Size**: ~160 Rust source files, ~273 total files
 - **License**: Apache-2.0
@@ -13,7 +13,8 @@
 ## Build Commands and Validation
 
 ### Prerequisites
-- Rust toolchain 1.88.0 with clippy and rustfmt components (automatically installed via `rust-toolchain.toml`)
+
+- Rust toolchain 1.95.0 with clippy and rustfmt components (automatically installed via `rust-toolchain.toml`)
 - No additional system dependencies required for basic builds
 
 ### Essential Commands (in order of typical workflow)
@@ -168,7 +169,7 @@ minio-rs/
 **Configuration Files:**
 - `Cargo.toml` - Main project dependencies and metadata (edition 2024)
 - `.rustfmt.toml` - Formatting rules (max_width=100, edition=2024)
-- `rust-toolchain.toml` - Specifies Rust 1.88.0
+- `rust-toolchain.toml` - Specifies Rust 1.95.0
 - `.gitignore` - Excludes `/target`, `Cargo.lock`, `*.env`, `.idea`, `.cargo`
 
 **CI/CD Workflows** (`.github/workflows/`):
@@ -309,8 +310,8 @@ export MINIO_SSL_CERT_FILE=./tests/public.crt
 
 ### Dependencies
 - Prefer workspace dependencies defined in `[workspace.dependencies]` section
-- Main async runtime: `tokio` (dev-dependency, version 1.48+)
-- HTTP client: `reqwest` (version 0.12, workspace dependency)
+- Main async runtime: `tokio` (workspace dependency, version 1.53+)
+- HTTP client: `reqwest` (version 0.13, workspace dependency)
 - See `Cargo.toml` for full dependency list
 
 ## Quick Reference

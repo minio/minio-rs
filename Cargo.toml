@@ -12,9 +12,12 @@ categories = ["api-bindings", "web-programming::http-client"]
 
 [features]
 default = ["default-tls", "default-crypto", "http2"]
-default-tls = ["reqwest/default-tls"]
+# reqwest's own default-tls selects rustls, which rejects the self-signed CA
+# certificates that MinIO certgen issues; keep native-tls as this crate's
+# default TLS backend.
+default-tls = ["reqwest/native-tls"]
 native-tls = ["reqwest/native-tls"]
-rustls-tls = ["reqwest/rustls-tls"]
+rustls-tls = ["reqwest/rustls"]
 default-crypto = ["dep:sha2", "dep:hmac"]
 # ring provides faster crypto using assembly optimizations
 ring = ["dep:ring"]
@@ -28,49 +31,54 @@ localhost = []
 rdma = ["dep:libc"]
 
 [workspace.dependencies]
-uuid = "1.19"
+uuid = "1.24"
 futures-util = "0.3"
 futures-io = "0.3"
-reqwest = { version = "0.12", default-features = false }
-bytes = "1.11"
-async-std = "1.13"
-tokio = "1.49"
-rand = "0.9"
+reqwest = { version = "0.13", default-features = false }
+bytes = "1.12"
+tokio = "1.53"
+tokio-util = "0.7"
+rand = "0.10.2"
 log = "0.4"
 chrono = "0.4"
-http = "1.4"
+http = "1.5"
+syn = "3.0"
+proc-macro2 = "1.0"
+quote = "1.0"
+darling = "0.24"
+darling_core = "0.24"
 
 
 [dependencies]
 uuid = { workspace = true, features = ["v4"]  }
 futures-util = { workspace = true }
 bytes = { workspace = true }
-async-std = { workspace = true, features = ["attributes"] }
+tokio = { workspace = true, features = ["fs", "io-util", "rt"] }
 reqwest = { workspace = true, features = ["stream"] }
 
 async-recursion = "1.1"
 async-stream = "0.3"
 async-trait = "0.1"
-base64 = "0.22"
+base64 = "0.23"
 chrono = { workspace = true, features = ["serde"] }
 crc-fast = "1.10"
 dashmap = "6.1.0"
 env_logger = "0.11"
-hmac = { version = "0.12", optional = true }
-hyper = { version = "1.8", features = ["full"] }
+hmac = { version = "0.13", optional = true }
+hyper = { version = "1.11", features = ["full"] }
 lazy_static = "1.5"
 log = { workspace = true }
 md5 = "0.8"
 multimap = "0.10"
 percent-encoding = "2.3"
 url = "2.5"
-regex = "1.12"
+regex = "1.13"
 ring = { version = "0.17", optional = true, default-features = false, features = ["alloc"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
-sha1 = "0.10"
-sha2 = { version = "0.10", optional = true }
+sha1 = "0.11"
+sha2 = { version = "0.11", optional = true }
 twox-hash = { version = "2", default-features = false, features = [
     "xxhash64",
     "xxhash3_64",
@@ -91,9 +99,9 @@ cc = "1.2"
 minio-common = { path = "./common" }
 minio-macros = { path = "./macros" }
 tokio = { workspace = true, features = ["full"] }
-async-std = { workspace = true, features = ["attributes", "tokio1"] }
+tokio-util = { workspace = true, features = ["compat"] }
 clap = { version = "4.5", features = ["derive"] }
-rand = { workspace = true, features = ["small_rng"] }
+rand = { workspace = true }
 quickcheck = "1.0"
 criterion = "0.8"
 

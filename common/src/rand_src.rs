@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_std::stream::Stream;
 use bytes::Bytes;
 use futures_io::AsyncRead;
+use futures_util::stream::Stream;
 use rand::prelude::SmallRng;
-use rand::{RngCore, SeedableRng};
+use rand::{Rng, SeedableRng};
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -30,7 +30,7 @@ pub struct RandSrc {
 impl RandSrc {
     #[allow(dead_code)]
     pub fn new(size: u64) -> RandSrc {
-        let rng: SmallRng = SmallRng::from_os_rng();
+        let rng: SmallRng = SmallRng::from_rng(&mut rand::rng());
         RandSrc { size, rng }
     }
 }
@@ -51,8 +51,7 @@ impl Stream for RandSrc {
         let this = self.get_mut();
 
         let mut buf = vec![0; bytes_read];
-        let random: &mut dyn rand::RngCore = &mut this.rng;
-        random.fill_bytes(&mut buf);
+        this.rng.fill_bytes(&mut buf);
         this.size -= bytes_read as u64;
         Poll::Ready(Some(Ok(Bytes::from(buf))))
     }

@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_std::io::ReadExt;
 use minio::s3::builders::ObjectContent;
 use minio::s3::response::{GetObjectResponse, PutObjectContentResponse};
 use minio::s3::response_traits::{HasBucket, HasObject};
@@ -27,12 +26,14 @@ use ring::digest::{Context, SHA256};
 #[cfg(not(feature = "ring"))]
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
+use tokio::io::AsyncReadExt;
+use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 async fn get_hash(filename: &str) -> String {
     #[cfg(feature = "ring")]
     {
         let mut context = Context::new(&SHA256);
-        let mut file = async_std::fs::File::open(filename).await.unwrap();
+        let mut file = tokio::fs::File::open(filename).await.unwrap();
         let mut buf = Vec::new();
         file.read_to_end(&mut buf).await.unwrap();
         context.update(&buf);
@@ -41,7 +42,7 @@ async fn get_hash(filename: &str) -> String {
     #[cfg(not(feature = "ring"))]
     {
         let mut hasher = Sha256::new();
-        let mut file = async_std::fs::File::open(filename).await.unwrap();
+        let mut file = tokio::fs::File::open(filename).await.unwrap();
         let mut buf = Vec::new();
         file.read_to_end(&mut buf).await.unwrap();
         hasher.update(&buf);
@@ -50,9 +51,9 @@ async fn get_hash(filename: &str) -> String {
 }
 
 async fn test_upload_download_object(ctx: &TestContext, bucket: &str, object: &str, size: u64) {
-    let mut file = async_std::fs::File::create(&object).await.unwrap();
+    let mut file = tokio::fs::File::create(&object).await.unwrap();
 
-    async_std::io::copy(&mut RandReader::new(size), &mut file)
+    tokio::io::copy(&mut RandReader::new(size).compat(), &mut file)
         .await
         .unwrap();
 
@@ -99,8 +100,8 @@ async fn test_upload_download_object(ctx: &TestContext, bucket: &str, object: &s
         .unwrap();
     assert_eq!(get_hash(object).await, get_hash(&filename).await);
 
-    async_std::fs::remove_file(&object).await.unwrap();
-    async_std::fs::remove_file(&filename).await.unwrap();
+    tokio::fs::remove_file(&object).await.unwrap();
+    tokio::fs::remove_file(&filename).await.unwrap();
 }
 
 /// Test uploading and downloading an object with a size that fits in a single part

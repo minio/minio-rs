@@ -339,12 +339,8 @@ impl PostPolicy {
                 value
             ]));
         }
-        if self.lower_limit.is_some() && self.upper_limit.is_some() {
-            conditions.push(json!([
-                "content-length-range",
-                self.lower_limit.unwrap(),
-                self.upper_limit.unwrap()
-            ]));
+        if let (Some(lower), Some(upper)) = (self.lower_limit, self.upper_limit) {
+            conditions.push(json!(["content-length-range", lower, upper]));
         }
 
         let date = utc_now();
