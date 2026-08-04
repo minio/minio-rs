@@ -32,7 +32,11 @@ pub struct RdmaResponse {
 }
 
 /// Errors specific to the RDMA fast path.
+///
+/// `#[non_exhaustive]` so future variants (e.g. `BufferTooLarge`) can be added
+/// without breaking downstream exhaustive `match` expressions.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum RdmaError {
     #[error("RDMA not available: cuObjClient not connected (no cuObjServer reachable)")]
     NotConnected,
