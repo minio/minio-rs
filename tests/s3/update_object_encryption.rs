@@ -65,18 +65,25 @@ async fn update_object_encryption(ctx: TestContext, bucket: BucketName) {
             assert_eq!(resp.object(), Some(&object));
         }
         Err(e) => {
-            // Without a provisioned KMS key (or on a plain object that was not
-            // SSE-encrypted to begin with) the server rejects the change; the
-            // request still reached the handler and was signed/parsed, which
-            // validates the SDK path. A signing/parse/transport error is a real
-            // failure, so require a server-side KMS/encryption rejection.
+            // The server rejects the change when the feature is unavailable in
+            // the running deployment: no provisioned KMS key, a plain object
+            // that was not SSE-encrypted, or a Free-tier license that gates this
+            // AIStor extension (XMinioPaidTierLicenseRequired). In all of these
+            // the request still reached the handler and was signed/parsed, which
+            // is what this test validates. A signing/parse/transport error is a
+            // real failure, so require a server-side capability/license rejection.
             let msg = e.to_string().to_lowercase();
             assert!(
-                msg.contains("kms") || msg.contains("encryption") || msg.contains("not supported"),
+                msg.contains("kms")
+                    || msg.contains("encryption")
+                    || msg.contains("not supported")
+                    || msg.contains("license")
+                    || msg.contains("paid"),
                 "unexpected error from update_object_encryption: {e}"
             );
             eprintln!(
-                "update_object_encryption reached the server but KMS key is not provisioned ({e}); set UPDATE_OBJECT_ENCRYPTION_KMS_KEY to a valid key to exercise the success path"
+                "update_object_encryption reached the server but the feature is unavailable ({e}); \
+                 provision KMS (UPDATE_OBJECT_ENCRYPTION_KMS_KEY) and a licensed server to exercise the success path"
             );
         }
     }
