@@ -20,7 +20,7 @@ use crate::s3::types::{BucketName, ETag, ObjectKey, PartInfo, Region, S3Api, Upl
 use crate::s3::utils::ChecksumAlgorithm;
 
 use super::buffer::RdmaBuffer;
-use super::cuobj::{ScopedRegistration, shared};
+use super::cuobj::{CUOBJ_MAX_MEMORY_REG_SIZE, ScopedRegistration, shared};
 use super::protocol::{RdmaOutcome, S3RdmaClientCtx, rdma_get_with_retry, rdma_put_with_retry};
 
 /// Successful RDMA transfer result.
@@ -38,6 +38,11 @@ pub enum RdmaError {
     NotConnected,
     #[error("RDMA buffer registration failed (cuMemObjGetDescriptor returned failure)")]
     RegistrationFailed,
+    #[error(
+        "RDMA buffer of {size} bytes exceeds the cuObject registration limit of {max} bytes \
+         (4 GiB); split the transfer into parts <= {max} bytes (multipart upload / ranged read)"
+    )]
+    BufferTooLarge { size: usize, max: usize },
     #[error("server declined RDMA (x-amz-rdma-reply: 501); fall back to HTTP PutObject/GetObject")]
     Declined,
     #[error("RDMA transfer failed after retries; fall back to HTTP PutObject/GetObject")]
@@ -56,6 +61,19 @@ impl From<Error> for RdmaError {
     fn from(e: Error) -> Self {
         Self::Control(e.to_string())
     }
+}
+
+/// Reject a buffer that cannot be pinned by a single cuObject registration
+/// before attempting it, so the caller gets an actionable `BufferTooLarge`
+/// rather than an opaque `RegistrationFailed`. The bound is inclusive.
+fn ensure_registrable(len: usize) -> Result<(), RdmaError> {
+    if len > CUOBJ_MAX_MEMORY_REG_SIZE {
+        return Err(RdmaError::BufferTooLarge {
+            size: len,
+            max: CUOBJ_MAX_MEMORY_REG_SIZE,
+        });
+    }
+    Ok(())
 }
 
 /// One part of an [`MinioClient::rdma_put_object_multipart`] upload.
@@ -133,6 +151,7 @@ impl MinioClient {
             return Err(RdmaError::NotConnected);
         }
 
+        ensure_registrable(buffer.len())?;
         let _reg = unsafe { ScopedRegistration::register(rdma, buffer.ptr(), buffer.len()) }
             .ok_or(RdmaError::RegistrationFailed)?;
 
@@ -182,6 +201,7 @@ impl MinioClient {
             return Err(RdmaError::NotConnected);
         }
 
+        ensure_registrable(buffer.len())?;
         let _reg = unsafe { ScopedRegistration::register(rdma, buffer.ptr(), buffer.len()) }
             .ok_or(RdmaError::RegistrationFailed)?;
 
@@ -241,6 +261,7 @@ impl MinioClient {
             return Err(RdmaError::NotConnected);
         }
 
+        ensure_registrable(buffer.len())?;
         let _reg = unsafe { ScopedRegistration::register(rdma, buffer.ptr(), buffer.len()) }
             .ok_or(RdmaError::RegistrationFailed)?;
 
@@ -381,5 +402,24 @@ impl MinioClient {
         self.get_region_from_url()
             .and_then(|r| Region::new(r).ok())
             .unwrap_or_else(|| DEFAULT_REGION.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ensure_registrable_boundary() {
+        // At and below the limit is accepted; over it is rejected (inclusive bound).
+        assert!(ensure_registrable(0).is_ok());
+        assert!(ensure_registrable(CUOBJ_MAX_MEMORY_REG_SIZE).is_ok());
+        match ensure_registrable(CUOBJ_MAX_MEMORY_REG_SIZE + 1) {
+            Err(RdmaError::BufferTooLarge { size, max }) => {
+                assert_eq!(size, CUOBJ_MAX_MEMORY_REG_SIZE + 1);
+                assert_eq!(max, CUOBJ_MAX_MEMORY_REG_SIZE);
+            }
+            other => panic!("expected BufferTooLarge, got {other:?}"),
+        }
     }
 }
