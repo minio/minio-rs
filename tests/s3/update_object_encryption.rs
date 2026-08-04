@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use minio::s3::builders::ObjectContent;
+use minio::s3::error::{Error, S3ServerError};
 use minio::s3::response::PutObjectContentResponse;
 use minio::s3::response_traits::{HasBucket, HasObject};
 use minio::s3::types::{BucketName, S3Api};
@@ -64,20 +65,32 @@ async fn update_object_encryption(ctx: TestContext, bucket: BucketName) {
             assert_eq!(resp.bucket(), Some(&bucket));
             assert_eq!(resp.object(), Some(&object));
         }
-        Err(e) => {
-            // Without a provisioned KMS key (or on a plain object that was not
-            // SSE-encrypted to begin with) the server rejects the change; the
-            // request still reached the handler and was signed/parsed, which
-            // validates the SDK path. A signing/parse/transport error is a real
-            // failure, so require a server-side KMS/encryption rejection.
-            let msg = e.to_string().to_lowercase();
+        // A structured server error proves the request reached the handler and
+        // was signed and parsed — which is what this test validates — and the
+        // feature is simply unavailable in the running deployment: no KMS key,
+        // a plain (non-SSE) object, the extension disabled, or a Free-tier
+        // license gating this AIStor extension. Match on the controlled error
+        // *code* (not the rendered message) so a signing/auth/transport failure
+        // cannot masquerade as an expected rejection.
+        Err(Error::S3Server(S3ServerError::S3Error(e))) => {
+            let code = e.code().to_string().to_lowercase();
             assert!(
-                msg.contains("kms") || msg.contains("encryption") || msg.contains("not supported"),
-                "unexpected error from update_object_encryption: {e}"
+                code.contains("license")
+                    || code.contains("kms")
+                    || code.contains("notimplemented")
+                    || code.contains("methodnotallowed")
+                    || code.contains("notsupported"),
+                "unexpected server error code from update_object_encryption: {} ({e})",
+                e.code()
             );
             eprintln!(
-                "update_object_encryption reached the server but KMS key is not provisioned ({e}); set UPDATE_OBJECT_ENCRYPTION_KMS_KEY to a valid key to exercise the success path"
+                "update_object_encryption reached the server but the feature is unavailable \
+                 (code {}); provision KMS (UPDATE_OBJECT_ENCRYPTION_KMS_KEY) and a licensed \
+                 server to exercise the success path",
+                e.code()
             );
         }
+        // Any non-server error (signing, parsing, transport) is a real failure.
+        Err(e) => panic!("unexpected non-server error from update_object_encryption: {e}"),
     }
 }

@@ -21,6 +21,13 @@ use libc::c_char;
 
 use super::ffi;
 
+/// Maximum buffer a single cuObject registration (`cuMemObjGetDescriptor`) can
+/// pin — 4 GiB. A larger buffer cannot be RDMA-registered, so the caller must
+/// split the transfer into parts (multipart upload / ranged read) of at most
+/// this size. `usize` is safe: the `rdma` feature only builds for x86_64 and
+/// aarch64 (see build.rs), both 64-bit.
+pub const CUOBJ_MAX_MEMORY_REG_SIZE: usize = 4 * 1024 * 1024 * 1024;
+
 /// What kind of memory backs a pointer, as classified by libcuobjclient.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryType {
