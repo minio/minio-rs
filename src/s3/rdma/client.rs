@@ -33,8 +33,8 @@ pub struct RdmaResponse {
 
 /// Errors specific to the RDMA fast path.
 ///
-/// `#[non_exhaustive]` so future variants (e.g. `BufferTooLarge`) can be added
-/// without breaking downstream exhaustive `match` expressions.
+/// `#[non_exhaustive]`: new variants can be added in future releases without
+/// requiring downstream `match` expressions to change for each one.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum RdmaError {
