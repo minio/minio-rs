@@ -174,7 +174,10 @@ fn http_client_for_token(token: &CStr) -> Arc<reqwest::Client> {
 }
 
 /// Mirrors C++ `rdmaPut`: signs and issues the HTTP PUT control plane carrying
-/// the RDMA token, then parses the server reply.
+/// the RDMA token, then parses the server reply. Uses the
+/// [PutObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html)
+/// request form, or [UploadPart](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html)
+/// when `ctx.upload_id` is set.
 pub async fn rdma_put(
     client: &MinioClient,
     ctx: &mut S3RdmaClientCtx,
@@ -305,6 +308,8 @@ pub async fn rdma_put(
 /// Mirrors C++ `rdmaGet`: signs and issues the HTTP GET control plane carrying
 /// the RDMA token, then trusts `x-amz-rdma-bytes-transferred` for the actual
 /// transferred byte count (which can be less than requested on ranged GETs).
+/// Uses the [GetObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html)
+/// request form.
 pub async fn rdma_get(
     client: &MinioClient,
     ctx: &mut S3RdmaClientCtx,
