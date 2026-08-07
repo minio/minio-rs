@@ -173,21 +173,17 @@ fn http_client_for_token(token: &CStr) -> Arc<reqwest::Client> {
     }
 }
 
-fn format_rdma_token(token: &CStr, buf_addr: u64, size: u64) -> String {
-    let s = token.to_str().unwrap_or("");
-    format!("{s}:{buf_addr:016x}:{size:016x}")
-}
-
 /// Mirrors C++ `rdmaPut`: signs and issues the HTTP PUT control plane carrying
 /// the RDMA token, then parses the server reply.
 pub async fn rdma_put(
     client: &MinioClient,
     ctx: &mut S3RdmaClientCtx,
     token: &CStr,
-    buf_addr: u64,
     size: u64,
 ) -> isize {
-    let rdma_token = format_rdma_token(token, buf_addr, size);
+    // The token is the RDMA descriptor verbatim; its leading fields already
+    // carry the buffer address and transfer size, so it is sent as-is.
+    let rdma_token = token.to_str().unwrap_or("");
 
     let mut query_params = Multimap::default();
     if let Some(upload_id) = &ctx.upload_id {
@@ -313,10 +309,11 @@ pub async fn rdma_get(
     client: &MinioClient,
     ctx: &mut S3RdmaClientCtx,
     token: &CStr,
-    buf_addr: u64,
     size: u64,
 ) -> isize {
-    let rdma_token = format_rdma_token(token, buf_addr, size);
+    // The token is the RDMA descriptor verbatim; its leading fields already
+    // carry the buffer address and transfer size, so it is sent as-is.
+    let rdma_token = token.to_str().unwrap_or("");
 
     let query_params = Multimap::default();
     let url = match client.shared.base_url.build_url(
@@ -420,7 +417,7 @@ pub async fn rdma_put_with_retry(
             Some(t) => t,
             None => return RdmaOutcome::Failed,
         };
-        last = rdma_put(client, ctx, token.as_cstr(), buf_ptr as u64, size as u64).await;
+        last = rdma_put(client, ctx, token.as_cstr(), size as u64).await;
         drop(token);
         if last > 0 || last == RDMA_NOT_SUPPORTED {
             break;
@@ -443,7 +440,7 @@ pub async fn rdma_get_with_retry(
             Some(t) => t,
             None => return RdmaOutcome::Failed,
         };
-        last = rdma_get(client, ctx, token.as_cstr(), buf_ptr as u64, size as u64).await;
+        last = rdma_get(client, ctx, token.as_cstr(), size as u64).await;
         drop(token);
         if last > 0 || last == RDMA_NOT_SUPPORTED {
             break;
