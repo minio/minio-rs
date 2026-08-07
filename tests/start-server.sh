@@ -7,7 +7,14 @@ set -e
 # extensions the integration tests exercise (RenameObject/RenamePrefix,
 # UpdateObjectEncryption, QoS, Inventory, LDAP STS).
 MINIO_IMAGE="registry.k5.min.dev/aistor/minio:edge"
-docker pull "${MINIO_IMAGE}"
+# Fall back to the public quay.io mirror when the private registry is
+# unreachable (e.g. fork-PR runners without access to registry.k5.min.dev).
+MINIO_IMAGE_FALLBACK="quay.io/minio/aistor/minio:edge-daily"
+if ! docker pull "${MINIO_IMAGE}"; then
+    echo "pull of ${MINIO_IMAGE} failed; falling back to ${MINIO_IMAGE_FALLBACK}" >&2
+    MINIO_IMAGE="${MINIO_IMAGE_FALLBACK}"
+    docker pull "${MINIO_IMAGE}"
+fi
 
 echo "MinIO Server Version:"
 docker run --rm "${MINIO_IMAGE}" --version
