@@ -23,7 +23,7 @@ use minio::s3::response::{AppendObjectResponse, StatObjectResponse};
 use minio::s3::response_traits::HasObjectSize;
 use minio::s3::segmented_bytes::SegmentedBytes;
 use minio::s3::types::{BucketName, ObjectKey, S3Api};
-use rand::Rng;
+use rand::RngExt;
 use rand::distr::Alphanumeric;
 
 #[tokio::main]

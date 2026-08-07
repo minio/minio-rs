@@ -7,11 +7,11 @@ edition = "2024"
 uuid = { workspace = true, features = ["v4"] }
 futures-util = { workspace = true }
 
-syn = "2.0"
-proc-macro2 = "1.0"
-quote = "1.0"
-darling = "0.21"
-darling_core = "0.21"
+syn = { workspace = true, features = ["full"] }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+darling = { workspace = true }
+darling_core = { workspace = true }
 
 [dev-dependencies]
 minio-common = { path = "../common" }

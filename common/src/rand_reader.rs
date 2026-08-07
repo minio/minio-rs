@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use futures_io::AsyncRead;
+use rand::Rng;
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -34,8 +35,7 @@ impl io::Read for RandReader {
         let bytes_read = buf.len().min(self.size as usize);
 
         if bytes_read > 0 {
-            let random: &mut dyn rand::RngCore = &mut rand::rng();
-            random.fill_bytes(&mut buf[0..bytes_read]);
+            rand::rng().fill_bytes(&mut buf[0..bytes_read]);
         }
 
         self.size -= bytes_read as u64;
@@ -53,8 +53,7 @@ impl AsyncRead for RandReader {
         let bytes_read = buf.len().min(self.size as usize);
 
         if bytes_read > 0 {
-            let random: &mut dyn rand::RngCore = &mut rand::rng();
-            random.fill_bytes(&mut buf[0..bytes_read]);
+            rand::rng().fill_bytes(&mut buf[0..bytes_read]);
         }
 
         self.get_mut().size -= bytes_read as u64;
