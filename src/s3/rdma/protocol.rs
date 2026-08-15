@@ -44,18 +44,23 @@ pub const RDMA_REPLY_NOT_IMPLEMENTED: i32 = 501;
 
 pub const RDMA_NOT_SUPPORTED: isize = -2;
 
-/// The call never reached the fabric: a bad argument, or a URL that would not
-/// build. Distinct from -1 because no rail carried this attempt, so charging
-/// one a failure would take healthy hardware out of rotation over a
-/// client-side mistake -- and the same error would repeat on the next rail.
-const RDMA_LOCAL_ERROR: isize = -3;
+/// The attempt failed for a reason that does not implicate the rail: a bad
+/// argument, a URL that would not build, or a 4xx from the server. The first
+/// two never reached the fabric; the third proves it was crossed, since the
+/// server had to receive the request to reject it.
+///
+/// Distinct from -1 so these skip both the retry and the rail-failure report.
+/// Charging a rail here takes healthy hardware out of rotation over an
+/// application mistake -- a missing bucket drove `healthy_nic_count()` to 0 on
+/// a two-rail host -- and the same error would repeat on the next rail anyway.
+const RDMA_NO_RAIL_FAULT: isize = -3;
 
 /// The two sentinels must stay distinct and negative: `from_ssize` tells them
 /// apart by value, and the retry loops route on them.
 const _: () = {
-    assert!(RDMA_LOCAL_ERROR != RDMA_NOT_SUPPORTED);
-    assert!(RDMA_LOCAL_ERROR != -1);
-    assert!(RDMA_LOCAL_ERROR < 0);
+    assert!(RDMA_NO_RAIL_FAULT != RDMA_NOT_SUPPORTED);
+    assert!(RDMA_NO_RAIL_FAULT != -1);
+    assert!(RDMA_NO_RAIL_FAULT < 0);
 };
 
 const RDMA_MAX_ATTEMPTS: u32 = 2;
@@ -206,7 +211,7 @@ pub async fn rdma_put(
     if let Some(upload_id) = &ctx.upload_id {
         query_params.add("uploadId", upload_id.as_str());
         if ctx.part_number == 0 || ctx.part_number > 10000 {
-            return RDMA_LOCAL_ERROR;
+            return RDMA_NO_RAIL_FAULT;
         }
         query_params.add("partNumber", ctx.part_number.to_string());
     }
@@ -219,7 +224,7 @@ pub async fn rdma_put(
         Some(&ctx.object),
     ) {
         Ok(u) => u,
-        Err(_) => return RDMA_LOCAL_ERROR,
+        Err(_) => return RDMA_NO_RAIL_FAULT,
     };
 
     let date = utc_now();
@@ -306,6 +311,14 @@ pub async fn rdma_put(
         if reply_code == RDMA_NOT_SUPPORTED as i32 {
             return RDMA_NOT_SUPPORTED;
         }
+        // `x-amz-rdma-reply` is the RDMA status channel. Absent, the server
+        // failed at the S3 layer -- a missing bucket answers 404, a busy node
+        // 503 -- having received this request over the rail, which is proof
+        // the rail carried it. Retrying gains nothing the fallback to HTTP
+        // does not, and charging the rail sidelines working hardware.
+        if reply.is_empty() || status.is_client_error() {
+            return RDMA_NO_RAIL_FAULT;
+        }
         return -1;
     }
 
@@ -343,7 +356,7 @@ pub async fn rdma_get(
         Some(&ctx.object),
     ) {
         Ok(u) => u,
-        Err(_) => return RDMA_LOCAL_ERROR,
+        Err(_) => return RDMA_NO_RAIL_FAULT,
     };
 
     let date = utc_now();
@@ -391,6 +404,7 @@ pub async fn rdma_get(
         Err(_) => return -1,
     };
 
+    let status = resp.status();
     let resp_headers = resp.headers().clone();
     let reply = resp_headers
         .get(X_AMZ_RDMA_REPLY)
@@ -401,6 +415,10 @@ pub async fn rdma_get(
         return RDMA_NOT_SUPPORTED;
     }
     if reply_code != RDMA_REPLY_SUCCESS && reply_code != RDMA_REPLY_PARTIAL_CONTENT {
+        // See rdma_put: no RDMA status means the failure was not the rail's.
+        if reply.is_empty() || status.is_client_error() {
+            return RDMA_NO_RAIL_FAULT;
+        }
         return -1;
     }
 
@@ -443,7 +461,7 @@ pub async unsafe fn rdma_put_with_retry(
             None => return RdmaOutcome::Failed,
         };
         last = rdma_put(client, ctx, token.as_cstr(), size as u64).await;
-        if last > 0 || last == RDMA_NOT_SUPPORTED || last == RDMA_LOCAL_ERROR {
+        if last > 0 || last == RDMA_NOT_SUPPORTED || last == RDMA_NO_RAIL_FAULT {
             drop(token);
             break;
         }
@@ -482,7 +500,7 @@ pub async unsafe fn rdma_get_with_retry(
             None => return RdmaOutcome::Failed,
         };
         last = rdma_get(client, ctx, token.as_cstr(), size as u64).await;
-        if last > 0 || last == RDMA_NOT_SUPPORTED || last == RDMA_LOCAL_ERROR {
+        if last > 0 || last == RDMA_NOT_SUPPORTED || last == RDMA_NO_RAIL_FAULT {
             drop(token);
             break;
         }
@@ -528,7 +546,7 @@ mod tests {
     #[test]
     fn a_local_error_reports_as_a_failed_transfer() {
         assert!(matches!(
-            RdmaOutcome::from_ssize(RDMA_LOCAL_ERROR, 4096),
+            RdmaOutcome::from_ssize(RDMA_NO_RAIL_FAULT, 4096),
             RdmaOutcome::Failed
         ));
         assert!(matches!(
