@@ -47,5 +47,6 @@ pub use protocol::{
     rdma_put_with_retry,
 };
 pub use transport::{
-    MemoryType, RdmaClient, RdmaToken, ScopedRegistration, shared as shared_rdma_client,
+    MemoryType, RdmaClient, RdmaToken, ScopedRegistration, init_error as rdma_init_error,
+    shared as shared_rdma_client,
 };

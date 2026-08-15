@@ -121,6 +121,11 @@ name = "append_object"
 name = "load_balancing_with_hooks"
 
 [[example]]
+name = "rdma_rails"
+path = "examples/rdma_rails.rs"
+required-features = ["rdma"]
+
+[[example]]
 name = "get_put_rdma"
 required-features = ["rdma"]
 

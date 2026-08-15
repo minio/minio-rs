@@ -87,7 +87,15 @@ void s3rdma_server_free(S3RdmaHandle h);
 // note on s3rdma_server_init_with_config_err.
 size_t s3rdma_last_error(char *buf, size_t len);
 
+// Rails this server can originate transfers from, or 0 for an invalid handle.
+// An empty `ip` opens every device with an ACTIVE port, so a dual-rail host
+// serves both without being told to; a specific address or device name selects
+// that one rail. A named device repeated in the list is opened once.
+int s3rdma_server_nic_count(S3RdmaHandle h);
+
 // --- Buffer registration ---
+// The buffer is registered on every rail, so a transfer can be served from
+// whichever rail can reach the client that asked for it.
 S3RdmaBufHandle s3rdma_register_buffer(S3RdmaHandle h, void *buf, size_t size);
 void s3rdma_deregister_buffer(S3RdmaHandle h, S3RdmaBufHandle reg);
 
@@ -161,12 +169,29 @@ void     s3rdma_free_channel(S3RdmaHandle h, uint16_t channel);
 #define S3RDMA_MEM_CUDA_DEVICE 2
 #define S3RDMA_MEM_UNKNOWN 3
 
-// Open a client-side RDMA context on `device` (a device name such as "mlx5_0",
-// NULL/empty to take S3RDMA_DEVICE from the environment, and failing that the
-// first usable device). Returns NULL on failure and writes the reason into
-// `err_buf` (NUL-terminated, truncated to err_buf_len-1); `err_buf` may be NULL.
+// Open a client-side RDMA context on `device`: a device name such as "mlx5_0",
+// several separated by commas ("mlx5_0,mlx5_1"), or NULL/empty to take
+// S3RDMA_DEVICE from the environment and, failing that, *every* device whose
+// port is ACTIVE. Returns NULL on failure and writes the reason into `err_buf`
+// (NUL-terminated, truncated to err_buf_len-1); `err_buf` may be NULL.
+//
+// Multi-rail is automatic. A buffer is registered on every rail, and each
+// token names one of them, chosen round-robin -- so consecutive transfers for
+// one buffer spread across NICs without the caller arranging anything. A rail
+// whose port goes down is skipped, and a caller that retries a failed transfer
+// gets a token on a different rail, which is what carries a transfer through a
+// NIC failure. A single-NIC host behaves exactly as it always did.
+//
+// The returned handle is an opaque id, not an address: do not dereference it.
+// Ids are never reissued, so a handle that has been freed matches nothing
+// afterwards. Every entry point below refuses a handle this library did not
+// issue or has already freed, rather than acting on it -- a double free, and a
+// stale handle used after another client was opened, are both safe.
 S3RdmaClientHandle s3rdma_client_init(const char *device, char *err_buf,
                                        size_t err_buf_len);
+// Free a client. Freeing twice, or freeing a handle that was never issued, is
+// a no-op. The client is released once any operation still in flight on
+// another thread has finished with it.
 void s3rdma_client_free(S3RdmaClientHandle h);
 
 // Returns 1 when `h` is a live client that can mint tokens. This reports a
@@ -175,9 +200,27 @@ void s3rdma_client_free(S3RdmaClientHandle h);
 // with `x-amz-rdma-reply: 501`, and the SDK falls back to HTTP there.
 int s3rdma_client_ready(S3RdmaClientHandle h);
 
+// Rails this client can mint on, and how many are currently usable. A healthy
+// count below the total means the client is running degraded but still
+// serving. Both return 0 for a handle this library did not issue or has
+// already freed -- indistinguishable from a client with no rails, which
+// cannot occur, since init fails rather than returning a railless client.
+// The reason is available from s3rdma_last_error.
+int s3rdma_client_nic_count(S3RdmaClientHandle h);
+int s3rdma_client_healthy_nic_count(S3RdmaClientHandle h);
+
+// Report that the transfer for `token` failed, so the rail that token named is
+// skipped until it recovers. Returns 0 if the rail was found, -1 otherwise.
+//
+// Optional: the next mint moves to another rail regardless, because selection
+// is round-robin. Calling it makes the move immediate rather than eventual,
+// which matters when one rail is down and the others are healthy.
+int s3rdma_client_report_token_failure(S3RdmaClientHandle h, const char *token);
+
 // Pin `ptr..ptr+size` for RDMA; 0 on success, -1 on failure. Registration is
 // keyed by `ptr` and reference counted, so pinning the same address twice
 // registers once and it stays pinned until a matching number of deregisters.
+// The buffer is registered on every rail, so any token may name any of them.
 int s3rdma_client_register(S3RdmaClientHandle h, void *ptr, size_t size);
 // Drop a reference taken by s3rdma_client_register. 0 on success, -1 if `ptr`
 // was not pinned.

@@ -402,6 +402,32 @@ impl MinioClient {
         shared().map(|c| c.is_ready()).unwrap_or(false)
     }
 
+    /// Rails this host can carry RDMA on: every device with an ACTIVE port,
+    /// or the ones named in `$S3RDMA_DEVICE`. Zero when RDMA is unavailable.
+    ///
+    /// Transfers spread across rails on their own — a buffer is registered on
+    /// all of them and each token names one, chosen round-robin — so this is
+    /// for seeing what the host has, not for driving it.
+    pub fn rdma_nic_count(&self) -> usize {
+        shared().map(|c| c.nic_count()).unwrap_or(0)
+    }
+
+    /// Rails currently usable. Below [`rdma_nic_count`](Self::rdma_nic_count)
+    /// means a rail has failed a transfer or lost its port, and the client is
+    /// serving on what is left.
+    pub fn rdma_healthy_nic_count(&self) -> usize {
+        shared().map(|c| c.healthy_nic_count()).unwrap_or(0)
+    }
+
+    /// Why RDMA is unavailable, when
+    /// [`rdma_available`](Self::rdma_available) is false.
+    ///
+    /// No hardware is an ordinary outcome and everything falls back to HTTP,
+    /// but a misconfigured HCA looks identical from outside without this.
+    pub fn rdma_unavailable_reason(&self) -> Option<&'static str> {
+        super::transport::init_error()
+    }
+
     fn resolve_rdma_region(&self) -> Region {
         self.get_region_from_url()
             .and_then(|r| Region::new(r).ok())

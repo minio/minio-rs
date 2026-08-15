@@ -423,10 +423,20 @@ pub async fn rdma_put_with_retry(
             None => return RdmaOutcome::Failed,
         };
         last = rdma_put(client, ctx, token.as_cstr(), size as u64).await;
-        drop(token);
         if last > 0 || last == RDMA_NOT_SUPPORTED {
+            drop(token);
             break;
         }
+        // The transfer failed. Charge it to the rail this token named, so the
+        // next request skips that rail rather than round-robinning back onto
+        // it. A 501 is excluded above: the server declining RDMA says nothing
+        // about the rail.
+        //
+        // A server-side failure marks every rail in turn, which is safe: the
+        // library clears all marks once no rail is left usable, so a fault
+        // that was never the fabric's heals itself.
+        rdma.report_token_failure(token.as_cstr());
+        drop(token);
     }
     RdmaOutcome::from_ssize(last, size)
 }
@@ -446,10 +456,13 @@ pub async fn rdma_get_with_retry(
             None => return RdmaOutcome::Failed,
         };
         last = rdma_get(client, ctx, token.as_cstr(), size as u64).await;
-        drop(token);
         if last > 0 || last == RDMA_NOT_SUPPORTED {
+            drop(token);
             break;
         }
+        // See rdma_put_with_retry: take the failing rail out of rotation.
+        rdma.report_token_failure(token.as_cstr());
+        drop(token);
     }
     RdmaOutcome::from_ssize(last, size)
 }

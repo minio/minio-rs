@@ -61,6 +61,22 @@ pub struct RdmaClient {
     raw: NonNull<c_void>,
 }
 
+/// Why RDMA is unavailable, when it is.
+///
+/// A host with no RDMA hardware is an ordinary outcome and every transfer
+/// takes the HTTP path, but a misconfigured HCA reads identically from the
+/// outside unless the reason is kept. `s3rdma_client_init` reports it into a
+/// caller-supplied buffer, so it is only lost if nobody passes one.
+static INIT_ERROR: OnceLock<String> = OnceLock::new();
+
+/// The reason the shared client could not open a device, if it could not.
+pub fn init_error() -> Option<&'static str> {
+    INIT_ERROR
+        .get()
+        .map(String::as_str)
+        .filter(|s| !s.is_empty())
+}
+
 unsafe impl Send for RdmaClient {}
 unsafe impl Sync for RdmaClient {}
 
@@ -69,7 +85,16 @@ impl RdmaClient {
     /// `$S3RDMA_DEVICE` when that names one. Returns `None` when the host has
     /// no usable device.
     pub fn new() -> Option<Self> {
-        let raw = unsafe { ffi::s3rdma_client_init(std::ptr::null(), std::ptr::null_mut(), 0) };
+        let mut err = [0i8; 512];
+        let raw = unsafe { ffi::s3rdma_client_init(std::ptr::null(), err.as_mut_ptr(), err.len()) };
+        if raw.is_null() {
+            let reason = unsafe { CStr::from_ptr(err.as_ptr()) }
+                .to_string_lossy()
+                .into_owned();
+            log::debug!("RDMA unavailable: {reason}");
+            let _ = INIT_ERROR.set(reason);
+            return None;
+        }
         NonNull::new(raw).map(|raw| Self { raw })
     }
 
@@ -112,6 +137,29 @@ impl RdmaClient {
             return None;
         }
         Some(RdmaToken { ptr: token })
+    }
+
+    /// Rails this client can mint tokens on: every RDMA device with an ACTIVE
+    /// port, or the ones named in `$S3RDMA_DEVICE`.
+    pub fn nic_count(&self) -> usize {
+        unsafe { ffi::s3rdma_client_nic_count(self.raw.as_ptr()).max(0) as usize }
+    }
+
+    /// Rails currently usable. Below [`nic_count`](Self::nic_count) means the
+    /// client is running degraded but still serving.
+    pub fn healthy_nic_count(&self) -> usize {
+        unsafe { ffi::s3rdma_client_healthy_nic_count(self.raw.as_ptr()).max(0) as usize }
+    }
+
+    /// Tell the library the transfer for `token` failed, so the rail that
+    /// token named is skipped until it recovers.
+    ///
+    /// Without this a dead rail stays in rotation: the retry below re-mints
+    /// and happens to land elsewhere, but the *next* request round-robins
+    /// straight back onto the dead one, so every request keeps paying a failed
+    /// attempt. Reporting takes it out of rotation instead.
+    pub fn report_token_failure(&self, token: &CStr) -> bool {
+        unsafe { ffi::s3rdma_client_report_token_failure(self.raw.as_ptr(), token.as_ptr()) == 0 }
     }
 
     /// Classify `ptr` as host or CUDA memory. Resolved inside libs3rdma

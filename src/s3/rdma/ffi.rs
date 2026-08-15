@@ -42,4 +42,7 @@ unsafe extern "C" {
     ) -> c_int;
     pub fn s3rdma_client_free_token(token: *mut c_char);
     pub fn s3rdma_client_memory_type(ptr: *const c_void) -> c_int;
+    pub fn s3rdma_client_nic_count(handle: *mut c_void) -> c_int;
+    pub fn s3rdma_client_healthy_nic_count(handle: *mut c_void) -> c_int;
+    pub fn s3rdma_client_report_token_failure(handle: *mut c_void, token: *const c_char) -> c_int;
 }
