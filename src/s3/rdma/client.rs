@@ -20,8 +20,8 @@ use crate::s3::types::{BucketName, ETag, ObjectKey, PartInfo, Region, S3Api, Upl
 use crate::s3::utils::ChecksumAlgorithm;
 
 use super::buffer::RdmaBuffer;
-use super::cuobj::{CUOBJ_MAX_MEMORY_REG_SIZE, ScopedRegistration, shared};
 use super::protocol::{RdmaOutcome, S3RdmaClientCtx, rdma_get_with_retry, rdma_put_with_retry};
+use super::transport::{RDMA_MAX_MEMORY_REG_SIZE, ScopedRegistration, shared};
 
 /// Successful RDMA transfer result.
 #[derive(Debug, Clone)]
@@ -38,13 +38,13 @@ pub struct RdmaResponse {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum RdmaError {
-    #[error("RDMA not available: cuObjClient not connected (no cuObjServer reachable)")]
+    #[error("RDMA not available: no usable RDMA device on this host")]
     NotConnected,
-    #[error("RDMA buffer registration failed (cuMemObjGetDescriptor returned failure)")]
+    #[error("RDMA buffer registration failed (ibv_reg_mr returned failure)")]
     RegistrationFailed,
     #[error(
-        "RDMA buffer of {size} bytes exceeds the cuObject registration limit of {max} bytes \
-         (4 GiB); split the transfer into parts <= {max} bytes (multipart upload / ranged read)"
+        "RDMA buffer of {size} bytes exceeds the {max} bytes an RDMA descriptor can \
+         describe; split the transfer into parts <= {max} bytes (multipart upload / ranged read)"
     )]
     BufferTooLarge { size: usize, max: usize },
     #[error("server declined RDMA (x-amz-rdma-reply: 501); fall back to HTTP PutObject/GetObject")]
@@ -67,14 +67,14 @@ impl From<Error> for RdmaError {
     }
 }
 
-/// Reject a buffer that cannot be pinned by a single cuObject registration
-/// before attempting it, so the caller gets an actionable `BufferTooLarge`
-/// rather than an opaque `RegistrationFailed`. The bound is inclusive.
+/// Reject a buffer larger than one RDMA descriptor can describe before
+/// attempting it, so the caller gets an actionable `BufferTooLarge` rather
+/// than an opaque `RegistrationFailed`. The bound is inclusive.
 fn ensure_registrable(len: usize) -> Result<(), RdmaError> {
-    if len > CUOBJ_MAX_MEMORY_REG_SIZE {
+    if len > RDMA_MAX_MEMORY_REG_SIZE {
         return Err(RdmaError::BufferTooLarge {
             size: len,
-            max: CUOBJ_MAX_MEMORY_REG_SIZE,
+            max: RDMA_MAX_MEMORY_REG_SIZE,
         });
     }
     Ok(())
@@ -126,13 +126,13 @@ pub struct RdmaMultipartResponse {
 }
 
 impl MinioClient {
-    /// Upload `buffer` to `bucket`/`object` over RDMA via cuObjClient.
+    /// Upload `buffer` to `bucket`/`object` over RDMA.
     ///
-    /// The buffer is registered once (mirrors C++ `ScopedRDMARegistration`),
-    /// the RDMA token is minted per attempt with one NIC-failover retry, and
-    /// the HTTP control plane carries the token to the server. On a 501
-    /// "RDMA not supported" reply, returns [`RdmaError::Declined`] so the
-    /// caller can fall back to [`MinioClient::put_object`].
+    /// The buffer is registered for the duration of the call, the RDMA token
+    /// is minted per attempt, and the HTTP control plane carries the token to
+    /// the server. On a 501 "RDMA not supported" reply, returns
+    /// [`RdmaError::Declined`] so the caller can fall back to
+    /// [`MinioClient::put_object`].
     ///
     /// # Safety
     /// `buffer` must wrap a live allocation valid for the call duration.
@@ -151,7 +151,7 @@ impl MinioClient {
         let bucket: BucketName = bucket.try_into().map_err(Into::into)?;
         let object: ObjectKey = object.try_into().map_err(Into::into)?;
         let rdma = shared().ok_or(RdmaError::NotConnected)?;
-        if !rdma.is_connected() {
+        if !rdma.is_ready() {
             return Err(RdmaError::NotConnected);
         }
 
@@ -201,7 +201,7 @@ impl MinioClient {
         let bucket: BucketName = bucket.try_into().map_err(Into::into)?;
         let object: ObjectKey = object.try_into().map_err(Into::into)?;
         let rdma = shared().ok_or(RdmaError::NotConnected)?;
-        if !rdma.is_connected() {
+        if !rdma.is_ready() {
             return Err(RdmaError::NotConnected);
         }
 
@@ -230,9 +230,8 @@ impl MinioClient {
         }
     }
 
-    /// Upload a single multipart part over RDMA. Mirrors C++
-    /// `BaseClient::UploadPart` RDMA path in src/baseclient.cc — registers the
-    /// buffer, mints a token, and dispatches with `uploadId` + `partNumber`
+    /// Upload a single multipart part over RDMA — registers the buffer, mints
+    /// a token, and dispatches with `uploadId` + `partNumber`
     /// set on the context. The caller drives `create_multipart_upload` and
     /// `complete_multipart_upload` separately (or uses the high-level
     /// [`MinioClient::rdma_put_object_multipart`]).
@@ -261,7 +260,7 @@ impl MinioClient {
         let object: ObjectKey = object.try_into().map_err(Into::into)?;
         let upload_id: UploadId = upload_id.try_into().map_err(Into::into)?;
         let rdma = shared().ok_or(RdmaError::NotConnected)?;
-        if !rdma.is_connected() {
+        if !rdma.is_ready() {
             return Err(RdmaError::NotConnected);
         }
 
@@ -396,10 +395,11 @@ impl MinioClient {
         })
     }
 
-    /// Returns `true` when the process-wide cuObjClient is connected to a
-    /// cuObjServer — i.e., an RDMA transfer is likely to succeed.
+    /// Returns `true` when this host has a usable RDMA device, so an RDMA
+    /// transfer is worth attempting. Whether the *server* serves RDMA for a
+    /// given object is answered per request, by `x-amz-rdma-reply`.
     pub fn rdma_available(&self) -> bool {
-        shared().map(|c| c.is_connected()).unwrap_or(false)
+        shared().map(|c| c.is_ready()).unwrap_or(false)
     }
 
     fn resolve_rdma_region(&self) -> Region {
@@ -417,11 +417,11 @@ mod tests {
     fn ensure_registrable_boundary() {
         // At and below the limit is accepted; over it is rejected (inclusive bound).
         assert!(ensure_registrable(0).is_ok());
-        assert!(ensure_registrable(CUOBJ_MAX_MEMORY_REG_SIZE).is_ok());
-        match ensure_registrable(CUOBJ_MAX_MEMORY_REG_SIZE + 1) {
+        assert!(ensure_registrable(RDMA_MAX_MEMORY_REG_SIZE).is_ok());
+        match ensure_registrable(RDMA_MAX_MEMORY_REG_SIZE + 1) {
             Err(RdmaError::BufferTooLarge { size, max }) => {
-                assert_eq!(size, CUOBJ_MAX_MEMORY_REG_SIZE + 1);
-                assert_eq!(max, CUOBJ_MAX_MEMORY_REG_SIZE);
+                assert_eq!(size, RDMA_MAX_MEMORY_REG_SIZE + 1);
+                assert_eq!(max, RDMA_MAX_MEMORY_REG_SIZE);
             }
             other => panic!("expected BufferTooLarge, got {other:?}"),
         }

@@ -34,7 +34,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get -qy update
-          sudo apt-get -qy install libibverbs-dev librdmacm-dev libnuma-dev libssl-dev pkg-config
+          sudo apt-get -qy install libibverbs-dev libssl-dev pkg-config
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -48,5 +48,5 @@ jobs:
 
       - name: Test
         env:
-          LD_LIBRARY_PATH: ${{ github.workspace }}/vendor/cuobj/lib/${{ matrix.config.arch }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/vendor/s3rdma/lib/${{ matrix.config.arch }}
         run: cargo test --lib --features rdma

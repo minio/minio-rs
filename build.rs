@@ -18,8 +18,6 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=src/s3/rdma/cuobj_shim.cc");
-    println!("cargo:rerun-if-changed=src/s3/rdma/cuobj_shim.h");
 
     if env::var("CARGO_FEATURE_RDMA").is_err() {
         return;
@@ -37,42 +35,28 @@ fn main() {
     };
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let vendor_dir = manifest_dir.join("vendor").join("cuobj");
-    let include_dir = vendor_dir.join("include");
-    let lib_dir = vendor_dir.join("lib").join(arch);
+    let lib_dir = manifest_dir
+        .join("vendor")
+        .join("s3rdma")
+        .join("lib")
+        .join(arch);
 
-    let probe = lib_dir.join("libcuobjclient.so");
+    let probe = lib_dir.join("libs3rdma.so");
     if !probe.exists() {
         panic!(
-            "`rdma` feature: cuObjClient libs not vendored at {} (missing {})",
+            "`rdma` feature: libs3rdma not vendored for {arch} at {} (missing {}). \
+             Run ./build-libs.sh in the s3rdma repo to build and vendor both arches.",
             lib_dir.display(),
             probe.display()
         );
     }
 
-    cc::Build::new()
-        .cpp(true)
-        .std("c++17")
-        .file("src/s3/rdma/cuobj_shim.cc")
-        .include(&include_dir)
-        .flag_if_supported("-Wno-unused-parameter")
-        .flag_if_supported("-fvisibility=hidden")
-        .compile("miniors_cuobj_shim");
-
+    println!("cargo:rerun-if-changed={}", probe.display());
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
     println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
 
-    for lib in &[
-        "cuobjclient",
-        "cufile",
-        "ibverbs",
-        "rdmacm",
-        "numa",
-        "pthread",
-        "dl",
-        "rt",
-    ] {
-        println!("cargo:rustc-link-lib=dylib={lib}");
-    }
-    println!("cargo:rustc-link-lib=dylib=stdc++");
+    // libs3rdma pulls in libibverbs itself, at runtime -- an SDK that links
+    // nothing but libs3rdma still builds on a host with no RDMA stack
+    // installed, and fails on the first client_init instead.
+    println!("cargo:rustc-link-lib=dylib=s3rdma");
 }

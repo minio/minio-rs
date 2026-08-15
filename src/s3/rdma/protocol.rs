@@ -29,7 +29,7 @@ use crate::s3::signer::sign_v4_s3;
 use crate::s3::types::{BucketName, ObjectKey, Region};
 use crate::s3::utils::{to_amz_date, utc_now};
 
-use super::cuobj::{CuObjClient, OpType};
+use super::transport::RdmaClient;
 
 pub const X_AMZ_RDMA_TOKEN: &str = "x-amz-rdma-token";
 pub const X_AMZ_RDMA_REPLY: &str = "x-amz-rdma-reply";
@@ -88,9 +88,10 @@ impl RdmaOutcome {
     }
 }
 
-/// Extract the client NIC IP from the 81-char RDMA token, matching libcuobjclient
-/// 1.2.0+'s IPv4-mapped IPv6 GID layout ("...ffffAABBCCDD"). Returns `None` for
-/// older clients or non-multipath tokens.
+/// Extract the client NIC IP from the 81-char RDMA token, whose trailing 32
+/// hex chars are the source NIC's GID. Returns `None` unless that GID is an
+/// IPv4-mapped IPv6 address ("...ffffAABBCCDD"), which is what a RoCEv2 GID
+/// over IPv4 looks like -- an IB or IPv6 GID names no address to pin to.
 pub fn parse_client_nic_from_token(token: &str) -> Option<IpAddr> {
     let bytes = token.as_bytes();
     if bytes.len() < 32 {
@@ -128,16 +129,15 @@ pub fn parse_rdma_reply(reply: &str) -> i32 {
 
 /// Cache of `reqwest::Client`s keyed by local NIC IP, used so a token that
 /// embedded a specific HCA's GID sends its HTTP control-plane out the same
-/// interface. Without this, multipath can split TCP and RDMA across NICs and
-/// the server's RDMA_READ has no healthy path back. Matches the C++ port's
-/// `CURLOPT_INTERFACE` behaviour.
+/// interface. Without this a multi-NIC host can split TCP and RDMA across
+/// NICs, and the server's RDMA_READ has no path back to the token's peer.
 static NIC_CLIENT_CACHE: LazyLock<DashMap<IpAddr, Arc<reqwest::Client>>> =
     LazyLock::new(DashMap::new);
 
-/// Default RDMA control-plane client when the token carries no NIC GID
-/// (older libcuobjclient, single-HCA). Kept in a LazyLock so the aggressive
-/// connect/total timeouts the C++ port always applies are present even when
-/// NIC pinning is unavailable, and so we don't allocate a fresh client per op.
+/// Default RDMA control-plane client, used when the token names no pinnable
+/// address (single-HCA host, IB or IPv6 GID). Kept in a LazyLock so the
+/// aggressive connect/total timeouts still apply when NIC pinning is
+/// unavailable, and so we don't allocate a fresh client per op.
 static DEFAULT_RDMA_CLIENT: LazyLock<Arc<reqwest::Client>> = LazyLock::new(|| {
     let c = reqwest::Client::builder()
         .tcp_nodelay(true)
@@ -407,10 +407,10 @@ pub async fn rdma_get(
     size as isize
 }
 
-/// Mirror of C++ `rdmaPutWithRetry`. Caller must have already registered the
-/// buffer via [`CuObjClient::get_descriptor`].
+/// PUT a registered buffer, retrying a transient RDMA failure once. Caller
+/// must have already registered the buffer via [`RdmaClient::register`].
 pub async fn rdma_put_with_retry(
-    rdma: &CuObjClient,
+    rdma: &RdmaClient,
     client: &MinioClient,
     ctx: &mut S3RdmaClientCtx,
     buf_ptr: *mut libc::c_void,
@@ -418,7 +418,7 @@ pub async fn rdma_put_with_retry(
 ) -> RdmaOutcome {
     let mut last: isize = -1;
     for _ in 0..RDMA_MAX_ATTEMPTS {
-        let token = match unsafe { rdma.get_rdma_token(buf_ptr, size, 0, OpType::Put) } {
+        let token = match unsafe { rdma.get_rdma_token(buf_ptr, size, 0) } {
             Some(t) => t,
             None => return RdmaOutcome::Failed,
         };
@@ -431,9 +431,9 @@ pub async fn rdma_put_with_retry(
     RdmaOutcome::from_ssize(last, size)
 }
 
-/// Mirror of C++ `rdmaGetWithRetry`.
+/// GET into a registered buffer. Same contract as [`rdma_put_with_retry`].
 pub async fn rdma_get_with_retry(
-    rdma: &CuObjClient,
+    rdma: &RdmaClient,
     client: &MinioClient,
     ctx: &mut S3RdmaClientCtx,
     buf_ptr: *mut libc::c_void,
@@ -441,7 +441,7 @@ pub async fn rdma_get_with_retry(
 ) -> RdmaOutcome {
     let mut last: isize = -1;
     for _ in 0..RDMA_MAX_ATTEMPTS {
-        let token = match unsafe { rdma.get_rdma_token(buf_ptr, size, 0, OpType::Get) } {
+        let token = match unsafe { rdma.get_rdma_token(buf_ptr, size, 0) } {
             Some(t) => t,
             None => return RdmaOutcome::Failed,
         };
