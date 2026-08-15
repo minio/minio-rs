@@ -85,7 +85,9 @@ impl RdmaClient {
     /// `$S3RDMA_DEVICE` when that names one. Returns `None` when the host has
     /// no usable device.
     pub fn new() -> Option<Self> {
-        let mut err = [0i8; 512];
+        // c_char, not i8: it is signed on x86_64 and unsigned on aarch64, so a
+        // hardcoded i8 buffer compiles on one and not the other.
+        let mut err = [0 as c_char; 512];
         let raw = unsafe { ffi::s3rdma_client_init(std::ptr::null(), err.as_mut_ptr(), err.len()) };
         if raw.is_null() {
             let reason = unsafe { CStr::from_ptr(err.as_ptr()) }
