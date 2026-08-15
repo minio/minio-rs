@@ -34,18 +34,27 @@ fn main() {
         Err(_) => panic!("CARGO_CFG_TARGET_ARCH not set"),
     };
 
+    // The vendored copy is the default, but its path is this build host's
+    // absolute CARGO_MANIFEST_DIR and it gets baked into every downstream
+    // binary as an rpath. A packager shipping libs3rdma to a system prefix
+    // points at it here instead.
+    println!("cargo:rerun-if-env-changed=S3RDMA_LIB_DIR");
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let lib_dir = manifest_dir
-        .join("vendor")
-        .join("s3rdma")
-        .join("lib")
-        .join(arch);
+    let lib_dir = match env::var_os("S3RDMA_LIB_DIR") {
+        Some(dir) => PathBuf::from(dir),
+        None => manifest_dir
+            .join("vendor")
+            .join("s3rdma")
+            .join("lib")
+            .join(arch),
+    };
 
     let probe = lib_dir.join("libs3rdma.so");
     if !probe.exists() {
         panic!(
-            "`rdma` feature: libs3rdma not vendored for {arch} at {} (missing {}). \
-             Run ./build-libs.sh in the s3rdma repo to build and vendor both arches.",
+            "`rdma` feature: libs3rdma not found for {arch} at {} (missing {}). \
+             Run ./build-libs.sh in the s3rdma repo to build and vendor both \
+             arches, or set $S3RDMA_LIB_DIR to an installed copy.",
             lib_dir.display(),
             probe.display()
         );

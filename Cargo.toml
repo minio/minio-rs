@@ -124,6 +124,7 @@ name = "load_balancing_with_hooks"
 name = "rdma_rails"
 path = "examples/rdma_rails.rs"
 required-features = ["rdma"]
+test = true
 
 [[example]]
 name = "get_put_rdma"

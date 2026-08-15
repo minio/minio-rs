@@ -81,23 +81,31 @@ unsafe impl Send for RdmaClient {}
 unsafe impl Sync for RdmaClient {}
 
 impl RdmaClient {
-    /// Open a client context on the first usable RDMA device, or on
-    /// `$S3RDMA_DEVICE` when that names one. Returns `None` when the host has
-    /// no usable device.
-    pub fn new() -> Option<Self> {
+    /// Open a client context, reporting the library's reason on failure.
+    fn open() -> Result<Self, String> {
         // c_char, not i8: it is signed on x86_64 and unsigned on aarch64, so a
         // hardcoded i8 buffer compiles on one and not the other.
         let mut err = [0 as c_char; 512];
         let raw = unsafe { ffi::s3rdma_client_init(std::ptr::null(), err.as_mut_ptr(), err.len()) };
-        if raw.is_null() {
-            let reason = unsafe { CStr::from_ptr(err.as_ptr()) }
+        NonNull::new(raw).map(|raw| Self { raw }).ok_or_else(|| {
+            unsafe { CStr::from_ptr(err.as_ptr()) }
                 .to_string_lossy()
-                .into_owned();
-            log::debug!("RDMA unavailable: {reason}");
-            let _ = INIT_ERROR.set(reason);
-            return None;
-        }
-        NonNull::new(raw).map(|raw| Self { raw })
+                .into_owned()
+        })
+    }
+
+    /// Open a client context on the first usable RDMA device, or on
+    /// `$S3RDMA_DEVICE` when that names one. Returns `None` when the host has
+    /// no usable device.
+    ///
+    /// A failure here is logged but not recorded in [`init_error`], which
+    /// describes the shared client only: `OnceLock` cannot be reset, so
+    /// caching a direct caller's failure would keep reporting it after
+    /// [`shared`] went on to open a device successfully.
+    pub fn new() -> Option<Self> {
+        Self::open()
+            .map_err(|reason| log::debug!("RDMA unavailable: {reason}"))
+            .ok()
     }
 
     /// Whether this client can mint tokens. True for any live client: DC is
@@ -205,7 +213,16 @@ impl Drop for RdmaToken {
 /// transfer mints its own token against it.
 pub fn shared() -> Option<&'static RdmaClient> {
     static INSTANCE: OnceLock<Option<RdmaClient>> = OnceLock::new();
-    INSTANCE.get_or_init(RdmaClient::new).as_ref()
+    INSTANCE
+        .get_or_init(|| {
+            RdmaClient::open()
+                .map_err(|reason| {
+                    log::debug!("RDMA unavailable: {reason}");
+                    let _ = INIT_ERROR.set(reason);
+                })
+                .ok()
+        })
+        .as_ref()
 }
 
 /// RAII buffer registration. Holds the memory pinned for RDMA until dropped.
@@ -243,5 +260,35 @@ impl<'a> Drop for ScopedRegistration<'a> {
         if !self.released {
             unsafe { self.client.deregister(self.ptr) };
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn memory_type_maps_every_known_code() {
+        let cases = [
+            (ffi::S3RDMA_MEM_SYSTEM, MemoryType::System),
+            (ffi::S3RDMA_MEM_CUDA_MANAGED, MemoryType::CudaManaged),
+            (ffi::S3RDMA_MEM_CUDA_DEVICE, MemoryType::CudaDevice),
+            (ffi::S3RDMA_MEM_UNKNOWN, MemoryType::Unknown),
+        ];
+        for (raw, expected) in cases {
+            assert_eq!(MemoryType::from_raw(raw), expected, "code {raw}");
+        }
+    }
+
+    #[test]
+    fn memory_type_falls_back_to_unknown() {
+        for raw in [-1, 4, 99, libc::c_int::MAX] {
+            assert_eq!(MemoryType::from_raw(raw), MemoryType::Unknown, "code {raw}");
+        }
+    }
+
+    #[test]
+    fn max_reg_size_is_the_32_bit_window() {
+        assert_eq!(RDMA_MAX_MEMORY_REG_SIZE, u32::MAX as usize);
     }
 }

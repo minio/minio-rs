@@ -44,6 +44,20 @@ pub const RDMA_REPLY_NOT_IMPLEMENTED: i32 = 501;
 
 pub const RDMA_NOT_SUPPORTED: isize = -2;
 
+/// The call never reached the fabric: a bad argument, or a URL that would not
+/// build. Distinct from -1 because no rail carried this attempt, so charging
+/// one a failure would take healthy hardware out of rotation over a
+/// client-side mistake -- and the same error would repeat on the next rail.
+const RDMA_LOCAL_ERROR: isize = -3;
+
+/// The two sentinels must stay distinct and negative: `from_ssize` tells them
+/// apart by value, and the retry loops route on them.
+const _: () = {
+    assert!(RDMA_LOCAL_ERROR != RDMA_NOT_SUPPORTED);
+    assert!(RDMA_LOCAL_ERROR != -1);
+    assert!(RDMA_LOCAL_ERROR < 0);
+};
+
 const RDMA_MAX_ATTEMPTS: u32 = 2;
 const RDMA_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const RDMA_TIMEOUT: Duration = Duration::from_secs(10);
@@ -192,7 +206,7 @@ pub async fn rdma_put(
     if let Some(upload_id) = &ctx.upload_id {
         query_params.add("uploadId", upload_id.as_str());
         if ctx.part_number == 0 || ctx.part_number > 10000 {
-            return -1;
+            return RDMA_LOCAL_ERROR;
         }
         query_params.add("partNumber", ctx.part_number.to_string());
     }
@@ -205,7 +219,7 @@ pub async fn rdma_put(
         Some(&ctx.object),
     ) {
         Ok(u) => u,
-        Err(_) => return -1,
+        Err(_) => return RDMA_LOCAL_ERROR,
     };
 
     let date = utc_now();
@@ -329,7 +343,7 @@ pub async fn rdma_get(
         Some(&ctx.object),
     ) {
         Ok(u) => u,
-        Err(_) => return -1,
+        Err(_) => return RDMA_LOCAL_ERROR,
     };
 
     let date = utc_now();
@@ -407,9 +421,15 @@ pub async fn rdma_get(
     size as isize
 }
 
-/// PUT a registered buffer, retrying a transient RDMA failure once. Caller
-/// must have already registered the buffer via [`RdmaClient::register`].
-pub async fn rdma_put_with_retry(
+/// PUT a registered buffer, retrying a transient RDMA failure once.
+///
+/// # Safety
+/// `buf_ptr` must point to a `size`-byte region that stays valid, and is not
+/// concurrently mutated, for the whole call. `rdma` must hold a live
+/// registration covering it -- see [`ScopedRegistration`](super::ScopedRegistration).
+/// The remote reads that memory directly, so a stale pointer is a use-after-free
+/// the caller never observes locally.
+pub async unsafe fn rdma_put_with_retry(
     rdma: &RdmaClient,
     client: &MinioClient,
     ctx: &mut S3RdmaClientCtx,
@@ -423,14 +443,15 @@ pub async fn rdma_put_with_retry(
             None => return RdmaOutcome::Failed,
         };
         last = rdma_put(client, ctx, token.as_cstr(), size as u64).await;
-        if last > 0 || last == RDMA_NOT_SUPPORTED {
+        if last > 0 || last == RDMA_NOT_SUPPORTED || last == RDMA_LOCAL_ERROR {
             drop(token);
             break;
         }
-        // The transfer failed. Charge it to the rail this token named, so the
-        // next request skips that rail rather than round-robinning back onto
-        // it. A 501 is excluded above: the server declining RDMA says nothing
-        // about the rail.
+        // The transfer failed on the wire. Charge it to the rail this token
+        // named, so the next request skips that rail rather than
+        // round-robinning back onto it. Two results are excluded above: a 501,
+        // because the server declining RDMA says nothing about the rail, and a
+        // local error, because nothing was ever sent.
         //
         // A server-side failure marks every rail in turn, which is safe: the
         // library clears all marks once no rail is left usable, so a fault
@@ -441,8 +462,13 @@ pub async fn rdma_put_with_retry(
     RdmaOutcome::from_ssize(last, size)
 }
 
-/// GET into a registered buffer. Same contract as [`rdma_put_with_retry`].
-pub async fn rdma_get_with_retry(
+/// GET into a registered buffer.
+///
+/// # Safety
+/// Same contract as [`rdma_put_with_retry`]: `buf_ptr` must name a live,
+/// registered `size`-byte region for the whole call. The remote writes into
+/// that memory directly.
+pub async unsafe fn rdma_get_with_retry(
     rdma: &RdmaClient,
     client: &MinioClient,
     ctx: &mut S3RdmaClientCtx,
@@ -456,7 +482,7 @@ pub async fn rdma_get_with_retry(
             None => return RdmaOutcome::Failed,
         };
         last = rdma_get(client, ctx, token.as_cstr(), size as u64).await;
-        if last > 0 || last == RDMA_NOT_SUPPORTED {
+        if last > 0 || last == RDMA_NOT_SUPPORTED || last == RDMA_LOCAL_ERROR {
             drop(token);
             break;
         }
@@ -497,5 +523,21 @@ mod tests {
     #[test]
     fn parse_nic_rejects_short_token() {
         assert!(parse_client_nic_from_token("short").is_none());
+    }
+
+    #[test]
+    fn a_local_error_reports_as_a_failed_transfer() {
+        assert!(matches!(
+            RdmaOutcome::from_ssize(RDMA_LOCAL_ERROR, 4096),
+            RdmaOutcome::Failed
+        ));
+        assert!(matches!(
+            RdmaOutcome::from_ssize(RDMA_NOT_SUPPORTED, 4096),
+            RdmaOutcome::Declined
+        ));
+        assert!(matches!(
+            RdmaOutcome::from_ssize(-1, 4096),
+            RdmaOutcome::Failed
+        ));
     }
 }

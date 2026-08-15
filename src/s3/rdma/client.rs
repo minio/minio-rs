@@ -39,7 +39,7 @@ pub struct RdmaResponse {
 #[non_exhaustive]
 pub enum RdmaError {
     #[error("RDMA not available: no usable RDMA device on this host")]
-    NotConnected,
+    NotAvailable,
     #[error("RDMA buffer registration failed (ibv_reg_mr returned failure)")]
     RegistrationFailed,
     #[error(
@@ -150,9 +150,9 @@ impl MinioClient {
     {
         let bucket: BucketName = bucket.try_into().map_err(Into::into)?;
         let object: ObjectKey = object.try_into().map_err(Into::into)?;
-        let rdma = shared().ok_or(RdmaError::NotConnected)?;
+        let rdma = shared().ok_or(RdmaError::NotAvailable)?;
         if !rdma.is_ready() {
-            return Err(RdmaError::NotConnected);
+            return Err(RdmaError::NotAvailable);
         }
 
         ensure_registrable(buffer.len())?;
@@ -169,7 +169,9 @@ impl MinioClient {
             etag: String::new(),
         };
 
-        match rdma_put_with_retry(rdma, self, &mut ctx, buffer.ptr(), buffer.len()).await {
+        // SAFETY: `_reg` keeps `buffer` registered for the whole call.
+        match unsafe { rdma_put_with_retry(rdma, self, &mut ctx, buffer.ptr(), buffer.len()) }.await
+        {
             RdmaOutcome::Ok(n) => Ok(RdmaResponse {
                 etag: ctx.etag,
                 bytes_transferred: n,
@@ -200,9 +202,9 @@ impl MinioClient {
     {
         let bucket: BucketName = bucket.try_into().map_err(Into::into)?;
         let object: ObjectKey = object.try_into().map_err(Into::into)?;
-        let rdma = shared().ok_or(RdmaError::NotConnected)?;
+        let rdma = shared().ok_or(RdmaError::NotAvailable)?;
         if !rdma.is_ready() {
-            return Err(RdmaError::NotConnected);
+            return Err(RdmaError::NotAvailable);
         }
 
         ensure_registrable(buffer.len())?;
@@ -219,7 +221,9 @@ impl MinioClient {
             etag: String::new(),
         };
 
-        match rdma_get_with_retry(rdma, self, &mut ctx, buffer.ptr(), buffer.len()).await {
+        // SAFETY: `_reg` keeps `buffer` registered for the whole call.
+        match unsafe { rdma_get_with_retry(rdma, self, &mut ctx, buffer.ptr(), buffer.len()) }.await
+        {
             RdmaOutcome::Ok(n) => Ok(RdmaResponse {
                 etag: ctx.etag,
                 bytes_transferred: n,
@@ -259,9 +263,9 @@ impl MinioClient {
         let bucket: BucketName = bucket.try_into().map_err(Into::into)?;
         let object: ObjectKey = object.try_into().map_err(Into::into)?;
         let upload_id: UploadId = upload_id.try_into().map_err(Into::into)?;
-        let rdma = shared().ok_or(RdmaError::NotConnected)?;
+        let rdma = shared().ok_or(RdmaError::NotAvailable)?;
         if !rdma.is_ready() {
-            return Err(RdmaError::NotConnected);
+            return Err(RdmaError::NotAvailable);
         }
 
         ensure_registrable(buffer.len())?;
@@ -278,7 +282,9 @@ impl MinioClient {
             etag: String::new(),
         };
 
-        match rdma_put_with_retry(rdma, self, &mut ctx, buffer.ptr(), buffer.len()).await {
+        // SAFETY: `_reg` keeps `buffer` registered for the whole call.
+        match unsafe { rdma_put_with_retry(rdma, self, &mut ctx, buffer.ptr(), buffer.len()) }.await
+        {
             RdmaOutcome::Ok(n) => Ok(RdmaResponse {
                 etag: ctx.etag,
                 bytes_transferred: n,
@@ -316,7 +322,7 @@ impl MinioClient {
         let object: ObjectKey = object.clone().try_into().map_err(Into::into)?;
 
         if !self.rdma_available() {
-            return Err(RdmaError::NotConnected);
+            return Err(RdmaError::NotAvailable);
         }
 
         let create_resp = self
