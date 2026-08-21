@@ -55,9 +55,22 @@ const char *s3rdma_version(void);
 int s3rdma_check_rdma(char *errbuf, size_t errbuf_len);
 
 // --- Server lifecycle ---
-// `ip` may be an IP address, a device name (e.g. "mlx5_0"), a comma-separated
-// list of either, or empty -- which opens every device with an ACTIVE port, so
-// a dual-rail host serves both rails without being told to.
+// `ip` may be an IP address, a device name, a comma-separated list of either,
+// or empty. Empty defers to `cfg->device`, so a caller of
+// s3rdma_server_init_with_config that set it gets that selection, not every
+// rail. When both are empty -- always for s3rdma_server_init, whose default
+// config names no device -- every device with an ACTIVE port is opened, so a
+// dual-rail host serves both rails without being told to.
+//
+// Device forms, where port and GID index may be pinned:
+//   "mlx5_0"        device, defaults for both
+//   "mlx5_0:3"      device, GID index 3
+//   "mlx5_0:1:3"    device, port 1, GID index 3
+//
+// A pin that is present but not a valid u8 ("mlx5_0:1:256") is *not* dropped
+// back to the default: the whole string is taken as a device name, so the open
+// fails naming exactly what was written rather than quietly binding a different
+// rail than the caller asked for.
 //
 // Either address family works: a RoCEv2 GID *is* a 128-bit IPv6 address (an
 // IPv4 peer just occupies the mapped `::ffff:a.b.c.d` form), so an IPv6-only
@@ -182,9 +195,19 @@ void     s3rdma_free_channel(S3RdmaHandle h, uint16_t channel);
 #define S3RDMA_MEM_UNKNOWN 3
 
 // Open a client-side RDMA context on `device`: a device name such as "mlx5_0",
-// several separated by commas ("mlx5_0,mlx5_1"), or NULL/empty to take
+// an IP address of either family, several of either separated by commas
+// ("mlx5_0,mlx5_1", "15.15.15.234,2001:db8::1"), or NULL/empty to take
 // S3RDMA_DEVICE from the environment and, failing that, *every* device whose
-// port is ACTIVE. Returns NULL on failure and writes the reason into `err_buf`
+// port is ACTIVE. Entries take the same forms, and the same port/GID-index
+// pins, as `ip` on s3rdma_server_init above -- including a wildcard
+// ("0.0.0.0", "::"), which names no interface and so means every ACTIVE device
+// even when it appears beside a named one.
+//
+// Pinning the client by address is what a dual-stack host needs: a device name
+// selects the lowest-index global RoCEv2 GID, which may be the IPv4-mapped
+// entry, and a v4-mapped source GID cannot be paired with an IPv6 destination
+// in a RoCEv2 address handle. Naming the address on both ends keeps the
+// families matched. Returns NULL on failure and writes the reason into `err_buf`
 // (NUL-terminated, truncated to err_buf_len-1); `err_buf` may be NULL.
 //
 // Multi-rail is automatic. A buffer is registered on every rail, and each
