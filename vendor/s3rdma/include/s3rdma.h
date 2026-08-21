@@ -55,8 +55,20 @@ const char *s3rdma_version(void);
 int s3rdma_check_rdma(char *errbuf, size_t errbuf_len);
 
 // --- Server lifecycle ---
-// `ip` may be an IPv4 address, a device name (e.g. "mlx5_0"), or empty (first
-// available device).
+// `ip` may be an IP address, a device name (e.g. "mlx5_0"), a comma-separated
+// list of either, or empty -- which opens every device with an ACTIVE port, so
+// a dual-rail host serves both rails without being told to.
+//
+// Either address family works: a RoCEv2 GID *is* a 128-bit IPv6 address (an
+// IPv4 peer just occupies the mapped `::ffff:a.b.c.d` form), so an IPv6-only
+// fabric needs no separate path. Accepted forms are `15.15.15.234`,
+// `2001:db8::1`, `[2001:db8::1]:9000`, and `fe80::1%eth0`. A scoped address
+// keeps its zone: a link-local address is unique only per link, so the same
+// `fe80::` address can sit on two rails, and the zone constrains the match to
+// GID entries that interface backs. Naming an interface that does not carry the
+// address is an error rather than a silent match on another one. A wildcard --
+// `0.0.0.0` or `::` -- names no interface and so means the same as empty: open
+// every device with an ACTIVE port.
 //
 // An address resolves through the GID table, and failing that through the
 // sysfs device-to-netdev mapping. The second step is what makes an address
