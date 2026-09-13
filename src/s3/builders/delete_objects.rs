@@ -54,7 +54,7 @@ fn xml_escape(s: &str) -> String {
 /// Specifies an object to be deleted.
 ///
 /// The object can be specified by key or by key and version_id via the `TryFrom` trait.
-#[derive(Debug, Clone, Default, TypedBuilder)]
+#[derive(Debug, Clone, TypedBuilder)]
 pub struct ObjectToDelete {
     key: ObjectKey,
     version_id: Option<VersionId>,
@@ -173,9 +173,11 @@ impl<V: Into<VersionId>> From<(ObjectKey, Option<V>)> for ObjectToDelete {
 }
 
 impl From<ListEntry> for ObjectToDelete {
+    /// Builds the delete target named by a listing entry, keeping its version.
+    /// Both values came from the server, so neither is re-validated.
     fn from(entry: ListEntry) -> Self {
         Self {
-            key: ObjectKey::new_unchecked(entry.name),
+            key: entry.name,
             version_id: entry.version_id.map(VersionId::new_unchecked),
         }
     }
@@ -209,7 +211,9 @@ pub struct DeleteObject {
     region: Option<Region>,
     #[builder(setter(into))] // force required + accept Into<String>
     bucket: BucketName,
-    #[builder(default, setter(into))]
+    // Required: a defaulted ObjectToDelete would name the empty key, so a request
+    // built without one would issue a delete rather than fail to build.
+    #[builder(setter(into))]
     object: ObjectToDelete,
     #[builder(default)]
     bypass_governance_mode: bool,

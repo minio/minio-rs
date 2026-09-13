@@ -16,7 +16,7 @@
 //! Basic S3 data types: ListEntry, Bucket, Part, Retention, etc.
 
 use crate::s3::error::ValidationErr;
-use crate::s3::types::{BucketName, ETag};
+use crate::s3::types::{BucketName, ETag, ObjectKey};
 use crate::s3::utils::{ChecksumAlgorithm, UtcTime};
 use std::collections::HashMap;
 use std::fmt;
@@ -24,9 +24,9 @@ use std::fmt;
 #[derive(Clone, Debug)]
 /// Contains information of an item of [list_objects()](crate::s3::client::MinioClient::list_objects) API
 pub struct ListEntry {
-    pub name: String,
+    pub name: ObjectKey,
     pub last_modified: Option<UtcTime>,
-    pub etag: Option<String>, // except DeleteMarker
+    pub etag: Option<ETag>, // except DeleteMarker
     pub owner_id: Option<String>,
     pub owner_name: Option<String>,
     pub size: Option<u64>, // except DeleteMarker
