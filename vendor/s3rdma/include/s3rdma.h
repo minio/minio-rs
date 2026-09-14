@@ -56,11 +56,13 @@ int s3rdma_check_rdma(char *errbuf, size_t errbuf_len);
 
 // --- Server lifecycle ---
 // `ip` may be an IP address, a device name, a comma-separated list of either,
-// or empty. Empty defers to `cfg->device`, so a caller of
-// s3rdma_server_init_with_config that set it gets that selection, not every
-// rail. When both are empty -- always for s3rdma_server_init, whose default
-// config names no device -- every device with an ACTIVE port is opened, so a
-// dual-rail host serves both rails without being told to.
+// or empty. Empty opens every device with an ACTIVE port, so a dual-rail host
+// serves both rails without being told to.
+//
+// `ip` is the whole of the selection from C. `S3RdmaConfig` carries no device
+// field, so there is nothing for an empty `ip` to fall back to:
+// s3rdma_server_init_with_config leaves that part of the server config at its
+// default, exactly as s3rdma_server_init does.
 //
 // Device forms, where port and GID index may be pinned:
 //   "mlx5_0"        device, defaults for both
@@ -80,10 +82,8 @@ int s3rdma_check_rdma(char *errbuf, size_t errbuf_len);
 // `fe80::` address can sit on two rails, and the zone constrains the match to
 // GID entries that interface backs. Naming an interface that does not carry the
 // address is an error rather than a silent match on another one. A wildcard --
-// `0.0.0.0` or `::` -- names no interface, so it opens every device with an
-// ACTIVE port. It is not the same as leaving `ip` empty: a wildcard does NOT
-// fall through to `cfg->device`. Writing one is itself a selection, and it
-// beats the configured device rather than deferring to it.
+// `0.0.0.0` or `::` -- names no interface and so does what empty does here:
+// open every device with an ACTIVE port.
 //
 // An address resolves through the GID table, and failing that through the
 // sysfs device-to-netdev mapping. The second step is what makes an address
