@@ -61,7 +61,7 @@
 
 use crate::s3::signer::{ChunkSigningContext, sign_chunk, sign_trailer};
 use crate::s3::utils::{ChecksumAlgorithm, b64_encode, sha256_hash};
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use crc_fast::{CrcAlgorithm, Digest as CrcFastDigest};
 use futures_util::Stream;
 #[cfg(feature = "ring")]
@@ -69,6 +69,7 @@ use ring::digest::{Context, SHA256, SHA512};
 use sha1::{Digest as Sha1Digest, Sha1};
 #[cfg(not(feature = "ring"))]
 use sha2::{Sha256, Sha512};
+use std::collections::VecDeque;
 use std::hash::Hasher;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -207,6 +208,10 @@ pub struct AwsChunkedEncoder<S> {
     algorithm: ChecksumAlgorithm,
     hasher: Option<StreamingHasher>,
     state: EncoderState,
+    /// The rest of the frame for the chunk just read: its payload and the closing
+    /// CRLF. Emitting a frame as separate pieces leaves the payload in the buffer
+    /// it arrived in, rather than copying it into a freshly joined one per chunk.
+    frame: VecDeque<Bytes>,
 }
 
 impl<S> AwsChunkedEncoder<S> {
@@ -217,6 +222,7 @@ impl<S> AwsChunkedEncoder<S> {
             algorithm,
             hasher: Some(StreamingHasher::new(algorithm)),
             state: EncoderState::Streaming,
+            frame: VecDeque::new(),
         }
     }
 }
@@ -229,6 +235,10 @@ where
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         loop {
+            // Finish the frame started by an earlier poll before reading on.
+            if let Some(piece) = self.frame.pop_front() {
+                return Poll::Ready(Some(Ok(piece)));
+            }
             match self.state {
                 EncoderState::Streaming => {
                     let inner = Pin::new(&mut self.inner);
@@ -244,15 +254,11 @@ where
                             }
 
                             // Format: <hex-size>\r\n<data>\r\n
-                            let chunk_len = chunk.len();
-                            let chunk_header = format!("{chunk_len:x}\r\n");
-                            let mut output =
-                                Vec::with_capacity(chunk_header.len() + chunk.len() + 2);
-                            output.extend_from_slice(chunk_header.as_bytes());
-                            output.extend_from_slice(&chunk);
-                            output.extend_from_slice(b"\r\n");
+                            let chunk_header = Bytes::from(format!("{:x}\r\n", chunk.len()));
+                            self.frame.push_back(chunk);
+                            self.frame.push_back(Bytes::from_static(b"\r\n"));
 
-                            return Poll::Ready(Some(Ok(Bytes::from(output))));
+                            return Poll::Ready(Some(Ok(chunk_header)));
                         }
                         Poll::Ready(Some(Err(e))) => {
                             return Poll::Ready(Some(Err(e)));
@@ -397,6 +403,11 @@ pub struct SignedAwsChunkedEncoder<S> {
     hasher: Option<StreamingHasher>,
     state: SignedEncoderState,
 
+    /// The rest of the frame for the chunk just read: its payload and the closing
+    /// CRLF. The signature covers the payload, which is unchanged by emitting the
+    /// frame in pieces instead of joining it into one buffer.
+    frame: VecDeque<Bytes>,
+
     // Signing context
     signing_key: Arc<[u8]>,
     date_time: String,
@@ -422,6 +433,7 @@ impl<S> SignedAwsChunkedEncoder<S> {
             algorithm,
             hasher: Some(StreamingHasher::new(algorithm)),
             state: SignedEncoderState::Streaming,
+            frame: VecDeque::new(),
             signing_key: context.signing_key,
             date_time: context.date_time,
             scope: context.scope,
@@ -452,6 +464,10 @@ where
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         loop {
+            // Finish the frame started by an earlier poll before reading on.
+            if let Some(piece) = self.frame.pop_front() {
+                return Poll::Ready(Some(Ok(piece)));
+            }
             match self.state {
                 SignedEncoderState::Streaming => {
                     let inner = Pin::new(&mut self.inner);
@@ -473,16 +489,14 @@ where
                             let signature = self.sign_chunk_data(&chunk_hash);
 
                             // Format: <hex-size>;chunk-signature=<sig>\r\n<data>\r\n
-                            let chunk_len = chunk.len();
-                            let chunk_header =
-                                format!("{chunk_len:x};chunk-signature={signature}\r\n");
-                            let mut output =
-                                Vec::with_capacity(chunk_header.len() + chunk.len() + 2);
-                            output.extend_from_slice(chunk_header.as_bytes());
-                            output.extend_from_slice(&chunk);
-                            output.extend_from_slice(b"\r\n");
+                            let chunk_header = Bytes::from(format!(
+                                "{:x};chunk-signature={signature}\r\n",
+                                chunk.len()
+                            ));
+                            self.frame.push_back(chunk);
+                            self.frame.push_back(Bytes::from_static(b"\r\n"));
 
-                            return Poll::Ready(Some(Ok(Bytes::from(output))));
+                            return Poll::Ready(Some(Ok(chunk_header)));
                         }
                         Poll::Ready(Some(Err(e))) => {
                             return Poll::Ready(Some(Err(e)));
@@ -650,10 +664,20 @@ pub fn calculate_signed_encoded_length(
 /// by `calculate_encoded_length` and `calculate_signed_encoded_length`,
 /// preventing Content-Length mismatches when the input stream produces
 /// differently-sized chunks.
+///
+/// Payload bytes are not copied when the input already holds at least a full
+/// chunk: the chunk is sliced out of the incoming `Bytes`, which shares the
+/// buffer by reference count. Only an input piece too small to emit on its own
+/// is accumulated, and then at most `chunk_size` bytes are copied per boundary.
+/// Re-buffering the whole body instead would make a large upload quadratic,
+/// because emitting each chunk would shift the remaining tail down.
 pub struct RechunkingStream<S> {
     inner: S,
     chunk_size: usize,
-    buffer: Vec<u8>,
+    /// The input piece being consumed, sliced from the front as chunks are emitted.
+    pending: Bytes,
+    /// Holds input pieces shorter than `chunk_size` until a full chunk can be emitted.
+    partial: BytesMut,
     done: bool,
 }
 
@@ -662,11 +686,18 @@ impl<S> RechunkingStream<S> {
     ///
     /// The wrapper buffers incoming data and emits chunks of exactly `chunk_size` bytes,
     /// except for the final chunk which may be smaller.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `chunk_size` is zero, because a stream of zero-byte chunks
+    /// never makes progress.
     pub fn new(inner: S, chunk_size: usize) -> Self {
+        assert!(chunk_size > 0, "chunk size must be non-zero");
         Self {
             inner,
             chunk_size,
-            buffer: Vec::with_capacity(chunk_size),
+            pending: Bytes::new(),
+            partial: BytesMut::new(),
             done: false,
         }
     }
@@ -686,53 +717,53 @@ where
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let chunk_size = self.chunk_size;
 
-        if self.done && self.buffer.is_empty() {
-            return Poll::Ready(None);
-        }
-
-        // If we already have a full chunk buffered, emit it
-        if self.buffer.len() >= chunk_size {
-            let chunk: Vec<u8> = self.buffer.drain(..chunk_size).collect();
-            return Poll::Ready(Some(Ok(Bytes::from(chunk))));
-        }
-
-        // Try to fill the buffer from the inner stream
         loop {
-            if self.done {
-                // Inner stream exhausted, emit remaining buffer as final chunk
-                if self.buffer.is_empty() {
-                    return Poll::Ready(None);
-                }
-                let remaining = std::mem::take(&mut self.buffer);
-                return Poll::Ready(Some(Ok(Bytes::from(remaining))));
+            // A whole chunk is already accumulated. `BytesMut::split_to` hands over
+            // the front and keeps the remainder without moving either.
+            if self.partial.len() >= chunk_size {
+                return Poll::Ready(Some(Ok(self.partial.split_to(chunk_size).freeze())));
             }
 
-            let inner = Pin::new(&mut self.inner);
-            match inner.poll_next(cx) {
+            // Nothing accumulated and the input piece covers a whole chunk, so serve
+            // it by reference. This is the path a large upload takes for every chunk.
+            if self.partial.is_empty() && self.pending.len() >= chunk_size {
+                return Poll::Ready(Some(Ok(self.pending.split_to(chunk_size))));
+            }
+
+            if self.done {
+                if !self.partial.is_empty() {
+                    return Poll::Ready(Some(Ok(std::mem::take(&mut self.partial).freeze())));
+                }
+                if !self.pending.is_empty() {
+                    return Poll::Ready(Some(Ok(std::mem::take(&mut self.pending))));
+                }
+                return Poll::Ready(None);
+            }
+
+            // Top the accumulator up to exactly one chunk and no further, so that the
+            // remainder of a large input piece can still be served by reference.
+            if !self.pending.is_empty() {
+                if self.partial.is_empty() {
+                    // One chunk is all the accumulator ever holds, so reserving it
+                    // once keeps a run of small input pieces from regrowing it.
+                    self.partial.reserve(chunk_size);
+                }
+                let take = (chunk_size - self.partial.len()).min(self.pending.len());
+                let head = self.pending.split_to(take);
+                self.partial.extend_from_slice(&head);
+                continue;
+            }
+
+            match Pin::new(&mut self.inner).poll_next(cx) {
                 Poll::Ready(Some(Ok(chunk))) => {
                     if chunk.is_empty() {
                         continue;
                     }
-
-                    self.buffer.extend_from_slice(&chunk);
-
-                    // If we now have enough for a full chunk, emit it
-                    if self.buffer.len() >= chunk_size {
-                        let chunk: Vec<u8> = self.buffer.drain(..chunk_size).collect();
-                        return Poll::Ready(Some(Ok(Bytes::from(chunk))));
-                    }
-                    // Otherwise continue buffering
+                    self.pending = chunk;
                 }
-                Poll::Ready(Some(Err(e))) => {
-                    return Poll::Ready(Some(Err(e)));
-                }
-                Poll::Ready(None) => {
-                    self.done = true;
-                    // Loop will handle emitting remaining buffer
-                }
-                Poll::Pending => {
-                    return Poll::Pending;
-                }
+                Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
+                Poll::Ready(None) => self.done = true,
+                Poll::Pending => return Poll::Pending,
             }
         }
     }
@@ -1024,6 +1055,37 @@ mod tests {
         assert!(result.is_none());
     }
 
+    /// A zero chunk size has to be rejected at construction. Every poll would
+    /// find a whole chunk accumulated, so the stream would emit empty chunks
+    /// forever and never read its input.
+    #[test]
+    #[should_panic(expected = "chunk size must be non-zero")]
+    fn rechunking_stream_rejects_a_zero_chunk_size() {
+        let stream = futures_util::stream::iter(Vec::<Result<Bytes, std::io::Error>>::new());
+        let _ = RechunkingStream::new(stream, 0);
+    }
+
+    /// An error from the input stream reaches the caller as the very next item,
+    /// even when a piece too short to emit is already buffered. Flushing that
+    /// piece ahead of the error would hand the consumer a chunk boundary the
+    /// input never had, and a caller that stops at the error would read it as a
+    /// complete body.
+    #[tokio::test]
+    async fn rechunker_reports_an_input_error_before_the_buffered_piece() {
+        const CHUNK: usize = 4096;
+        let items = vec![
+            Ok(Bytes::from_static(b"a piece shorter than one chunk")),
+            Err(std::io::Error::other("inner stream failed")),
+        ];
+        let mut rechunker = RechunkingStream::new(futures_util::stream::iter(items), CHUNK);
+
+        match rechunker.next().await {
+            Some(Err(e)) => assert_eq!(e.to_string(), "inner stream failed"),
+            Some(Ok(chunk)) => panic!("emitted {} buffered bytes before the error", chunk.len()),
+            None => panic!("ended without reporting the error"),
+        }
+    }
+
     #[tokio::test]
     async fn test_rechunking_stream_preserves_data() {
         // Verify data integrity through rechunking
@@ -1042,5 +1104,87 @@ mod tests {
         }
 
         assert_eq!(output, original);
+    }
+
+    /// The encoder declares `Content-Length` up front from
+    /// `calculate_encoded_length`, so the stream it then produces must be exactly
+    /// that long. A rechunker that emitted different boundaries would desynchronize
+    /// the two and every upload would fail on the wire, not in these tests.
+    #[tokio::test]
+    async fn encoded_stream_length_matches_the_declared_content_length() {
+        const CHUNK: usize = 4096;
+        // Bodies that divide evenly, leave a remainder, fall short of one chunk,
+        // and land exactly on a boundary.
+        for body_len in [
+            0usize,
+            1,
+            100,
+            CHUNK - 1,
+            CHUNK,
+            CHUNK + 1,
+            3 * CHUNK,
+            10_000,
+        ] {
+            // The same body delivered whole, and split into pieces that straddle
+            // chunk boundaries, must encode to the same length either way.
+            for piece in [body_len.max(1), 1000, 7] {
+                let body = vec![0xA5u8; body_len];
+                let segments: Vec<Result<Bytes, std::io::Error>> = body
+                    .chunks(piece)
+                    .map(|c| Ok(Bytes::copy_from_slice(c)))
+                    .collect();
+                let stream = futures_util::stream::iter(segments);
+                let rechunked = RechunkingStream::new(stream, CHUNK);
+                let mut encoder = AwsChunkedEncoder::new(rechunked, ChecksumAlgorithm::CRC32C);
+
+                let mut encoded = 0u64;
+                while let Some(piece) = encoder.next().await {
+                    encoded += piece.unwrap().len() as u64;
+                }
+
+                let declared =
+                    calculate_encoded_length(body_len as u64, CHUNK, ChecksumAlgorithm::CRC32C);
+                assert_eq!(
+                    encoded, declared,
+                    "body {body_len} in {piece}-byte pieces: encoded {encoded}, declared {declared}"
+                );
+            }
+        }
+    }
+
+    /// Whatever the incoming segmentation, the rechunker must emit full chunks
+    /// followed by at most one short tail, and hand back the original bytes in
+    /// order. Slicing the input by reference must not reorder or drop any of it.
+    #[tokio::test]
+    async fn rechunker_preserves_bytes_and_boundaries_for_any_segmentation() {
+        const CHUNK: usize = 256;
+        let body: Vec<u8> = (0..2000u32).map(|i| (i % 251) as u8).collect();
+
+        for piece in [1usize, 3, 255, 256, 257, 1000, 2000] {
+            let segments: Vec<Result<Bytes, std::io::Error>> = body
+                .chunks(piece)
+                .map(|c| Ok(Bytes::copy_from_slice(c)))
+                .collect();
+            let mut rechunker = RechunkingStream::new(futures_util::stream::iter(segments), CHUNK);
+
+            let mut out = Vec::new();
+            let mut sizes = Vec::new();
+            while let Some(c) = rechunker.next().await {
+                let c = c.unwrap();
+                sizes.push(c.len());
+                out.extend_from_slice(&c);
+            }
+
+            assert_eq!(out, body, "bytes differ for {piece}-byte input pieces");
+            let (last, full) = sizes.split_last().expect("a non-empty body yields a chunk");
+            assert!(
+                full.iter().all(|&n| n == CHUNK),
+                "non-final chunk was short for {piece}-byte input pieces: {sizes:?}"
+            );
+            assert!(
+                *last > 0 && *last <= CHUNK,
+                "final chunk out of range for {piece}-byte input pieces: {sizes:?}"
+            );
+        }
     }
 }
