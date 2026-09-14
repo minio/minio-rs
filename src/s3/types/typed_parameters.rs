@@ -22,6 +22,37 @@ use crate::s3::error::ValidationErr;
 use crate::s3::utils::{check_bucket_name, check_object_name};
 use std::fmt;
 
+/// Implements `Deserialize` for a validated wrapper by routing the decoded value
+/// through the constructor named in `$ctor`.
+///
+/// The derived implementation would write the inner value straight into the
+/// wrapper, so a value that arrived over the wire would carry no invariant while
+/// one built in code carried the full one. Every consumer downstream of a decode
+/// would then have to re-check what the type already promises. `$ctor` returns
+/// `Result`, and a rejected value becomes a deserialization error naming the
+/// reason.
+macro_rules! deserialize_validated {
+    ($t:ty, $inner:ty, $ctor:expr) => {
+        impl<'de> serde::Deserialize<'de> for $t {
+            /// Decodes the inner value and builds the wrapper from it, so a
+            /// decoded value carries the same invariant as one built in code.
+            ///
+            /// # Errors
+            ///
+            /// Returns a deserialization error naming the reason when the
+            /// constructor rejects the value.
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let raw = <$inner as serde::Deserialize<'de>>::deserialize(deserializer)?;
+                #[allow(clippy::redundant_closure_call)]
+                ($ctor)(raw).map_err(serde::de::Error::custom)
+            }
+        }
+    };
+}
+
 /// A validated S3 bucket name.
 ///
 /// Bucket names are validated at construction time. Two validation modes are available:
@@ -66,7 +97,7 @@ use std::fmt;
 /// assert!(BucketName::new("192.168.1.1").is_err());  // IP address
 /// assert!(BucketName::new_strict("xn--test").is_err()); // reserved prefix
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct BucketName(String);
 
 impl BucketName {
@@ -172,16 +203,25 @@ impl TryFrom<&str> for BucketName {
 impl TryFrom<&String> for BucketName {
     type Error = ValidationErr;
 
+    /// Validates the borrowed value and returns the wrapper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationErr`] when the value fails validation.
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         Self::new(value.as_str())
     }
 }
 
 impl From<&BucketName> for BucketName {
+    /// Clones the borrowed value, so a call site can pass a reference
+    /// instead of cloning at the call itself.
     fn from(value: &BucketName) -> Self {
         value.clone()
     }
 }
+
+deserialize_validated!(BucketName, String, BucketName::new);
 
 /// A validated S3 object key (object name).
 ///
@@ -222,19 +262,14 @@ impl From<&BucketName> for BucketName {
 /// // Invalid keys are rejected
 /// assert!(ObjectKey::new("").is_err());  // empty
 /// ```
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde::Serialize,
-    serde::Deserialize,
-    Default,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct ObjectKey(String);
+
+/// Maximum length of an S3 object key, in bytes. Enforced by
+/// [`check_object_name`], which every validated construction path runs. The
+/// crate-private `new_unchecked` skips it, for server responses whose keys are
+/// already known good.
+pub const MAX_OBJECT_KEY_BYTES: usize = 1024;
 
 impl ObjectKey {
     /// Creates a new object key.
@@ -259,16 +294,6 @@ impl ObjectKey {
     /// Consumes self and returns the object key as a `String`.
     pub fn into_inner(self) -> String {
         self.0
-    }
-
-    /// Returns true if the object key is empty (should never happen after validation).
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    /// Returns the length of the object key in bytes.
-    pub fn len(&self) -> usize {
-        self.0.len()
     }
 
     /// Creates an `ObjectKey` without validation.
@@ -319,16 +344,25 @@ impl TryFrom<&str> for ObjectKey {
 impl TryFrom<&String> for ObjectKey {
     type Error = ValidationErr;
 
+    /// Validates the borrowed value and returns the wrapper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationErr`] when the value fails validation.
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         Self::new(value.as_str())
     }
 }
 
 impl From<&ObjectKey> for ObjectKey {
+    /// Clones the borrowed value, so a call site can pass a reference
+    /// instead of cloning at the call itself.
     fn from(value: &ObjectKey) -> Self {
         value.clone()
     }
 }
+
+deserialize_validated!(ObjectKey, String, ObjectKey::new);
 
 /// Maximum length of an object-annotation name, in bytes.
 pub const MAX_ANNOTATION_NAME_BYTES: usize = 512;
@@ -424,6 +458,11 @@ impl TryFrom<&str> for AnnotationName {
 impl TryFrom<&String> for AnnotationName {
     type Error = ValidationErr;
 
+    /// Validates the borrowed value and returns the wrapper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationErr`] when the value fails validation.
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         Self::new(value.as_str())
     }
@@ -477,7 +516,7 @@ mod annotation_name_tests {
 /// // Empty version IDs are rejected
 /// assert!(VersionId::new("").is_err());
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct VersionId(String);
 
 impl VersionId {
@@ -564,16 +603,25 @@ impl TryFrom<&str> for VersionId {
 impl TryFrom<&String> for VersionId {
     type Error = ValidationErr;
 
+    /// Validates the borrowed value and returns the wrapper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationErr`] when the value fails validation.
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         Self::new(value.as_str())
     }
 }
 
 impl From<&VersionId> for VersionId {
+    /// Clones the borrowed value, so a call site can pass a reference
+    /// instead of cloning at the call itself.
     fn from(value: &VersionId) -> Self {
         value.clone()
     }
 }
+
+deserialize_validated!(VersionId, String, VersionId::new);
 
 /// A validated region identifier.
 ///
@@ -593,7 +641,7 @@ impl From<&VersionId> for VersionId {
 /// // Empty regions are rejected
 /// assert!(Region::new("").is_err());
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct Region(String);
 
 impl Default for Region {
@@ -682,16 +730,31 @@ impl TryFrom<&str> for Region {
 impl TryFrom<&String> for Region {
     type Error = ValidationErr;
 
+    /// Validates the borrowed value and returns the wrapper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationErr`] when the value fails validation.
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         Self::new(value.as_str())
     }
 }
 
 impl From<&Region> for Region {
+    /// Clones the borrowed value, so a call site can pass a reference
+    /// instead of cloning at the call itself.
     fn from(value: &Region) -> Self {
         value.clone()
     }
 }
+
+// The empty region is a real value here, meaning "unspecified", so it decodes
+// to `new_empty` rather than being rejected the way `new` rejects it.
+deserialize_validated!(Region, String, |s: String| if s.is_empty() {
+    Ok(Region::new_empty())
+} else {
+    Region::new(s)
+});
 
 /// A validated multipart upload ID.
 ///
@@ -711,7 +774,7 @@ impl From<&Region> for Region {
 /// // Empty upload IDs are rejected
 /// assert!(UploadId::new("").is_err());
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct UploadId(String);
 
 impl UploadId {
@@ -798,16 +861,25 @@ impl TryFrom<&str> for UploadId {
 impl TryFrom<&String> for UploadId {
     type Error = ValidationErr;
 
+    /// Validates the borrowed value and returns the wrapper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationErr`] when the value fails validation.
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         Self::new(value.as_str())
     }
 }
 
 impl From<&UploadId> for UploadId {
+    /// Clones the borrowed value, so a call site can pass a reference
+    /// instead of cloning at the call itself.
     fn from(value: &UploadId) -> Self {
         value.clone()
     }
 }
+
+deserialize_validated!(UploadId, String, UploadId::new);
 
 /// An entity tag (ETag) returned by S3 operations.
 ///
@@ -834,7 +906,7 @@ impl From<&UploadId> for UploadId {
 /// // Empty ETags are rejected
 /// assert!(ETag::new("").is_err());
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct ETag(String);
 
 impl ETag {
@@ -916,16 +988,25 @@ impl TryFrom<&str> for ETag {
 impl TryFrom<&String> for ETag {
     type Error = ValidationErr;
 
+    /// Validates the borrowed value and returns the wrapper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationErr`] when the value fails validation.
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         Self::new(value.as_str())
     }
 }
 
 impl From<&ETag> for ETag {
+    /// Clones the borrowed value, so a call site can pass a reference
+    /// instead of cloning at the call itself.
     fn from(value: &ETag) -> Self {
         value.clone()
     }
 }
+
+deserialize_validated!(ETag, String, ETag::new);
 
 /// A validated content type (MIME type).
 ///
@@ -946,7 +1027,7 @@ impl From<&ETag> for ETag {
 /// // Empty content types are rejected
 /// assert!(ContentType::new("").is_err());
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct ContentType(String);
 
 impl ContentType {
@@ -1025,16 +1106,25 @@ impl TryFrom<&str> for ContentType {
 impl TryFrom<&String> for ContentType {
     type Error = ValidationErr;
 
+    /// Validates the borrowed value and returns the wrapper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationErr`] when the value fails validation.
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         Self::new(value.as_str())
     }
 }
 
 impl From<&ContentType> for ContentType {
+    /// Clones the borrowed value, so a call site can pass a reference
+    /// instead of cloning at the call itself.
     fn from(value: &ContentType) -> Self {
         value.clone()
     }
 }
+
+deserialize_validated!(ContentType, String, ContentType::new);
 
 /// A validated maximum keys parameter for ListObjects API calls.
 ///
@@ -1058,7 +1148,7 @@ impl From<&ContentType> for ContentType {
 /// assert!(MaxKeys::new(0).is_err());      // too low
 /// assert!(MaxKeys::new(2000).is_err());   // exceeds limit
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct MaxKeys(u16);
 
 impl MaxKeys {
@@ -1162,12 +1252,17 @@ impl TryFrom<&String> for MaxKeys {
 }
 
 impl From<&MaxKeys> for MaxKeys {
+    /// Clones the borrowed value, so a call site can pass a reference
+    /// instead of cloning at the call itself.
     fn from(value: &MaxKeys) -> Self {
         *value
     }
 }
 
+deserialize_validated!(MaxKeys, u16, MaxKeys::new);
+
 impl From<MaxKeys> for Option<u16> {
+    /// Returns the page size as the `Option` the request builders take.
     fn from(value: MaxKeys) -> Self {
         Some(value.as_u16())
     }
@@ -1212,11 +1307,11 @@ mod tests {
         assert!(BucketName::new("my.-bucket").is_err());
     }
 
+    /// A slash is an ordinary character in a key: S3 has no directories.
     #[test]
     fn test_object_key_valid() {
         let key: ObjectKey = "path/to/object.txt".parse().unwrap();
         assert_eq!(key.as_str(), "path/to/object.txt");
-        assert!(!key.is_empty());
     }
 
     #[test]
@@ -1419,6 +1514,7 @@ mod tests {
         assert_eq!(*value, 600);
     }
 
+    /// A present page size passes through validation unchanged.
     #[test]
     fn test_max_keys_value_from_option_u16_some() {
         use crate::s3::builders::MaxKeysValue;
@@ -1428,6 +1524,8 @@ mod tests {
         assert_eq!(mkv.validate().unwrap().unwrap().as_u16(), 500);
     }
 
+    /// An absent page size stays absent through validation: the server picks its
+    /// own default rather than the builder inventing one.
     #[test]
     fn test_max_keys_value_from_option_u16_none() {
         use crate::s3::builders::MaxKeysValue;
@@ -1436,11 +1534,116 @@ mod tests {
         assert!(mkv.validate().unwrap().is_none());
     }
 
+    /// A present page size is validated, so a zero is rejected rather than sent.
     #[test]
     fn test_max_keys_value_from_option_u16_invalid() {
         use crate::s3::builders::MaxKeysValue;
 
         let mkv: MaxKeysValue = Some(0u16).into();
         assert!(mkv.validate().is_err());
+    }
+
+    /// Decoding applies the constructor's rule, so a value the constructor rejects
+    /// is a deserialization error and every decoded wrapper carries the invariant.
+    #[test]
+    fn deserialize_rejects_what_the_constructor_rejects() {
+        assert!(serde_json::from_str::<ObjectKey>(r#""""#).is_err());
+        let oversized = "x".repeat(MAX_OBJECT_KEY_BYTES + 1);
+        let too_long = format!(r#""{oversized}""#);
+        assert!(serde_json::from_str::<ObjectKey>(&too_long).is_err());
+        assert!(serde_json::from_str::<ETag>(r#""""#).is_err());
+        assert!(serde_json::from_str::<VersionId>(r#""""#).is_err());
+        assert!(serde_json::from_str::<UploadId>(r#""""#).is_err());
+        assert!(serde_json::from_str::<ContentType>(r#""""#).is_err());
+        assert!(serde_json::from_str::<BucketName>(r#""ab""#).is_err());
+        assert!(serde_json::from_str::<MaxKeys>("0").is_err());
+    }
+
+    /// A value the constructor accepts has to decode, and decode to the same
+    /// wrapper the constructor builds, or validation on the way in would reject
+    /// responses the server is allowed to send.
+    #[test]
+    fn deserialize_accepts_what_the_constructor_accepts() {
+        assert_eq!(
+            serde_json::from_str::<ObjectKey>(r#""path/to/object.txt""#).unwrap(),
+            ObjectKey::new("path/to/object.txt").unwrap()
+        );
+        assert_eq!(
+            serde_json::from_str::<BucketName>(r#""my-bucket""#).unwrap(),
+            BucketName::new("my-bucket").unwrap()
+        );
+        assert_eq!(
+            serde_json::from_str::<ETag>(r#""\"d41d8cd98f00b204e9800998ecf8427e\"""#).unwrap(),
+            ETag::new("\"d41d8cd98f00b204e9800998ecf8427e\"").unwrap()
+        );
+        assert_eq!(
+            serde_json::from_str::<VersionId>(
+                r#""3sL4kqtJlcpXroDTDmJ+rmSpXd3dIbrHY+MTRCxf3vjVBH40Nr8X8gdRQBpUMLUo""#
+            )
+            .unwrap(),
+            VersionId::new("3sL4kqtJlcpXroDTDmJ+rmSpXd3dIbrHY+MTRCxf3vjVBH40Nr8X8gdRQBpUMLUo")
+                .unwrap()
+        );
+        assert_eq!(
+            serde_json::from_str::<UploadId>(r#""2~1a2b3c4d5e6f""#).unwrap(),
+            UploadId::new("2~1a2b3c4d5e6f").unwrap()
+        );
+        assert_eq!(
+            serde_json::from_str::<ContentType>(r#""application/octet-stream""#).unwrap(),
+            ContentType::new("application/octet-stream").unwrap()
+        );
+        assert_eq!(
+            serde_json::from_str::<MaxKeys>("1000").unwrap(),
+            MaxKeys::new(1000).unwrap()
+        );
+    }
+
+    /// The error a rejected value produces has to say why, or a decode failure
+    /// deep in a response is untraceable.
+    #[test]
+    fn a_rejected_value_names_its_reason() {
+        let err = serde_json::from_str::<ObjectKey>(r#""""#).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("empty"),
+            "the cause must survive into the message, got {msg:?}"
+        );
+    }
+
+    /// Validating on the way in must not change the encoding. A wrapper still
+    /// reads and writes as its bare inner value.
+    #[test]
+    fn validation_leaves_the_wire_format_unchanged() {
+        let key = ObjectKey::new("path/to/object.txt").unwrap();
+        let json = serde_json::to_string(&key).unwrap();
+        assert_eq!(json, r#""path/to/object.txt""#);
+        assert_eq!(serde_json::from_str::<ObjectKey>(&json).unwrap(), key);
+
+        let max = MaxKeys::new(100).unwrap();
+        let json = serde_json::to_string(&max).unwrap();
+        assert_eq!(json, "100");
+        assert_eq!(serde_json::from_str::<MaxKeys>(&json).unwrap(), max);
+    }
+
+    /// The published bound has to be the bound the constructor actually applies, or
+    /// a caller sizing its own keys against it builds keys the constructor refuses.
+    #[test]
+    fn the_published_object_key_bound_is_the_one_enforced() {
+        assert!(ObjectKey::new("x".repeat(MAX_OBJECT_KEY_BYTES)).is_ok());
+        assert!(ObjectKey::new("x".repeat(MAX_OBJECT_KEY_BYTES + 1)).is_err());
+    }
+
+    /// The empty region means "unspecified" and has its own constructor, so it is
+    /// the one wrapper whose empty value must survive a decode.
+    #[test]
+    fn an_empty_region_decodes_to_the_unspecified_region() {
+        assert_eq!(
+            serde_json::from_str::<Region>(r#""""#).unwrap(),
+            Region::new_empty()
+        );
+        assert_eq!(
+            serde_json::from_str::<Region>(r#""us-east-1""#).unwrap(),
+            Region::new("us-east-1").unwrap()
+        );
     }
 }

@@ -60,6 +60,8 @@ pub struct ObjectChecksum {
 }
 
 impl ObjectChecksum {
+    /// Reads the checksum fields from a `Checksum` element. An absent field means
+    /// the object was not stored with that algorithm.
     fn from_element(elem: &Element) -> Self {
         Self {
             crc32: elem.get_child_text("ChecksumCRC32"),
@@ -68,7 +70,7 @@ impl ObjectChecksum {
             sha1: elem.get_child_text("ChecksumSHA1"),
             sha256: elem.get_child_text("ChecksumSHA256"),
             checksum_type: elem
-                .get_child_text("ChecksumType")
+                .get_child_text_cow("ChecksumType")
                 .as_deref()
                 .and_then(ObjectChecksumType::parse),
         }
@@ -109,6 +111,12 @@ pub struct ObjectAttributesData {
     pub object_parts: Option<ObjectParts>,
 }
 
+/// Parses a GetObjectAttributes response body. `checksum` and `object_parts` are
+/// absent unless the request asked for them; malformed numbers read as 0.
+///
+/// # Errors
+///
+/// Returns [`ValidationErr`] when `body` is not well-formed XML.
 fn parse_object_attributes(body: &[u8]) -> Result<ObjectAttributesData, ValidationErr> {
     let xmltree_root = xmltree::Element::parse(body).map_err(ValidationErr::from)?;
     let root = Element::from(&xmltree_root);
@@ -122,8 +130,8 @@ fn parse_object_attributes(body: &[u8]) -> Result<ObjectAttributesData, Validati
             .get_matching_children("Part")
             .into_iter()
             .map(|(_, p)| ObjectAttributePart {
-                part_number: parse_u32(p.get_child_text("PartNumber")),
-                size: parse_u64(p.get_child_text("Size")),
+                part_number: parse_u32(p.get_child_text_cow("PartNumber").as_deref()),
+                size: parse_u64(p.get_child_text_cow("Size").as_deref()),
                 crc32: p.get_child_text("ChecksumCRC32"),
                 crc32c: p.get_child_text("ChecksumCRC32C"),
                 crc64nvme: p.get_child_text("ChecksumCRC64NVME"),
@@ -133,14 +141,15 @@ fn parse_object_attributes(body: &[u8]) -> Result<ObjectAttributesData, Validati
             .collect();
 
         ObjectParts {
-            parts_count: parse_u32(op.get_child_text("PartsCount")),
-            part_number_marker: parse_u32(op.get_child_text("PartNumberMarker")),
-            next_part_number_marker: parse_u32(op.get_child_text("NextPartNumberMarker")),
-            max_parts: parse_u32(op.get_child_text("MaxParts")),
+            parts_count: parse_u32(op.get_child_text_cow("PartsCount").as_deref()),
+            part_number_marker: parse_u32(op.get_child_text_cow("PartNumberMarker").as_deref()),
+            next_part_number_marker: parse_u32(
+                op.get_child_text_cow("NextPartNumberMarker").as_deref(),
+            ),
+            max_parts: parse_u32(op.get_child_text_cow("MaxParts").as_deref()),
             is_truncated: op
-                .get_child_text("IsTruncated")
-                .map(|v| v.eq_ignore_ascii_case("true"))
-                .unwrap_or(false),
+                .get_child_text_cow("IsTruncated")
+                .is_some_and(|v| v.eq_ignore_ascii_case("true")),
             parts,
         }
     });
@@ -148,17 +157,19 @@ fn parse_object_attributes(body: &[u8]) -> Result<ObjectAttributesData, Validati
     Ok(ObjectAttributesData {
         etag: root.get_child_text("ETag"),
         storage_class: root.get_child_text("StorageClass"),
-        object_size: parse_u64(root.get_child_text("ObjectSize")),
+        object_size: parse_u64(root.get_child_text_cow("ObjectSize").as_deref()),
         checksum,
         object_parts,
     })
 }
 
-fn parse_u32(value: Option<String>) -> u32 {
+/// parse_u32 returns the parsed text, or 0 when it is absent or unparsable.
+fn parse_u32(value: Option<&str>) -> u32 {
     value.and_then(|v| v.parse::<u32>().ok()).unwrap_or(0)
 }
 
-fn parse_u64(value: Option<String>) -> u64 {
+/// parse_u64 is [`parse_u32`] for fields that can exceed 32 bits, such as a size.
+fn parse_u64(value: Option<&str>) -> u64 {
     value.and_then(|v| v.parse::<u64>().ok()).unwrap_or(0)
 }
 

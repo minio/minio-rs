@@ -21,6 +21,9 @@ use minio_common::test_context::TestContext;
 use minio_common::utils::{rand_object_name, rand_object_name_utf8};
 use std::collections::HashSet;
 
+/// Creates `n_objects` objects over `n_prefixes` prefixes and asserts the listing
+/// returns the same set of keys. Sets, not sequences, because S3-Express does not
+/// guarantee listing order.
 async fn test_list_objects(
     use_api_v1: bool,
     include_versions: bool,
@@ -82,8 +85,8 @@ async fn test_list_objects(
 
     while let Some(items) = stream.next().await {
         let items = items.unwrap().contents;
-        for item in items.iter() {
-            names_vec_after.push(ObjectKey::try_from(item.name.clone()).unwrap());
+        for item in items {
+            names_vec_after.push(item.name);
         }
     }
     assert_eq!(names_vec_after.len(), names_set_before.len());
@@ -129,6 +132,8 @@ async fn list_objects_express(ctx: TestContext, bucket: BucketName) {
     test_list_objects(false, false, true, 5, 5, ctx, bucket).await;
 }
 
+/// Uploads one object and asserts the listing returns that exact key, so a key
+/// survives the round trip unchanged.
 async fn test_list_one_object(ctx: &TestContext, bucket: BucketName, object: ObjectKey) {
     let resp: PutObjectContentResponse = ctx
         .client
@@ -157,7 +162,7 @@ async fn test_list_one_object(ctx: &TestContext, bucket: BucketName, object: Obj
     }
 
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].contents[0].name, object.as_str());
+    assert_eq!(result[0].contents[0].name, object);
 }
 
 /// Test listing an object with a name that contains utf-8 characters.

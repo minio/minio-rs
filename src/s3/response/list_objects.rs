@@ -13,7 +13,7 @@
 use crate::impl_has_s3fields;
 use crate::s3::error::{Error, ValidationErr};
 
-use crate::s3::types::{FromS3Response, ListEntry, S3Request};
+use crate::s3::types::{ETag, FromS3Response, ListEntry, ObjectKey, S3Request};
 use crate::s3::utils::xml::{Element, MergeXmlElements};
 use crate::s3::utils::{from_iso8601utc, parse_tags, url_decode};
 use async_trait::async_trait;
@@ -22,6 +22,8 @@ use reqwest::header::HeaderMap;
 use std::collections::HashMap;
 use std::mem;
 
+/// Returns `s` percent-decoded when `encoding_type` is `url`, and unchanged
+/// otherwise. `None` passes through as `None`.
 fn url_decode_w_enc(
     encoding_type: &Option<String>,
     s: Option<String>,
@@ -40,6 +42,13 @@ fn url_decode_w_enc(
     Ok(None)
 }
 
+/// Reads the fields every ListObjects version shares, as `(name, encoding_type,
+/// prefix, delimiter, is_truncated, max_keys)`. The prefix is decoded, the entry
+/// keys are not, so callers must pass `encoding_type` on.
+///
+/// # Errors
+///
+/// Returns [`ValidationErr`] when `Name` is absent or `MaxKeys` is malformed.
 #[allow(clippy::type_complexity)]
 fn parse_common_list_objects_response(
     root: &Element,
@@ -64,16 +73,23 @@ fn parse_common_list_objects_response(
         encoding_type,
         prefix,
         root.get_child_text("Delimiter"),
-        root.get_child_text("IsTruncated")
-            .map(|x| x.to_lowercase() == "true")
-            .unwrap_or(false),
-        root.get_child_text("MaxKeys")
+        root.get_child_text_cow("IsTruncated")
+            .is_some_and(|x| x.eq_ignore_ascii_case("true")),
+        root.get_child_text_cow("MaxKeys")
             .map(|x| x.parse::<u16>())
             .transpose()
             .map_err(ValidationErr::from)?,
     ))
 }
 
+/// Appends one [`ListEntry`] per `main_tag` element to `contents`, plus one per
+/// `DeleteMarker` when `with_delete_marker` is set. Both kinds merge into one
+/// list in document order; a delete marker has no size and no ETag.
+///
+/// # Errors
+///
+/// Returns [`ValidationErr`] when an entry has no `Key` or `LastModified`, or
+/// when `Size`, `LastModified`, `ETag` or `UserTags` is malformed.
 fn parse_list_objects_contents(
     contents: &mut Vec<ListEntry>,
     root: &Element,
@@ -89,23 +105,24 @@ fn parse_list_objects_contents(
     };
     let merged = MergeXmlElements::new(&children1, &children2);
     for content in merged {
-        let etype = encoding_type.as_ref().cloned();
+        let etype = encoding_type.clone();
         let key = url_decode_w_enc(&etype, Some(content.get_child_text_or_error("Key")?))?.unwrap();
         let last_modified = Some(from_iso8601utc(
-            &content.get_child_text_or_error("LastModified")?,
+            &content.get_child_text_cow_or_error("LastModified")?,
         )?);
-        let etag = content.get_child_text("ETag");
+        let etag = content
+            .get_child_text_cow("ETag")
+            .map(ETag::new)
+            .transpose()?;
         let size: Option<u64> = content
-            .get_child_text("Size")
+            .get_child_text_cow("Size")
             .map(|x| x.parse::<u64>())
             .transpose()
             .map_err(ValidationErr::from)?;
         let storage_class = content.get_child_text("StorageClass");
         let is_latest = content
-            .get_child_text("IsLatest")
-            .unwrap_or_default()
-            .to_lowercase()
-            == "true";
+            .get_child_text_cow("IsLatest")
+            .is_some_and(|value| value.eq_ignore_ascii_case("true"));
         let version_id = content.get_child_text("VersionId");
         let (owner_id, owner_name) = content
             .get_child("Owner")
@@ -123,20 +140,20 @@ fn parse_list_objects_contents(
                 .collect::<HashMap<String, String>>()
         });
         let user_tags = content
-            .get_child_text("UserTags")
-            .as_ref()
-            .map(|x| parse_tags(x))
+            .get_child_text_cow("UserTags")
+            .as_deref()
+            .map(parse_tags)
             .transpose()?;
         let is_delete_marker = content.name() == "DeleteMarker";
         let checksum_algorithm = content.get_child_text("ChecksumAlgorithm");
         let access_time = content
             .get_child("Internal")
-            .and_then(|internal| internal.get_child_text("AccessTime"))
+            .and_then(|internal| internal.get_child_text_cow("AccessTime"))
             .map(|s| from_iso8601utc(&s))
             .transpose()?;
 
         contents.push(ListEntry {
-            name: key,
+            name: ObjectKey::new_unchecked(key),
             last_modified,
             etag,
             owner_id,
@@ -158,6 +175,13 @@ fn parse_list_objects_contents(
     Ok(())
 }
 
+/// Appends one [`ListEntry`] per `CommonPrefixes` element to `contents`. Such an
+/// entry names a group of keys rolled up by the delimiter, not an object, so it
+/// carries only a name and has [`ListEntry::is_prefix`] set.
+///
+/// # Errors
+///
+/// Returns [`ValidationErr`] when a `CommonPrefixes` element has no `Prefix`.
 fn parse_list_objects_common_prefixes(
     contents: &mut Vec<ListEntry>,
     root: &Element,
@@ -165,11 +189,13 @@ fn parse_list_objects_common_prefixes(
 ) -> Result<(), ValidationErr> {
     for (_, common_prefix) in root.get_matching_children("CommonPrefixes") {
         contents.push(ListEntry {
-            name: url_decode_w_enc(
-                encoding_type,
-                Some(common_prefix.get_child_text_or_error("Prefix")?),
-            )?
-            .unwrap(),
+            name: ObjectKey::new_unchecked(
+                url_decode_w_enc(
+                    encoding_type,
+                    Some(common_prefix.get_child_text_or_error("Prefix")?),
+                )?
+                .unwrap(),
+            ),
             last_modified: None,
             etag: None,
             owner_id: None,
@@ -213,6 +239,12 @@ impl_has_s3fields!(ListObjectsV1Response);
 
 #[async_trait]
 impl FromS3Response for ListObjectsV1Response {
+    /// Parses a ListObjects (V1) response. On a truncated listing with no
+    /// `NextMarker`, the last key becomes the marker for the next page.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`] when the request failed or the body cannot be parsed.
     async fn from_s3response(
         request: S3Request,
         response: Result<reqwest::Response, Error>,
@@ -231,7 +263,7 @@ impl FromS3Response for ListObjectsV1Response {
         let mut contents: Vec<ListEntry> = Vec::new();
         parse_list_objects_contents(&mut contents, &root, "Contents", &encoding_type, false)?;
         if is_truncated && next_marker.is_none() {
-            next_marker = contents.last().map(|v| v.name.clone())
+            next_marker = contents.last().map(|v| v.name.to_string())
         }
         parse_list_objects_common_prefixes(&mut contents, &root, &encoding_type)?;
 
@@ -277,6 +309,12 @@ impl_has_s3fields!(ListObjectsV2Response);
 
 #[async_trait]
 impl FromS3Response for ListObjectsV2Response {
+    /// Parses a ListObjects V2 response. The next page is requested with the
+    /// returned continuation token.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`] when the request failed or the body cannot be parsed.
     async fn from_s3response(
         request: S3Request,
         response: Result<reqwest::Response, Error>,
@@ -346,6 +384,12 @@ impl_has_s3fields!(ListObjectVersionsResponse);
 
 #[async_trait]
 impl FromS3Response for ListObjectVersionsResponse {
+    /// Parses a ListObjectVersions response. Versions and delete markers merge
+    /// into one list; the next page needs both returned markers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`] when the request failed or the body cannot be parsed.
     async fn from_s3response(
         request: S3Request,
         response: Result<reqwest::Response, Error>,

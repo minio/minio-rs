@@ -174,6 +174,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 }
 
+/// Returns the storage class the server reports for `object`, or `None` when the
+/// bucket holds no such key. Read from a listing: GetObject does not report it.
 async fn find_storage_class(
     client: &MinioClient,
     bucket: &str,
@@ -188,7 +190,7 @@ async fn find_storage_class(
         .await;
     while let Some(items) = stream.next().await {
         for item in items?.contents {
-            if item.name == object {
+            if item.name.as_str() == object {
                 return Ok(item.storage_class);
             }
         }

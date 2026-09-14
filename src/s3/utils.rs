@@ -18,7 +18,7 @@ use crate::s3::error::ValidationErr;
 use crate::s3::multimap_ext::Multimap;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::sse::{Sse, SseCustomerKey};
-use crate::s3::types::{BucketName, ObjectKey};
+use crate::s3::types::{BucketName, MAX_OBJECT_KEY_BYTES, ObjectKey};
 use base64::engine::Engine as _;
 use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
 use crc_fast::{CrcAlgorithm, Digest as CrcFastDigest, checksum as crc_fast_checksum};
@@ -1131,6 +1131,127 @@ mod tests {
         assert!(!key_64_encoded.is_empty());
     }
 
+    /// A single text node reads back byte for byte, quotes included.
+    #[test]
+    fn test_get_child_text_cow_present() {
+        let xml_str = r#"<root><ETag>"abc123"</ETag></root>"#;
+        let root = xmltree::Element::parse(xml_str.as_bytes()).unwrap();
+        let elem = xml::Element::from(&root);
+        assert_eq!(
+            elem.get_child_text_cow("ETag").as_deref(),
+            Some("\"abc123\"")
+        );
+    }
+
+    /// An absent element reads as `None`, never as an empty string.
+    #[test]
+    fn test_get_child_text_cow_missing_tag() {
+        let xml_str = r#"<root><Size>42</Size></root>"#;
+        let root = xmltree::Element::parse(xml_str.as_bytes()).unwrap();
+        let elem = xml::Element::from(&root);
+        assert_eq!(elem.get_child_text_cow("ETag"), None);
+    }
+
+    /// An element holding no text reads as `None`, the same as an absent one.
+    #[test]
+    fn test_get_child_text_cow_empty_element() {
+        let xml_str = r#"<root><ETag></ETag></root>"#;
+        let root = xmltree::Element::parse(xml_str.as_bytes()).unwrap();
+        let elem = xml::Element::from(&root);
+        assert_eq!(elem.get_child_text_cow("ETag"), None);
+    }
+
+    /// A CDATA section is text, so values the server wraps in one still read.
+    #[test]
+    fn test_get_child_text_cow_cdata() {
+        let xml_str = r#"<root><UserTags><![CDATA[a=1&b=2]]></UserTags></root>"#;
+        let root = xmltree::Element::parse(xml_str.as_bytes()).unwrap();
+        let elem = xml::Element::from(&root);
+        assert_eq!(
+            elem.get_child_text_cow("UserTags").as_deref(),
+            Some("a=1&b=2")
+        );
+    }
+
+    /// Repeated tags read as the first in document order.
+    #[test]
+    fn test_get_child_text_cow_first_of_repeated_tags() {
+        let xml_str = r#"<root><Key>first</Key><Key>second</Key></root>"#;
+        let root = xmltree::Element::parse(xml_str.as_bytes()).unwrap();
+        let elem = xml::Element::from(&root);
+        assert_eq!(elem.get_child_text_cow("Key").as_deref(), Some("first"));
+    }
+
+    /// The borrow must outlive the temporary `Element` that `get_child` returns, or
+    /// the helper is unusable on a nested element, which is where most reads happen.
+    #[test]
+    fn test_get_child_text_cow_outlives_a_nested_element_wrapper() {
+        let xml_str = r#"<root><Internal><AccessTime>2024-01-01</AccessTime></Internal></root>"#;
+        let root = xmltree::Element::parse(xml_str.as_bytes()).unwrap();
+        let elem = xml::Element::from(&root);
+        let access = elem
+            .get_child("Internal")
+            .and_then(|internal| internal.get_child_text_cow("AccessTime"));
+        assert_eq!(access.as_deref(), Some("2024-01-01"));
+    }
+
+    /// The fallible read returns the value, or an error naming the tag, so a
+    /// malformed response is traceable to the element that caused it.
+    #[test]
+    fn test_get_child_text_cow_or_error_reads_and_reports() {
+        let xml_str = concat!(
+            "<root>",
+            "<LastModified>2024-01-01T00:00:00Z</LastModified>",
+            "<Empty></Empty>",
+            "<Split>ab<![CDATA[cd]]></Split>",
+            "</root>"
+        );
+        let root = xmltree::Element::parse(xml_str.as_bytes()).unwrap();
+        let elem = xml::Element::from(&root);
+        assert_eq!(
+            elem.get_child_text_cow_or_error("LastModified").unwrap(),
+            "2024-01-01T00:00:00Z"
+        );
+        let missing = elem.get_child_text_cow_or_error("Nope").unwrap_err();
+        assert!(
+            missing.to_string().contains("<Nope> tag not found"),
+            "got {missing}"
+        );
+        // Split text is a value, not a failure: it reads in full.
+        assert_eq!(elem.get_child_text_cow_or_error("Split").unwrap(), "abcd");
+        assert!(elem.get_child_text_cow_or_error("Empty").is_err());
+    }
+
+    /// A CDATA section starts a new text node, so an element's text can arrive in
+    /// several pieces. Reading only the first would silently truncate the value, and
+    /// reporting it as absent would zero a number or stop a paginated listing early.
+    #[test]
+    fn test_get_child_text_cow_joins_split_text() {
+        let xml_str = r#"<root><Key>ab<![CDATA[cd]]>ef</Key></root>"#;
+        let root = xmltree::Element::parse(xml_str.as_bytes()).unwrap();
+        let elem = xml::Element::from(&root);
+        assert_eq!(elem.get_child_text_cow("Key").as_deref(), Some("abcdef"));
+        assert_eq!(elem.get_child_text("Key"), Some("abcdef".to_string()));
+    }
+
+    /// The whole point of the Cow: the common single-node case must not allocate,
+    /// and only a genuinely split value may.
+    #[test]
+    fn test_get_child_text_cow_borrows_unless_it_must_allocate() {
+        let xml_str = r#"<root><One>plain</One><Two>ab<![CDATA[cd]]></Two></root>"#;
+        let root = xmltree::Element::parse(xml_str.as_bytes()).unwrap();
+        let elem = xml::Element::from(&root);
+        assert!(matches!(
+            elem.get_child_text_cow("One"),
+            Some(std::borrow::Cow::Borrowed("plain"))
+        ));
+        assert!(matches!(
+            elem.get_child_text_cow("Two"),
+            Some(std::borrow::Cow::Owned(_))
+        ));
+    }
+
+    /// The element's text is returned when the element is present.
     #[test]
     fn test_get_text_default() {
         let xml_str = r#"<root><name>test</name></root>"#;
@@ -1498,16 +1619,21 @@ pub fn check_bucket_name(bucket: impl AsRef<str>, strict: bool) -> Result<(), Va
     Ok(())
 }
 
-/// Validates given object name.
 // TODO: S3Express has slightly different rules for object names
+/// Validates given object name: non-empty and at most
+/// [`MAX_OBJECT_KEY_BYTES`] bytes.
+///
+/// # Errors
+///
+/// Returns [`ValidationErr::InvalidObjectName`] when either bound is violated.
 pub fn check_object_name(object: impl AsRef<str>) -> Result<(), ValidationErr> {
     let object: &str = object.as_ref();
     match object.len() {
         0 => Err(ValidationErr::InvalidObjectName(
             "object name cannot be empty".into(),
         )),
-        n if n > 1024 => Err(ValidationErr::InvalidObjectName(format!(
-            "Object name ('{object}') cannot be greater than 1024 bytes"
+        n if n > MAX_OBJECT_KEY_BYTES => Err(ValidationErr::InvalidObjectName(format!(
+            "Object name ('{object}') cannot be greater than {MAX_OBJECT_KEY_BYTES} bytes"
         ))),
         _ => Ok(()),
     }
@@ -1719,6 +1845,8 @@ mod annotation_payload_tests {
         assert!(validate_annotation_payload_len(MAX_ANNOTATION_PAYLOAD_BYTES + 1).is_err());
     }
 
+    /// Every length from one byte up to the limit is accepted, so the bound is
+    /// inclusive.
     #[test]
     fn accepts_valid() {
         assert!(validate_annotation_payload_len(1).is_ok());
@@ -1728,6 +1856,7 @@ mod annotation_payload_tests {
 
 pub mod xml {
     use crate::s3::error::ValidationErr;
+    use std::borrow::Cow;
     use std::collections::HashMap;
 
     #[derive(Debug, Clone)]
@@ -1737,14 +1866,11 @@ pub mod xml {
 
     impl XmlElementIndex {
         fn get_first(&self, tag: &str) -> Option<usize> {
-            let tag: String = tag.to_string();
-            let is = self.children.get(&tag)?;
-            is.first().copied()
+            self.children.get(tag)?.first().copied()
         }
 
         fn get(&self, tag: &str) -> Option<&Vec<usize>> {
-            let tag: String = tag.to_string();
-            self.children.get(&tag)
+            self.children.get(tag)
         }
     }
 
@@ -1773,6 +1899,8 @@ pub mod xml {
     }
 
     impl<'a> From<&'a xmltree::Element> for Element<'a> {
+        /// Wraps a parsed element, building the index that makes a lookup by tag
+        /// name constant time instead of a scan over the children.
         fn from(value: &'a xmltree::Element) -> Self {
             let element_index = XmlElementIndex::from(value);
             Self {
@@ -1782,19 +1910,73 @@ pub mod xml {
         }
     }
 
-    impl Element<'_> {
+    impl<'a> Element<'a> {
+        /// Returns the tag name of this element.
         pub fn name(&self) -> &str {
             &self.inner.name
         }
 
+        /// Returns the text of the first child element named `tag`, owned.
+        ///
+        /// Prefer [`Element::get_child_text_cow`] where the value is read and
+        /// discarded; this allocates even when the text is a single node.
         pub fn get_child_text(&self, tag: &str) -> Option<String> {
-            let index = self.child_element_index.get_first(tag)?;
-            self.inner.children[index]
-                .as_element()?
-                .get_text()
-                .map(|v| v.to_string())
+            self.get_child_text_cow(tag).map(Cow::into_owned)
         }
 
+        /// Returns the text of the first child element named `tag`.
+        ///
+        /// An element's text can arrive as several adjacent nodes, because a CDATA
+        /// section starts a new one. A single node is borrowed from the parsed
+        /// document and several are concatenated, so the common case allocates
+        /// nothing and a split value is still read in full.
+        ///
+        /// The borrow is on the document rather than on this wrapper, so it stays
+        /// valid after a temporary `Element` from [`Element::get_child`] is dropped.
+        ///
+        /// Returns `None` when no such child exists, or when it holds no text.
+        pub fn get_child_text_cow(&self, tag: &str) -> Option<Cow<'a, str>> {
+            let index = self.child_element_index.get_first(tag)?;
+            let element = self.inner.children[index].as_element()?;
+            let mut single: Option<&'a str> = None;
+            let mut joined: Option<String> = None;
+
+            for child in &element.children {
+                let Some(value) = child.as_text().or_else(|| child.as_cdata()) else {
+                    continue;
+                };
+                match (&mut joined, single) {
+                    (Some(acc), _) => acc.push_str(value),
+                    (None, Some(first)) => {
+                        let mut acc = String::with_capacity(first.len() + value.len());
+                        acc.push_str(first);
+                        acc.push_str(value);
+                        joined = Some(acc);
+                    }
+                    (None, None) => single = Some(value),
+                }
+            }
+            joined.map(Cow::Owned).or(single.map(Cow::Borrowed))
+        }
+
+        /// Returns the text of the first child element named `tag`, or an error naming
+        /// the tag. The borrowing counterpart of [`Element::get_child_text_or_error`].
+        pub fn get_child_text_cow_or_error(
+            &self,
+            tag: &str,
+        ) -> Result<Cow<'a, str>, ValidationErr> {
+            self.child_element_index
+                .get_first(tag)
+                .ok_or_else(|| ValidationErr::xml_error(format!("<{tag}> tag not found")))?;
+            self.get_child_text_cow(tag)
+                .ok_or_else(|| ValidationErr::xml_error(format!("text of <{tag}> tag not found")))
+        }
+
+        /// Returns the text of the first child element named `tag`, owned, or an
+        /// error distinguishing an absent element from one holding no text.
+        ///
+        /// Prefer [`Element::get_child_text_cow_or_error`] where the value is read
+        /// and discarded; this allocates even when the text is a single node.
         pub fn get_child_text_or_error(&self, tag: &str) -> Result<String, ValidationErr> {
             let i = self
                 .child_element_index
@@ -1810,7 +1992,8 @@ pub mod xml {
                 )))
         }
 
-        // Returns all children with given tag along with their index.
+        /// Returns every child element named `tag`, each paired with its index
+        /// among this element's children.
         pub fn get_matching_children(&self, tag: &str) -> Vec<(usize, Element<'_>)> {
             self.child_element_index
                 .get(tag)
@@ -1820,11 +2003,16 @@ pub mod xml {
                 .collect()
         }
 
-        pub fn get_child(&self, tag: &str) -> Option<Element<'_>> {
+        /// Returns the first child element named `tag`, or `None`. It borrows the
+        /// parsed document, not this wrapper, so a value read from it stays valid
+        /// after the returned element is dropped.
+        pub fn get_child(&self, tag: &str) -> Option<Element<'a>> {
             let index = self.child_element_index.get_first(tag)?;
             Some(self.inner.children[index].as_element()?.into())
         }
 
+        /// Returns this element's child elements as raw `xmltree` nodes, skipping
+        /// text and CDATA nodes.
         pub fn get_xmltree_children(&self) -> Vec<&xmltree::Element> {
             self.inner
                 .children
