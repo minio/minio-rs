@@ -23,6 +23,7 @@ use http::Method;
 use std::sync::LazyLock;
 
 use crate::s3::client::MinioClient;
+use crate::s3::creds::Credentials;
 use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::signer::sign_v4_s3;
@@ -183,6 +184,40 @@ fn http_client_for_nic(nic: IpAddr) -> Arc<reqwest::Client> {
     arc
 }
 
+/// Returns the credentials to sign this request with, refreshing them when the
+/// provider needs it.
+///
+/// A provider that mints temporary credentials caches them and hands back an
+/// empty set once the cache has expired, so signing from the cache alone starts
+/// failing at a time nothing in this path controls. The server answers a signing
+/// failure with 4xx, which reads here as a request the rail carried and the
+/// caller then serves over HTTP, so the fast path would go quiet without
+/// reporting why.
+///
+/// `Ok(None)` means the client is unauthenticated, which is a valid
+/// configuration. `Err(())` means the refresh failed; the reason is logged.
+async fn fetch_credentials(client: &MinioClient) -> Result<Option<Credentials>, ()> {
+    let Some(provider) = client.shared.provider.as_ref() else {
+        return Ok(None);
+    };
+    match provider.ensure_credentials().await {
+        Ok(creds) => Ok(Some(creds)),
+        Err(e) => {
+            log::debug!("RDMA control plane could not obtain credentials: {e}");
+            Err(())
+        }
+    }
+}
+
+/// Returns the value of `name`, or an empty string when the header is absent or
+/// does not hold ASCII.
+fn header_str<'a>(headers: &'a http::HeaderMap, name: &str) -> &'a str {
+    headers
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+}
+
 fn http_client_for_token(token: &CStr) -> Arc<reqwest::Client> {
     // Parse against the ORIGINAL token (the GID suffix lives in its last 32
     // hex chars), not the formatted "token:addr:size" header value.
@@ -241,7 +276,10 @@ pub async fn rdma_put(
         headers.add("x-amz-checksum-crc64nvme", cs.as_str());
     }
 
-    let creds = client.shared.provider.as_ref().map(|p| p.fetch());
+    let creds = match fetch_credentials(client).await {
+        Ok(creds) => creds,
+        Err(()) => return RDMA_NO_RAIL_FAULT,
+    };
     if let Some(c) = &creds
         && let Some(st) = &c.session_token
     {
@@ -278,11 +316,7 @@ pub async fn rdma_put(
     };
 
     let status = resp.status();
-    let resp_headers = resp.headers().clone();
-    let etag = resp_headers
-        .get("etag")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
+    let etag = header_str(resp.headers(), "etag")
         .trim_matches('"')
         .to_owned();
 
@@ -291,11 +325,8 @@ pub async fn rdma_put(
         return size as isize;
     }
 
-    let reply = resp_headers
-        .get(X_AMZ_RDMA_REPLY)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_owned();
+    // Owned, because the debug branch below consumes the response body.
+    let reply = header_str(resp.headers(), X_AMZ_RDMA_REPLY).to_owned();
     let reply_code = parse_rdma_reply(&reply);
     if reply_code != RDMA_REPLY_SUCCESS && reply_code != RDMA_REPLY_NO_CONTENT {
         if log::log_enabled!(log::Level::Debug) {
@@ -322,11 +353,9 @@ pub async fn rdma_put(
         return -1;
     }
 
-    if let Some(cs) = resp_headers
-        .get("x-amz-checksum-crc64nvme")
-        .and_then(|v| v.to_str().ok())
-    {
-        ctx.checksum_crc64nvme = Some(cs.to_owned());
+    let checksum = header_str(resp.headers(), "x-amz-checksum-crc64nvme");
+    if !checksum.is_empty() {
+        ctx.checksum_crc64nvme = Some(checksum.to_owned());
     }
     ctx.etag = etag;
     size as isize
@@ -368,7 +397,10 @@ pub async fn rdma_get(
     headers.add(X_AMZ_CONTENT_SHA256, UNSIGNED_PAYLOAD);
     headers.add(X_AMZ_RDMA_TOKEN, rdma_token);
 
-    let creds = client.shared.provider.as_ref().map(|p| p.fetch());
+    let creds = match fetch_credentials(client).await {
+        Ok(creds) => creds,
+        Err(()) => return RDMA_NO_RAIL_FAULT,
+    };
     if let Some(c) = &creds
         && let Some(st) = &c.session_token
     {
@@ -405,11 +437,8 @@ pub async fn rdma_get(
     };
 
     let status = resp.status();
-    let resp_headers = resp.headers().clone();
-    let reply = resp_headers
-        .get(X_AMZ_RDMA_REPLY)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
+    let resp_headers = resp.headers();
+    let reply = header_str(resp_headers, X_AMZ_RDMA_REPLY);
     let reply_code = parse_rdma_reply(reply);
     if reply_code == RDMA_NOT_SUPPORTED as i32 {
         return RDMA_NOT_SUPPORTED;
@@ -422,15 +451,14 @@ pub async fn rdma_get(
         return -1;
     }
 
-    if let Some(etag) = resp_headers.get("etag").and_then(|v| v.to_str().ok()) {
+    let etag = header_str(resp_headers, "etag");
+    if !etag.is_empty() {
         ctx.etag = etag.trim_matches('"').to_owned();
     }
 
-    if let Some(bytes_str) = resp_headers
-        .get(X_AMZ_RDMA_BYTES_TRANSFERRED)
-        .and_then(|v| v.to_str().ok())
-    {
-        return match bytes_str.parse::<i64>() {
+    let transferred = header_str(resp_headers, X_AMZ_RDMA_BYTES_TRANSFERRED);
+    if !transferred.is_empty() {
+        return match transferred.parse::<i64>() {
             Ok(n) if n >= 0 => n as isize,
             _ => -1,
         };
@@ -514,6 +542,110 @@ pub async unsafe fn rdma_get_with_retry(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::s3::client::MinioClient;
+    use crate::s3::creds::{Credentials, Provider};
+    use crate::s3::error::ValidationErr;
+    use std::ffi::CString;
+    use std::sync::Mutex;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    /// A provider whose credentials are only available after a refresh, the
+    /// shape every provider that mints temporary credentials has once its
+    /// cached set has expired.
+    #[derive(Debug)]
+    struct RefreshOnlyProvider;
+
+    const REFRESHED_ACCESS_KEY: &str = "refreshed-access-key";
+
+    #[async_trait::async_trait]
+    impl Provider for RefreshOnlyProvider {
+        fn fetch(&self) -> Credentials {
+            Credentials {
+                access_key: String::new(),
+                secret_key: String::new(),
+                session_token: None,
+            }
+        }
+
+        async fn ensure_credentials(&self) -> Result<Credentials, ValidationErr> {
+            Ok(Credentials {
+                access_key: REFRESHED_ACCESS_KEY.to_string(),
+                secret_key: "refreshed-secret-key".to_string(),
+                session_token: Some("refreshed-session-token".to_string()),
+            })
+        }
+    }
+
+    /// Accepts one request, records its header block, and answers 501 so the
+    /// caller treats the exchange as a server that declined RDMA.
+    async fn record_one_request(listener: TcpListener, seen: Arc<Mutex<String>>) {
+        let Ok((mut sock, _)) = listener.accept().await else {
+            return;
+        };
+        let mut buf = [0u8; 8192];
+        let mut head = Vec::new();
+        while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+            match sock.read(&mut buf).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => head.extend_from_slice(&buf[..n]),
+            }
+        }
+        *seen.lock().unwrap() = String::from_utf8_lossy(&head).into_owned();
+        let _ = sock
+            .write_all(b"HTTP/1.1 501 Not Implemented\r\nx-amz-rdma-reply: 501\r\nContent-Length: 0\r\n\r\n")
+            .await;
+        let _ = sock.flush().await;
+    }
+
+    /// The control plane must sign with refreshed credentials. Signing from the
+    /// provider's cache alone sends an empty access key once that cache has
+    /// expired, the server answers 4xx, and every transfer silently falls back
+    /// to HTTP with nothing reporting why.
+    #[tokio::test]
+    async fn control_plane_signs_with_refreshed_credentials() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let seen = Arc::new(Mutex::new(String::new()));
+        let server = tokio::spawn(record_one_request(listener, Arc::clone(&seen)));
+
+        let client = MinioClient::new(
+            format!("http://{addr}").parse().unwrap(),
+            Some(RefreshOnlyProvider),
+            None,
+            None,
+        )
+        .unwrap();
+        let mut ctx = S3RdmaClientCtx {
+            bucket: BucketName::new("test-bucket").unwrap(),
+            object: ObjectKey::new("test-object").unwrap(),
+            region: Region::new("us-east-1").unwrap(),
+            upload_id: None,
+            part_number: 0,
+            checksum_crc64nvme: None,
+            etag: String::new(),
+        };
+        let token = CString::new("a".repeat(81)).unwrap();
+
+        let outcome = rdma_put(&client, &mut ctx, &token, 4096).await;
+
+        server.await.unwrap();
+        let request = seen.lock().unwrap().clone();
+        assert_eq!(
+            outcome, RDMA_NOT_SUPPORTED,
+            "server replied 501, so the caller must be told to fall back"
+        );
+        assert!(
+            request.contains(&format!("Credential={REFRESHED_ACCESS_KEY}/")),
+            "request signed with the wrong key:
+{request}"
+        );
+        assert!(
+            request.contains("refreshed-session-token"),
+            "session token from the refresh was not sent:
+{request}"
+        );
+    }
 
     #[test]
     fn parse_reply_known_codes() {
