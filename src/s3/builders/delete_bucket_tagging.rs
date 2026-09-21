@@ -18,7 +18,7 @@ use crate::s3::builders::{BucketCommon, BucketCommonBuilder};
 use crate::s3::error::ValidationErr;
 use crate::s3::response::DeleteBucketTaggingResponse;
 use crate::s3::types::{BucketName, S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, insert};
+use crate::s3::utils::insert;
 use http::Method;
 
 /// Argument builder for the [`DeleteBucketTagging`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucketTagging.html) S3 API operation.
@@ -44,8 +44,6 @@ pub type DeleteBucketTaggingBldr = BucketCommonBuilder<
 
 impl ToS3Request for DeleteBucketTagging {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-
         Ok(S3Request::builder()
             .client(self.client)
             .method(Method::DELETE)

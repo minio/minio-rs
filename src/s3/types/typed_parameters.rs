@@ -55,83 +55,56 @@ macro_rules! deserialize_validated {
 
 /// A validated S3 bucket name.
 ///
-/// Bucket names are validated at construction time. Two validation modes are available:
+/// A bucket name is validated once, when it is constructed, against the strict
+/// S3 naming rules. The rule set is the stricter of the AIStor and AWS S3 rules,
+/// so a name accepted here is accepted by both:
 ///
-/// ## `new()` - Relaxed Mode (MinIO/S3-Compatible)
-///
-/// Allows bucket names that work with MinIO and other S3-compatible implementations:
-/// - Length: 3-63 characters
-/// - Allowed characters: `a-z`, `A-Z`, `0-9`, `-`, `.`, `_`, `:`
-/// - Must start and end with alphanumeric character
-/// - No adjacent `.`, `.-`, or `-.`
-/// - Cannot be an IP address
-///
-/// ## `new_strict()` - AWS S3 Compliant Mode
-///
-/// Enforces official AWS S3 bucket naming rules:
 /// - Length: 3-63 characters
 /// - Allowed characters: `a-z`, `0-9`, `-`, `.` (lowercase only)
-/// - Must start and end with alphanumeric character
+/// - Must start and end with an alphanumeric character
 /// - No adjacent `.`, `.-`, or `-.`
 /// - Cannot be an IP address
-/// - Cannot start with `xn--` (reserved for IDN)
-/// - Cannot start with `sthree-` (reserved by AWS)
-/// - Cannot end with `-s3alias` (reserved for S3 Access Points)
+/// - Cannot start with `xn--`, `sthree-` or `amzn-s3-demo-`
+/// - Cannot end with `-s3alias`, `--ol-s3`, `.mrap` or `--table-s3`
+/// - A name that ends with `--x-s3` must be an S3 Express directory bucket name,
+///   `<base>--<zone-id>--x-s3`, with a base of lowercase letters, numbers and
+///   hyphens
 ///
-/// Use `new_strict()` when creating buckets on AWS S3 or when maximum compatibility is needed.
+/// The prefix and suffix rules cover the names AWS reserves for IDN, access point
+/// aliases, Multi-Region Access Points, S3 Tables buckets and directory buckets.
+///
+/// Every API accepts the same names, and a name that reaches a request builder
+/// needs no further checking.
 ///
 /// # Example
 ///
 /// ```
 /// use minio::s3::types::BucketName;
 ///
-/// // Relaxed mode - works with MinIO
 /// let bucket = BucketName::new("my-bucket").unwrap();
 /// assert_eq!(bucket.as_str(), "my-bucket");
-///
-/// // Strict mode - AWS S3 compliant
-/// let bucket = BucketName::new_strict("my-bucket").unwrap();
 ///
 /// // Invalid names are rejected
 /// assert!(BucketName::new("ab").is_err());           // too short
 /// assert!(BucketName::new("192.168.1.1").is_err());  // IP address
-/// assert!(BucketName::new_strict("xn--test").is_err()); // reserved prefix
+/// assert!(BucketName::new("My_Bucket").is_err());    // uppercase and underscore
+/// assert!(BucketName::new("xn--test").is_err());     // reserved prefix
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct BucketName(String);
 
 impl BucketName {
-    /// Creates a new bucket name with relaxed validation (MinIO/S3-compatible).
+    /// Creates a new bucket name, enforcing the strict S3 naming rules.
     ///
-    /// This mode allows characters beyond the AWS S3 specification, including uppercase
-    /// letters, underscores, and colons, for compatibility with MinIO and other
-    /// S3-compatible implementations.
-    ///
-    /// For AWS S3 compatibility, use [`new_strict()`](Self::new_strict) instead.
+    /// The rules are listed on [`BucketName`]. Every operation in this SDK
+    /// accepts a name that passes them.
     ///
     /// # Errors
     ///
     /// Returns [`ValidationErr::InvalidBucketName`] if the name doesn't meet requirements.
     pub fn new(name: impl Into<String>) -> Result<Self, ValidationErr> {
         let name = name.into();
-        check_bucket_name(&name, false)?;
-        Ok(Self(name))
-    }
-
-    /// Creates a new bucket name with strict AWS S3 validation.
-    ///
-    /// Enforces official AWS S3 bucket naming rules:
-    /// - Lowercase letters, numbers, hyphens, and dots only
-    /// - No reserved prefixes (`xn--`, `sthree-`) or suffixes (`-s3alias`)
-    ///
-    /// Use this when creating buckets on AWS S3 or when maximum compatibility is needed.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ValidationErr::InvalidBucketName`] if the name doesn't meet AWS S3 requirements.
-    pub fn new_strict(name: impl Into<String>) -> Result<Self, ValidationErr> {
-        let name = name.into();
-        check_bucket_name(&name, true)?;
+        check_bucket_name(&name)?;
         Ok(Self(name))
     }
 
@@ -153,14 +126,6 @@ impl BucketName {
     /// Returns the length of the bucket name in bytes.
     pub fn len(&self) -> usize {
         self.0.len()
-    }
-
-    /// Creates a `BucketName` without validation.
-    ///
-    /// This is intended for internal use when parsing server responses,
-    /// where the bucket name is already known to be valid.
-    pub(crate) fn new_unchecked(name: impl Into<String>) -> Self {
-        Self(name.into())
     }
 }
 
@@ -1305,6 +1270,45 @@ mod tests {
     fn test_bucket_name_invalid_chars() {
         assert!(BucketName::new("my..bucket").is_err());
         assert!(BucketName::new("my.-bucket").is_err());
+    }
+
+    /// The constructor applies the strict S3 rules, so no request builder has to
+    /// check a bucket name again.
+    #[test]
+    fn test_bucket_name_is_strict() {
+        for name in [
+            "My_Bucket",   // uppercase
+            "my_bucket",   // underscore
+            "bucket:one",  // colon
+            "xn--bucket",  // reserved for IDN
+            "sthree-data", // reserved by AWS
+            "alias-s3alias",
+            "mybucket--x-s3", // directory bucket suffix without a zone id
+        ] {
+            assert!(
+                BucketName::new(name).is_err(),
+                "{name} must be rejected at construction"
+            );
+        }
+    }
+
+    /// A name that starts or ends with whitespace is invalid.
+    #[test]
+    fn test_bucket_name_rejects_surrounding_whitespace() {
+        for name in [" my-bucket", "my-bucket ", " my-bucket ", "my-bucket\n"] {
+            assert!(
+                BucketName::new(name).is_err(),
+                "{name:?} must be rejected at construction"
+            );
+        }
+    }
+
+    /// The stored value is the value that was checked.
+    #[test]
+    fn test_bucket_name_stores_what_was_validated() {
+        for name in ["my-bucket", "my.bucket", "abc", &"a".repeat(63)] {
+            assert_eq!(BucketName::new(name).unwrap().as_str(), name);
+        }
     }
 
     /// A slash is an ordinary character in a key: S3 has no directories.

@@ -877,64 +877,188 @@ mod tests {
 
     #[test]
     fn test_check_bucket_name_valid() {
-        assert!(check_bucket_name("mybucket", false).is_ok());
-        assert!(check_bucket_name("my-bucket", true).is_ok());
-        assert!(check_bucket_name("my.bucket", true).is_ok());
-        assert!(check_bucket_name("bucket123", false).is_ok());
-        assert!(check_bucket_name("abc", false).is_ok());
+        for name in ["mybucket", "my-bucket", "my.bucket", "bucket123", "abc"] {
+            assert!(check_bucket_name(name).is_ok(), "{name} is valid");
+        }
     }
 
     #[test]
     fn test_check_bucket_name_empty() {
-        assert!(check_bucket_name("", false).is_err());
-        assert!(check_bucket_name("  ", false).is_err());
+        assert!(check_bucket_name("").is_err());
+        assert!(check_bucket_name("  ").is_err());
     }
 
     #[test]
     fn test_check_bucket_name_too_short() {
-        assert!(check_bucket_name("ab", false).is_err());
-        assert!(check_bucket_name("a", false).is_err());
+        assert!(check_bucket_name("ab").is_err());
+        assert!(check_bucket_name("a").is_err());
+    }
+
+    /// A name that starts or ends with whitespace is invalid.
+    #[test]
+    fn test_check_bucket_name_rejects_surrounding_whitespace() {
+        for name in [
+            " my-bucket",
+            "my-bucket ",
+            " my-bucket ",
+            "my-bucket
+",
+            "	my-bucket",
+            "my-bucket
+",
+        ] {
+            assert!(
+                check_bucket_name(name).is_err(),
+                "{name:?} must be rejected"
+            );
+        }
     }
 
     #[test]
     fn test_check_bucket_name_too_long() {
-        let long_name = "a".repeat(64);
-        assert!(check_bucket_name(&long_name, false).is_err());
+        assert!(check_bucket_name("a".repeat(63)).is_ok());
+        assert!(check_bucket_name("a".repeat(64)).is_err());
     }
 
     #[test]
     fn test_check_bucket_name_ip_address() {
-        assert!(check_bucket_name("192.168.1.1", false).is_err());
-        assert!(check_bucket_name("10.0.0.1", false).is_err());
+        assert!(check_bucket_name("192.168.1.1").is_err());
+        assert!(check_bucket_name("10.0.0.1").is_err());
     }
 
     #[test]
     fn test_check_bucket_name_invalid_successive_chars() {
-        assert!(check_bucket_name("my..bucket", false).is_err());
-        assert!(check_bucket_name("my.-bucket", false).is_err());
-        assert!(check_bucket_name("my-.bucket", false).is_err());
+        assert!(check_bucket_name("my..bucket").is_err());
+        assert!(check_bucket_name("my.-bucket").is_err());
+        assert!(check_bucket_name("my-.bucket").is_err());
+    }
+
+    /// Uppercase letters, underscores and colons are outside the S3 character set.
+    #[test]
+    fn test_check_bucket_name_invalid_characters() {
+        for name in ["My-Bucket", "my_bucket", "my:bucket", "MYBUCKET"] {
+            assert!(check_bucket_name(name).is_err(), "{name} must be rejected");
+        }
     }
 
     #[test]
-    fn test_check_bucket_name_strict() {
-        // Uppercase not allowed in strict mode
-        assert!(check_bucket_name("My-Bucket", false).is_ok());
-        assert!(check_bucket_name("My-Bucket", true).is_err());
-        // Underscore not allowed in strict mode
-        assert!(check_bucket_name("my_bucket", false).is_ok());
-        assert!(check_bucket_name("my_bucket", true).is_err());
-        // Reserved prefixes not allowed in strict mode
-        assert!(check_bucket_name("xn--bucket", false).is_ok());
-        assert!(check_bucket_name("xn--bucket", true).is_err());
-        assert!(check_bucket_name("sthree-bucket", false).is_ok());
-        assert!(check_bucket_name("sthree-bucket", true).is_err());
-        // Reserved suffix not allowed in strict mode
-        assert!(check_bucket_name("bucket-s3alias", false).is_ok());
-        assert!(check_bucket_name("bucket-s3alias", true).is_err());
-        // Valid strict names
-        assert!(check_bucket_name("my-bucket", true).is_ok());
-        assert!(check_bucket_name("bucket123", true).is_ok());
-        assert!(check_bucket_name("my.bucket.name", true).is_ok());
+    fn test_check_bucket_name_reserved() {
+        for name in [
+            "xn--bucket",
+            "sthree-bucket",
+            "amzn-s3-demo-bucket",
+            "bucket-s3alias",
+            "bucket--ol-s3",
+            "bucket.mrap",
+            "bucket--table-s3",
+        ] {
+            assert!(check_bucket_name(name).is_err(), "{name} is reserved");
+        }
+        // A name that only resembles a reserved form is still valid
+        for name in [
+            "my-bucket",
+            "bucket123",
+            "my.bucket.name",
+            "amzn-s3-bucket",
+            "bucket-ol-s3",
+            "bucket-mrap",
+            "bucket-table-s3",
+            "s3alias-bucket",
+        ] {
+            assert!(check_bucket_name(name).is_ok(), "{name} is valid");
+        }
+        // A directory bucket name ends with `--x-s3` and is valid
+        assert!(check_bucket_name("mybucket--usw2-az1--x-s3").is_ok());
+    }
+
+    /// AWS reserves `--x-s3` for directory buckets, so a name with that suffix is
+    /// valid only when it has the full directory bucket shape.
+    #[test]
+    fn test_check_bucket_name_directory_suffix_needs_directory_shape() {
+        for (name, why) in [
+            ("mybucket--x-s3", "no zone id"),
+            ("my-bucket--x-s3", "no zone id"),
+            ("mybucket--usw2--x-s3", "zone id without a zone number"),
+            ("my.bucket--usw2-az1--x-s3", "dot in base"),
+            ("my--bucket--usw2-az1--x-s3", "two separators in base"),
+        ] {
+            assert!(
+                matches!(
+                    check_bucket_name(name),
+                    Err(ValidationErr::InvalidBucketName { .. })
+                ),
+                "{name} must be rejected ({why})"
+            );
+        }
+        // The suffix needs both hyphens to be reserved
+        assert!(check_bucket_name("mybucket-x-s3").is_ok());
+    }
+
+    /// Names of the form `<base>--<zone-id>--x-s3`.
+    #[test]
+    fn test_check_bucket_name_s3_express_valid() {
+        for name in [
+            "mybucket--usw2-az1--x-s3",
+            "base-name--use1-az4--x-s3",
+            "b12--apne1-az6--x-s3",
+            "a--usw2-az1--x-s3",
+            "ab--usw2-az1--x-s3",
+            "bucket--usw2-lax1-az1--x-s3",
+        ] {
+            assert!(
+                check_bucket_name_s3_express(name).is_ok(),
+                "{name} must be a valid directory bucket name"
+            );
+            assert!(is_s3_express_bucket(name));
+        }
+    }
+
+    #[test]
+    fn test_check_bucket_name_s3_express_invalid() {
+        for (name, why) in [
+            ("mybucket", "no suffix"),
+            ("mybucket--x-s3", "no zone id"),
+            ("mybucket--usw2-az1--x-s4", "wrong marker"),
+            ("sthree-demo--usw2-az1--x-s3", "reserved prefix"),
+            ("xn--demo--usw2-az1--x-s3", "reserved prefix"),
+            ("MyBucket--usw2-az1--x-s3", "uppercase base"),
+            ("amzn-s3-demo-base--usw2-az1--x-s3", "reserved prefix"),
+            ("my.bucket--usw2-az1--x-s3", "dot in base"),
+            (
+                "192.168.1.1--usw2-az1--x-s3",
+                "an IP address base needs dots",
+            ),
+            ("my--bucket--usw2-az1--x-s3", "two separators in base"),
+            (" mybucket--usw2-az1--x-s3", "leading whitespace"),
+            ("", "empty"),
+        ] {
+            assert!(
+                check_bucket_name_s3_express(name).is_err(),
+                "{name:?} must be rejected ({why})"
+            );
+            assert!(!is_s3_express_bucket(name));
+        }
+    }
+
+    /// A directory bucket name is also a valid general purpose name, which is why
+    /// `BucketName` applies one rule set and no operation has to ask which kind of
+    /// bucket it is addressing.
+    #[test]
+    fn test_s3_express_names_are_a_subset_of_strict_names() {
+        for name in [
+            "mybucket--usw2-az1--x-s3",
+            "base-name--use1-az4--x-s3",
+            "b12--apne1-az6--x-s3",
+            "a--usw2-az1--x-s3",
+            "ab--usw2-az1--x-s3",
+            "bucket--usw2-lax1-az1--x-s3",
+        ] {
+            assert!(check_bucket_name_s3_express(name).is_ok());
+            assert!(
+                check_bucket_name(name).is_ok(),
+                "{name} must pass the general purpose rules as well"
+            );
+        }
     }
 
     #[test]
@@ -1530,15 +1654,32 @@ pub fn match_region(value: &str) -> bool {
         || value.ends_with('_')
 }
 
-/// Validates given bucket name.
-// TODO: S3Express has slightly different rules for bucket names
-pub fn check_bucket_name(bucket: impl AsRef<str>, strict: bool) -> Result<(), ValidationErr> {
-    let bucket: &str = bucket.as_ref().trim();
+lazy_static! {
+    /// Matches a dotted-quad IPv4 address, which is never a legal bucket name.
+    static ref IPV4_REGEX: Regex = Regex::new(
+        r"^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+    ).unwrap();
+}
+
+/// Validates given bucket name against the strict S3 naming rules.
+///
+/// The name is checked as given: a name that starts or ends with whitespace is
+/// invalid. An S3 Express directory bucket name satisfies these rules as well,
+/// so [`check_bucket_name_s3_express`] is a narrowing of this check, never an
+/// alternative to it.
+pub fn check_bucket_name(bucket: impl AsRef<str>) -> Result<(), ValidationErr> {
+    let bucket: &str = bucket.as_ref();
     let bucket_len = bucket.len();
-    if bucket_len == 0 {
+    if bucket.trim().is_empty() {
         return Err(ValidationErr::InvalidBucketName {
-            name: "".into(),
+            name: bucket.into(),
             reason: "bucket name cannot be empty".into(),
+        });
+    }
+    if bucket.trim() != bucket {
+        return Err(ValidationErr::InvalidBucketName {
+            name: bucket.into(),
+            reason: "bucket name cannot start or end with whitespace".into(),
         });
     }
     if bucket_len < 3 {
@@ -1555,10 +1696,7 @@ pub fn check_bucket_name(bucket: impl AsRef<str>, strict: bool) -> Result<(), Va
     }
 
     lazy_static! {
-    static ref IPV4_REGEX: Regex = Regex::new(r"^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$").unwrap();
         static ref VALID_BUCKET_NAME_REGEX: Regex =
-            Regex::new("^[A-Za-z0-9][A-Za-z0-9\\.\\-_:]{1,61}[A-Za-z0-9]$").unwrap();
-        static ref VALID_BUCKET_NAME_STRICT_REGEX: Regex =
             Regex::new("^[a-z0-9][a-z0-9\\.\\-]{1,61}[a-z0-9]$").unwrap();
     }
 
@@ -1576,37 +1714,7 @@ pub fn check_bucket_name(bucket: impl AsRef<str>, strict: bool) -> Result<(), Va
         });
     }
 
-    if strict {
-        if !VALID_BUCKET_NAME_STRICT_REGEX.is_match(bucket) {
-            return Err(ValidationErr::InvalidBucketName {
-                name: bucket.into(),
-                reason: format!(
-                    "bucket name does not follow S3 standards strictly, according to {}",
-                    *VALID_BUCKET_NAME_STRICT_REGEX
-                ),
-            });
-        }
-        // AWS reserved prefixes and suffixes
-        if bucket.starts_with("xn--") {
-            return Err(ValidationErr::InvalidBucketName {
-                name: bucket.into(),
-                reason: "bucket name cannot start with 'xn--' (reserved for IDN)".into(),
-            });
-        }
-        if bucket.starts_with("sthree-") {
-            return Err(ValidationErr::InvalidBucketName {
-                name: bucket.into(),
-                reason: "bucket name cannot start with 'sthree-' (reserved by AWS)".into(),
-            });
-        }
-        if bucket.ends_with("-s3alias") {
-            return Err(ValidationErr::InvalidBucketName {
-                name: bucket.into(),
-                reason: "bucket name cannot end with '-s3alias' (reserved for S3 Access Points)"
-                    .into(),
-            });
-        }
-    } else if !VALID_BUCKET_NAME_REGEX.is_match(bucket) {
+    if !VALID_BUCKET_NAME_REGEX.is_match(bucket) {
         return Err(ValidationErr::InvalidBucketName {
             name: bucket.into(),
             reason: format!(
@@ -1616,7 +1724,130 @@ pub fn check_bucket_name(bucket: impl AsRef<str>, strict: bool) -> Result<(), Va
         });
     }
 
+    /// Prefixes AWS reserves, each with what it is reserved for.
+    const RESERVED_PREFIXES: [(&str, &str); 3] = [
+        ("xn--", "reserved for IDN"),
+        ("sthree-", "reserved by AWS"),
+        ("amzn-s3-demo-", "reserved by AWS"),
+    ];
+
+    /// Suffixes AWS reserves, each with what it is reserved for. `--x-s3` is
+    /// not in the list, because a directory bucket name ends with it. A name with
+    /// that suffix must have the directory bucket shape instead, which is checked
+    /// below.
+    const RESERVED_SUFFIXES: [(&str, &str); 4] = [
+        ("-s3alias", "reserved for S3 Access Points"),
+        ("--ol-s3", "reserved for S3 Object Lambda Access Points"),
+        (".mrap", "reserved for S3 Multi-Region Access Points"),
+        ("--table-s3", "reserved for S3 Tables buckets"),
+    ];
+
+    for (prefix, purpose) in RESERVED_PREFIXES {
+        if bucket.starts_with(prefix) {
+            return Err(ValidationErr::InvalidBucketName {
+                name: bucket.into(),
+                reason: format!("bucket name cannot start with '{prefix}' ({purpose})"),
+            });
+        }
+    }
+    for (suffix, purpose) in RESERVED_SUFFIXES {
+        if bucket.ends_with(suffix) {
+            return Err(ValidationErr::InvalidBucketName {
+                name: bucket.into(),
+                reason: format!("bucket name cannot end with '{suffix}' ({purpose})"),
+            });
+        }
+    }
+
+    if bucket.ends_with(DIRECTORY_BUCKET_SUFFIX) {
+        check_directory_bucket_shape(bucket)?;
+    }
+
     Ok(())
+}
+
+/// The suffix AWS reserves for S3 Express directory bucket names.
+const DIRECTORY_BUCKET_SUFFIX: &str = "--x-s3";
+
+/// The reason given when a name does not have the directory bucket shape.
+const DIRECTORY_BUCKET_SHAPE: &str = "directory bucket name must be '<base>--<zone-id>--x-s3', \
+     with a base of lowercase letters, numbers and hyphens";
+
+/// Checks the `<base>--<zone-id>--x-s3` shape of a directory bucket name.
+///
+/// The check covers only what the general purpose rules leave open, so it is
+/// meaningful only for a name that passes the rest of [`check_bucket_name`].
+fn check_directory_bucket_shape(bucket: &str) -> Result<(), ValidationErr> {
+    lazy_static! {
+        /// `<base>--<zone-id>--x-s3`, where the zone id is one or more
+        /// hyphen-separated parts followed by the zone number. The base name may
+        /// be a single character: the 3 to 63 character bound counts the whole
+        /// name, and [`check_bucket_name`] applies it.
+        static ref VALID_BUCKET_NAME_S3EXPRESS_REGEX: Regex = Regex::new(
+            r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?--[a-z0-9]+(-[a-z0-9]+)*-az[0-9]+--x-s3$"
+        ).unwrap();
+    }
+
+    let invalid = |reason: &str| ValidationErr::InvalidBucketName {
+        name: bucket.into(),
+        reason: reason.into(),
+    };
+
+    if !VALID_BUCKET_NAME_S3EXPRESS_REGEX.is_match(bucket) {
+        return Err(invalid(DIRECTORY_BUCKET_SHAPE));
+    }
+
+    // The regex accepts `--` inside the base name, so the separator count is what
+    // pins the name to exactly one base, one zone id and the `x-s3` marker.
+    let parts: Vec<&str> = bucket.split("--").collect();
+    if parts.len() != 3 || parts[2] != "x-s3" {
+        return Err(invalid(
+            "directory bucket name must contain exactly one '--<zone-id>--x-s3' suffix",
+        ));
+    }
+
+    Ok(())
+}
+
+/// Validates given bucket name as an S3 Express directory bucket name.
+///
+/// A directory bucket is named `<base>--<zone-id>--x-s3`, where the zone id
+/// names the Availability Zone or Local Zone that holds the bucket, for example
+/// `usw2-az1` or `usw2-lax1-az1`.
+///
+/// A directory bucket name is also a valid general purpose bucket name, so this
+/// function is [`check_bucket_name`] plus one requirement: the name must end
+/// with `--x-s3`. [`check_bucket_name`] already checks the directory bucket shape
+/// of every name with that suffix: a base name of lowercase letters, numbers and
+/// hyphens only, then `--<zone-id>--x-s3`.
+///
+/// # Errors
+///
+/// Returns [`ValidationErr::InvalidBucketName`] naming the rule that rejected the
+/// name.
+pub fn check_bucket_name_s3_express(bucket: impl AsRef<str>) -> Result<(), ValidationErr> {
+    let bucket: &str = bucket.as_ref();
+
+    check_bucket_name(bucket)?;
+
+    if !bucket.ends_with(DIRECTORY_BUCKET_SUFFIX) {
+        return Err(ValidationErr::InvalidBucketName {
+            name: bucket.into(),
+            reason: DIRECTORY_BUCKET_SHAPE.into(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Reports whether the name is an S3 Express directory bucket name.
+///
+/// The shape of the name is what identifies the bucket type, so this is what
+/// selects the express endpoint, the session credentials and the
+/// `x-amz-s3session-token` header once those are supported. A name that is not a
+/// directory bucket name is an ordinary bucket name, not an invalid one.
+pub fn is_s3_express_bucket(bucket: impl AsRef<str>) -> bool {
+    check_bucket_name_s3_express(bucket).is_ok()
 }
 
 // TODO: S3Express has slightly different rules for object names
