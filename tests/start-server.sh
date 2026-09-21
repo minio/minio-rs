@@ -3,6 +3,13 @@
 set -x
 set -e
 
+# MINIO_API_TYPE picks the deployment the suite runs against: "S3" for an
+# ordinary AIStor server, "S3Express" for an S3 Express zone. The server reads
+# the value as its --api flag. A test marked skip_if_express or
+# skip_if_not_express runs in exactly one of the two, so both jobs are needed to
+# cover the whole suite.
+MINIO_API_TYPE="${MINIO_API_TYPE:-S3}"
+
 # Always test against the AIStor :edge image, which carries the latest AIStor
 # extensions the integration tests exercise (RenameObject/RenamePrefix,
 # UpdateObjectEncryption, QoS, LDAP STS).
@@ -40,6 +47,7 @@ docker run -d --name minio-test \
     -e MINIO_LICENSE="${MINIO_LICENSE}" \
     -e MINIO_NOTIFY_WEBHOOK_ENABLE_miniojavatest=on \
     -e MINIO_NOTIFY_WEBHOOK_ENDPOINT_miniojavatest=http://example.org/ \
+    -e MINIO_API_TYPE="${MINIO_API_TYPE}" \
     "${MINIO_IMAGE}" \
     server /tmp/test-xl/{1...4}/ --certs-dir /certs/
 set -x
