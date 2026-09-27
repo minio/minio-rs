@@ -5,7 +5,7 @@ set -e
 
 # Always test against the AIStor :edge image, which carries the latest AIStor
 # extensions the integration tests exercise (RenameObject/RenamePrefix,
-# UpdateObjectEncryption, QoS, Inventory, LDAP STS).
+# UpdateObjectEncryption, QoS, LDAP STS).
 MINIO_IMAGE="registry.k5.min.dev/aistor/minio:edge"
 # Fall back to the public quay.io mirror when the private registry is
 # unreachable (e.g. fork-PR runners without access to registry.k5.min.dev).
@@ -22,7 +22,7 @@ docker run --rm "${MINIO_IMAGE}" --version
 mkdir -p /tmp/certs
 cp ./tests/public.crt ./tests/private.key /tmp/certs/
 
-# Free-tier AIStor license so the server exposes AIStor APIs (QoS, Inventory,
+# Free-tier AIStor license so the server exposes AIStor APIs (QoS,
 # RenameObject, UpdateObjectEncryption, LDAP STS) that the integration tests cover.
 # Disable command tracing around the license + docker run so the credential is
 # not echoed into CI logs.
