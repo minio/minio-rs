@@ -507,11 +507,17 @@ impl MinioClientBuilder {
 }
 
 /// Returns a reqwest client builder. Every HTTP client in this crate starts
-/// here: with `rustls-tls`, reqwest uses the process-wide rustls provider, so
-/// this installs ring unless the application has already chosen one.
+/// here. With `rustls-tls` it selects rustls, which reqwest would otherwise
+/// pass over for native TLS when another dependency enables that too, and
+/// installs ring as the process-wide rustls provider unless the application
+/// has already chosen one.
 pub(crate) fn http_client_builder() -> reqwest::ClientBuilder {
     #[cfg(feature = "rustls-tls")]
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        reqwest::Client::builder().tls_backend_rustls()
+    }
+    #[cfg(not(feature = "rustls-tls"))]
     reqwest::Client::builder()
 }
 
@@ -1581,19 +1587,6 @@ impl SharedClientItems {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// With `rustls-no-provider`, reqwest panics when it builds a client and
-    /// no rustls provider is installed, so a successful build shows the ring
-    /// provider is in place. The credential providers build their clients
-    /// with `http_client`, the S3 client with `MinioClientBuilder::build`.
-    #[cfg(feature = "rustls-tls")]
-    #[test]
-    fn a_rustls_client_builds_on_the_ring_provider() {
-        http_client();
-        let base_url: BaseUrl = "https://play.min.io".parse().unwrap();
-        MinioClientBuilder::new(base_url).build().unwrap();
-        assert!(rustls::crypto::CryptoProvider::get_default().is_some());
-    }
 
     #[test]
     fn test_200_ok_with_error_body_is_recognized() {

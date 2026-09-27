@@ -96,6 +96,7 @@ libc = { version = "0.2", optional = true }
 
 [dev-dependencies]
 minio-common = { path = "./common" }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 minio-macros = { path = "./macros" }
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true, features = ["compat"] }
