@@ -255,7 +255,7 @@ impl LdapIdentityProvider {
     /// Performs the STS exchange and stores the result in the cache.
     pub async fn refresh(&self) -> Result<Credentials, ValidationErr> {
         let body = self.build_request_body();
-        let response = reqwest::Client::new()
+        let response = crate::s3::client::http_client()
             .post(&self.sts_endpoint)
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)

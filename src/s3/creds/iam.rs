@@ -109,7 +109,7 @@ impl IamRoleProvider {
 
     /// Performs the credential fetch and stores the result in the cache.
     pub async fn refresh(&self) -> Result<Credentials, ValidationErr> {
-        let client = reqwest::Client::builder()
+        let client = crate::s3::client::http_client_builder()
             .timeout(REQUEST_TIMEOUT)
             .build()
             .map_err(ValidationErr::from)?;

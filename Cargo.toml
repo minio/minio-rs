@@ -17,7 +17,9 @@ default = ["default-tls", "default-crypto", "http2"]
 # default TLS backend.
 default-tls = ["reqwest/native-tls"]
 native-tls = ["reqwest/native-tls"]
-rustls-tls = ["reqwest/rustls"]
+# rustls with the ring crypto provider. reqwest's own `rustls` feature brings in
+# aws-lc-rs; `rustls-no-provider` leaves the provider to this crate.
+rustls-tls = ["reqwest/rustls-no-provider", "dep:rustls"]
 default-crypto = ["dep:sha2", "dep:hmac"]
 # ring provides faster crypto using assembly optimizations
 ring = ["dep:ring"]
@@ -73,6 +75,7 @@ percent-encoding = "2.3"
 url = "2.5"
 regex = "1.13"
 ring = { version = "0.17", optional = true, default-features = false, features = ["alloc"] }
+rustls = { version = "0.23", optional = true, default-features = false, features = ["ring", "std", "tls12", "logging"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
@@ -93,6 +96,7 @@ libc = { version = "0.2", optional = true }
 
 [dev-dependencies]
 minio-common = { path = "./common" }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 minio-macros = { path = "./macros" }
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true, features = ["compat"] }

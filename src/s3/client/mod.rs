@@ -429,7 +429,7 @@ impl MinioClientBuilder {
     /// Build the Client.
     pub fn build(self) -> Result<MinioClient, Error> {
         let pool_config = &self.connection_pool_config;
-        let mut builder = reqwest::Client::builder()
+        let mut builder = http_client_builder()
             .no_gzip()
             .tcp_nodelay(pool_config.tcp_nodelay)
             .tcp_keepalive(pool_config.tcp_keepalive)
@@ -504,6 +504,28 @@ impl MinioClientBuilder {
             }),
         })
     }
+}
+
+/// Returns a reqwest client builder. Every HTTP client in this crate starts
+/// here. With `rustls-tls` it selects rustls, which reqwest would otherwise
+/// pass over for native TLS when another dependency enables that too, and
+/// installs ring as the process-wide rustls provider unless the application
+/// has already chosen one.
+pub(crate) fn http_client_builder() -> reqwest::ClientBuilder {
+    #[cfg(feature = "rustls-tls")]
+    {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        reqwest::Client::builder().tls_backend_rustls()
+    }
+    #[cfg(not(feature = "rustls-tls"))]
+    reqwest::Client::builder()
+}
+
+/// Returns a reqwest client with default settings; see [`http_client_builder`].
+pub(crate) fn http_client() -> reqwest::Client {
+    http_client_builder()
+        .build()
+        .expect("the TLS backend initializes")
 }
 
 /// Simple Storage Service (aka S3) client to perform bucket and object operations.

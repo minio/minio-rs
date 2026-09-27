@@ -159,12 +159,12 @@ static NIC_CLIENT_CACHE: LazyLock<DashMap<IpAddr, Arc<reqwest::Client>>> =
 /// aggressive connect/total timeouts still apply when NIC pinning is
 /// unavailable, and so we don't allocate a fresh client per op.
 static DEFAULT_RDMA_CLIENT: LazyLock<Arc<reqwest::Client>> = LazyLock::new(|| {
-    let c = reqwest::Client::builder()
+    let c = crate::s3::client::http_client_builder()
         .tcp_nodelay(true)
         .connect_timeout(RDMA_CONNECT_TIMEOUT)
         .timeout(RDMA_TIMEOUT)
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
+        .unwrap_or_else(|_| crate::s3::client::http_client());
     Arc::new(c)
 });
 
@@ -172,13 +172,13 @@ fn http_client_for_nic(nic: IpAddr) -> Arc<reqwest::Client> {
     if let Some(c) = NIC_CLIENT_CACHE.get(&nic) {
         return Arc::clone(c.value());
     }
-    let client = reqwest::Client::builder()
+    let client = crate::s3::client::http_client_builder()
         .tcp_nodelay(true)
         .local_address(Some(nic))
         .connect_timeout(RDMA_CONNECT_TIMEOUT)
         .timeout(RDMA_TIMEOUT)
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
+        .unwrap_or_else(|_| crate::s3::client::http_client());
     let arc = Arc::new(client);
     NIC_CLIENT_CACHE.insert(nic, Arc::clone(&arc));
     arc

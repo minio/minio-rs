@@ -205,7 +205,7 @@ impl AssumeRoleProvider {
             date,
         );
 
-        let mut request = reqwest::Client::new()
+        let mut request = crate::s3::client::http_client()
             .post(url.clone())
             .timeout(REQUEST_TIMEOUT)
             .body(body);

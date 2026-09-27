@@ -172,7 +172,7 @@ mod tests {
             }
         });
         let server = start(responder).await;
-        let client = reqwest::Client::new();
+        let client = crate::s3::client::http_client();
 
         let resp = client
             .post(format!("{}/echo", server.base_url))
