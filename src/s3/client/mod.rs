@@ -428,13 +428,8 @@ impl MinioClientBuilder {
 
     /// Build the Client.
     pub fn build(self) -> Result<MinioClient, Error> {
-        // reqwest uses the process-wide rustls provider. Install ring unless
-        // the application has already chosen one.
-        #[cfg(feature = "rustls-tls")]
-        let _ = rustls::crypto::ring::default_provider().install_default();
-
         let pool_config = &self.connection_pool_config;
-        let mut builder = reqwest::Client::builder()
+        let mut builder = http_client_builder()
             .no_gzip()
             .tcp_nodelay(pool_config.tcp_nodelay)
             .tcp_keepalive(pool_config.tcp_keepalive)
@@ -509,6 +504,22 @@ impl MinioClientBuilder {
             }),
         })
     }
+}
+
+/// Returns a reqwest client builder. Every HTTP client in this crate starts
+/// here: with `rustls-tls`, reqwest uses the process-wide rustls provider, so
+/// this installs ring unless the application has already chosen one.
+pub(crate) fn http_client_builder() -> reqwest::ClientBuilder {
+    #[cfg(feature = "rustls-tls")]
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    reqwest::Client::builder()
+}
+
+/// Returns a reqwest client with default settings; see [`http_client_builder`].
+pub(crate) fn http_client() -> reqwest::Client {
+    http_client_builder()
+        .build()
+        .expect("the TLS backend initializes")
 }
 
 /// Simple Storage Service (aka S3) client to perform bucket and object operations.
@@ -1573,10 +1584,12 @@ mod tests {
 
     /// With `rustls-no-provider`, reqwest panics when it builds a client and
     /// no rustls provider is installed, so a successful build shows the ring
-    /// provider is in place.
+    /// provider is in place. The credential providers build their clients
+    /// with `http_client`, the S3 client with `MinioClientBuilder::build`.
     #[cfg(feature = "rustls-tls")]
     #[test]
     fn a_rustls_client_builds_on_the_ring_provider() {
+        http_client();
         let base_url: BaseUrl = "https://play.min.io".parse().unwrap();
         MinioClientBuilder::new(base_url).build().unwrap();
         assert!(rustls::crypto::CryptoProvider::get_default().is_some());

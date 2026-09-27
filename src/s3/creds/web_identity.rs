@@ -153,7 +153,7 @@ impl WebIdentityProvider {
         let token = self.read_token()?;
         let body = self.build_request_body(&token)?;
 
-        let response = reqwest::Client::new()
+        let response = crate::s3::client::http_client()
             .post(&self.sts_endpoint)
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)
