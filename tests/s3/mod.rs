@@ -45,7 +45,6 @@ mod bucket_policy;
 mod bucket_qos;
 mod bucket_tagging;
 mod bucket_versioning;
-mod inventory;
 
 // Bucket replication & notifications
 mod bucket_notification;
