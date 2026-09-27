@@ -23,6 +23,7 @@ use http::Method;
 use std::sync::LazyLock;
 
 use crate::s3::client::MinioClient;
+use crate::s3::creds::Credentials;
 use crate::s3::header_constants::*;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::signer::sign_v4_s3;
@@ -183,6 +184,34 @@ fn http_client_for_nic(nic: IpAddr) -> Arc<reqwest::Client> {
     arc
 }
 
+/// Returns the credentials to sign a control-plane request with, refreshing
+/// them through the provider first.
+///
+/// `Ok(None)` means no provider is configured, so the request goes out
+/// unsigned. `Err(())` means the refresh failed, and the reason is logged at
+/// debug level.
+async fn fetch_credentials(client: &MinioClient) -> Result<Option<Credentials>, ()> {
+    let Some(provider) = client.shared.provider.as_ref() else {
+        return Ok(None);
+    };
+    match provider.ensure_credentials().await {
+        Ok(creds) => Ok(Some(creds)),
+        Err(e) => {
+            log::debug!("RDMA control plane could not obtain credentials: {e}");
+            Err(())
+        }
+    }
+}
+
+/// Returns the value of `name`, or an empty string when the header is absent or
+/// does not hold ASCII.
+fn header_str<'a>(headers: &'a http::HeaderMap, name: &str) -> &'a str {
+    headers
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+}
+
 fn http_client_for_token(token: &CStr) -> Arc<reqwest::Client> {
     // Parse against the ORIGINAL token (the GID suffix lives in its last 32
     // hex chars), not the formatted "token:addr:size" header value.
@@ -241,7 +270,10 @@ pub async fn rdma_put(
         headers.add("x-amz-checksum-crc64nvme", cs.as_str());
     }
 
-    let creds = client.shared.provider.as_ref().map(|p| p.fetch());
+    let creds = match fetch_credentials(client).await {
+        Ok(creds) => creds,
+        Err(()) => return RDMA_NO_RAIL_FAULT,
+    };
     if let Some(c) = &creds
         && let Some(st) = &c.session_token
     {
@@ -278,24 +310,26 @@ pub async fn rdma_put(
     };
 
     let status = resp.status();
-    let resp_headers = resp.headers().clone();
-    let etag = resp_headers
-        .get("etag")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
+    let etag = header_str(resp.headers(), "etag")
         .trim_matches('"')
         .to_owned();
 
+    // Read before the return below: a 200 carries the checksum beside the
+    // ETag, and the multipart caller completes the upload with it. An empty
+    // value leaves `ctx.checksum_crc64nvme` alone, which holds the value the
+    // caller supplied for a part upload.
+    let checksum = header_str(resp.headers(), "x-amz-checksum-crc64nvme").to_owned();
+
     if status.as_u16() == 200 && !etag.is_empty() {
+        if !checksum.is_empty() {
+            ctx.checksum_crc64nvme = Some(checksum);
+        }
         ctx.etag = etag;
         return size as isize;
     }
 
-    let reply = resp_headers
-        .get(X_AMZ_RDMA_REPLY)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_owned();
+    // Owned, because the debug branch below consumes the response body.
+    let reply = header_str(resp.headers(), X_AMZ_RDMA_REPLY).to_owned();
     let reply_code = parse_rdma_reply(&reply);
     if reply_code != RDMA_REPLY_SUCCESS && reply_code != RDMA_REPLY_NO_CONTENT {
         if log::log_enabled!(log::Level::Debug) {
@@ -322,21 +356,22 @@ pub async fn rdma_put(
         return -1;
     }
 
-    if let Some(cs) = resp_headers
-        .get("x-amz-checksum-crc64nvme")
-        .and_then(|v| v.to_str().ok())
-    {
-        ctx.checksum_crc64nvme = Some(cs.to_owned());
+    if !checksum.is_empty() {
+        ctx.checksum_crc64nvme = Some(checksum);
     }
     ctx.etag = etag;
     size as isize
 }
 
 /// Mirrors C++ `rdmaGet`: signs and issues the HTTP GET control plane carrying
-/// the RDMA token, then trusts `x-amz-rdma-bytes-transferred` for the actual
-/// transferred byte count (which can be less than requested on ranged GETs).
-/// Uses the [GetObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html)
+/// the RDMA token, then takes the transferred byte count from
+/// `x-amz-rdma-bytes-transferred`, which can be less than requested on a ranged
+/// GET. Uses the [GetObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html)
 /// request form.
+///
+/// Returns the byte count the server reports, or `size` when a `200` reply
+/// omits it. Returns -1 when a `206` reply omits it, and when the count is
+/// unparseable or larger than `size`.
 pub async fn rdma_get(
     client: &MinioClient,
     ctx: &mut S3RdmaClientCtx,
@@ -368,7 +403,10 @@ pub async fn rdma_get(
     headers.add(X_AMZ_CONTENT_SHA256, UNSIGNED_PAYLOAD);
     headers.add(X_AMZ_RDMA_TOKEN, rdma_token);
 
-    let creds = client.shared.provider.as_ref().map(|p| p.fetch());
+    let creds = match fetch_credentials(client).await {
+        Ok(creds) => creds,
+        Err(()) => return RDMA_NO_RAIL_FAULT,
+    };
     if let Some(c) = &creds
         && let Some(st) = &c.session_token
     {
@@ -405,11 +443,8 @@ pub async fn rdma_get(
     };
 
     let status = resp.status();
-    let resp_headers = resp.headers().clone();
-    let reply = resp_headers
-        .get(X_AMZ_RDMA_REPLY)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
+    let resp_headers = resp.headers();
+    let reply = header_str(resp_headers, X_AMZ_RDMA_REPLY);
     let reply_code = parse_rdma_reply(reply);
     if reply_code == RDMA_NOT_SUPPORTED as i32 {
         return RDMA_NOT_SUPPORTED;
@@ -422,21 +457,30 @@ pub async fn rdma_get(
         return -1;
     }
 
-    if let Some(etag) = resp_headers.get("etag").and_then(|v| v.to_str().ok()) {
-        ctx.etag = etag.trim_matches('"').to_owned();
-    }
+    // Assigned for every reply, so a caller that reuses `ctx` never reads the
+    // ETag of an earlier object.
+    ctx.etag = header_str(resp_headers, "etag")
+        .trim_matches('"')
+        .to_owned();
 
-    if let Some(bytes_str) = resp_headers
-        .get(X_AMZ_RDMA_BYTES_TRANSFERRED)
-        .and_then(|v| v.to_str().ok())
-    {
-        return match bytes_str.parse::<i64>() {
-            Ok(n) if n >= 0 => n as isize,
-            _ => -1,
+    // A 206 moved less than was asked for, so its count is the only record of
+    // how much of the buffer holds data. A 200 filled the buffer, which makes
+    // the count redundant there.
+    let transferred = header_str(resp_headers, X_AMZ_RDMA_BYTES_TRANSFERRED);
+    if transferred.is_empty() {
+        return if reply_code == RDMA_REPLY_PARTIAL_CONTENT {
+            -1
+        } else {
+            isize::try_from(size).unwrap_or(-1)
         };
     }
 
-    size as isize
+    // A count above `size` would send the caller reading past the end of the
+    // registered buffer.
+    match transferred.parse::<u64>() {
+        Ok(n) if n <= size => isize::try_from(n).unwrap_or(-1),
+        _ => -1,
+    }
 }
 
 /// PUT a registered buffer, retrying a transient RDMA failure once.
@@ -514,6 +558,396 @@ pub async unsafe fn rdma_get_with_retry(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::s3::client::MinioClient;
+    use crate::s3::creds::{Credentials, Provider, StaticProvider};
+    use crate::s3::error::ValidationErr;
+    use http::{HeaderMap, HeaderValue};
+    use std::ffi::CString;
+    use std::net::SocketAddr;
+    use std::sync::Mutex;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+    use tokio::time::timeout;
+
+    const REFRESHED_ACCESS_KEY: &str = "refreshed-access-key";
+    const REFRESHED_SESSION_TOKEN: &str = "refreshed-session-token";
+
+    /// A provider that holds nothing usable in its cache: `fetch` yields an
+    /// empty set and only `ensure_credentials` yields a signing key. Every
+    /// provider that mints temporary credentials has this shape until it is
+    /// primed.
+    #[derive(Debug)]
+    struct RefreshOnlyProvider;
+
+    #[async_trait::async_trait]
+    impl Provider for RefreshOnlyProvider {
+        fn fetch(&self) -> Credentials {
+            Credentials::empty()
+        }
+
+        async fn ensure_credentials(&self) -> Result<Credentials, ValidationErr> {
+            Ok(Credentials {
+                access_key: REFRESHED_ACCESS_KEY.to_string(),
+                secret_key: "refreshed-secret-key".to_string(),
+                session_token: Some(REFRESHED_SESSION_TOKEN.to_string()),
+            })
+        }
+    }
+
+    /// A provider whose refresh always fails, the shape of an STS or metadata
+    /// endpoint that cannot be reached.
+    #[derive(Debug)]
+    struct FailingProvider;
+
+    #[async_trait::async_trait]
+    impl Provider for FailingProvider {
+        fn fetch(&self) -> Credentials {
+            Credentials::empty()
+        }
+
+        async fn ensure_credentials(&self) -> Result<Credentials, ValidationErr> {
+            Err(ValidationErr::StrError {
+                message: "refresh failed".to_string(),
+                source: None,
+            })
+        }
+    }
+
+    const DECLINE_RDMA: &[u8] =
+        b"HTTP/1.1 501 Not Implemented\r\nx-amz-rdma-reply: 501\r\nContent-Length: 0\r\n\r\n";
+
+    /// How long the test server waits for the request. A control plane call
+    /// that never reaches the socket must fail its test, not hang it.
+    const SERVE_DEADLINE: Duration = Duration::from_secs(10);
+
+    /// Accepts one request, records its header block in `seen`, and answers
+    /// with `response`.
+    ///
+    /// Panics when no complete request head arrives within `SERVE_DEADLINE`,
+    /// which fails the test awaiting this task.
+    async fn serve_one(listener: TcpListener, response: &'static [u8], seen: Arc<Mutex<String>>) {
+        let (mut sock, _) = timeout(SERVE_DEADLINE, listener.accept())
+            .await
+            .expect("no request arrived")
+            .expect("accept failed");
+        let mut buf = [0u8; 8192];
+        let mut head = Vec::new();
+        while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+            let read = timeout(SERVE_DEADLINE, sock.read(&mut buf))
+                .await
+                .expect("request head never completed");
+            match read {
+                Ok(0) | Err(_) => break,
+                Ok(n) => head.extend_from_slice(&buf[..n]),
+            }
+        }
+        *seen.lock().unwrap() = String::from_utf8_lossy(&head).into_owned();
+        let _ = sock.write_all(response).await;
+        let _ = sock.flush().await;
+    }
+
+    /// Returns an address with nothing listening on it, so a request that
+    /// reaches the network fails to connect and reports -1 rather than
+    /// [`RDMA_NO_RAIL_FAULT`].
+    async fn unreachable_addr() -> SocketAddr {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        listener.local_addr().unwrap()
+    }
+
+    fn client_for<P: Provider + Send + Sync + 'static>(
+        addr: SocketAddr,
+        provider: Option<P>,
+    ) -> MinioClient {
+        MinioClient::new(
+            format!("http://{addr}").parse().unwrap(),
+            provider,
+            None,
+            None,
+        )
+        .unwrap()
+    }
+
+    fn test_ctx() -> S3RdmaClientCtx {
+        S3RdmaClientCtx {
+            bucket: BucketName::new("test-bucket").unwrap(),
+            object: ObjectKey::new("test-object").unwrap(),
+            region: Region::new("us-east-1").unwrap(),
+            upload_id: None,
+            part_number: 0,
+            checksum_crc64nvme: None,
+            etag: String::new(),
+        }
+    }
+
+    fn test_token() -> CString {
+        CString::new("a".repeat(81)).unwrap()
+    }
+
+    /// Verifies that `rdma_put` signs with the credentials `ensure_credentials`
+    /// returns: the refreshed access key appears in the `Credential=` scope and
+    /// the refreshed session token is sent.
+    #[tokio::test]
+    async fn put_signs_with_refreshed_credentials() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let seen = Arc::new(Mutex::new(String::new()));
+        let server = tokio::spawn(serve_one(listener, DECLINE_RDMA, Arc::clone(&seen)));
+
+        let client = client_for(addr, Some(RefreshOnlyProvider));
+        let mut ctx = test_ctx();
+
+        let outcome = rdma_put(&client, &mut ctx, &test_token(), 4096).await;
+
+        server.await.unwrap();
+        let request = seen.lock().unwrap().clone();
+        assert_eq!(
+            outcome, RDMA_NOT_SUPPORTED,
+            "server replied 501, so the caller must be told to fall back"
+        );
+        assert!(
+            request.contains(&format!("Credential={REFRESHED_ACCESS_KEY}/")),
+            "request signed with the wrong key:\n{request}"
+        );
+        assert!(
+            request.contains(REFRESHED_SESSION_TOKEN),
+            "session token from the refresh was not sent:\n{request}"
+        );
+    }
+
+    /// Runs `rdma_put` against a server that answers `response`, and returns
+    /// the outcome together with the context the call wrote.
+    async fn put_against(
+        response: &'static [u8],
+        mut ctx: S3RdmaClientCtx,
+        size: u64,
+    ) -> (isize, S3RdmaClientCtx) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let seen = Arc::new(Mutex::new(String::new()));
+        let server = tokio::spawn(serve_one(listener, response, seen));
+
+        let client = client_for(addr, Some(RefreshOnlyProvider));
+        let outcome = rdma_put(&client, &mut ctx, &test_token(), size).await;
+
+        server.await.unwrap();
+        (outcome, ctx)
+    }
+
+    /// Runs `rdma_get` against a server that answers `response`, and returns
+    /// the outcome together with the context the call wrote.
+    async fn get_against(
+        response: &'static [u8],
+        mut ctx: S3RdmaClientCtx,
+        size: u64,
+    ) -> (isize, S3RdmaClientCtx) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let seen = Arc::new(Mutex::new(String::new()));
+        let server = tokio::spawn(serve_one(listener, response, seen));
+
+        let client = client_for(addr, Some(RefreshOnlyProvider));
+        let outcome = rdma_get(&client, &mut ctx, &test_token(), size).await;
+
+        server.await.unwrap();
+        (outcome, ctx)
+    }
+
+    /// Verifies that `rdma_get` signs with the credentials `ensure_credentials`
+    /// returns, reports the byte count the server moved, and stores the ETag
+    /// without its quotes.
+    #[tokio::test]
+    async fn get_signs_with_refreshed_credentials_and_reports_bytes_moved() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let seen = Arc::new(Mutex::new(String::new()));
+        let response: &[u8] = b"HTTP/1.1 200 OK\r\nx-amz-rdma-reply: 200\r\netag: \"abc123\"\r\nx-amz-rdma-bytes-transferred: 2048\r\nContent-Length: 0\r\n\r\n";
+        let server = tokio::spawn(serve_one(listener, response, Arc::clone(&seen)));
+
+        let client = client_for(addr, Some(RefreshOnlyProvider));
+        let mut ctx = test_ctx();
+
+        let outcome = rdma_get(&client, &mut ctx, &test_token(), 4096).await;
+
+        server.await.unwrap();
+        let request = seen.lock().unwrap().clone();
+        assert_eq!(
+            outcome, 2048,
+            "the count must come from x-amz-rdma-bytes-transferred, not from the requested size"
+        );
+        assert_eq!(ctx.etag, "abc123");
+        assert!(
+            request.contains(&format!("Credential={REFRESHED_ACCESS_KEY}/")),
+            "request signed with the wrong key:\n{request}"
+        );
+        assert!(
+            request.contains(REFRESHED_SESSION_TOKEN),
+            "session token from the refresh was not sent:\n{request}"
+        );
+    }
+
+    /// A refresh that fails stops both control-plane calls before they reach
+    /// the network. The address has no listener, so a request that did go out
+    /// would report -1 instead.
+    #[tokio::test]
+    async fn a_failed_refresh_reports_no_rail_fault() {
+        let client = client_for(unreachable_addr().await, Some(FailingProvider));
+
+        assert_eq!(
+            rdma_put(&client, &mut test_ctx(), &test_token(), 4096).await,
+            RDMA_NO_RAIL_FAULT
+        );
+        assert_eq!(
+            rdma_get(&client, &mut test_ctx(), &test_token(), 4096).await,
+            RDMA_NO_RAIL_FAULT
+        );
+    }
+
+    /// A client with no provider sends the control plane unsigned, which an
+    /// anonymous endpoint accepts.
+    #[tokio::test]
+    async fn an_absent_provider_sends_an_unsigned_request() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let seen = Arc::new(Mutex::new(String::new()));
+        let server = tokio::spawn(serve_one(listener, DECLINE_RDMA, Arc::clone(&seen)));
+
+        let client = client_for(addr, None::<StaticProvider>);
+        let mut ctx = test_ctx();
+
+        let outcome = rdma_put(&client, &mut ctx, &test_token(), 4096).await;
+
+        server.await.unwrap();
+        let request = seen.lock().unwrap().to_lowercase();
+        assert_eq!(outcome, RDMA_NOT_SUPPORTED);
+        assert!(
+            !request.contains("authorization:"),
+            "a client with no provider must not send an Authorization header:\n{request}"
+        );
+        assert!(
+            !request.contains(&X_AMZ_SECURITY_TOKEN.to_lowercase()),
+            "a client with no provider must not send a session token:\n{request}"
+        );
+    }
+
+    /// A 200 reply carries the ETag and the checksum together. The multipart
+    /// caller completes an upload created with CRC64NVME from the checksum,
+    /// so a reply that has one must not lose it.
+    #[tokio::test]
+    async fn a_put_keeps_the_checksum_beside_the_etag() {
+        let response: &[u8] = b"HTTP/1.1 200 OK\r\netag: \"abc123\"\r\nx-amz-checksum-crc64nvme: kfmV6yUMcQ4=\r\nContent-Length: 0\r\n\r\n";
+
+        let (outcome, ctx) = put_against(response, test_ctx(), 4096).await;
+
+        assert_eq!(outcome, 4096);
+        assert_eq!(ctx.etag, "abc123");
+        assert_eq!(
+            ctx.checksum_crc64nvme.as_deref(),
+            Some("kfmV6yUMcQ4="),
+            "the checksum the server returned must reach the caller"
+        );
+    }
+
+    /// A reply without a checksum leaves the one the caller supplied for a
+    /// part upload in place.
+    #[tokio::test]
+    async fn a_put_without_a_checksum_keeps_the_one_supplied() {
+        let mut ctx = test_ctx();
+        ctx.checksum_crc64nvme = Some("kfmV6yUMcQ4=".to_string());
+        let response: &[u8] = b"HTTP/1.1 200 OK\r\netag: \"abc123\"\r\nContent-Length: 0\r\n\r\n";
+
+        let (outcome, ctx) = put_against(response, ctx, 4096).await;
+
+        assert_eq!(outcome, 4096);
+        assert_eq!(ctx.checksum_crc64nvme.as_deref(), Some("kfmV6yUMcQ4="));
+    }
+
+    /// A reply that carries no ETag must not leave the one an earlier call
+    /// wrote in a reused context.
+    #[tokio::test]
+    async fn a_get_without_an_etag_clears_the_previous_one() {
+        let mut ctx = test_ctx();
+        ctx.etag = "stale-etag".to_string();
+        let response: &[u8] = b"HTTP/1.1 200 OK\r\nx-amz-rdma-reply: 200\r\nx-amz-rdma-bytes-transferred: 4096\r\nContent-Length: 0\r\n\r\n";
+
+        let (outcome, ctx) = get_against(response, ctx, 4096).await;
+
+        assert_eq!(outcome, 4096);
+        assert_eq!(ctx.etag, "", "the ETag must describe the current reply");
+    }
+
+    /// A 206 says the server moved less than was asked for, so a reply without
+    /// a byte count leaves the filled part of the buffer unknown.
+    #[tokio::test]
+    async fn partial_content_without_a_byte_count_fails() {
+        let response: &[u8] =
+            b"HTTP/1.1 206 Partial Content\r\nx-amz-rdma-reply: 206\r\nContent-Length: 0\r\n\r\n";
+
+        let (outcome, _) = get_against(response, test_ctx(), 4096).await;
+
+        assert_eq!(outcome, -1);
+    }
+
+    /// A 200 filled the whole buffer, so the byte count may be left out.
+    #[tokio::test]
+    async fn a_full_transfer_without_a_byte_count_reports_the_requested_size() {
+        let response: &[u8] =
+            b"HTTP/1.1 200 OK\r\nx-amz-rdma-reply: 200\r\nContent-Length: 0\r\n\r\n";
+
+        let (outcome, _) = get_against(response, test_ctx(), 4096).await;
+
+        assert_eq!(outcome, 4096);
+    }
+
+    /// A byte count is reported as an `isize`, so a size that does not fit
+    /// one cannot be reported as a success.
+    #[tokio::test]
+    async fn a_size_beyond_isize_fails() {
+        let response: &[u8] =
+            b"HTTP/1.1 200 OK\r\nx-amz-rdma-reply: 200\r\nContent-Length: 0\r\n\r\n";
+
+        let (outcome, _) = get_against(response, test_ctx(), u64::MAX).await;
+
+        assert_eq!(outcome, -1);
+    }
+
+    /// A count that is not a number, is negative, or exceeds the registered
+    /// buffer cannot describe the transfer.
+    #[tokio::test]
+    async fn an_unusable_byte_count_fails() {
+        let responses: [&'static [u8]; 3] = [
+            b"HTTP/1.1 200 OK\r\nx-amz-rdma-reply: 200\r\nx-amz-rdma-bytes-transferred: not-a-number\r\nContent-Length: 0\r\n\r\n",
+            b"HTTP/1.1 200 OK\r\nx-amz-rdma-reply: 200\r\nx-amz-rdma-bytes-transferred: -1\r\nContent-Length: 0\r\n\r\n",
+            b"HTTP/1.1 200 OK\r\nx-amz-rdma-reply: 200\r\nx-amz-rdma-bytes-transferred: 4097\r\nContent-Length: 0\r\n\r\n",
+        ];
+
+        for response in responses {
+            let (outcome, _) = get_against(response, test_ctx(), 4096).await;
+            assert_eq!(
+                outcome,
+                -1,
+                "count accepted from: {}",
+                String::from_utf8_lossy(response)
+            );
+        }
+    }
+
+    #[test]
+    fn header_str_reads_ascii_and_defaults_to_empty() {
+        let mut headers = HeaderMap::new();
+        headers.insert("etag", HeaderValue::from_static("\"abc\""));
+        headers.insert(
+            X_AMZ_RDMA_REPLY,
+            HeaderValue::from_bytes(&[0xff, 0xfe]).unwrap(),
+        );
+
+        assert_eq!(header_str(&headers, "etag"), "\"abc\"");
+        assert_eq!(
+            header_str(&headers, X_AMZ_RDMA_REPLY),
+            "",
+            "a value that is not ASCII must read as absent"
+        );
+        assert_eq!(header_str(&headers, "x-absent"), "");
+    }
 
     #[test]
     fn parse_reply_known_codes() {
