@@ -62,7 +62,7 @@ pub(crate) struct SigningKeyCache {
     /// The cached signing key (Arc allows zero-copy sharing on cache hits)
     key: Arc<[u8]>,
     /// SHA-256 digest of the secret key this key was derived from
-    secret_digest: String,
+    secret_digest: [u8; 32],
     /// The date string (YYYYMMDD) this key was computed for
     date_str: String,
     /// The region this key was computed for
@@ -81,7 +81,7 @@ impl SigningKeyCache {
     pub(crate) fn new() -> Self {
         Self {
             key: Arc::from(Vec::new()),
-            secret_digest: String::new(),
+            secret_digest: [0; 32],
             date_str: String::new(),
             region: Region::new_empty(),
             service: String::new(),
@@ -90,11 +90,17 @@ impl SigningKeyCache {
 
     /// Checks if the cached signing key is valid for the given parameters.
     #[inline]
-    fn matches(&self, secret_digest: &str, date_str: &str, region: &Region, service: &str) -> bool {
+    fn matches(
+        &self,
+        secret_digest: &[u8; 32],
+        date_str: &str,
+        region: &Region,
+        service: &str,
+    ) -> bool {
         (self.date_str == date_str)
             && (&self.region == region)
             && (self.service == service)
-            && (self.secret_digest == secret_digest)
+            && (&self.secret_digest == secret_digest)
     }
 
     /// Returns the cached signing key if it matches the given parameters.
@@ -104,7 +110,7 @@ impl SigningKeyCache {
     #[inline]
     fn get_key_if_matches(
         &self,
-        secret_digest: &str,
+        secret_digest: &[u8; 32],
         date_str: &str,
         region: &Region,
         service: &str,
@@ -120,7 +126,7 @@ impl SigningKeyCache {
     fn update(
         &mut self,
         key: Arc<[u8]>,
-        secret_digest: String,
+        secret_digest: [u8; 32],
         date_str: String,
         region: Region,
         service: String,
@@ -130,6 +136,22 @@ impl SigningKeyCache {
         self.date_str = date_str;
         self.region = region;
         self.service = service;
+    }
+}
+
+/// Returns the binary SHA-256 digest of data.
+fn sha256_digest(data: &[u8]) -> [u8; 32] {
+    #[cfg(feature = "ring")]
+    {
+        ring::digest::digest(&ring::digest::SHA256, data)
+            .as_ref()
+            .try_into()
+            .expect("SHA-256 digests are 32 bytes")
+    }
+    #[cfg(not(feature = "ring"))]
+    {
+        use sha2::Digest;
+        Sha256::digest(data).into()
     }
 }
 
@@ -231,7 +253,7 @@ fn get_signing_key(
     service_name: &str,
 ) -> Arc<[u8]> {
     let date_str = to_signer_date(date);
-    let secret_digest = sha256_hash(secret_key.as_bytes());
+    let secret_digest = sha256_digest(secret_key.as_bytes());
 
     // Fast path: try to get from cache with read lock (allows concurrent reads)
     // A hit costs one SHA-256 of the secret and an Arc::clone
