@@ -39,29 +39,19 @@ use std::sync::{Arc, RwLock};
 
 /// Cached precomputation of AWS Signature V4 signing keys.
 ///
-/// Computing a signing key requires 4 HMAC-SHA256 operations. Since the key only
-/// changes when date, region, or service changes, we cache the result to avoid
-/// redundant computation on subsequent requests.
+/// Computing a signing key requires 4 HMAC-SHA256 operations. The key changes
+/// with the secret key, date, region and service, so the cache is keyed on all
+/// four and a request reuses the key only when they all match.
 ///
 /// This is stored per-client (in `SharedClientItems`) rather than globally to
 /// support multiple clients with different credentials in the same process.
 ///
-/// # Validation
+/// # Credential rotation
 ///
-/// **What we validate:**
-/// - Date (YYYYMMDD): Changes daily, always validated
-/// - Region: Changes per bucket, always validated
-/// - Service: Always "s3", validated for correctness
-///
-/// **What we DON'T validate:**
-/// - Secret key: Deliberately omitted for security and performance
-///
-/// **Why not validate secret key?**
-///
-/// 1. **Security**: Storing the secret key (even hashed) increases memory exposure risk
-/// 2. **Performance**: Hashing the secret key on every cache check adds overhead
-/// 3. **Acceptable tradeoff**: Credential rotation is rare; the caller can handle
-///    authentication errors by creating a new client with updated credentials
+/// A provider may return new credentials at any time (STS sessions, a reloaded
+/// credentials file). The cache holds a SHA-256 digest of the secret key rather
+/// than the key itself, so a rotated secret misses the cache and derives a new
+/// signing key instead of signing with the old one until the date changes.
 ///
 /// # Concurrency
 ///
@@ -71,6 +61,8 @@ use std::sync::{Arc, RwLock};
 pub(crate) struct SigningKeyCache {
     /// The cached signing key (Arc allows zero-copy sharing on cache hits)
     key: Arc<[u8]>,
+    /// SHA-256 digest of the secret key this key was derived from
+    secret_digest: String,
     /// The date string (YYYYMMDD) this key was computed for
     date_str: String,
     /// The region this key was computed for
@@ -89,6 +81,7 @@ impl SigningKeyCache {
     pub(crate) fn new() -> Self {
         Self {
             key: Arc::from(Vec::new()),
+            secret_digest: String::new(),
             date_str: String::new(),
             region: Region::new_empty(),
             service: String::new(),
@@ -96,27 +89,27 @@ impl SigningKeyCache {
     }
 
     /// Checks if the cached signing key is valid for the given parameters.
-    ///
-    /// Note: Does NOT validate the secret key. See struct-level documentation
-    /// for the rationale behind this design decision.
     #[inline]
-    fn matches(&self, date_str: &str, region: &Region, service: &str) -> bool {
-        // Check most likely to change first (date changes daily)
-        (self.date_str == date_str) && (&self.region == region) && (self.service == service)
+    fn matches(&self, secret_digest: &str, date_str: &str, region: &Region, service: &str) -> bool {
+        (self.date_str == date_str)
+            && (&self.region == region)
+            && (self.service == service)
+            && (self.secret_digest == secret_digest)
     }
 
     /// Returns the cached signing key if it matches the given parameters.
     ///
-    /// Returns `None` if the cache is invalid (different date/region/service).
+    /// Returns `None` if the cache is invalid (different secret/date/region/service).
     /// Uses Arc::clone for zero-copy sharing (just atomic reference count increment).
     #[inline]
     fn get_key_if_matches(
         &self,
+        secret_digest: &str,
         date_str: &str,
         region: &Region,
         service: &str,
     ) -> Option<Arc<[u8]>> {
-        if self.matches(date_str, region, service) {
+        if self.matches(secret_digest, date_str, region, service) {
             Some(Arc::clone(&self.key))
         } else {
             None
@@ -124,8 +117,16 @@ impl SigningKeyCache {
     }
 
     /// Updates the cache with a new signing key and associated parameters.
-    fn update(&mut self, key: Arc<[u8]>, date_str: String, region: Region, service: String) {
+    fn update(
+        &mut self,
+        key: Arc<[u8]>,
+        secret_digest: String,
+        date_str: String,
+        region: Region,
+        service: String,
+    ) {
         self.key = key;
+        self.secret_digest = secret_digest;
         self.date_str = date_str;
         self.region = region;
         self.service = service;
@@ -204,8 +205,8 @@ fn compute_signing_key(
 /// Returns signing key of given secret key, date, region and service name.
 ///
 /// Uses caching to avoid recomputing the signing key for every request.
-/// The signing key only changes when the date (YYYYMMDD), region, or service changes,
-/// so we store the last computed key and reuse it when inputs match.
+/// The signing key only changes when the secret key, date (YYYYMMDD), region, or
+/// service changes, so we store the last computed key and reuse it when inputs match.
 ///
 /// # Performance
 ///
@@ -213,18 +214,15 @@ fn compute_signing_key(
 /// - Returns cached key via Arc::clone (atomic reference count increment)
 /// - Multiple threads can read simultaneously via RwLock
 ///
-/// **Cache misses (daily date change or region change):**
+/// **Cache misses (daily date change, region change, or rotated credentials):**
 /// - Computes new signing key (4 HMAC-SHA256 operations)
 /// - Computation happens outside the lock to avoid blocking readers
 /// - Brief write lock to update cache with new key
 ///
 /// # Credential Rotation
 ///
-/// The cache does not validate credentials - it only checks date/region/service.
-/// If credentials rotate while date/region/service remain the same, the cached
-/// signing key (derived from old credentials) will be used, causing S3 to return
-/// an authentication error. The caller is responsible for handling credential
-/// rotation at a higher level.
+/// A new secret key misses the cache, so rotated credentials sign correctly on
+/// the next request.
 fn get_signing_key(
     cache: &RwLock<SigningKeyCache>,
     secret_key: &str,
@@ -233,11 +231,13 @@ fn get_signing_key(
     service_name: &str,
 ) -> Arc<[u8]> {
     let date_str = to_signer_date(date);
+    let secret_digest = sha256_hash(secret_key.as_bytes());
 
     // Fast path: try to get from cache with read lock (allows concurrent reads)
-    // Zero allocations on cache hit - just Arc::clone (atomic increment)
+    // A hit costs one SHA-256 of the secret and an Arc::clone
     if let Ok(cache_guard) = cache.read()
-        && let Some(key) = cache_guard.get_key_if_matches(&date_str, region, service_name)
+        && let Some(key) =
+            cache_guard.get_key_if_matches(&secret_digest, &date_str, region, service_name)
     {
         return key;
     }
@@ -257,6 +257,7 @@ fn get_signing_key(
     if let Ok(mut cache_guard) = cache.write() {
         cache_guard.update(
             Arc::clone(&signing_key),
+            secret_digest,
             date_str,
             region.clone(),
             service_name.to_string(),
@@ -1828,6 +1829,27 @@ mod tests {
         assert!(
             Arc::ptr_eq(&key_after_first, &key_after_second),
             "second sign must reuse the cached signing key, not re-derive it"
+        );
+    }
+
+    #[test]
+    fn get_signing_key_rederives_after_secret_rotation() {
+        let cache = test_cache();
+        let date = get_test_date();
+        let region = Region::new("us-east-1").unwrap();
+        let date_str = to_signer_date(date);
+
+        let old = get_signing_key(&cache, "old-secret", date, &region, "s3");
+        let rotated = get_signing_key(&cache, "rotated-secret", date, &region, "s3");
+
+        assert_eq!(
+            &old[..],
+            &compute_signing_key("old-secret", &date_str, &region, "s3")[..]
+        );
+        assert_eq!(
+            &rotated[..],
+            &compute_signing_key("rotated-secret", &date_str, &region, "s3")[..],
+            "a rotated secret must not sign with the key cached for the old one"
         );
     }
 }
