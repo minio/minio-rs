@@ -298,7 +298,7 @@ pub struct MinioClientBuilder {
     /// Set flag to ignore certificate check. This is insecure and should only be used for testing.
     ignore_cert_check: Option<bool>,
     /// Addresses that override DNS for the given domains.
-    resolve: Vec<(String, SocketAddr)>,
+    resolve: Vec<(String, Vec<SocketAddr>)>,
     /// Set the app info as an Option of (app_name, app_version) pair. This will show up in the client's user-agent.
     app_info: Option<(String, String)>,
     /// Skip region lookup for MinIO servers (region is not used by MinIO).
@@ -367,8 +367,17 @@ impl MinioClientBuilder {
     /// against it and sends it as SNI, while the connection goes to `addr`.
     /// Use it to reach a server by IP whose certificate names a DNS name. A
     /// port of 0 uses the port from the URL.
-    pub fn resolve(mut self, domain: &str, addr: SocketAddr) -> Self {
-        self.resolve.push((domain.to_string(), addr));
+    pub fn resolve(self, domain: &str, addr: SocketAddr) -> Self {
+        self.resolve_to_addrs(domain, &[addr])
+    }
+
+    /// Dial one of `addrs` for `domain` instead of resolving it through DNS.
+    ///
+    /// Like [`Self::resolve`], but the connection tries each address in turn.
+    /// A later call for the same domain replaces the earlier addresses.
+    pub fn resolve_to_addrs(mut self, domain: &str, addrs: &[SocketAddr]) -> Self {
+        self.resolve.retain(|(d, _)| d != domain);
+        self.resolve.push((domain.to_string(), addrs.to_vec()));
         self
     }
 
@@ -479,8 +488,8 @@ impl MinioClientBuilder {
         }
         builder = builder.user_agent(user_agent);
 
-        for (domain, addr) in &self.resolve {
-            builder = builder.resolve(domain, *addr);
+        for (domain, addrs) in &self.resolve {
+            builder = builder.resolve_to_addrs(domain, addrs);
         }
 
         #[cfg(any(
@@ -1720,6 +1729,20 @@ mod tests {
     async fn ensure_credentials_propagates_provider_error() {
         let client = client_with(Some(FakeProvider { fail: true }));
         assert!(client.ensure_credentials().await.is_err());
+    }
+
+    #[test]
+    fn resolve_to_addrs_keeps_every_address_and_replaces_a_domain() {
+        let base_url = "http://aistor.invalid:9000/".parse::<BaseUrl>().unwrap();
+        let first: SocketAddr = "10.0.0.1:9000".parse().unwrap();
+        let second: SocketAddr = "10.0.0.2:9000".parse().unwrap();
+        let builder = MinioClientBuilder::new(base_url)
+            .resolve("aistor.invalid", first)
+            .resolve_to_addrs("aistor.invalid", &[first, second]);
+        assert_eq!(
+            builder.resolve,
+            vec![("aistor.invalid".to_string(), vec![first, second])]
+        );
     }
 
     #[tokio::test]
