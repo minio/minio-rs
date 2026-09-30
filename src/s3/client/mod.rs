@@ -1746,9 +1746,14 @@ mod tests {
         });
 
         let (mut conn, _) = listener.accept().await.unwrap();
-        let mut buf = vec![0u8; 4096];
-        let n = conn.read(&mut buf).await.unwrap();
-        let head = String::from_utf8_lossy(&buf[..n]).to_ascii_lowercase();
+        let mut head = Vec::new();
+        let mut buf = [0u8; 1024];
+        while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+            let n = conn.read(&mut buf).await.unwrap();
+            assert!(n > 0, "connection closed before the request headers ended");
+            head.extend_from_slice(&buf[..n]);
+        }
+        let head = String::from_utf8_lossy(&head).to_ascii_lowercase();
         assert!(
             head.contains(&format!("host: aistor.invalid:{port}")),
             "{head}"
