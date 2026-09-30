@@ -40,6 +40,7 @@ use std::fmt::Debug;
 use std::fs::File;
 use std::io::prelude::*;
 use std::mem;
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::string::ToString;
 use std::sync::{Arc, OnceLock, RwLock};
@@ -296,6 +297,8 @@ pub struct MinioClientBuilder {
     ssl_cert_file: Option<PathBuf>,
     /// Set flag to ignore certificate check. This is insecure and should only be used for testing.
     ignore_cert_check: Option<bool>,
+    /// Addresses that override DNS for the given domains.
+    resolve: Vec<(String, SocketAddr)>,
     /// Set the app info as an Option of (app_name, app_version) pair. This will show up in the client's user-agent.
     app_info: Option<(String, String)>,
     /// Skip region lookup for MinIO servers (region is not used by MinIO).
@@ -316,6 +319,7 @@ impl MinioClientBuilder {
             client_hooks: Vec::new(),
             ssl_cert_file: None,
             ignore_cert_check: None,
+            resolve: Vec::new(),
             app_info: None,
             skip_region_lookup: false,
             unsigned_payload: false,
@@ -354,6 +358,17 @@ impl MinioClientBuilder {
     /// be used for testing.
     pub fn ignore_cert_check(mut self, ignore_cert_check: Option<bool>) -> Self {
         self.ignore_cert_check = ignore_cert_check;
+        self
+    }
+
+    /// Dial `addr` for `domain` instead of resolving it through DNS.
+    ///
+    /// The base URL keeps the domain, so TLS verifies the server certificate
+    /// against it and sends it as SNI, while the connection goes to `addr`.
+    /// Use it to reach a server by IP whose certificate names a DNS name. A
+    /// port of 0 uses the port from the URL.
+    pub fn resolve(mut self, domain: &str, addr: SocketAddr) -> Self {
+        self.resolve.push((domain.to_string(), addr));
         self
     }
 
@@ -463,6 +478,10 @@ impl MinioClientBuilder {
             user_agent.push_str(format!(" {app_name}/{app_version}").as_str());
         }
         builder = builder.user_agent(user_agent);
+
+        for (domain, addr) in &self.resolve {
+            builder = builder.resolve(domain, *addr);
+        }
 
         #[cfg(any(
             feature = "default-tls",
@@ -1701,5 +1720,47 @@ mod tests {
     async fn ensure_credentials_propagates_provider_error() {
         let client = client_with(Some(FakeProvider { fail: true }));
         assert!(client.ensure_credentials().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn resolve_dials_the_given_address_for_the_domain() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let base_url = format!("http://aistor.invalid:{port}/")
+            .parse::<BaseUrl>()
+            .unwrap();
+        let client = MinioClientBuilder::new(base_url)
+            .resolve("aistor.invalid", "127.0.0.1:0".parse().unwrap())
+            .build()
+            .unwrap();
+
+        let request = tokio::spawn({
+            let http = client.http_client.clone();
+            async move {
+                http.get(format!("http://aistor.invalid:{port}/"))
+                    .send()
+                    .await
+            }
+        });
+
+        let (mut conn, _) = listener.accept().await.unwrap();
+        let mut head = Vec::new();
+        let mut buf = [0u8; 1024];
+        while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+            let n = conn.read(&mut buf).await.unwrap();
+            assert!(n > 0, "connection closed before the request headers ended");
+            head.extend_from_slice(&buf[..n]);
+        }
+        let head = String::from_utf8_lossy(&head).to_ascii_lowercase();
+        assert!(
+            head.contains(&format!("host: aistor.invalid:{port}")),
+            "{head}"
+        );
+        conn.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n")
+            .await
+            .unwrap();
+        assert!(request.await.unwrap().unwrap().status().is_success());
     }
 }
