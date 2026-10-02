@@ -1332,13 +1332,7 @@ impl MinioClient {
         object: &str,
         range: Option<(u64, Option<u64>)>,
     ) -> Result<reqwest::Response, Error> {
-        use crate::s3::utils::{check_bucket_name, check_object_name};
-
         // Validate inputs (same as standard API)
-        check_bucket_name(bucket, true)?;
-        check_object_name(object)?;
-
-        // Create typed wrappers after validation
         let bucket_typed = BucketName::new(bucket)?;
         let object_typed = ObjectKey::new(object)?;
 

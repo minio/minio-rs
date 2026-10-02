@@ -24,7 +24,7 @@ use crate::s3::response::{
 };
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{BucketName, Region, S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, insert, md5sum_hash};
+use crate::s3::utils::{insert, md5sum_hash};
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -74,7 +74,6 @@ impl S3Api for GenerateInventoryConfigYaml {
 
 impl ToS3Request for GenerateInventoryConfigYaml {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
         if self.id.is_empty() {
             return Err(empty_id_error());
         }
@@ -138,7 +137,6 @@ impl S3Api for PutBucketInventoryConfiguration {
 
 impl ToS3Request for PutBucketInventoryConfiguration {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
         if self.id.is_empty() {
             return Err(empty_id_error());
         }
@@ -204,7 +202,6 @@ impl S3Api for GetBucketInventoryConfiguration {
 
 impl ToS3Request for GetBucketInventoryConfiguration {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
         if self.id.is_empty() {
             return Err(empty_id_error());
         }
@@ -264,7 +261,6 @@ impl S3Api for DeleteBucketInventoryConfiguration {
 
 impl ToS3Request for DeleteBucketInventoryConfiguration {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
         if self.id.is_empty() {
             return Err(empty_id_error());
         }
@@ -318,8 +314,6 @@ impl S3Api for ListBucketInventoryConfigurations {
 
 impl ToS3Request for ListBucketInventoryConfigurations {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-
         let mut query_params = insert(self.extra_query_params, INVENTORY);
         query_params.add("continuation-token", self.continuation_token);
 
@@ -369,7 +363,6 @@ impl S3Api for GetBucketInventoryJobStatus {
 
 impl ToS3Request for GetBucketInventoryJobStatus {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
         if self.id.is_empty() {
             return Err(empty_id_error());
         }

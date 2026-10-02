@@ -25,7 +25,7 @@ use crate::s3::types::{
     BucketName, FromS3Response, ListEntry, ObjectKey, Region, S3Api, S3Request, ToS3Request,
     ToStream, VersionId,
 };
-use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
+use crate::s3::utils::{check_object_name, insert, md5sum_hash};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::stream::iter;
@@ -238,7 +238,6 @@ pub type DeleteObjectBldr = DeleteObjectBuilder<(
 
 impl ToS3Request for DeleteObject {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
         check_object_name(&self.object.key)?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
@@ -336,7 +335,6 @@ impl DeleteObjects {
     /// GCS does not support the S3 multi-object delete API. Missing objects/versions are
     /// not treated as errors and are skipped, mirroring the multi-object delete behavior.
     async fn send_single_deletes(self) -> Result<DeleteObjectsResponse, Error> {
-        check_bucket_name(&self.bucket, true)?;
         if self.objects.len() > MAX_DELETE_OBJECTS {
             return Err(ValidationErr::TooManyDeleteObjects(self.objects.len()).into());
         }
@@ -425,7 +423,6 @@ pub type DeleteObjectsBldr = DeleteObjectsBuilder<(
 
 impl ToS3Request for DeleteObjects {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
         if self.objects.len() > MAX_DELETE_OBJECTS {
             return Err(ValidationErr::TooManyDeleteObjects(self.objects.len()));
         }
