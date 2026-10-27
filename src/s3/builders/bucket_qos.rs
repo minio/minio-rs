@@ -22,7 +22,7 @@ use crate::s3::response::{
 };
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{BucketName, Region, S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, insert};
+use crate::s3::utils::insert;
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -105,8 +105,6 @@ pub type GetBucketQOSBldr =
 
 impl ToS3Request for GetBucketQOS {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-
         Ok(S3Request::builder()
             .client(self.client)
             .method(Method::GET)
@@ -150,8 +148,6 @@ impl S3Api for SetBucketQOS {
 
 impl ToS3Request for SetBucketQOS {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-
         let data =
             serde_yaml::to_string(&self.qos_config).map_err(|e| ValidationErr::InvalidYaml {
                 message: e.to_string(),
@@ -203,8 +199,6 @@ impl S3Api for GetBucketQOSMetrics {
 
 impl ToS3Request for GetBucketQOSMetrics {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-
         let mut query_params = insert(self.extra_query_params, "qos-metrics");
         if let Some(node) = self.node.filter(|n| !n.is_empty()) {
             query_params.add("node", node);

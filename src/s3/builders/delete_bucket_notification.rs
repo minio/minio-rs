@@ -20,7 +20,7 @@ use crate::s3::response::DeleteBucketNotificationResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::NotificationConfig;
 use crate::s3::types::{BucketName, S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, insert};
+use crate::s3::utils::insert;
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -50,8 +50,6 @@ pub type DeleteBucketNotificationBldr = BucketCommonBuilder<
 
 impl ToS3Request for DeleteBucketNotification {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-
         const CONFIG: NotificationConfig = NotificationConfig {
             cloud_func_config_list: None,
             queue_config_list: None,
