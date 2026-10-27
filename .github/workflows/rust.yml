@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ "master" ]
 
+permissions:
+  contents: read
+
 env:
   RUST_LOG: debug
   CARGO_TERM_COLOR: always
@@ -14,7 +17,9 @@ jobs:
   check-format:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        persist-credentials: false
     - name: Check format
       run: |
         cargo fmt --all -- --check
@@ -22,7 +27,9 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - name: Install RDMA system deps (required by --all-features)
         run: |
           sudo apt-get -qy update
@@ -32,7 +39,9 @@ jobs:
   test-multi-thread:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - name: Run tests
         run: |
           ./tests/start-server.sh
@@ -46,7 +55,9 @@ jobs:
   test-current-thread:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - name: Run tests
         run: |
           ./tests/start-server.sh
@@ -57,12 +68,30 @@ jobs:
           export SERVER_REGION=us-east-1
           export MINIO_SSL_CERT_FILE=./tests/public.crt
           MINIO_TEST_TOKIO_RUNTIME_FLAVOR="current_thread" cargo test -- --nocapture
+  test-express:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Run tests against an S3 Express zone
+        run: |
+          MINIO_API_TYPE=S3Express ./tests/start-server.sh
+          export SERVER_ENDPOINT=localhost:9000
+          export ACCESS_KEY=minioadmin
+          export SECRET_KEY=minioadmin
+          export ENABLE_HTTPS=1
+          export SERVER_REGION=us-east-1
+          export MINIO_SSL_CERT_FILE=./tests/public.crt
+          MINIO_TEST_TOKIO_RUNTIME_FLAVOR="multi_thread" cargo test -- --nocapture
 
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        persist-credentials: false
     - name: Build
       run: |
         cargo --version

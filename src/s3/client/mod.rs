@@ -566,6 +566,18 @@ pub struct MinioClient {
     pub(crate) shared: Arc<SharedClientItems>,
 }
 
+/// Reports whether a `Server` response header names an S3 Express zone.
+///
+/// A server started with `--api S3Express` appends the mode to its product name,
+/// so the header reads `MinIO AIStor/S3express`. The product name changes between
+/// releases, so only the mode suffix is matched, without regard to case. A server
+/// in the default mode sends the product name alone.
+fn is_express_server_header(value: &str) -> bool {
+    value
+        .rsplit_once('/')
+        .is_some_and(|(_, mode)| mode.trim().eq_ignore_ascii_case("s3express"))
+}
+
 impl MinioClient {
     /// Returns a S3 client with given base URL.
     ///
@@ -622,7 +634,10 @@ impl MinioClient {
         self.shared.base_url.https
     }
 
-    /// Returns whether this client is configured to use the express endpoint and is minio enterprise.
+    /// Returns whether the server runs as an S3 Express zone.
+    ///
+    /// The mode is read from the `Server` response header once, then cached for
+    /// the life of the client. See [`is_express_server_header`].
     pub async fn is_minio_express(&self) -> bool {
         if let Some(val) = self.shared.express.get() {
             *val
@@ -633,17 +648,11 @@ impl MinioClient {
                 .build();
 
             let express = match be.send().await {
-                Ok(v) => {
-                    if let Some(server) = v.headers().get("server") {
-                        if let Ok(s) = server.to_str() {
-                            s.eq_ignore_ascii_case("MinIO Enterprise/S3Express")
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    }
-                }
+                Ok(v) => v
+                    .headers()
+                    .get("server")
+                    .and_then(|server| server.to_str().ok())
+                    .is_some_and(is_express_server_header),
                 Err(e) => {
                     log::warn!("is_express_internal: error: {e}, assume false");
                     false
@@ -1615,6 +1624,37 @@ impl SharedClientItems {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The header carries the product name and, when the server runs with
+    /// `--api S3Express`, the mode. `http.CanonicalHeaderKey` lowercases all but
+    /// the first letter of the mode, so the server sends `S3express`.
+    #[test]
+    fn express_server_header_is_recognized() {
+        for value in [
+            "MinIO AIStor/S3express",
+            "MinIO AIStor/S3Express",
+            "MinIO Enterprise/S3Express",
+            "SomeFutureName/s3express",
+        ] {
+            assert!(
+                is_express_server_header(value),
+                "{value:?} names an express zone"
+            );
+        }
+
+        for value in [
+            "MinIO AIStor",
+            "MinIO Enterprise",
+            "MinIO AIStor/S3",
+            "nginx",
+            "",
+        ] {
+            assert!(
+                !is_express_server_header(value),
+                "{value:?} does not name an express zone"
+            );
+        }
+    }
 
     #[test]
     fn test_200_ok_with_error_body_is_recognized() {

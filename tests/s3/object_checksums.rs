@@ -481,7 +481,11 @@ async fn upload_download_with_sha1_verification(ctx: TestContext, bucket: Bucket
 // AppendObject checksum tests
 // ============================================================================
 
-/// Test AppendObject with CRC32C checksum
+/// Test AppendObject with CRC32C checksum.
+///
+/// The base object is stored with CRC32C because the server merges the appended
+/// part's checksum into the object's existing one, and it rejects a request
+/// whose algorithm differs from the stored one.
 #[minio_macros::test(skip_if_not_express)]
 async fn append_object_with_crc32c_checksum(ctx: TestContext, bucket: BucketName) {
     let object = rand_object_name();
@@ -493,6 +497,7 @@ async fn append_object_with_crc32c_checksum(ctx: TestContext, bucket: BucketName
         .client
         .put_object_content(&bucket, &object, content1)
         .unwrap()
+        .checksum_algorithm(ChecksumAlgorithm::CRC32C)
         .build()
         .send()
         .await
@@ -524,15 +529,18 @@ async fn append_object_with_crc32c_checksum(ctx: TestContext, bucket: BucketName
         .unwrap();
 }
 
-/// Test AppendObject with all checksum algorithms
+/// Test AppendObject with every checksum algorithm an append can use.
+///
+/// Only the CRC algorithms are listed. An append merges the new part's checksum
+/// into the checksum already stored on the object, and a SHA digest cannot be
+/// merged. The base object is stored with the same algorithm the append asks
+/// for, because the server rejects a mismatch.
 #[minio_macros::test(skip_if_not_express)]
 async fn append_object_all_checksum_algorithms(ctx: TestContext, bucket: BucketName) {
     let algorithms = vec![
         ChecksumAlgorithm::CRC32,
         ChecksumAlgorithm::CRC32C,
         ChecksumAlgorithm::CRC64NVME,
-        ChecksumAlgorithm::SHA1,
-        ChecksumAlgorithm::SHA256,
     ];
 
     for algo in algorithms {
@@ -547,6 +555,7 @@ async fn append_object_all_checksum_algorithms(ctx: TestContext, bucket: BucketN
             .client
             .put_object_content(&bucket, &object, content1)
             .unwrap()
+            .checksum_algorithm(algo)
             .build()
             .send()
             .await
@@ -584,18 +593,23 @@ async fn append_object_all_checksum_algorithms(ctx: TestContext, bucket: BucketN
     }
 }
 
-/// Test AppendObjectContent with checksum
+/// Test AppendObjectContent with checksum.
+///
+/// CRC64NVME is used on both calls. An append merges the new part's checksum
+/// into the checksum already stored on the object, so a SHA digest cannot be
+/// used and the two algorithms must match.
 #[minio_macros::test(skip_if_not_express)]
 async fn append_object_content_with_checksum(ctx: TestContext, bucket: BucketName) {
     let object = rand_object_name();
     let content1 = "Initial content.";
-    let content2 = "Appended content with SHA256.";
+    let content2 = "Appended content with CRC64NVME.";
 
     // Create initial object
     let _resp: PutObjectContentResponse = ctx
         .client
         .put_object_content(&bucket, &object, content1)
         .unwrap()
+        .checksum_algorithm(ChecksumAlgorithm::CRC64NVME)
         .build()
         .send()
         .await
@@ -606,7 +620,7 @@ async fn append_object_content_with_checksum(ctx: TestContext, bucket: BucketNam
         .client
         .append_object_content(&bucket, &object, content2)
         .unwrap()
-        .checksum_algorithm(ChecksumAlgorithm::SHA256)
+        .checksum_algorithm(ChecksumAlgorithm::CRC64NVME)
         .build()
         .send()
         .await

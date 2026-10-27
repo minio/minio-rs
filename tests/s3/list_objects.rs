@@ -188,13 +188,16 @@ async fn list_object_2(ctx: TestContext, bucket: BucketName) {
 /// This test verifies that when max_keys is set to a small value (e.g., 5),
 /// the API returns at most that many objects per response, and pagination
 /// continues through subsequent pages.
+///
+/// The keys sit under a directory prefix: a directory bucket (S3 Express) only
+/// accepts a prefix that ends with the delimiter.
 #[minio_macros::test]
 async fn list_objects_with_max_keys(ctx: TestContext, bucket: BucketName) {
     const TOTAL_OBJECTS: usize = 15;
     const MAX_KEYS: u16 = 5;
 
     for i in 0..TOTAL_OBJECTS {
-        let object = ObjectKey::try_from(format!("max-keys-test-{:03}", i)).unwrap();
+        let object = ObjectKey::try_from(format!("max-keys-test/{:03}", i)).unwrap();
         let content = format!("content-{}", i).into_bytes();
         ctx.client
             .put_object_content(&bucket, &object, content)
@@ -209,7 +212,7 @@ async fn list_objects_with_max_keys(ctx: TestContext, bucket: BucketName) {
         .client
         .list_objects(&bucket)
         .unwrap()
-        .prefix(Some("max-keys-test-".to_string()))
+        .prefix(Some("max-keys-test/".to_string()))
         .max_keys(MAX_KEYS)
         .build()
         .to_stream()
@@ -258,12 +261,15 @@ async fn list_objects_with_max_keys(ctx: TestContext, bucket: BucketName) {
 }
 
 /// Test that max_keys=1 works correctly (edge case).
+///
+/// The keys sit under a directory prefix: a directory bucket (S3 Express) only
+/// accepts a prefix that ends with the delimiter.
 #[minio_macros::test]
 async fn list_objects_with_max_keys_one(ctx: TestContext, bucket: BucketName) {
     const TOTAL_OBJECTS: usize = 5;
 
     for i in 0..TOTAL_OBJECTS {
-        let object = ObjectKey::try_from(format!("max-keys-one-{:03}", i)).unwrap();
+        let object = ObjectKey::try_from(format!("max-keys-one/{:03}", i)).unwrap();
         ctx.client
             .put_object_content(&bucket, &object, "x")
             .unwrap()
@@ -277,7 +283,7 @@ async fn list_objects_with_max_keys_one(ctx: TestContext, bucket: BucketName) {
         .client
         .list_objects(&bucket)
         .unwrap()
-        .prefix(Some("max-keys-one-".to_string()))
+        .prefix(Some("max-keys-one/".to_string()))
         .max_keys(1)
         .build()
         .to_stream()
