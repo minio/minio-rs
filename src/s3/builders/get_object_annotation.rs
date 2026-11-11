@@ -15,6 +15,7 @@
 
 use crate::s3::client::MinioClient;
 use crate::s3::error::ValidationErr;
+use crate::s3::header_constants::X_AMZ_CHECKSUM_MODE;
 use crate::s3::multimap_ext::{Multimap, MultimapExt};
 use crate::s3::response::GetObjectAnnotationResponse;
 use crate::s3::types::{
@@ -47,6 +48,11 @@ pub struct GetObjectAnnotation {
     annotation_name: AnnotationName,
     #[builder(default, setter(into))]
     version_id: Option<VersionId>,
+    /// When true, asks the server for the annotation's checksum by sending
+    /// `x-amz-checksum-mode: ENABLED`. Check the payload against it with
+    /// [`GetObjectAnnotationResponse::verify_checksum`].
+    #[builder(default = false)]
+    enable_checksum: bool,
 }
 
 /// Builder type for [`GetObjectAnnotation`] returned by
@@ -60,6 +66,7 @@ pub type GetObjectAnnotationBldr = GetObjectAnnotationBuilder<(
     (ObjectKey,),
     (AnnotationName,),
     (),
+    (),
 )>;
 
 impl S3Api for GetObjectAnnotation {
@@ -72,6 +79,11 @@ impl ToS3Request for GetObjectAnnotation {
         query_params.add("annotationName", self.annotation_name.into_inner());
         query_params.add_version(self.version_id);
 
+        let mut headers: Multimap = self.extra_headers.unwrap_or_default();
+        if self.enable_checksum {
+            headers.add(X_AMZ_CHECKSUM_MODE, "ENABLED");
+        }
+
         Ok(S3Request::builder()
             .client(self.client)
             .method(Method::GET)
@@ -79,7 +91,7 @@ impl ToS3Request for GetObjectAnnotation {
             .bucket(self.bucket)
             .query_params(query_params)
             .object(self.object)
-            .headers(self.extra_headers.unwrap_or_default())
+            .headers(headers)
             .build())
     }
 }
@@ -127,5 +139,26 @@ mod tests {
                 .get_object_annotation("bucket", "object", "")
                 .is_err()
         );
+    }
+
+    #[test]
+    fn checksum_mode_is_sent_only_when_enabled() {
+        let build = |enable: bool| {
+            test_client()
+                .get_object_annotation("bucket", "object", "review")
+                .unwrap()
+                .enable_checksum(enable)
+                .build()
+                .to_s3request()
+                .unwrap()
+        };
+        assert_eq!(
+            build(true)
+                .headers
+                .get(X_AMZ_CHECKSUM_MODE)
+                .map(String::as_str),
+            Some("ENABLED")
+        );
+        assert!(!build(false).headers.contains_key(X_AMZ_CHECKSUM_MODE));
     }
 }

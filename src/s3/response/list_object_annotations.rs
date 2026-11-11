@@ -16,7 +16,7 @@
 use crate::s3::error::ValidationErr;
 use crate::s3::response_traits::{HasBucket, HasObject, HasRegion, HasVersion};
 use crate::s3::types::S3Request;
-use crate::s3::utils::{UtcTime, from_iso8601utc, trim_quotes};
+use crate::s3::utils::{ChecksumAlgorithm, UtcTime, from_iso8601utc, trim_quotes};
 use crate::{impl_from_s3response, impl_has_s3fields};
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
@@ -34,6 +34,9 @@ pub struct ObjectAnnotation {
     pub etag: String,
     /// Last-modified time, or `None` if the server sent an unparseable value.
     pub last_modified: Option<UtcTime>,
+    /// Algorithm of the annotation's stored checksum, or `None` when the server
+    /// does not report one.
+    pub checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 /// Response of
@@ -50,39 +53,55 @@ impl_from_s3response!(ListObjectAnnotationsResponse);
 impl_has_s3fields!(ListObjectAnnotationsResponse);
 
 impl ListObjectAnnotationsResponse {
-    /// Parses the `ListObjectAnnotationsOutput` XML body into annotation
-    /// entries. Returns an empty vec when the object has no annotations. A
+    /// Parses the `ListObjectAnnotationsOutput` XML body into the entries of
+    /// this page. Returns an empty vec when the object has no annotations. A
     /// single entry with an unparseable `LastModified` yields `None` for that
     /// field rather than failing the whole listing.
     pub fn annotations(&self) -> Result<Vec<ObjectAnnotation>, ValidationErr> {
         parse_annotations(&self.body)
     }
+
+    /// Token to pass as `continuation_token` to fetch the next page, or `None`
+    /// when this page is the last.
+    pub fn next_continuation_token(&self) -> Result<Option<String>, ValidationErr> {
+        if self.body.is_empty() {
+            return Ok(None);
+        }
+        let root = Element::parse(self.body.clone().reader())?;
+        Ok(child_text(&root, "NextContinuationToken").filter(|t| !t.is_empty()))
+    }
 }
 
-/// Parses a `ListObjectAnnotationsOutput` XML body. Annotation entries sit
-/// directly under the root (unlike tagging's `<TagSet>` wrapper).
+/// Parses a `ListObjectAnnotationsOutput` XML body. S3 wraps the entries as
+/// `<Annotations><AnnotationEntry>`; AIStor releases before the S3 format put
+/// `<Annotation>` elements directly under the root, so both are read.
 fn parse_annotations(body: &Bytes) -> Result<Vec<ObjectAnnotation>, ValidationErr> {
     if body.is_empty() {
         return Ok(Vec::new());
     }
     let mut root = Element::parse(body.clone().reader())?;
     let mut annotations = Vec::new();
+    if let Some(mut wrapper) = root.take_child("Annotations") {
+        while let Some(entry) = wrapper.take_child("AnnotationEntry") {
+            annotations.push(parse_entry(&entry));
+        }
+    }
     while let Some(entry) = root.take_child("Annotation") {
-        let name = child_text(&entry, "AnnotationName").unwrap_or_default();
-        let size = child_text(&entry, "Size")
-            .and_then(|s| s.parse::<i64>().ok())
-            .unwrap_or(0);
-        let etag = trim_quotes(child_text(&entry, "ETag").unwrap_or_default());
-        let last_modified =
-            child_text(&entry, "LastModified").and_then(|s| from_iso8601utc(&s).ok());
-        annotations.push(ObjectAnnotation {
-            name,
-            size,
-            etag,
-            last_modified,
-        });
+        annotations.push(parse_entry(&entry));
     }
     Ok(annotations)
+}
+
+fn parse_entry(entry: &Element) -> ObjectAnnotation {
+    ObjectAnnotation {
+        name: child_text(entry, "AnnotationName").unwrap_or_default(),
+        size: child_text(entry, "Size")
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap_or(0),
+        etag: trim_quotes(child_text(entry, "ETag").unwrap_or_default()),
+        last_modified: child_text(entry, "LastModified").and_then(|s| from_iso8601utc(&s).ok()),
+        checksum_algorithm: child_text(entry, "ChecksumAlgorithm").and_then(|s| s.parse().ok()),
+    }
 }
 
 /// Text content of a direct child element, if present.
@@ -135,6 +154,62 @@ mod tests {
     }
 
     #[test]
+    fn parses_s3_list_format() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<ListObjectAnnotationsOutput xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Annotations>
+    <AnnotationEntry>
+      <AnnotationName>review-status</AnnotationName>
+      <LastModified>2026-01-02T03:04:05.000Z</LastModified>
+      <ETag>"abc123"</ETag>
+      <ChecksumAlgorithm>CRC64NVME</ChecksumAlgorithm>
+      <Size>42</Size>
+    </AnnotationEntry>
+    <AnnotationEntry>
+      <AnnotationName>summary</AnnotationName>
+      <LastModified>2026-01-02T03:04:05.000Z</LastModified>
+      <ETag>"def456"</ETag>
+      <Size>7</Size>
+    </AnnotationEntry>
+  </Annotations>
+  <Bucket>b</Bucket>
+  <Key>k</Key>
+  <AnnotationCount>2</AnnotationCount>
+  <NextContinuationToken>AXN1bW1hcnk</NextContinuationToken>
+</ListObjectAnnotationsOutput>"#;
+        let body = Bytes::from_static(xml);
+        let got = parse_annotations(&body).unwrap();
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].name, "review-status");
+        assert_eq!(got[0].size, 42);
+        assert_eq!(got[0].etag, "abc123");
+        assert!(got[0].last_modified.is_some());
+        assert_eq!(
+            got[0].checksum_algorithm,
+            Some(ChecksumAlgorithm::CRC64NVME)
+        );
+        assert_eq!(got[1].name, "summary");
+        assert_eq!(got[1].size, 7);
+        assert_eq!(got[1].checksum_algorithm, None);
+
+        let root = Element::parse(body.reader()).unwrap();
+        assert_eq!(
+            child_text(&root, "NextContinuationToken").as_deref(),
+            Some("AXN1bW1hcnk")
+        );
+    }
+
+    #[test]
+    fn empty_s3_list_yields_no_annotations() {
+        let xml = br#"<ListObjectAnnotationsOutput xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Annotations></Annotations><Bucket>b</Bucket><Key>k</Key><AnnotationCount>0</AnnotationCount></ListObjectAnnotationsOutput>"#;
+        assert!(
+            parse_annotations(&Bytes::from_static(xml))
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn empty_body_yields_no_annotations() {
         assert!(parse_annotations(&Bytes::new()).unwrap().is_empty());
     }
@@ -142,7 +217,11 @@ mod tests {
     #[test]
     fn malformed_xml_errors() {
         // Truncated/unclosed document must surface an error, not panic.
-        let bad = Bytes::from_static(b"<ListObjectAnnotationsOutput><Annotation>");
-        assert!(parse_annotations(&bad).is_err());
+        for bad in [
+            &b"<ListObjectAnnotationsOutput><Annotation>"[..],
+            &b"<ListObjectAnnotationsOutput><Annotations><AnnotationEntry>"[..],
+        ] {
+            assert!(parse_annotations(&Bytes::from_static(bad)).is_err());
+        }
     }
 }
