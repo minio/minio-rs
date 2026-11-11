@@ -35,20 +35,88 @@ impl_has_s3fields!(ListBucketsResponse);
 
 impl ListBucketsResponse {
     /// Returns the list of buckets in the account.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationErr`] when the body is not the expected XML, or when
+    /// a listed name does not satisfy the [`BucketName`] rules.
     pub fn buckets(&self) -> Result<Vec<Bucket>, ValidationErr> {
-        let mut root = Element::parse(self.body().clone().reader())?;
-        let buckets_xml = root
-            .get_mut_child("Buckets")
-            .ok_or(ValidationErr::xml_error("<Buckets> tag not found"))?;
+        parse_buckets(self.body().clone())
+    }
+}
 
-        let mut buckets: Vec<Bucket> = Vec::new();
-        while let Some(b) = buckets_xml.take_child("Bucket") {
-            let bucket = b;
-            buckets.push(Bucket {
-                name: BucketName::new_unchecked(get_text_result(&bucket, "Name")?),
-                creation_date: from_iso8601utc(&get_text_result(&bucket, "CreationDate")?)?,
-            })
+/// Parses the `<Buckets>` element of a `ListAllMyBucketsResult` body.
+///
+/// Each listed name goes through [`BucketName::new`], so a name that reaches a
+/// caller carries the same invariant as one written in code and can be passed
+/// straight back to any operation.
+fn parse_buckets(body: Bytes) -> Result<Vec<Bucket>, ValidationErr> {
+    let mut root = Element::parse(body.reader())?;
+    let buckets_xml = root
+        .get_mut_child("Buckets")
+        .ok_or(ValidationErr::xml_error("<Buckets> tag not found"))?;
+
+    let mut buckets: Vec<Bucket> = Vec::new();
+    while let Some(bucket) = buckets_xml.take_child("Bucket") {
+        buckets.push(Bucket {
+            name: BucketName::new(get_text_result(&bucket, "Name")?)?,
+            creation_date: from_iso8601utc(&get_text_result(&bucket, "CreationDate")?)?,
+        })
+    }
+    Ok(buckets)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::s3::client::MinioClient;
+    use crate::s3::creds::StaticProvider;
+    use crate::s3::http::BaseUrl;
+
+    fn listing(name: &str) -> Bytes {
+        Bytes::from(format!(
+            r#"<ListAllMyBucketsResult><Buckets><Bucket>
+                <Name>{name}</Name>
+                <CreationDate>2024-01-01T00:00:00.000Z</CreationDate>
+            </Bucket></Buckets></ListAllMyBucketsResult>"#
+        ))
+    }
+
+    #[test]
+    fn a_listed_name_is_validated() {
+        let buckets = parse_buckets(listing("my-bucket")).unwrap();
+        assert_eq!(buckets.len(), 1);
+        assert_eq!(buckets[0].name.as_str(), "my-bucket");
+    }
+
+    /// A name the server sends is the one path that could hand out a `BucketName`
+    /// the strict rules never saw, which every request builder now relies on.
+    #[test]
+    fn a_listed_name_that_breaks_the_rules_is_rejected() {
+        for name in ["My_Bucket", "my_bucket", "ab", "192.168.1.1", "xn--bucket"] {
+            assert!(
+                matches!(
+                    parse_buckets(listing(name)),
+                    Err(ValidationErr::InvalidBucketName { .. })
+                ),
+                "{name} must not become a BucketName"
+            );
         }
-        Ok(buckets)
+    }
+
+    /// The same names cannot reach a request through a client method either.
+    #[test]
+    fn a_name_that_breaks_the_rules_cannot_build_a_request() {
+        let base_url = "http://localhost:9000/".parse::<BaseUrl>().unwrap();
+        let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+        let client = MinioClient::new(base_url, Some(provider), None, None).unwrap();
+
+        assert!(client.get_object("my-bucket", "key").is_ok());
+        for name in ["My_Bucket", "my_bucket", "ab", "192.168.1.1", "xn--bucket"] {
+            assert!(
+                client.get_object(name, "key").is_err(),
+                "{name} must not build a request"
+            );
+        }
     }
 }

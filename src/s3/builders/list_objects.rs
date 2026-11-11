@@ -87,7 +87,7 @@ use crate::s3::response::list_objects::{
     ListObjectVersionsResponse, ListObjectsV1Response, ListObjectsV2Response,
 };
 use crate::s3::types::{BucketName, Region, S3Api, S3Request, ToS3Request, ToStream};
-use crate::s3::utils::{check_bucket_name, insert};
+use crate::s3::utils::insert;
 use async_trait::async_trait;
 use futures_util::{Stream, StreamExt, stream as futures_stream};
 use http::Method;
@@ -180,7 +180,6 @@ impl S3Api for ListObjectsV1 {
 
 impl ToS3Request for ListObjectsV1 {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
         let max_keys = self.max_keys.validate()?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
@@ -290,7 +289,6 @@ impl S3Api for ListObjectsV2 {
 
 impl ToS3Request for ListObjectsV2 {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
         let max_keys = self.max_keys.validate()?;
 
         let mut query_params: Multimap = self.extra_query_params.unwrap_or_default();
@@ -422,7 +420,6 @@ impl S3Api for ListObjectVersions {
 
 impl ToS3Request for ListObjectVersions {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
         let max_keys = self.max_keys.validate()?;
 
         let mut query_params: Multimap = insert(self.extra_query_params, "versions");

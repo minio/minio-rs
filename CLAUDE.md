@@ -5,6 +5,21 @@
 - Do not use emojis.
 - Do not add a "feel good" section.
 
+## CRITICAL: Design Rules
+
+**Read [`docs/DESIGN-RULES.md`](docs/DESIGN-RULES.md) before writing or reviewing new code.**
+
+It holds twelve numbered rules that decide the shape of new code: newtypes for
+distinct values, validation at the edge, typestate for a required order, enums for
+policy parameters, `Option` instead of sentinels, private by default, wire-form
+tests, lock discipline, and typed error variants. Each rule names its pattern,
+points at an example in this tree, and says when to skip it. Cite the rules by
+number in review.
+
+The rules complement this file: this file states the SDK-wide conventions (builder
+pattern, typed parameters, performance, testing), `docs/DESIGN-RULES.md` states the
+per-item design decisions.
+
 ## CRITICAL: Benchmark and Performance Data
 
 **NEVER fabricate, estimate, or make up benchmark results. EVER.**
@@ -70,6 +85,10 @@ log::debug!("Fetching {key} from {url}");
 ```
 
 ## Critical Code Patterns
+
+The numbered design rules behind these patterns are in
+[`docs/DESIGN-RULES.md`](docs/DESIGN-RULES.md): rule 1 for newtypes, rule 2 for
+validation at the edge, and rule 4 for the builder's compile-time required fields.
 
 ### Builder Pattern
 All S3 API requests MUST use the builder pattern, with documentation similar to the following example (adapted for each specific API)
@@ -525,7 +544,7 @@ For running integration tests against MinIO:
 - `/src` - Main library source code
 - `/tests` - Integration tests
 - `/examples` - Example usage code
-- `/docs` - Documentation
+- `/docs` - Documentation, including [`docs/DESIGN-RULES.md`](docs/DESIGN-RULES.md)
 - `/benches` - Performance benchmarks
 
 ## Common Patterns to Follow

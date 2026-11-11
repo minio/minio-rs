@@ -18,7 +18,7 @@ use crate::s3::builders::{BucketCommon, BucketCommonBuilder};
 use crate::s3::error::ValidationErr;
 use crate::s3::response::GetObjectLockConfigResponse;
 use crate::s3::types::{BucketName, S3Api, S3Request, ToS3Request};
-use crate::s3::utils::{check_bucket_name, insert};
+use crate::s3::utils::insert;
 use http::Method;
 
 /// Argument builder for the [`GetObjectLockConfig`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObjectLockConfiguration.html) S3 API operation.
@@ -41,8 +41,6 @@ impl S3Api for GetObjectLockConfig {
 
 impl ToS3Request for GetObjectLockConfig {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        check_bucket_name(&self.bucket, true)?;
-
         Ok(S3Request::builder()
             .client(self.client)
             .method(Method::GET)
