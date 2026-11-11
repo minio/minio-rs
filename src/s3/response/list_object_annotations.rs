@@ -62,14 +62,34 @@ impl ListObjectAnnotationsResponse {
     }
 
     /// Token to pass as `continuation_token` to fetch the next page, or `None`
-    /// when this page is the last.
+    /// when this page is the last. A token equal to the one this page was
+    /// requested with is an error, as following it would return this page
+    /// again.
     pub fn next_continuation_token(&self) -> Result<Option<String>, ValidationErr> {
-        if self.body.is_empty() {
-            return Ok(None);
-        }
-        let root = Element::parse(self.body.clone().reader())?;
-        Ok(child_text(&root, "NextContinuationToken").filter(|t| !t.is_empty()))
+        let requested = self
+            .request
+            .query_params
+            .get("continuation-token")
+            .map(String::as_str);
+        parse_next_token(&self.body, requested)
     }
+}
+
+fn parse_next_token(
+    body: &Bytes,
+    requested: Option<&str>,
+) -> Result<Option<String>, ValidationErr> {
+    if body.is_empty() {
+        return Ok(None);
+    }
+    let root = Element::parse(body.clone().reader())?;
+    let next = child_text(&root, "NextContinuationToken").filter(|t| !t.is_empty());
+    if next.is_some() && next.as_deref() == requested {
+        return Err(ValidationErr::xml_error(
+            "ListObjectAnnotations returned the continuation token it was requested with",
+        ));
+    }
+    Ok(next)
 }
 
 /// Parses a `ListObjectAnnotationsOutput` XML body. S3 wraps the entries as
@@ -192,11 +212,25 @@ mod tests {
         assert_eq!(got[1].size, 7);
         assert_eq!(got[1].checksum_algorithm, None);
 
-        let root = Element::parse(body.reader()).unwrap();
         assert_eq!(
-            child_text(&root, "NextContinuationToken").as_deref(),
+            parse_next_token(&body, None).unwrap().as_deref(),
             Some("AXN1bW1hcnk")
         );
+        assert_eq!(
+            parse_next_token(&body, Some("AXJldmlldy1zdGF0dXM"))
+                .unwrap()
+                .as_deref(),
+            Some("AXN1bW1hcnk")
+        );
+        assert!(parse_next_token(&body, Some("AXN1bW1hcnk")).is_err());
+    }
+
+    #[test]
+    fn last_page_has_no_next_token() {
+        let xml = br#"<ListObjectAnnotationsOutput><Annotations></Annotations><ContinuationToken>AXN1bW1hcnk</ContinuationToken></ListObjectAnnotationsOutput>"#;
+        let body = Bytes::from_static(xml);
+        assert_eq!(parse_next_token(&body, Some("AXN1bW1hcnk")).unwrap(), None);
+        assert_eq!(parse_next_token(&Bytes::new(), None).unwrap(), None);
     }
 
     #[test]
