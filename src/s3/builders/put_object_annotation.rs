@@ -22,7 +22,9 @@ use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{
     AnnotationName, BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId,
 };
-use crate::s3::utils::{insert, validate_annotation_payload_len};
+use crate::s3::utils::{
+    ChecksumAlgorithm, compute_checksum, insert, validate_annotation_payload_len,
+};
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -58,6 +60,11 @@ pub struct PutObjectAnnotation {
     /// (sent as `x-amz-object-if-match`).
     #[builder(default, setter(into))]
     if_match: Option<String>,
+    /// When set, sends the payload's checksum in this algorithm, which the
+    /// server verifies and stores. Without one the server stores a CRC64NVME
+    /// checksum of its own.
+    #[builder(default, setter(into))]
+    checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 /// Builder type for [`PutObjectAnnotation`] returned by
@@ -71,6 +78,7 @@ pub type PutObjectAnnotationBldr = PutObjectAnnotationBuilder<(
     (ObjectKey,),
     (AnnotationName,),
     (Bytes,),
+    (),
     (),
     (),
 )>;
@@ -90,6 +98,12 @@ impl ToS3Request for PutObjectAnnotation {
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         if let Some(etag) = self.if_match {
             headers.add(X_AMZ_OBJECT_IF_MATCH, etag);
+        }
+        if let Some(algorithm) = self.checksum_algorithm {
+            headers.add(
+                algorithm.header_name(),
+                compute_checksum(algorithm, &self.payload),
+            );
         }
 
         let body = Arc::new(SegmentedBytes::from(self.payload));
@@ -185,6 +199,38 @@ mod tests {
             test_client()
                 .put_object_annotation("bucket", "object", "", Bytes::from_static(b"x"))
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn checksum_header_is_sent_when_chosen() {
+        let req = test_client()
+            .put_object_annotation("bucket", "object", "review", Bytes::from_static(b"hello"))
+            .unwrap()
+            .checksum_algorithm(Some(ChecksumAlgorithm::CRC32))
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert_eq!(
+            req.headers
+                .get(ChecksumAlgorithm::CRC32.header_name())
+                .map(String::as_str),
+            Some(compute_checksum(ChecksumAlgorithm::CRC32, b"hello").as_str())
+        );
+    }
+
+    #[test]
+    fn no_checksum_header_by_default() {
+        let req = test_client()
+            .put_object_annotation("bucket", "object", "review", Bytes::from_static(b"hello"))
+            .unwrap()
+            .build()
+            .to_s3request()
+            .unwrap();
+        assert!(
+            !req.headers
+                .keys()
+                .any(|k| k.to_ascii_lowercase().starts_with("x-amz-checksum-"))
         );
     }
 }

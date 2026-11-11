@@ -69,6 +69,9 @@ pub enum ValidationErr {
     #[error("Invalid annotation payload: {0}")]
     InvalidAnnotationPayload(String),
 
+    #[error("Invalid max_results: {0}; must be between 1 and 1000")]
+    InvalidMaxAnnotationResults(u16),
+
     #[error("Invalid max_keys: {0}")]
     InvalidMaxKeys(String),
 

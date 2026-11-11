@@ -43,12 +43,33 @@ pub struct ListObjectAnnotations {
     object: ObjectKey,
     #[builder(default, setter(into))]
     version_id: Option<VersionId>,
+    /// Lists only the annotations whose name starts with this prefix.
+    #[builder(default, setter(into))]
+    prefix: Option<String>,
+    /// Most entries the page holds, from 1 to 1000. The server's default is
+    /// 1000.
+    #[builder(default, setter(into))]
+    max_results: Option<u16>,
+    /// `next_continuation_token` of the previous page, to fetch the page after
+    /// it.
+    #[builder(default, setter(into))]
+    continuation_token: Option<String>,
 }
 
 /// Builder type for [`ListObjectAnnotations`] returned by
 /// [`MinioClient::list_object_annotations`](crate::s3::client::MinioClient::list_object_annotations).
-pub type ListObjectAnnotationsBldr =
-    ListObjectAnnotationsBuilder<((MinioClient,), (), (), (), (BucketName,), (ObjectKey,), ())>;
+pub type ListObjectAnnotationsBldr = ListObjectAnnotationsBuilder<(
+    (MinioClient,),
+    (),
+    (),
+    (),
+    (BucketName,),
+    (ObjectKey,),
+    (),
+    (),
+    (),
+    (),
+)>;
 
 impl S3Api for ListObjectAnnotations {
     type S3Response = ListObjectAnnotationsResponse;
@@ -56,8 +77,23 @@ impl S3Api for ListObjectAnnotations {
 
 impl ToS3Request for ListObjectAnnotations {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
+        if let Some(n) = self.max_results
+            && !(1..=1000).contains(&n)
+        {
+            return Err(ValidationErr::InvalidMaxAnnotationResults(n));
+        }
+
         let mut query_params: Multimap = insert(self.extra_query_params, "annotation");
         query_params.add_version(self.version_id);
+        if let Some(prefix) = self.prefix {
+            query_params.add("annotation-prefix", prefix);
+        }
+        if let Some(n) = self.max_results {
+            query_params.add("max-annotation-results", n.to_string());
+        }
+        if let Some(token) = self.continuation_token {
+            query_params.add("continuation-token", token);
+        }
 
         Ok(S3Request::builder()
             .client(self.client)
@@ -110,5 +146,52 @@ mod tests {
             req.query_params.get("versionId").map(String::as_str),
             Some("v1")
         );
+    }
+
+    #[test]
+    fn page_parameters_are_sent() {
+        let req = test_client()
+            .list_object_annotations("bucket", "object")
+            .unwrap()
+            .prefix(Some("review-".to_string()))
+            .max_results(Some(10u16))
+            .continuation_token(Some("AXN1bW1hcnk".to_string()))
+            .build()
+            .to_s3request()
+            .unwrap();
+        let q = |k: &str| req.query_params.get(k).map(String::as_str);
+        assert_eq!(q("annotation-prefix"), Some("review-"));
+        assert_eq!(q("max-annotation-results"), Some("10"));
+        assert_eq!(q("continuation-token"), Some("AXN1bW1hcnk"));
+    }
+
+    #[test]
+    fn page_parameters_are_omitted_by_default() {
+        let req = test_client()
+            .list_object_annotations("bucket", "object")
+            .unwrap()
+            .build()
+            .to_s3request()
+            .unwrap();
+        for k in [
+            "annotation-prefix",
+            "max-annotation-results",
+            "continuation-token",
+        ] {
+            assert!(!req.query_params.contains_key(k), "{k}");
+        }
+    }
+
+    #[test]
+    fn max_results_out_of_range_is_refused() {
+        for n in [0u16, 1001] {
+            let res = test_client()
+                .list_object_annotations("bucket", "object")
+                .unwrap()
+                .max_results(Some(n))
+                .build()
+                .to_s3request();
+            assert!(res.is_err(), "{n}");
+        }
     }
 }
