@@ -20,6 +20,7 @@ use crate::s3::response::PutObjectTaggingResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId};
 use crate::s3::utils::insert;
+use crate::s3::xml_body::XmlBody;
 use bytes::Bytes;
 use http::Method;
 use std::collections::HashMap;
@@ -73,23 +74,20 @@ impl ToS3Request for PutObjectTagging {
         query_params.add_version(self.version_id);
 
         let data: String = {
-            let mut data = String::from("<Tagging>");
+            let mut body = XmlBody::new();
+            body.start("Tagging");
             if !self.tags.is_empty() {
-                data.push_str("<TagSet>");
+                body.start("TagSet");
                 for (key, value) in self.tags.iter() {
-                    data.push_str("<Tag>");
-                    data.push_str("<Key>");
-                    data.push_str(key);
-                    data.push_str("</Key>");
-                    data.push_str("<Value>");
-                    data.push_str(value);
-                    data.push_str("</Value>");
-                    data.push_str("</Tag>");
+                    body.start("Tag")
+                        .element("Key", key)
+                        .element("Value", value)
+                        .end();
                 }
-                data.push_str("</TagSet>");
+                body.end();
             }
-            data.push_str("</Tagging>");
-            data
+            body.end();
+            body.finish()?
         };
         let body = Arc::new(SegmentedBytes::from(Bytes::from(data)));
 
@@ -103,5 +101,36 @@ impl ToS3Request for PutObjectTagging {
             .headers(self.extra_headers.unwrap_or_default())
             .body(body)
             .build())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::s3::creds::StaticProvider;
+    use crate::s3::http::BaseUrl;
+
+    #[test]
+    fn tags_reach_the_server_unchanged() {
+        let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
+        let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+        let client = MinioClient::new(base_url, Some(provider), None, None).unwrap();
+        let tags = HashMap::from([("team".to_owned(), "R&D <core>\r\n".to_owned())]);
+        let req = PutObjectTagging::builder()
+            .client(client)
+            .bucket(BucketName::new("test-bucket").unwrap())
+            .object(ObjectKey::new("obj").unwrap())
+            .tags(tags)
+            .build()
+            .to_s3request()
+            .unwrap();
+        let body = req.body.unwrap().to_bytes();
+        let root = xmltree::Element::parse(body.as_ref()).unwrap();
+        let tag = root.get_child("TagSet").unwrap().get_child("Tag").unwrap();
+        assert_eq!(tag.get_child("Key").unwrap().get_text().unwrap(), "team");
+        assert_eq!(
+            tag.get_child("Value").unwrap().get_text().unwrap(),
+            "R&D <core>\r\n"
+        );
     }
 }

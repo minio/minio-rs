@@ -20,6 +20,7 @@ use crate::s3::response::PutBucketTaggingResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{BucketName, Region, S3Api, S3Request, ToS3Request};
 use crate::s3::utils::insert;
+use crate::s3::xml_body::XmlBody;
 use bytes::Bytes;
 use http::Method;
 use std::collections::HashMap;
@@ -58,23 +59,20 @@ impl S3Api for PutBucketTagging {
 impl ToS3Request for PutBucketTagging {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         let data: String = {
-            let mut data = String::from("<Tagging>");
+            let mut body = XmlBody::new();
+            body.start("Tagging");
             if !self.tags.is_empty() {
-                data.push_str("<TagSet>");
+                body.start("TagSet");
                 for (key, value) in self.tags.iter() {
-                    data.push_str("<Tag>");
-                    data.push_str("<Key>");
-                    data.push_str(key);
-                    data.push_str("</Key>");
-                    data.push_str("<Value>");
-                    data.push_str(value);
-                    data.push_str("</Value>");
-                    data.push_str("</Tag>");
+                    body.start("Tag")
+                        .element("Key", key)
+                        .element("Value", value)
+                        .end();
                 }
-                data.push_str("</TagSet>");
+                body.end();
             }
-            data.push_str("</Tagging>");
-            data
+            body.end();
+            body.finish()?
         };
         let body = Arc::new(SegmentedBytes::from(Bytes::from(data)));
 

@@ -19,6 +19,7 @@ use super::prefix_filter_rule::PrefixFilterRule;
 use super::suffix_filter_rule::SuffixFilterRule;
 use crate::s3::error::ValidationErr;
 use crate::s3::utils::{get_text_option, get_text_result};
+use crate::s3::xml_body::XmlBody;
 use xmltree::Element;
 
 #[allow(clippy::type_complexity)]
@@ -73,45 +74,31 @@ pub fn parse_common_notification_config(
     Ok((events, id, prefix_filter_rule, suffix_filter_rule))
 }
 
-pub fn to_xml_common_notification_config(
-    events: &Vec<String>,
+pub(crate) fn write_common_notification_config(
+    body: &mut XmlBody,
+    events: &[String],
     id: &Option<String>,
     prefix_filter_rule: &Option<PrefixFilterRule>,
     suffix_filter_rule: &Option<SuffixFilterRule>,
-) -> String {
-    let mut data = String::new();
-
+) {
     for event in events {
-        data.push_str("<Event>");
-        data.push_str(event);
-        data.push_str("</Event>");
+        body.element("Event", event);
     }
-
-    if let Some(v) = id {
-        data.push_str("<Id>");
-        data.push_str(v);
-        data.push_str("</Id>");
-    }
-
+    body.optional("Id", id.as_deref());
     if prefix_filter_rule.is_some() || suffix_filter_rule.is_some() {
-        data.push_str("<Filter><S3Key>");
-
+        body.start("Filter").start("S3Key");
         if let Some(v) = prefix_filter_rule {
-            data.push_str("<FilterRule><Name>prefix</Name>");
-            data.push_str("<Value>");
-            data.push_str(&v.value);
-            data.push_str("</Value></FilterRule>");
+            body.start("FilterRule")
+                .element("Name", "prefix")
+                .element("Value", &v.value)
+                .end();
         }
-
         if let Some(v) = suffix_filter_rule {
-            data.push_str("<FilterRule><Name>suffix</Name>");
-            data.push_str("<Value>");
-            data.push_str(&v.value);
-            data.push_str("</Value></FilterRule>");
+            body.start("FilterRule")
+                .element("Name", "suffix")
+                .element("Value", &v.value)
+                .end();
         }
-
-        data.push_str("</S3Key></Filter>");
+        body.end().end();
     }
-
-    data
 }

@@ -19,6 +19,7 @@ use super::super::tag::Tag;
 use super::and_operator::AndOperator;
 use crate::s3::error::ValidationErr;
 use crate::s3::utils::get_text_result;
+use crate::s3::xml_body::XmlBody;
 use std::collections::HashMap;
 use xmltree::Element;
 
@@ -93,7 +94,9 @@ impl Filter {
         if self.and_operator.is_some() ^ self.prefix.is_some() ^ self.tag.is_some() {
             return Ok(());
         }
-        Err(ValidationErr::InvalidFilter(self.to_xml()))
+        Err(ValidationErr::InvalidFilter(
+            self.to_xml().unwrap_or_default(),
+        ))
     }
 
     pub fn is_null(&self) -> bool {
@@ -103,47 +106,33 @@ impl Filter {
         and_is_empty && self.prefix.is_none() && self.tag.is_none()
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<Filter>");
-        if let Some(and_op) = &self.and_operator {
-            data.push_str("<And>");
-            if let Some(prefix) = &and_op.prefix {
-                data.push_str("<Prefix>");
-                data.push_str(prefix);
-                data.push_str("</Prefix>");
-            }
-            if let Some(tags) = &and_op.tags {
-                for (key, value) in tags {
-                    data.push_str("<Tag>");
-                    data.push_str("<Key>");
-                    data.push_str(key);
-                    data.push_str("</Key>");
-                    data.push_str("<Value>");
-                    data.push_str(value);
-                    data.push_str("</Value>");
-                    data.push_str("</Tag>");
-                }
-            }
-            data.push_str("</And>");
-        }
-        if let Some(prefix) = &self.prefix {
-            data.push_str("<Prefix>");
-            data.push_str(prefix);
-            data.push_str("</Prefix>");
-        }
-        if let Some(tag) = &self.tag {
-            data.push_str("<Tag>");
-            data.push_str("<Key>");
-            data.push_str(&tag.key);
-            data.push_str("</Key>");
-            data.push_str("<Value>");
-            data.push_str(&tag.value);
-            data.push_str("</Value>");
-            data.push_str("</Tag>");
-        }
-        data.push_str("</Filter>");
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        self.write_xml(&mut body);
+        body.finish()
+    }
 
-        data
+    pub(crate) fn write_xml(&self, body: &mut XmlBody) {
+        body.start("Filter");
+        if let Some(and_op) = &self.and_operator {
+            body.start("And")
+                .optional("Prefix", and_op.prefix.as_deref());
+            for (key, value) in and_op.tags.iter().flatten() {
+                body.start("Tag")
+                    .element("Key", key)
+                    .element("Value", value)
+                    .end();
+            }
+            body.end();
+        }
+        body.optional("Prefix", self.prefix.as_deref());
+        if let Some(tag) = &self.tag {
+            body.start("Tag")
+                .element("Key", &tag.key)
+                .element("Value", &tag.value)
+                .end();
+        }
+        body.end();
     }
 }
 

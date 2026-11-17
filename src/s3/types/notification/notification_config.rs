@@ -19,6 +19,7 @@ use super::cloud_func_config::CloudFuncConfig;
 use super::queue_config::QueueConfig;
 use super::topic_config::TopicConfig;
 use crate::s3::error::ValidationErr;
+use crate::s3::xml_body::XmlBody;
 use xmltree::Element;
 
 #[derive(PartialEq, Clone, Debug, Default)]
@@ -85,28 +86,19 @@ impl NotificationConfig {
         Ok(())
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<NotificationConfiguration>");
-
-        if let Some(v) = &self.cloud_func_config_list {
-            for rule in v {
-                data.push_str(&rule.to_xml())
-            }
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        body.start("NotificationConfiguration");
+        for rule in self.cloud_func_config_list.iter().flatten() {
+            rule.write_xml(&mut body);
         }
-
-        if let Some(v) = &self.queue_config_list {
-            for rule in v {
-                data.push_str(&rule.to_xml())
-            }
+        for rule in self.queue_config_list.iter().flatten() {
+            rule.write_xml(&mut body);
         }
-
-        if let Some(v) = &self.topic_config_list {
-            for rule in v {
-                data.push_str(&rule.to_xml())
-            }
+        for rule in self.topic_config_list.iter().flatten() {
+            rule.write_xml(&mut body);
         }
-
-        data.push_str("</NotificationConfiguration>");
-        data
+        body.end();
+        body.finish()
     }
 }

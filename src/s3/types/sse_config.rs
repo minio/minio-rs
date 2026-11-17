@@ -15,6 +15,9 @@
 
 //! Server-side encryption configuration
 
+use crate::s3::error::ValidationErr;
+use crate::s3::xml_body::XmlBody;
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SseConfig {
     pub sse_algorithm: String,
@@ -36,22 +39,16 @@ impl SseConfig {
         }
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from(
-            "<ServerSideEncryptionConfiguration><Rule><ApplyServerSideEncryptionByDefault>",
-        );
-        data.push_str("<SSEAlgorithm>");
-        data.push_str(&self.sse_algorithm);
-        data.push_str("</SSEAlgorithm>");
-        if let Some(v) = &self.kms_master_key_id {
-            data.push_str("<KMSMasterKeyID>");
-            data.push_str(v);
-            data.push_str("</KMSMasterKeyID>");
-        }
-
-        data.push_str(
-            "</ApplyServerSideEncryptionByDefault></Rule></ServerSideEncryptionConfiguration>",
-        );
-        data
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        body.start("ServerSideEncryptionConfiguration")
+            .start("Rule")
+            .start("ApplyServerSideEncryptionByDefault")
+            .element("SSEAlgorithm", &self.sse_algorithm)
+            .optional("KMSMasterKeyID", self.kms_master_key_id.as_deref())
+            .end()
+            .end()
+            .end();
+        body.finish()
     }
 }

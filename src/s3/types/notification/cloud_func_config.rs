@@ -16,12 +16,13 @@
 //! Cloud function configuration information
 
 use super::notification_common::{
-    parse_common_notification_config, to_xml_common_notification_config,
+    parse_common_notification_config, write_common_notification_config,
 };
 use super::prefix_filter_rule::PrefixFilterRule;
 use super::suffix_filter_rule::SuffixFilterRule;
 use crate::s3::error::ValidationErr;
 use crate::s3::utils::get_text_result;
+use crate::s3::xml_body::XmlBody;
 use xmltree::Element;
 
 #[derive(PartialEq, Clone, Debug)]
@@ -51,25 +52,27 @@ impl CloudFuncConfig {
             return Ok(());
         }
 
-        Err(ValidationErr::InvalidFilter(self.to_xml()))
+        Err(ValidationErr::InvalidFilter(
+            self.to_xml().unwrap_or_default(),
+        ))
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<CloudFunctionConfiguration>");
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        self.write_xml(&mut body);
+        body.finish()
+    }
 
-        data.push_str("<CloudFunction>");
-        data.push_str(&self.cloud_func);
-        data.push_str("</CloudFunction>");
-
-        data.push_str(&to_xml_common_notification_config(
+    pub(crate) fn write_xml(&self, body: &mut XmlBody) {
+        body.start("CloudFunctionConfiguration")
+            .element("CloudFunction", &self.cloud_func);
+        write_common_notification_config(
+            body,
             &self.events,
             &self.id,
             &self.prefix_filter_rule,
             &self.suffix_filter_rule,
-        ));
-
-        data.push_str("</CloudFunctionConfiguration>");
-
-        data
+        );
+        body.end();
     }
 }

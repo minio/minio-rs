@@ -88,6 +88,7 @@ twox-hash = { version = "2", default-features = false, features = [
     "std",
 ] }
 urlencoding = "2.1"
+xml = "1.3"
 xmltree = "0.12"
 http = { workspace = true }
 thiserror = "2.0"

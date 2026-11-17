@@ -19,6 +19,7 @@ use super::basic_types::RetentionMode;
 use crate::s3::error::ValidationErr;
 use crate::s3::types::header_constants::*;
 use crate::s3::utils::{UtcTime, get_text_option, get_text_result};
+use crate::s3::xml_body::XmlBody;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -268,129 +269,90 @@ impl SelectRequest {
         })
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<SelectObjectContentRequest>");
-
-        data.push_str("<Expression>");
-        data.push_str(&self.expr);
-        data.push_str("</Expression>");
-        data.push_str("<ExpressionType>SQL</ExpressionType>");
-
-        data.push_str("<InputSerialization>");
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let text = |v: Option<char>| v.map(String::from);
+        let mut body = XmlBody::new();
+        body.start("SelectObjectContentRequest")
+            .element("Expression", &self.expr)
+            .element("ExpressionType", "SQL")
+            .start("InputSerialization");
         if let Some(c) = &self.csv_input {
-            if let Some(v) = &c.compression_type {
-                data.push_str("<CompressionType>");
-                data.push_str(&v.to_string());
-                data.push_str("</CompressionType>");
-            }
-
-            data.push_str("<CSV>");
+            body.optional(
+                "CompressionType",
+                c.compression_type
+                    .as_ref()
+                    .map(|v| v.to_string())
+                    .as_deref(),
+            )
+            .start("CSV");
             if c.allow_quoted_record_delimiter {
-                data.push_str("<AllowQuotedRecordDelimiter>true</AllowQuotedRecordDelimiter>");
+                body.element("AllowQuotedRecordDelimiter", "true");
             }
-            if let Some(v) = c.comments {
-                data.push_str("<Comments>");
-                data.push(v);
-                data.push_str("</Comments>");
-            }
-            if let Some(v) = c.field_delimiter {
-                data.push_str("<FieldDelimiter>");
-                data.push(v);
-                data.push_str("</FieldDelimiter>");
-            }
-            if let Some(v) = &c.file_header_info {
-                data.push_str("<FileHeaderInfo>");
-                data.push_str(&v.to_string());
-                data.push_str("</FileHeaderInfo>");
-            }
-            if let Some(v) = c.quote_character {
-                data.push_str("<QuoteCharacter>");
-                data.push(v);
-                data.push_str("</QuoteCharacter>");
-            }
-            if let Some(v) = c.record_delimiter {
-                data.push_str("<RecordDelimiter>");
-                data.push(v);
-                data.push_str("</RecordDelimiter>");
-            }
-            data.push_str("</CSV>");
+            body.optional("Comments", text(c.comments).as_deref())
+                .optional("FieldDelimiter", text(c.field_delimiter).as_deref())
+                .optional(
+                    "FileHeaderInfo",
+                    c.file_header_info
+                        .as_ref()
+                        .map(|v| v.to_string())
+                        .as_deref(),
+                )
+                .optional("QuoteCharacter", text(c.quote_character).as_deref())
+                .optional("RecordDelimiter", text(c.record_delimiter).as_deref())
+                .end();
         } else if let Some(j) = &self.json_input {
-            if let Some(v) = &j.compression_type {
-                data.push_str("<CompressionType>");
-                data.push_str(&v.to_string());
-                data.push_str("</CompressionType>");
-            }
-            data.push_str("<JSON>");
-            if let Some(v) = &j.json_type {
-                data.push_str("<Type>");
-                data.push_str(&v.to_string());
-                data.push_str("</Type>");
-            }
-            data.push_str("</JSON>");
+            body.optional(
+                "CompressionType",
+                j.compression_type
+                    .as_ref()
+                    .map(|v| v.to_string())
+                    .as_deref(),
+            )
+            .start("JSON")
+            .optional(
+                "Type",
+                j.json_type.as_ref().map(|v| v.to_string()).as_deref(),
+            )
+            .end();
         } else if self.parquet_input.is_some() {
-            data.push_str("<Parquet></Parquet>");
+            body.start("Parquet").end();
         }
-        data.push_str("</InputSerialization>");
-
-        data.push_str("<OutputSerialization>");
+        body.end().start("OutputSerialization");
         if let Some(c) = &self.csv_output {
-            data.push_str("<CSV>");
-            if let Some(v) = c.field_delimiter {
-                data.push_str("<FieldDelimiter>");
-                data.push(v);
-                data.push_str("</FieldDelimiter>");
-            }
-            if let Some(v) = c.quote_character {
-                data.push_str("<QuoteCharacter>");
-                data.push(v);
-                data.push_str("</QuoteCharacter>");
-            }
-            if let Some(v) = c.quote_escape_character {
-                data.push_str("<QuoteEscapeCharacter>");
-                data.push(v);
-                data.push_str("</QuoteEscapeCharacter>");
-            }
-            if let Some(v) = &c.quote_fields {
-                data.push_str("<QuoteFields>");
-                data.push_str(&v.to_string());
-                data.push_str("</QuoteFields>");
-            }
-            if let Some(v) = c.record_delimiter {
-                data.push_str("<RecordDelimiter>");
-                data.push(v);
-                data.push_str("</RecordDelimiter>");
-            }
-            data.push_str("</CSV>");
+            body.start("CSV")
+                .optional("FieldDelimiter", text(c.field_delimiter).as_deref())
+                .optional("QuoteCharacter", text(c.quote_character).as_deref())
+                .optional(
+                    "QuoteEscapeCharacter",
+                    text(c.quote_escape_character).as_deref(),
+                )
+                .optional(
+                    "QuoteFields",
+                    c.quote_fields.as_ref().map(|v| v.to_string()).as_deref(),
+                )
+                .optional("RecordDelimiter", text(c.record_delimiter).as_deref())
+                .end();
         } else if let Some(j) = &self.json_output {
-            data.push_str("<JSON>");
-            if let Some(v) = j.record_delimiter {
-                data.push_str("<RecordDelimiter>");
-                data.push(v);
-                data.push_str("</RecordDelimiter>");
-            }
-            data.push_str("</JSON>");
+            body.start("JSON")
+                .optional("RecordDelimiter", text(j.record_delimiter).as_deref())
+                .end();
         }
-        data.push_str("</OutputSerialization>");
-
+        body.end();
         if self.request_progress {
-            data.push_str("<RequestProgress><Enabled>true</Enabled></RequestProgress>");
+            body.start("RequestProgress")
+                .element("Enabled", "true")
+                .end();
         }
-
         if let Some(s) = self.scan_start_range
             && let Some(e) = self.scan_end_range
         {
-            data.push_str("<ScanRange>");
-            data.push_str("<Start>");
-            data.push_str(&s.to_string());
-            data.push_str("</Start>");
-            data.push_str("<End>");
-            data.push_str(&e.to_string());
-            data.push_str("</End>");
-            data.push_str("</ScanRange>");
+            body.start("ScanRange")
+                .element("Start", &s.to_string())
+                .element("End", &e.to_string())
+                .end();
         }
-
-        data.push_str("</SelectObjectContentRequest>");
-        data
+        body.end();
+        body.finish()
     }
 }
 
@@ -610,23 +572,17 @@ impl SseConfig {
         }
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from(
-            "<ServerSideEncryptionConfiguration><Rule><ApplyServerSideEncryptionByDefault>",
-        );
-        data.push_str("<SSEAlgorithm>");
-        data.push_str(&self.sse_algorithm);
-        data.push_str("</SSEAlgorithm>");
-        if let Some(v) = &self.kms_master_key_id {
-            data.push_str("<KMSMasterKeyID>");
-            data.push_str(v);
-            data.push_str("</KMSMasterKeyID>");
-        }
-
-        data.push_str(
-            "</ApplyServerSideEncryptionByDefault></Rule></ServerSideEncryptionConfiguration>",
-        );
-        data
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        body.start("ServerSideEncryptionConfiguration")
+            .start("Rule")
+            .start("ApplyServerSideEncryptionByDefault")
+            .element("SSEAlgorithm", &self.sse_algorithm)
+            .optional("KMSMasterKeyID", self.kms_master_key_id.as_deref())
+            .end()
+            .end()
+            .end();
+        body.finish()
     }
 }
 
@@ -716,50 +672,38 @@ impl Filter {
         if self.and_operator.is_some() ^ self.prefix.is_some() ^ self.tag.is_some() {
             return Ok(());
         }
-        Err(ValidationErr::InvalidFilter(self.to_xml()))
+        Err(ValidationErr::InvalidFilter(
+            self.to_xml().unwrap_or_default(),
+        ))
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<Filter>");
-        if let Some(and_op) = &self.and_operator {
-            data.push_str("<And>");
-            if let Some(prefix) = &and_op.prefix {
-                data.push_str("<Prefix>");
-                data.push_str(prefix);
-                data.push_str("</Prefix>");
-            }
-            if let Some(tags) = &and_op.tags {
-                for (key, value) in tags {
-                    data.push_str("<Tag>");
-                    data.push_str("<Key>");
-                    data.push_str(key);
-                    data.push_str("</Key>");
-                    data.push_str("<Value>");
-                    data.push_str(value);
-                    data.push_str("</Value>");
-                    data.push_str("</Tag>");
-                }
-            }
-            data.push_str("</And>");
-        }
-        if let Some(prefix) = &self.prefix {
-            data.push_str("<Prefix>");
-            data.push_str(prefix);
-            data.push_str("</Prefix>");
-        }
-        if let Some(tag) = &self.tag {
-            data.push_str("<Tag>");
-            data.push_str("<Key>");
-            data.push_str(&tag.key);
-            data.push_str("</Key>");
-            data.push_str("<Value>");
-            data.push_str(&tag.value);
-            data.push_str("</Value>");
-            data.push_str("</Tag>");
-        }
-        data.push_str("</Filter>");
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        self.write_xml(&mut body);
+        body.finish()
+    }
 
-        data
+    pub(crate) fn write_xml(&self, body: &mut XmlBody) {
+        body.start("Filter");
+        if let Some(and_op) = &self.and_operator {
+            body.start("And")
+                .optional("Prefix", and_op.prefix.as_deref());
+            for (key, value) in and_op.tags.iter().flatten() {
+                body.start("Tag")
+                    .element("Key", key)
+                    .element("Value", value)
+                    .end();
+            }
+            body.end();
+        }
+        body.optional("Prefix", self.prefix.as_deref());
+        if let Some(tag) = &self.tag {
+            body.start("Tag")
+                .element("Key", &tag.key)
+                .element("Value", &tag.value)
+                .end();
+        }
+        body.end();
     }
 }
 
@@ -815,47 +759,33 @@ fn parse_common_notification_config(
     Ok((events, id, prefix_filter_rule, suffix_filter_rule))
 }
 
-fn to_xml_common_notification_config(
-    events: &Vec<String>,
+fn write_common_notification_config(
+    body: &mut XmlBody,
+    events: &[String],
     id: &Option<String>,
     prefix_filter_rule: &Option<PrefixFilterRule>,
     suffix_filter_rule: &Option<SuffixFilterRule>,
-) -> String {
-    let mut data = String::new();
-
+) {
     for event in events {
-        data.push_str("<Event>");
-        data.push_str(event);
-        data.push_str("</Event>");
+        body.element("Event", event);
     }
-
-    if let Some(v) = id {
-        data.push_str("<Id>");
-        data.push_str(v);
-        data.push_str("</Id>");
-    }
-
+    body.optional("Id", id.as_deref());
     if prefix_filter_rule.is_some() || suffix_filter_rule.is_some() {
-        data.push_str("<Filter><S3Key>");
-
+        body.start("Filter").start("S3Key");
         if let Some(v) = prefix_filter_rule {
-            data.push_str("<FilterRule><Name>prefix</Name>");
-            data.push_str("<Value>");
-            data.push_str(&v.value);
-            data.push_str("</Value></FilterRule>");
+            body.start("FilterRule")
+                .element("Name", "prefix")
+                .element("Value", &v.value)
+                .end();
         }
-
         if let Some(v) = suffix_filter_rule {
-            data.push_str("<FilterRule><Name>suffix</Name>");
-            data.push_str("<Value>");
-            data.push_str(&v.value);
-            data.push_str("</Value></FilterRule>");
+            body.start("FilterRule")
+                .element("Name", "suffix")
+                .element("Value", &v.value)
+                .end();
         }
-
-        data.push_str("</S3Key></Filter>");
+        body.end().end();
     }
-
-    data
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -906,26 +836,28 @@ impl CloudFuncConfig {
             return Ok(());
         }
 
-        Err(ValidationErr::InvalidFilter(self.to_xml()))
+        Err(ValidationErr::InvalidFilter(
+            self.to_xml().unwrap_or_default(),
+        ))
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<CloudFunctionConfiguration>");
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        self.write_xml(&mut body);
+        body.finish()
+    }
 
-        data.push_str("<CloudFunction>");
-        data.push_str(&self.cloud_func);
-        data.push_str("</CloudFunction>");
-
-        data.push_str(&to_xml_common_notification_config(
+    pub(crate) fn write_xml(&self, body: &mut XmlBody) {
+        body.start("CloudFunctionConfiguration")
+            .element("CloudFunction", &self.cloud_func);
+        write_common_notification_config(
+            body,
             &self.events,
             &self.id,
             &self.prefix_filter_rule,
             &self.suffix_filter_rule,
-        ));
-
-        data.push_str("</CloudFunctionConfiguration>");
-
-        data
+        );
+        body.end();
     }
 }
 
@@ -957,26 +889,28 @@ impl QueueConfig {
             return Ok(());
         }
 
-        Err(ValidationErr::InvalidFilter(self.to_xml()))
+        Err(ValidationErr::InvalidFilter(
+            self.to_xml().unwrap_or_default(),
+        ))
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<QueueConfiguration>");
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        self.write_xml(&mut body);
+        body.finish()
+    }
 
-        data.push_str("<Queue>");
-        data.push_str(&self.queue);
-        data.push_str("</Queue>");
-
-        data.push_str(&to_xml_common_notification_config(
+    pub(crate) fn write_xml(&self, body: &mut XmlBody) {
+        body.start("QueueConfiguration")
+            .element("Queue", &self.queue);
+        write_common_notification_config(
+            body,
             &self.events,
             &self.id,
             &self.prefix_filter_rule,
             &self.suffix_filter_rule,
-        ));
-
-        data.push_str("</QueueConfiguration>");
-
-        data
+        );
+        body.end();
     }
 }
 
@@ -1008,26 +942,28 @@ impl TopicConfig {
             return Ok(());
         }
 
-        Err(ValidationErr::InvalidFilter(self.to_xml()))
+        Err(ValidationErr::InvalidFilter(
+            self.to_xml().unwrap_or_default(),
+        ))
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<TopicConfiguration>");
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        self.write_xml(&mut body);
+        body.finish()
+    }
 
-        data.push_str("<Topic>");
-        data.push_str(&self.topic);
-        data.push_str("</Topic>");
-
-        data.push_str(&to_xml_common_notification_config(
+    pub(crate) fn write_xml(&self, body: &mut XmlBody) {
+        body.start("TopicConfiguration")
+            .element("Topic", &self.topic);
+        write_common_notification_config(
+            body,
             &self.events,
             &self.id,
             &self.prefix_filter_rule,
             &self.suffix_filter_rule,
-        ));
-
-        data.push_str("</TopicConfiguration>");
-
-        data
+        );
+        body.end();
     }
 }
 
@@ -1096,29 +1032,20 @@ impl NotificationConfig {
         Ok(())
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<NotificationConfiguration>");
-
-        if let Some(v) = &self.cloud_func_config_list {
-            for rule in v {
-                data.push_str(&rule.to_xml())
-            }
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        body.start("NotificationConfiguration");
+        for rule in self.cloud_func_config_list.iter().flatten() {
+            rule.write_xml(&mut body);
         }
-
-        if let Some(v) = &self.queue_config_list {
-            for rule in v {
-                data.push_str(&rule.to_xml())
-            }
+        for rule in self.queue_config_list.iter().flatten() {
+            rule.write_xml(&mut body);
         }
-
-        if let Some(v) = &self.topic_config_list {
-            for rule in v {
-                data.push_str(&rule.to_xml())
-            }
+        for rule in self.topic_config_list.iter().flatten() {
+            rule.write_xml(&mut body);
         }
-
-        data.push_str("</NotificationConfiguration>");
-        data
+        body.end();
+        body.finish()
     }
 }
 
@@ -1236,82 +1163,49 @@ impl Destination {
         })
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<Destination>");
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        self.write_xml(&mut body);
+        body.finish()
+    }
 
-        data.push_str("<Bucket>");
-        data.push_str(&self.bucket_arn);
-        data.push_str("</Bucket>");
-
+    pub(crate) fn write_xml(&self, body: &mut XmlBody) {
+        let status = |enabled: bool| if enabled { "Enabled" } else { "Disabled" };
+        body.start("Destination")
+            .element("Bucket", &self.bucket_arn);
         if let Some(v) = &self.access_control_translation {
-            data.push_str("<AccessControlTranslation><Owner>");
-            data.push_str(&v.owner);
-            data.push_str("</Owner></AccessControlTranslation>");
+            body.start("AccessControlTranslation")
+                .element("Owner", &v.owner)
+                .end();
         }
-
-        if let Some(v) = &self.account {
-            data.push_str("<Account>");
-            data.push_str(v);
-            data.push_str("</Account>");
-        }
-
+        body.optional("Account", self.account.as_deref());
         if let Some(c) = &self.encryption_config {
-            data.push_str("<EncryptionConfiguration>");
-            if let Some(v) = &c.replica_kms_key_id {
-                data.push_str("<ReplicaKmsKeyID>");
-                data.push_str(v);
-                data.push_str("</ReplicaKmsKeyID>");
-            }
-            data.push_str("</EncryptionConfiguration>");
+            body.start("EncryptionConfiguration")
+                .optional("ReplicaKmsKeyID", c.replica_kms_key_id.as_deref())
+                .end();
         }
-
         if let Some(m) = &self.metrics {
-            data.push_str("<Metrics><EventThreshold>");
-
-            if let Some(v) = m.event_threshold_minutes {
-                data.push_str("<Minutes>");
-                data.push_str(&v.to_string());
-                data.push_str("</Minutes>");
-            }
-
-            data.push_str("<Status>");
-            data.push_str(match m.status {
-                true => "Enabled",
-                false => "Disabled",
-            });
-            data.push_str("</Status>");
-
-            data.push_str("</EventThreshold></Metrics>");
+            body.start("Metrics")
+                .start("EventThreshold")
+                .optional(
+                    "Minutes",
+                    m.event_threshold_minutes.map(|v| v.to_string()).as_deref(),
+                )
+                .element("Status", status(m.status))
+                .end()
+                .end();
         }
-
         if let Some(t) = &self.replication_time {
-            data.push_str("<ReplicationTime>");
-
-            data.push_str("<Time>");
-            if let Some(v) = t.time_minutes {
-                data.push_str(&v.to_string());
-            }
-            data.push_str("</Time>");
-
-            data.push_str("<Status>");
-            data.push_str(match t.status {
-                true => "Enabled",
-                false => "Disabled",
-            });
-            data.push_str("</Status>");
-
-            data.push_str("</ReplicationTime>");
+            body.start("ReplicationTime")
+                .element(
+                    "Time",
+                    &t.time_minutes.map(|v| v.to_string()).unwrap_or_default(),
+                )
+                .element("Status", status(t.status))
+                .end();
         }
-
-        if let Some(v) = &self.storage_class {
-            data.push_str("<StorageClass>");
-            data.push_str(v);
-            data.push_str("</StorageClass>");
-        }
-
-        data.push_str("</Destination>");
-
-        data
+        body.optional("StorageClass", self.storage_class.as_deref());
+        body.end();
     }
 }
 
@@ -1384,87 +1278,46 @@ impl ReplicationRule {
         })
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = self.destination.to_xml();
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        self.write_xml(&mut body);
+        body.finish()
+    }
 
+    pub(crate) fn write_xml(&self, body: &mut XmlBody) {
+        let status = |enabled: bool| if enabled { "Enabled" } else { "Disabled" };
+        self.destination.write_xml(body);
         if let Some(v) = self.delete_marker_replication_status {
-            data.push_str("<DeleteMarkerReplication>");
-            data.push_str("<Status>");
-            data.push_str(match v {
-                true => "Enabled",
-                false => "Disabled",
-            });
-            data.push_str("</Status>");
-            data.push_str("</DeleteMarkerReplication>");
+            body.start("DeleteMarkerReplication")
+                .element("Status", status(v))
+                .end();
         }
-
         if let Some(v) = self.existing_object_replication_status {
-            data.push_str("<ExistingObjectReplication>");
-            data.push_str("<Status>");
-            data.push_str(match v {
-                true => "Enabled",
-                false => "Disabled",
-            });
-            data.push_str("</Status>");
-            data.push_str("</ExistingObjectReplication>");
+            body.start("ExistingObjectReplication")
+                .element("Status", status(v))
+                .end();
         }
-
         if let Some(v) = &self.filter {
-            data.push_str(&v.to_xml())
+            v.write_xml(body);
         }
-
-        if let Some(v) = &self.id {
-            data.push_str("<ID>");
-            data.push_str(v);
-            data.push_str("</ID>");
-        }
-
-        if let Some(v) = &self.prefix {
-            data.push_str("<Prefix>");
-            data.push_str(v);
-            data.push_str("</Prefix>");
-        }
-
-        if let Some(v) = self.priority {
-            data.push_str("<Priority>");
-            data.push_str(&v.to_string());
-            data.push_str("</Priority>");
-        }
-
+        body.optional("ID", self.id.as_deref())
+            .optional("Prefix", self.prefix.as_deref())
+            .optional("Priority", self.priority.map(|v| v.to_string()).as_deref());
         if let Some(s) = &self.source_selection_criteria {
-            data.push_str("<SourceSelectionCriteria>");
+            body.start("SourceSelectionCriteria");
             if let Some(v) = s.sse_kms_encrypted_objects_status {
-                data.push_str("<SseKmsEncryptedObjects>");
-                data.push_str("<Status>");
-                data.push_str(match v {
-                    true => "Enabled",
-                    false => "Disabled",
-                });
-                data.push_str("</Status>");
-                data.push_str("</SseKmsEncryptedObjects>");
+                body.start("SseKmsEncryptedObjects")
+                    .element("Status", status(v))
+                    .end();
             }
-            data.push_str("</SourceSelectionCriteria>");
+            body.end();
         }
-
         if let Some(v) = self.delete_replication_status {
-            data.push_str("<DeleteReplication>");
-            data.push_str("<Status>");
-            data.push_str(match v {
-                true => "Enabled",
-                false => "Disabled",
-            });
-            data.push_str("</Status>");
-            data.push_str("</DeleteReplication>");
+            body.start("DeleteReplication")
+                .element("Status", status(v))
+                .end();
         }
-
-        data.push_str("<Status>");
-        data.push_str(match self.status {
-            true => "Enabled",
-            false => "Disabled",
-        });
-        data.push_str("</Status>");
-
-        data
+        body.element("Status", status(self.status));
     }
 }
 
@@ -1494,21 +1347,15 @@ impl ReplicationConfig {
         Ok(config)
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<ReplicationConfiguration>");
-
-        if let Some(v) = &self.role {
-            data.push_str("<Role>");
-            data.push_str(v);
-            data.push_str("</Role>");
-        }
-
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        body.start("ReplicationConfiguration")
+            .optional("Status", self.role.as_deref());
         for rule in &self.rules {
-            data.push_str(&rule.to_xml());
+            rule.write_xml(&mut body);
         }
-
-        data.push_str("</ReplicationConfiguration>");
-        data
+        body.end();
+        body.finish()
     }
 }
 

@@ -61,7 +61,7 @@ impl ToS3Request for PutBucketLifecycle {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
 
-        let bytes: Bytes = self.life_cycle_config.to_xml().into();
+        let bytes: Bytes = self.life_cycle_config.to_xml()?.into();
         headers.add(CONTENT_MD5, md5sum_hash(bytes.as_ref()));
 
         let body = Arc::new(SegmentedBytes::from(bytes));

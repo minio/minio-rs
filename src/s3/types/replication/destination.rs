@@ -21,6 +21,7 @@ use super::metrics::Metrics;
 use super::replication_time::ReplicationTime;
 use crate::s3::error::ValidationErr;
 use crate::s3::utils::{get_text_option, get_text_result};
+use crate::s3::xml_body::XmlBody;
 use xmltree::Element;
 
 #[derive(PartialEq, Clone, Debug, Default)]
@@ -78,81 +79,48 @@ impl Destination {
         })
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<Destination>");
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        self.write_xml(&mut body);
+        body.finish()
+    }
 
-        data.push_str("<Bucket>");
-        data.push_str(&self.bucket_arn);
-        data.push_str("</Bucket>");
-
+    pub(crate) fn write_xml(&self, body: &mut XmlBody) {
+        let status = |enabled: bool| if enabled { "Enabled" } else { "Disabled" };
+        body.start("Destination")
+            .element("Bucket", &self.bucket_arn);
         if let Some(v) = &self.access_control_translation {
-            data.push_str("<AccessControlTranslation><Owner>");
-            data.push_str(&v.owner);
-            data.push_str("</Owner></AccessControlTranslation>");
+            body.start("AccessControlTranslation")
+                .element("Owner", &v.owner)
+                .end();
         }
-
-        if let Some(v) = &self.account {
-            data.push_str("<Account>");
-            data.push_str(v);
-            data.push_str("</Account>");
-        }
-
+        body.optional("Account", self.account.as_deref());
         if let Some(c) = &self.encryption_config {
-            data.push_str("<EncryptionConfiguration>");
-            if let Some(v) = &c.replica_kms_key_id {
-                data.push_str("<ReplicaKmsKeyID>");
-                data.push_str(v);
-                data.push_str("</ReplicaKmsKeyID>");
-            }
-            data.push_str("</EncryptionConfiguration>");
+            body.start("EncryptionConfiguration")
+                .optional("ReplicaKmsKeyID", c.replica_kms_key_id.as_deref())
+                .end();
         }
-
         if let Some(m) = &self.metrics {
-            data.push_str("<Metrics><EventThreshold>");
-
-            if let Some(v) = m.event_threshold_minutes {
-                data.push_str("<Minutes>");
-                data.push_str(&v.to_string());
-                data.push_str("</Minutes>");
-            }
-
-            data.push_str("<Status>");
-            data.push_str(match m.status {
-                true => "Enabled",
-                false => "Disabled",
-            });
-            data.push_str("</Status>");
-
-            data.push_str("</EventThreshold></Metrics>");
+            body.start("Metrics")
+                .start("EventThreshold")
+                .optional(
+                    "Minutes",
+                    m.event_threshold_minutes.map(|v| v.to_string()).as_deref(),
+                )
+                .element("Status", status(m.status))
+                .end()
+                .end();
         }
-
         if let Some(t) = &self.replication_time {
-            data.push_str("<ReplicationTime>");
-
-            data.push_str("<Time>");
-            if let Some(v) = t.time_minutes {
-                data.push_str(&v.to_string());
-            }
-            data.push_str("</Time>");
-
-            data.push_str("<Status>");
-            data.push_str(match t.status {
-                true => "Enabled",
-                false => "Disabled",
-            });
-            data.push_str("</Status>");
-
-            data.push_str("</ReplicationTime>");
+            body.start("ReplicationTime")
+                .element(
+                    "Time",
+                    &t.time_minutes.map(|v| v.to_string()).unwrap_or_default(),
+                )
+                .element("Status", status(t.status))
+                .end();
         }
-
-        if let Some(v) = &self.storage_class {
-            data.push_str("<StorageClass>");
-            data.push_str(v);
-            data.push_str("</StorageClass>");
-        }
-
-        data.push_str("</Destination>");
-
-        data
+        body.optional("StorageClass", self.storage_class.as_deref());
+        body.end();
     }
 }
