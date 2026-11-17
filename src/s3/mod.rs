@@ -33,6 +33,7 @@ pub mod segmented_bytes;
 pub mod signer;
 pub mod types;
 pub mod utils;
+mod xml_body;
 
 // Re-export types module contents for convenience
 pub use client::{ConnectionPoolConfig, MinioClient, MinioClientBuilder};

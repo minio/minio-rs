@@ -58,7 +58,7 @@ impl S3Api for PutBucketEncryption {
 
 impl ToS3Request for PutBucketEncryption {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        let bytes: Bytes = self.sse_config.to_xml().into();
+        let bytes: Bytes = self.sse_config.to_xml()?.into();
         let body = Arc::new(SegmentedBytes::from(bytes));
 
         Ok(S3Request::builder()

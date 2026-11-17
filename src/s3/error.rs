@@ -373,6 +373,11 @@ pub enum ValidationErr {
 
     #[error("Invalid ARN: {0}")]
     InvalidArn(String),
+
+    /// The value holds a character XML 1.0 cannot represent, so it cannot be sent
+    /// in an XML request body.
+    #[error("{character:?} in {value:?} cannot be sent in an XML request")]
+    InvalidXmlCharacter { value: String, character: char },
 }
 
 impl From<reqwest::header::ToStrError> for ValidationErr {

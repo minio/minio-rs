@@ -81,7 +81,7 @@ impl ToS3Request for SelectObjectContent {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
         check_ssec(&self.ssec, &self.client)?;
 
-        let bytes: Bytes = self.request.to_xml().into();
+        let bytes: Bytes = self.request.to_xml()?.into();
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         headers.add(CONTENT_MD5, md5sum_hash(bytes.as_ref()));

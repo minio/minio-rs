@@ -16,6 +16,7 @@
 use crate::s3::error::ValidationErr;
 use crate::s3::types::Filter;
 use crate::s3::utils::to_iso8601utc;
+use crate::s3::xml_body::XmlBody;
 use xmltree::Element;
 
 #[derive(PartialEq, Clone, Debug, Default)]
@@ -55,172 +56,96 @@ impl LifecycleConfig {
         self.rules.is_empty()
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<LifecycleConfiguration>");
-
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let number = |v: Option<u32>| v.map(|v| v.to_string());
+        let mut body = XmlBody::new();
+        body.start("LifecycleConfiguration");
         for rule in &self.rules {
-            data.push_str("<Rule>");
-
-            // ID should come earlier in XML based on Go ordering
+            body.start("Rule");
             if !rule.id.is_empty() {
-                data.push_str("<ID>");
-                data.push_str(&rule.id);
-                data.push_str("</ID>");
+                body.element("ID", &rule.id);
             }
-
-            // Status comes next
-            data.push_str("<Status>");
-            if rule.status {
-                data.push_str("Enabled");
-            } else {
-                data.push_str("Disabled");
-            }
-            data.push_str("</Status>");
-
-            // Filter
+            body.element("Status", if rule.status { "Enabled" } else { "Disabled" });
             if !rule.filter.is_null() {
-                data.push_str(&rule.filter.to_xml());
+                rule.filter.write_xml(&mut body);
             }
-
-            // AbortIncompleteMultipartUpload
             if let Some(days) = rule.abort_incomplete_multipart_upload_days_after_initiation {
-                data.push_str("<AbortIncompleteMultipartUpload><DaysAfterInitiation>");
-                data.push_str(&days.to_string());
-                data.push_str("</DaysAfterInitiation></AbortIncompleteMultipartUpload>");
+                body.start("AbortIncompleteMultipartUpload")
+                    .element("DaysAfterInitiation", &days.to_string())
+                    .end();
             }
-
-            // Expiration
             let has_expiration = rule.expiration_date.is_some()
                 || rule.expiration_days.is_some()
                 || rule.expiration_expired_object_delete_marker.is_some()
                 || rule.expiration_expired_object_all_versions.is_some();
-
             if has_expiration {
-                data.push_str("<Expiration>");
-                if let Some(date) = rule.expiration_date {
-                    data.push_str("<Date>");
-                    data.push_str(&to_iso8601utc(date));
-                    data.push_str("</Date>");
+                body.start("Expiration")
+                    .optional("Date", rule.expiration_date.map(to_iso8601utc).as_deref())
+                    .optional("Days", number(rule.expiration_days).as_deref());
+                if rule.expiration_expired_object_delete_marker == Some(true) {
+                    body.element("ExpiredObjectDeleteMarker", "true");
                 }
-                if let Some(days) = rule.expiration_days {
-                    data.push_str("<Days>");
-                    data.push_str(&days.to_string());
-                    data.push_str("</Days>");
+                if rule.expiration_expired_object_all_versions == Some(true) {
+                    body.element("ExpiredObjectAllVersions", "true");
                 }
-                if let Some(delete_marker) = rule.expiration_expired_object_delete_marker
-                    && delete_marker
-                {
-                    data.push_str("<ExpiredObjectDeleteMarker>true</ExpiredObjectDeleteMarker>");
-                }
-                if let Some(delete_all) = rule.expiration_expired_object_all_versions
-                    && delete_all
-                {
-                    data.push_str("<ExpiredObjectAllVersions>true</ExpiredObjectAllVersions>");
-                }
-                data.push_str("</Expiration>");
+                body.end();
             }
-
-            // DelMarkerExpiration
             if let Some(days) = rule.del_marker_expiration_days {
-                data.push_str("<DelMarkerExpiration><Days>");
-                data.push_str(&days.to_string());
-                data.push_str("</Days></DelMarkerExpiration>");
+                body.start("DelMarkerExpiration")
+                    .element("Days", &days.to_string())
+                    .end();
             }
-
-            // AllVersionsExpiration
             if let Some(days) = rule.all_versions_expiration_days {
-                data.push_str("<AllVersionsExpiration><Days>");
-                data.push_str(&days.to_string());
-                data.push_str("</Days>");
-
-                if let Some(delete_marker) = rule.all_versions_expiration_delete_marker
-                    && delete_marker
-                {
-                    data.push_str("<DeleteMarker>true</DeleteMarker>");
+                body.start("AllVersionsExpiration")
+                    .element("Days", &days.to_string());
+                if rule.all_versions_expiration_delete_marker == Some(true) {
+                    body.element("DeleteMarker", "true");
                 }
-
-                data.push_str("</AllVersionsExpiration>");
+                body.end();
             }
-
-            // NoncurrentVersionExpiration
             if let Some(days) = rule.noncurrent_version_expiration_noncurrent_days {
-                data.push_str("<NoncurrentVersionExpiration><NoncurrentDays>");
-                data.push_str(&days.to_string());
-                data.push_str("</NoncurrentDays>");
-
-                if let Some(versions) = rule.noncurrent_version_expiration_newer_versions {
-                    data.push_str("<NewerNoncurrentVersions>");
-                    data.push_str(&versions.to_string());
-                    data.push_str("</NewerNoncurrentVersions>");
-                }
-
-                data.push_str("</NoncurrentVersionExpiration>");
+                body.start("NoncurrentVersionExpiration")
+                    .element("NoncurrentDays", &days.to_string())
+                    .optional(
+                        "NewerNoncurrentVersions",
+                        number(rule.noncurrent_version_expiration_newer_versions).as_deref(),
+                    )
+                    .end();
             }
-
-            // NoncurrentVersionTransition
             let has_noncurrent_transition =
                 rule.noncurrent_version_transition_noncurrent_days.is_some()
                     || rule.noncurrent_version_transition_storage_class.is_some()
                     || rule.noncurrent_version_transition_newer_versions.is_some();
-
             if has_noncurrent_transition {
-                data.push_str("<NoncurrentVersionTransition>");
-
-                if let Some(days) = rule.noncurrent_version_transition_noncurrent_days {
-                    data.push_str("<NoncurrentDays>");
-                    data.push_str(&days.to_string());
-                    data.push_str("</NoncurrentDays>");
-                }
-
-                if let Some(storage_class) = &rule.noncurrent_version_transition_storage_class {
-                    data.push_str("<StorageClass>");
-                    data.push_str(storage_class);
-                    data.push_str("</StorageClass>");
-                }
-
-                if let Some(versions) = rule.noncurrent_version_transition_newer_versions {
-                    data.push_str("<NewerNoncurrentVersions>");
-                    data.push_str(&versions.to_string());
-                    data.push_str("</NewerNoncurrentVersions>");
-                }
-
-                data.push_str("</NoncurrentVersionTransition>");
+                body.start("NoncurrentVersionTransition")
+                    .optional(
+                        "NoncurrentDays",
+                        number(rule.noncurrent_version_transition_noncurrent_days).as_deref(),
+                    )
+                    .optional(
+                        "StorageClass",
+                        rule.noncurrent_version_transition_storage_class.as_deref(),
+                    )
+                    .optional(
+                        "NewerNoncurrentVersions",
+                        number(rule.noncurrent_version_transition_newer_versions).as_deref(),
+                    )
+                    .end();
             }
-
-            // Transition
             let has_transition = rule.transition_date.is_some()
                 || rule.transition_days.is_some()
                 || rule.transition_storage_class.is_some();
-
             if has_transition {
-                data.push_str("<Transition>");
-
-                if let Some(date) = rule.transition_date {
-                    data.push_str("<Date>");
-                    data.push_str(&to_iso8601utc(date));
-                    data.push_str("</Date>");
-                }
-
-                if let Some(days) = rule.transition_days {
-                    data.push_str("<Days>");
-                    data.push_str(&days.to_string());
-                    data.push_str("</Days>");
-                }
-
-                if let Some(storage_class) = &rule.transition_storage_class {
-                    data.push_str("<StorageClass>");
-                    data.push_str(storage_class);
-                    data.push_str("</StorageClass>");
-                }
-
-                data.push_str("</Transition>");
+                body.start("Transition")
+                    .optional("Date", rule.transition_date.map(to_iso8601utc).as_deref())
+                    .optional("Days", number(rule.transition_days).as_deref())
+                    .optional("StorageClass", rule.transition_storage_class.as_deref())
+                    .end();
             }
-
-            data.push_str("</Rule>");
+            body.end();
         }
-
-        data.push_str("</LifecycleConfiguration>");
-        data
+        body.end();
+        body.finish()
     }
 }
 
@@ -508,6 +433,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_filter_prefix_reaches_the_server_unchanged() {
+        let config = LifecycleConfig {
+            rules: vec![LifecycleRule {
+                id: "R&D".to_string(),
+                status: true,
+                filter: Filter {
+                    prefix: Some("R&D <archive>/".to_string()),
+                    ..Default::default()
+                },
+                expiration_days: Some(30),
+                ..Default::default()
+            }],
+        };
+        let xml = config.to_xml().unwrap();
+        let root = xmltree::Element::parse(xml.as_bytes()).unwrap();
+        let rule = root.get_child("Rule").unwrap();
+        assert_eq!(rule.get_child("ID").unwrap().get_text().unwrap(), "R&D");
+        let filter = rule.get_child("Filter").unwrap();
+        assert_eq!(
+            filter.get_child("Prefix").unwrap().get_text().unwrap(),
+            "R&D <archive>/"
+        );
+    }
+
+    #[test]
     fn empty_filter_omits_filter_element() {
         let config = LifecycleConfig {
             rules: vec![LifecycleRule {
@@ -519,7 +469,7 @@ mod tests {
             }],
         };
 
-        let xml = config.to_xml();
+        let xml = config.to_xml().unwrap();
         assert!(!xml.contains("<Filter>"));
         assert!(!xml.contains("</Filter>"));
         assert!(xml.contains("<Days>30</Days>"));
@@ -541,7 +491,7 @@ mod tests {
             }],
         };
 
-        let xml = config.to_xml();
+        let xml = config.to_xml().unwrap();
         assert!(xml.contains("<Filter><Prefix>logs/</Prefix></Filter>"));
     }
 }

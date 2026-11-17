@@ -20,6 +20,7 @@ use super::destination::Destination;
 use super::source_selection_criteria::SourceSelectionCriteria;
 use crate::s3::error::ValidationErr;
 use crate::s3::utils::{get_text_option, get_text_result};
+use crate::s3::xml_body::XmlBody;
 use xmltree::Element;
 
 #[derive(PartialEq, Clone, Debug, Default)]
@@ -84,86 +85,45 @@ impl ReplicationRule {
         })
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = self.destination.to_xml();
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        self.write_xml(&mut body);
+        body.finish()
+    }
 
+    pub(crate) fn write_xml(&self, body: &mut XmlBody) {
+        let status = |enabled: bool| if enabled { "Enabled" } else { "Disabled" };
+        self.destination.write_xml(body);
         if let Some(v) = self.delete_marker_replication_status {
-            data.push_str("<DeleteMarkerReplication>");
-            data.push_str("<Status>");
-            data.push_str(match v {
-                true => "Enabled",
-                false => "Disabled",
-            });
-            data.push_str("</Status>");
-            data.push_str("</DeleteMarkerReplication>");
+            body.start("DeleteMarkerReplication")
+                .element("Status", status(v))
+                .end();
         }
-
         if let Some(v) = self.existing_object_replication_status {
-            data.push_str("<ExistingObjectReplication>");
-            data.push_str("<Status>");
-            data.push_str(match v {
-                true => "Enabled",
-                false => "Disabled",
-            });
-            data.push_str("</Status>");
-            data.push_str("</ExistingObjectReplication>");
+            body.start("ExistingObjectReplication")
+                .element("Status", status(v))
+                .end();
         }
-
         if let Some(v) = &self.filter {
-            data.push_str(&v.to_xml())
+            v.write_xml(body);
         }
-
-        if let Some(v) = &self.id {
-            data.push_str("<ID>");
-            data.push_str(v);
-            data.push_str("</ID>");
-        }
-
-        if let Some(v) = &self.prefix {
-            data.push_str("<Prefix>");
-            data.push_str(v);
-            data.push_str("</Prefix>");
-        }
-
-        if let Some(v) = self.priority {
-            data.push_str("<Priority>");
-            data.push_str(&v.to_string());
-            data.push_str("</Priority>");
-        }
-
+        body.optional("ID", self.id.as_deref())
+            .optional("Prefix", self.prefix.as_deref())
+            .optional("Priority", self.priority.map(|v| v.to_string()).as_deref());
         if let Some(s) = &self.source_selection_criteria {
-            data.push_str("<SourceSelectionCriteria>");
+            body.start("SourceSelectionCriteria");
             if let Some(v) = s.sse_kms_encrypted_objects_status {
-                data.push_str("<SseKmsEncryptedObjects>");
-                data.push_str("<Status>");
-                data.push_str(match v {
-                    true => "Enabled",
-                    false => "Disabled",
-                });
-                data.push_str("</Status>");
-                data.push_str("</SseKmsEncryptedObjects>");
+                body.start("SseKmsEncryptedObjects")
+                    .element("Status", status(v))
+                    .end();
             }
-            data.push_str("</SourceSelectionCriteria>");
+            body.end();
         }
-
         if let Some(v) = self.delete_replication_status {
-            data.push_str("<DeleteReplication>");
-            data.push_str("<Status>");
-            data.push_str(match v {
-                true => "Enabled",
-                false => "Disabled",
-            });
-            data.push_str("</Status>");
-            data.push_str("</DeleteReplication>");
+            body.start("DeleteReplication")
+                .element("Status", status(v))
+                .end();
         }
-
-        data.push_str("<Status>");
-        data.push_str(match self.status {
-            true => "Enabled",
-            false => "Disabled",
-        });
-        data.push_str("</Status>");
-
-        data
+        body.element("Status", status(self.status));
     }
 }

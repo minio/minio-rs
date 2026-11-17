@@ -18,6 +18,7 @@
 use super::replication_rule::ReplicationRule;
 use crate::s3::error::ValidationErr;
 use crate::s3::utils::get_text_option;
+use crate::s3::xml_body::XmlBody;
 use xmltree::Element;
 
 #[derive(PartialEq, Clone, Debug, Default)]
@@ -45,20 +46,14 @@ impl ReplicationConfig {
         Ok(config)
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<ReplicationConfiguration>");
-
-        if let Some(v) = &self.role {
-            data.push_str("<Status>");
-            data.push_str(v);
-            data.push_str("</Status>");
-        }
-
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let mut body = XmlBody::new();
+        body.start("ReplicationConfiguration")
+            .optional("Status", self.role.as_deref());
         for rule in &self.rules {
-            data.push_str(&rule.to_xml());
+            rule.write_xml(&mut body);
         }
-
-        data.push_str("</ReplicationConfiguration>");
-        data
+        body.end();
+        body.finish()
     }
 }

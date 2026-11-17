@@ -57,7 +57,7 @@ impl S3Api for PutBucketNotification {
 
 impl ToS3Request for PutBucketNotification {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        let bytes: Bytes = self.notification_config.to_xml().into();
+        let bytes: Bytes = self.notification_config.to_xml()?.into();
         let body = Arc::new(SegmentedBytes::from(bytes));
 
         Ok(S3Request::builder()

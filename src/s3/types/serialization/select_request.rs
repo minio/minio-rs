@@ -21,6 +21,7 @@ use super::json_input_serialization::JsonInputSerialization;
 use super::json_output_serialization::JsonOutputSerialization;
 use super::parquet_input_serialization::ParquetInputSerialization;
 use crate::s3::error::ValidationErr;
+use crate::s3::xml_body::XmlBody;
 
 #[derive(Clone, Debug, Default)]
 pub struct SelectRequest {
@@ -156,128 +157,126 @@ impl SelectRequest {
         })
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut data = String::from("<SelectObjectContentRequest>");
-
-        data.push_str("<Expression>");
-        data.push_str(&self.expr);
-        data.push_str("</Expression>");
-        data.push_str("<ExpressionType>SQL</ExpressionType>");
-
-        data.push_str("<InputSerialization>");
+    pub fn to_xml(&self) -> Result<String, ValidationErr> {
+        let text = |v: Option<char>| v.map(String::from);
+        let mut body = XmlBody::new();
+        body.start("SelectObjectContentRequest")
+            .element("Expression", &self.expr)
+            .element("ExpressionType", "SQL")
+            .start("InputSerialization");
         if let Some(c) = &self.csv_input {
-            if let Some(v) = &c.compression_type {
-                data.push_str("<CompressionType>");
-                data.push_str(&v.to_string());
-                data.push_str("</CompressionType>");
-            }
-
-            data.push_str("<CSV>");
+            body.optional(
+                "CompressionType",
+                c.compression_type
+                    .as_ref()
+                    .map(|v| v.to_string())
+                    .as_deref(),
+            )
+            .start("CSV");
             if c.allow_quoted_record_delimiter {
-                data.push_str("<AllowQuotedRecordDelimiter>true</AllowQuotedRecordDelimiter>");
+                body.element("AllowQuotedRecordDelimiter", "true");
             }
-            if let Some(v) = c.comments {
-                data.push_str("<Comments>");
-                data.push(v);
-                data.push_str("</Comments>");
-            }
-            if let Some(v) = c.field_delimiter {
-                data.push_str("<FieldDelimiter>");
-                data.push(v);
-                data.push_str("</FieldDelimiter>");
-            }
-            if let Some(v) = &c.file_header_info {
-                data.push_str("<FileHeaderInfo>");
-                data.push_str(&v.to_string());
-                data.push_str("</FileHeaderInfo>");
-            }
-            if let Some(v) = c.quote_character {
-                data.push_str("<QuoteCharacter>");
-                data.push(v);
-                data.push_str("</QuoteCharacter>");
-            }
-            if let Some(v) = c.record_delimiter {
-                data.push_str("<RecordDelimiter>");
-                data.push(v);
-                data.push_str("</RecordDelimiter>");
-            }
-            data.push_str("</CSV>");
+            body.optional("Comments", text(c.comments).as_deref())
+                .optional("FieldDelimiter", text(c.field_delimiter).as_deref())
+                .optional(
+                    "FileHeaderInfo",
+                    c.file_header_info
+                        .as_ref()
+                        .map(|v| v.to_string())
+                        .as_deref(),
+                )
+                .optional("QuoteCharacter", text(c.quote_character).as_deref())
+                .optional("RecordDelimiter", text(c.record_delimiter).as_deref())
+                .end();
         } else if let Some(j) = &self.json_input {
-            if let Some(v) = &j.compression_type {
-                data.push_str("<CompressionType>");
-                data.push_str(&v.to_string());
-                data.push_str("</CompressionType>");
-            }
-            data.push_str("<JSON>");
-            if let Some(v) = &j.json_type {
-                data.push_str("<Type>");
-                data.push_str(&v.to_string());
-                data.push_str("</Type>");
-            }
-            data.push_str("</JSON>");
+            body.optional(
+                "CompressionType",
+                j.compression_type
+                    .as_ref()
+                    .map(|v| v.to_string())
+                    .as_deref(),
+            )
+            .start("JSON")
+            .optional(
+                "Type",
+                j.json_type.as_ref().map(|v| v.to_string()).as_deref(),
+            )
+            .end();
         } else if self.parquet_input.is_some() {
-            data.push_str("<Parquet></Parquet>");
+            body.start("Parquet").end();
         }
-        data.push_str("</InputSerialization>");
-
-        data.push_str("<OutputSerialization>");
+        body.end().start("OutputSerialization");
         if let Some(c) = &self.csv_output {
-            data.push_str("<CSV>");
-            if let Some(v) = c.field_delimiter {
-                data.push_str("<FieldDelimiter>");
-                data.push(v);
-                data.push_str("</FieldDelimiter>");
-            }
-            if let Some(v) = c.quote_character {
-                data.push_str("<QuoteCharacter>");
-                data.push(v);
-                data.push_str("</QuoteCharacter>");
-            }
-            if let Some(v) = c.quote_escape_character {
-                data.push_str("<QuoteEscapeCharacter>");
-                data.push(v);
-                data.push_str("</QuoteEscapeCharacter>");
-            }
-            if let Some(v) = &c.quote_fields {
-                data.push_str("<QuoteFields>");
-                data.push_str(&v.to_string());
-                data.push_str("</QuoteFields>");
-            }
-            if let Some(v) = c.record_delimiter {
-                data.push_str("<RecordDelimiter>");
-                data.push(v);
-                data.push_str("</RecordDelimiter>");
-            }
-            data.push_str("</CSV>");
+            body.start("CSV")
+                .optional("FieldDelimiter", text(c.field_delimiter).as_deref())
+                .optional("QuoteCharacter", text(c.quote_character).as_deref())
+                .optional(
+                    "QuoteEscapeCharacter",
+                    text(c.quote_escape_character).as_deref(),
+                )
+                .optional(
+                    "QuoteFields",
+                    c.quote_fields.as_ref().map(|v| v.to_string()).as_deref(),
+                )
+                .optional("RecordDelimiter", text(c.record_delimiter).as_deref())
+                .end();
         } else if let Some(j) = &self.json_output {
-            data.push_str("<JSON>");
-            if let Some(v) = j.record_delimiter {
-                data.push_str("<RecordDelimiter>");
-                data.push(v);
-                data.push_str("</RecordDelimiter>");
-            }
-            data.push_str("</JSON>");
+            body.start("JSON")
+                .optional("RecordDelimiter", text(j.record_delimiter).as_deref())
+                .end();
         }
-        data.push_str("</OutputSerialization>");
-
+        body.end();
         if self.request_progress {
-            data.push_str("<RequestProgress><Enabled>true</Enabled></RequestProgress>");
+            body.start("RequestProgress")
+                .element("Enabled", "true")
+                .end();
         }
-
         if let Some(s) = self.scan_start_range
             && let Some(e) = self.scan_end_range
         {
-            data.push_str("<ScanRange>");
-            data.push_str("<Start>");
-            data.push_str(&s.to_string());
-            data.push_str("</Start>");
-            data.push_str("<End>");
-            data.push_str(&e.to_string());
-            data.push_str("</End>");
-            data.push_str("</ScanRange>");
+            body.start("ScanRange")
+                .element("Start", &s.to_string())
+                .element("End", &e.to_string())
+                .end();
         }
+        body.end();
+        body.finish()
+    }
+}
 
-        data.push_str("</SelectObjectContentRequest>");
-        data
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_expression_with_xml_syntax_reaches_the_server_unchanged() {
+        let expr = "SELECT * FROM S3Object s WHERE s.size < 5 AND s.team = 'R&D'";
+        let request = SelectRequest::new_csv_input_output(
+            expr,
+            CsvInputSerialization {
+                compression_type: None,
+                allow_quoted_record_delimiter: false,
+                comments: None,
+                field_delimiter: None,
+                file_header_info: None,
+                quote_character: None,
+                quote_escape_character: None,
+                record_delimiter: None,
+            },
+            CsvOutputSerialization {
+                field_delimiter: None,
+                quote_character: None,
+                quote_escape_character: None,
+                quote_fields: None,
+                record_delimiter: None,
+            },
+        )
+        .unwrap();
+        let xml = request.to_xml().unwrap();
+        let root = xmltree::Element::parse(xml.as_bytes()).unwrap();
+        assert_eq!(
+            root.get_child("Expression").unwrap().get_text().unwrap(),
+            expr
+        );
     }
 }

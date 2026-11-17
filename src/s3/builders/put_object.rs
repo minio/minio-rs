@@ -31,7 +31,8 @@ use crate::s3::types::Retention;
 use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, UploadId};
 use crate::s3::utils::{ChecksumAlgorithm, check_sse, compute_checksum_sb, insert};
 use crate::s3::utils::{encode_tags, md5sum_hash, to_iso8601utc, url_encode};
-use bytes::{Bytes, BytesMut};
+use crate::s3::xml_body::XmlBody;
+use bytes::Bytes;
 use http::Method;
 use std::{collections::HashMap, sync::Arc};
 use typed_builder::TypedBuilder;
@@ -300,31 +301,21 @@ impl ToS3Request for CompleteMultipartUpload {
             }
         }
 
-        // Set the capacity of the byte-buffer based on the part count - attempting
-        // to avoid extra allocations when building the XML payload.
         let bytes: Bytes = {
-            let mut data = BytesMut::with_capacity(200 * self.parts.len() + 100);
-            data.extend_from_slice(b"<CompleteMultipartUpload>");
+            let mut body = XmlBody::new();
+            body.start("CompleteMultipartUpload");
             for part in self.parts.iter() {
-                data.extend_from_slice(b"<Part><PartNumber>");
-                data.extend_from_slice(part.number.to_string().as_bytes());
-                data.extend_from_slice(b"</PartNumber><ETag>");
-                data.extend_from_slice(part.etag.as_str().as_bytes());
-                data.extend_from_slice(b"</ETag>");
+                body.start("Part")
+                    .element("PartNumber", &part.number.to_string())
+                    .element("ETag", part.etag.as_str());
                 if let Some((algorithm, ref value)) = part.checksum {
                     let name = algorithm.as_str();
-                    data.extend_from_slice(b"<Checksum");
-                    data.extend_from_slice(name.as_bytes());
-                    data.extend_from_slice(b">");
-                    data.extend_from_slice(value.as_bytes());
-                    data.extend_from_slice(b"</Checksum");
-                    data.extend_from_slice(name.as_bytes());
-                    data.extend_from_slice(b">");
+                    body.element(&format!("Checksum{name}"), value);
                 }
-                data.extend_from_slice(b"</Part>");
+                body.end();
             }
-            data.extend_from_slice(b"</CompleteMultipartUpload>");
-            data.freeze()
+            body.end();
+            Bytes::from(body.finish()?)
         };
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();

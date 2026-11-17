@@ -57,7 +57,7 @@ impl ToS3Request for DeleteBucketNotification {
             queue_config_list: None,
             topic_config_list: None,
         };
-        let bytes: Bytes = CONFIG.to_xml().into();
+        let bytes: Bytes = CONFIG.to_xml()?.into();
         let body: Arc<SegmentedBytes> = Arc::new(SegmentedBytes::from(bytes));
         //TODO consider const body
 

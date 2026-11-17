@@ -21,6 +21,7 @@ use crate::s3::response::UpdateObjectEncryptionResponse;
 use crate::s3::segmented_bytes::SegmentedBytes;
 use crate::s3::types::{BucketName, ObjectKey, Region, S3Api, S3Request, ToS3Request, VersionId};
 use crate::s3::utils::{insert, md5sum_hash};
+use crate::s3::xml_body::XmlBody;
 use bytes::Bytes;
 use http::Method;
 use std::sync::Arc;
@@ -75,21 +76,17 @@ impl S3Api for UpdateObjectEncryption {
     type S3Response = UpdateObjectEncryptionResponse;
 }
 
-const ENCRYPTION_XMLNS: &str = "http://s3.amazonaws.com/doc/2006-03-01/";
-
-fn object_encryption_xml(kms_key_arn: &str, bucket_key_enabled: Option<bool>) -> Bytes {
-    let mut data = String::from("<ObjectEncryption xmlns=\"");
-    data.push_str(ENCRYPTION_XMLNS);
-    data.push_str("\"><SSE-KMS>");
-    if let Some(enabled) = bucket_key_enabled {
-        data.push_str("<BucketKeyEnabled>");
-        data.push_str(if enabled { "true" } else { "false" });
-        data.push_str("</BucketKeyEnabled>");
-    }
-    data.push_str("<KMSKeyArn>");
-    data.push_str(kms_key_arn);
-    data.push_str("</KMSKeyArn></SSE-KMS></ObjectEncryption>");
-    Bytes::from(data)
+fn object_encryption_xml(
+    kms_key_arn: &str,
+    bucket_key_enabled: Option<bool>,
+) -> Result<Bytes, ValidationErr> {
+    let mut body = XmlBody::new();
+    body.start_s3("ObjectEncryption").start("SSE-KMS").optional(
+        "BucketKeyEnabled",
+        bucket_key_enabled.map(|enabled| if enabled { "true" } else { "false" }),
+    );
+    body.element("KMSKeyArn", kms_key_arn).end().end();
+    Ok(Bytes::from(body.finish()?))
 }
 
 impl ToS3Request for UpdateObjectEncryption {
@@ -101,7 +98,7 @@ impl ToS3Request for UpdateObjectEncryption {
             });
         }
 
-        let bytes: Bytes = object_encryption_xml(&self.kms_key_arn, self.bucket_key_enabled);
+        let bytes: Bytes = object_encryption_xml(&self.kms_key_arn, self.bucket_key_enabled)?;
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         headers.add(CONTENT_MD5, md5sum_hash(bytes.as_ref()));
@@ -138,7 +135,7 @@ mod tests {
 
     #[test]
     fn xml_body_includes_bucket_key_enabled_when_set() {
-        let xml = object_encryption_xml("arn:aws:kms:key", Some(true));
+        let xml = object_encryption_xml("arn:aws:kms:key", Some(true)).unwrap();
         let xml = String::from_utf8(xml.to_vec()).unwrap();
         assert_eq!(
             xml,
@@ -150,7 +147,7 @@ mod tests {
 
     #[test]
     fn xml_body_omits_bucket_key_enabled_when_none() {
-        let xml = object_encryption_xml("my-key", None);
+        let xml = object_encryption_xml("my-key", None).unwrap();
         let xml = String::from_utf8(xml.to_vec()).unwrap();
         assert_eq!(
             xml,
@@ -162,7 +159,7 @@ mod tests {
 
     #[test]
     fn xml_body_emits_false_bucket_key_enabled() {
-        let xml = object_encryption_xml("my-key", Some(false));
+        let xml = object_encryption_xml("my-key", Some(false)).unwrap();
         let xml = String::from_utf8(xml.to_vec()).unwrap();
         assert!(xml.contains("<BucketKeyEnabled>false</BucketKeyEnabled>"));
     }

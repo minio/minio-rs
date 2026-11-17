@@ -56,7 +56,7 @@ impl S3Api for PutBucketReplication {
 
 impl ToS3Request for PutBucketReplication {
     fn to_s3request(self) -> Result<S3Request, ValidationErr> {
-        let bytes: Bytes = self.replication_config.to_xml().into();
+        let bytes: Bytes = self.replication_config.to_xml()?.into();
         let body = Arc::new(SegmentedBytes::from(bytes));
 
         Ok(S3Request::builder()

@@ -26,6 +26,7 @@ use crate::s3::types::{
     ToStream, VersionId,
 };
 use crate::s3::utils::{check_bucket_name, check_object_name, insert, md5sum_hash};
+use crate::s3::xml_body::XmlBody;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::stream::iter;
@@ -40,14 +41,6 @@ use typed_builder::TypedBuilder;
 /// The S3 `DeleteObjects` API rejects requests containing more than 1000 keys.
 /// Streams of objects larger than this are split into multiple requests.
 pub const MAX_DELETE_OBJECTS: usize = 1000;
-
-/// Minimal XML text escaping for response bodies synthesized from user-controlled
-/// values (object keys, version ids, error messages) on the single-DELETE path.
-fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-}
 
 // region: object-to-delete
 
@@ -344,30 +337,24 @@ impl DeleteObjects {
         let verbose_mode = self.verbose_mode;
         let requests = self.to_single_requests();
 
-        let mut body = String::from(r#"<?xml version="1.0" encoding="UTF-8"?><DeleteResult>"#);
+        let mut body = XmlBody::new();
+        body.start("DeleteResult");
         for request in requests {
             let object = request.object.clone();
             match request.send().await {
                 Ok(resp) => {
                     if verbose_mode {
                         let delete_marker = resp.is_delete_marker().unwrap_or(false);
-                        body.push_str("<Deleted><Key>");
-                        body.push_str(&xml_escape(object.key.as_str()));
-                        body.push_str("</Key>");
-                        if let Some(v) = object.version_id.as_ref() {
-                            body.push_str("<VersionId>");
-                            body.push_str(&xml_escape(v.as_str()));
-                            body.push_str("</VersionId>");
-                        }
+                        body.start("Deleted")
+                            .element("Key", object.key.as_str())
+                            .optional("VersionId", object.version_id.as_ref().map(|v| v.as_str()));
                         if delete_marker {
-                            body.push_str("<DeleteMarker>true</DeleteMarker>");
-                            if let Some(v) = resp.version_id() {
-                                body.push_str("<DeleteMarkerVersionId>");
-                                body.push_str(&xml_escape(v.as_str()));
-                                body.push_str("</DeleteMarkerVersionId>");
-                            }
+                            body.element("DeleteMarker", "true").optional(
+                                "DeleteMarkerVersionId",
+                                resp.version_id().as_ref().map(|v| v.as_str()),
+                            );
                         }
-                        body.push_str("</Deleted>");
+                        body.end();
                     }
                 }
                 Err(Error::S3Server(S3ServerError::S3Error(e))) => {
@@ -377,24 +364,18 @@ impl DeleteObjects {
                     if not_found {
                         continue;
                     }
-                    body.push_str("<Error><Key>");
-                    body.push_str(&xml_escape(object.key.as_str()));
-                    body.push_str("</Key>");
-                    if let Some(v) = object.version_id.as_ref() {
-                        body.push_str("<VersionId>");
-                        body.push_str(&xml_escape(v.as_str()));
-                        body.push_str("</VersionId>");
-                    }
-                    body.push_str("<Code>");
-                    body.push_str(&xml_escape(&code.to_string()));
-                    body.push_str("</Code><Message>");
-                    body.push_str(&xml_escape(e.message().as_deref().unwrap_or_default()));
-                    body.push_str("</Message></Error>");
+                    body.start("Error")
+                        .element("Key", object.key.as_str())
+                        .optional("VersionId", object.version_id.as_ref().map(|v| v.as_str()))
+                        .element("Code", &code.to_string())
+                        .element("Message", e.message().as_deref().unwrap_or_default())
+                        .end();
                 }
                 Err(e) => return Err(e),
             }
         }
-        body.push_str("</DeleteResult>");
+        body.end();
+        let body = body.finish()?;
 
         let synthetic = http::Response::new(Bytes::from(body));
         let request = DeleteObjects::builder()
@@ -430,24 +411,19 @@ impl ToS3Request for DeleteObjects {
             return Err(ValidationErr::TooManyDeleteObjects(self.objects.len()));
         }
 
-        let mut data: String = String::from("<Delete>");
+        let mut body = XmlBody::new();
+        body.start("Delete");
         if !self.verbose_mode {
-            data.push_str("<Quiet>true</Quiet>");
+            body.element("Quiet", "true");
         }
         for object in self.objects.iter() {
-            data.push_str("<Object>");
-            data.push_str("<Key>");
-            data.push_str(object.key.as_str());
-            data.push_str("</Key>");
-            if let Some(v) = object.version_id.as_ref() {
-                data.push_str("<VersionId>");
-                data.push_str(v.as_str());
-                data.push_str("</VersionId>");
-            }
-            data.push_str("</Object>");
+            body.start("Object")
+                .element("Key", object.key.as_str())
+                .optional("VersionId", object.version_id.as_ref().map(|v| v.as_str()))
+                .end();
         }
-        data.push_str("</Delete>");
-        let bytes: Bytes = data.into();
+        body.end();
+        let bytes: Bytes = body.finish()?.into();
 
         let mut headers: Multimap = self.extra_headers.unwrap_or_default();
         {
@@ -631,6 +607,50 @@ mod tests {
         let base_url: BaseUrl = "http://localhost:9000".parse().unwrap();
         let provider = StaticProvider::new("minioadmin", "minioadmin", None);
         MinioClient::new(base_url, Some(provider), None, None).unwrap()
+    }
+
+    fn delete_body(keys: &[&str]) -> Result<xmltree::Element, ValidationErr> {
+        let objects = keys
+            .iter()
+            .map(|k| ObjectToDelete::try_from(*k).unwrap())
+            .collect();
+        let req = DeleteObjects::builder()
+            .client(dummy_client())
+            .bucket(BucketName::new("test-bucket").unwrap())
+            .objects(objects)
+            .build()
+            .to_s3request()?;
+        let body = req.body.unwrap().to_bytes();
+        Ok(xmltree::Element::parse(body.as_ref()).unwrap())
+    }
+
+    /// Every key reaches the server exactly as given, however much XML syntax it
+    /// holds, and none can add or change a delete target.
+    #[test]
+    fn request_body_carries_each_key_unchanged() {
+        let keys = [
+            "R&D <notes>.md",
+            "it's \"quoted\"",
+            "cr\rlf\n",
+            "a</Key></Object><Object><Key>other",
+        ];
+        let root = delete_body(&keys).unwrap();
+        let sent: Vec<String> = root
+            .children
+            .iter()
+            .filter_map(|n| n.as_element())
+            .filter(|e| e.name == "Object")
+            .map(|e| e.get_child("Key").unwrap().get_text().unwrap().into_owned())
+            .collect();
+        assert_eq!(sent, keys);
+    }
+
+    #[test]
+    fn a_key_xml_cannot_carry_is_refused() {
+        assert!(matches!(
+            delete_body(&["bell\u{7}"]),
+            Err(ValidationErr::InvalidXmlCharacter { .. })
+        ));
     }
 
     fn dummy_object(i: usize) -> ObjectToDelete {
