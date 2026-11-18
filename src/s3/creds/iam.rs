@@ -337,6 +337,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn t8_sts_endpoint_variables_do_not_affect_imds() {
+        let _guard = crate::s3::creds::test_support::ENV_LOCK.blocking_lock();
+        let keys = [
+            "AWS_ENDPOINT_URL_STS",
+            "AWS_ENDPOINT_URL",
+            "AWS_EC2_METADATA_SERVICE_ENDPOINT",
+        ];
+        let prev: Vec<_> = keys.iter().map(|k| (*k, env::var(k).ok())).collect();
+        unsafe {
+            env::remove_var("AWS_EC2_METADATA_SERVICE_ENDPOINT");
+            env::set_var("AWS_ENDPOINT_URL_STS", "https://sts.example.com");
+            env::set_var("AWS_ENDPOINT_URL", "https://gateway.example.com");
+        }
+        let endpoint = IamRoleProvider::new().imds_endpoint();
+        for (key, value) in prev {
+            match value {
+                Some(v) => unsafe { env::set_var(key, v) },
+                None => unsafe { env::remove_var(key) },
+            }
+        }
+        assert_eq!(endpoint, DEFAULT_IMDS_ENDPOINT);
+    }
+
+    #[test]
     fn parses_successful_response() {
         let json = r#"{
             "Code": "Success",
