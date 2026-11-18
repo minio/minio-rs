@@ -299,6 +299,9 @@ pub struct MinioClientBuilder {
     ignore_cert_check: Option<bool>,
     /// Addresses that override DNS for the given domains.
     resolve: Vec<(String, Vec<SocketAddr>)>,
+    /// Unix socket every connection goes through instead of TCP.
+    #[cfg(unix)]
+    unix_socket: Option<PathBuf>,
     /// Set the app info as an Option of (app_name, app_version) pair. This will show up in the client's user-agent.
     app_info: Option<(String, String)>,
     /// Skip region lookup for MinIO servers (region is not used by MinIO).
@@ -320,6 +323,8 @@ impl MinioClientBuilder {
             ssl_cert_file: None,
             ignore_cert_check: None,
             resolve: Vec::new(),
+            #[cfg(unix)]
+            unix_socket: None,
             app_info: None,
             skip_region_lookup: false,
             unsigned_payload: false,
@@ -378,6 +383,21 @@ impl MinioClientBuilder {
     pub fn resolve_to_addrs(mut self, domain: &str, addrs: &[SocketAddr]) -> Self {
         self.resolve.retain(|(d, _)| d != domain);
         self.resolve.push((domain.to_string(), addrs.to_vec()));
+        self
+    }
+
+    /// Send every request of this client through the Unix socket at `path`
+    /// instead of dialing the base URL's host.
+    ///
+    /// The base URL keeps its host, so the `Host` header, request signing and,
+    /// for an `https` URL, TLS (SNI and the certificate check) work as they do
+    /// over TCP. Nothing is resolved through DNS, and the addresses given to
+    /// [`Self::resolve`] are not used. A credential provider that fetches
+    /// credentials over the network, such as the STS providers, makes its own
+    /// connections and does not use the socket.
+    #[cfg(unix)]
+    pub fn unix_socket(mut self, path: impl Into<PathBuf>) -> Self {
+        self.unix_socket = Some(path.into());
         self
     }
 
@@ -490,6 +510,11 @@ impl MinioClientBuilder {
 
         for (domain, addrs) in &self.resolve {
             builder = builder.resolve_to_addrs(domain, addrs);
+        }
+
+        #[cfg(unix)]
+        if let Some(path) = self.unix_socket {
+            builder = builder.unix_socket(path);
         }
 
         #[cfg(any(
@@ -1821,6 +1846,63 @@ mod tests {
             head.contains(&format!("host: aistor.invalid:{port}")),
             "{head}"
         );
+        conn.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n")
+            .await
+            .unwrap();
+        assert!(request.await.unwrap().unwrap().status().is_success());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn unix_socket_carries_the_request_with_the_url_host() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        struct RemoveOnDrop(PathBuf);
+        impl Drop for RemoveOnDrop {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+
+        // A Unix socket path holds at most about 104 bytes, so a long TMPDIR
+        // falls back to /tmp.
+        let name = format!("minio-rs-{}.sock", uuid::Uuid::new_v4());
+        let mut path = std::env::temp_dir().join(&name);
+        if path.as_os_str().len() > 100 {
+            path = Path::new("/tmp").join(&name);
+        }
+        let _socket = RemoveOnDrop(path.clone());
+        let listener = tokio::net::UnixListener::bind(&path).unwrap();
+        let base_url = "http://aistor.invalid:9000/".parse::<BaseUrl>().unwrap();
+        let client = MinioClientBuilder::new(base_url)
+            .unix_socket(&path)
+            .build()
+            .unwrap();
+
+        let mut request = tokio::spawn({
+            let http = client.http_client.clone();
+            async move { http.get("http://aistor.invalid:9000/").send().await }
+        });
+
+        let mut conn = tokio::select! {
+            accepted = tokio::time::timeout(std::time::Duration::from_secs(10), listener.accept()) => {
+                accepted.expect("no connection reached the socket").unwrap().0
+            }
+            result = &mut request => panic!("the request ended before connecting: {result:?}"),
+        };
+        let mut head = Vec::new();
+        let mut buf = [0u8; 1024];
+        while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+            let n = conn.read(&mut buf).await.unwrap();
+            assert!(n > 0, "connection closed before the request headers ended");
+            head.extend_from_slice(&buf[..n]);
+        }
+        let head = String::from_utf8_lossy(&head).into_owned();
+        let host = head.lines().find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.eq_ignore_ascii_case("host").then(|| value.trim())
+        });
+        assert_eq!(host, Some("aistor.invalid:9000"), "{head}");
         conn.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n")
             .await
             .unwrap();
