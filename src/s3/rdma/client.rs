@@ -167,6 +167,7 @@ impl MinioClient {
             part_number: 0,
             checksum_crc64nvme: None,
             etag: String::new(),
+            range_start: None,
         };
 
         // SAFETY: `_reg` keeps `buffer` registered for the whole call.
@@ -200,6 +201,47 @@ impl MinioClient {
         O: TryInto<ObjectKey>,
         O::Error: Into<ValidationErr>,
     {
+        self.rdma_get(bucket, object, None, buffer).await
+    }
+
+    /// Download `buffer.len()` bytes of `bucket`/`object` starting at `offset`
+    /// directly into `buffer` over RDMA, with a signed `Range` header.
+    ///
+    /// The returned [`RdmaResponse`] reports how many bytes the server moved,
+    /// which is less than `buffer.len()` when the range runs past the end of
+    /// the object.
+    ///
+    /// # Safety
+    /// `buffer` must wrap a live allocation valid for the call duration.
+    pub async fn rdma_get_object_range<B, O>(
+        &self,
+        bucket: B,
+        object: O,
+        offset: u64,
+        buffer: RdmaBuffer,
+    ) -> Result<RdmaResponse, RdmaError>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
+        self.rdma_get(bucket, object, Some(offset), buffer).await
+    }
+
+    async fn rdma_get<B, O>(
+        &self,
+        bucket: B,
+        object: O,
+        range_start: Option<u64>,
+        buffer: RdmaBuffer,
+    ) -> Result<RdmaResponse, RdmaError>
+    where
+        B: TryInto<BucketName>,
+        B::Error: Into<ValidationErr>,
+        O: TryInto<ObjectKey>,
+        O::Error: Into<ValidationErr>,
+    {
         let bucket: BucketName = bucket.try_into().map_err(Into::into)?;
         let object: ObjectKey = object.try_into().map_err(Into::into)?;
         let rdma = shared().ok_or(RdmaError::NotAvailable)?;
@@ -219,6 +261,7 @@ impl MinioClient {
             part_number: 0,
             checksum_crc64nvme: None,
             etag: String::new(),
+            range_start,
         };
 
         // SAFETY: `_reg` keeps `buffer` registered for the whole call.
@@ -280,6 +323,7 @@ impl MinioClient {
             part_number: part_number as u32,
             checksum_crc64nvme,
             etag: String::new(),
+            range_start: None,
         };
 
         // SAFETY: `_reg` keeps `buffer` registered for the whole call.

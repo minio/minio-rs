@@ -81,6 +81,9 @@ pub struct S3RdmaClientCtx {
     pub checksum_crc64nvme: Option<String>,
     /// ETag populated by callee on success.
     pub etag: String,
+    /// Byte offset to start a GET at; the length is the buffer's size.
+    /// `None` reads from the start of the object.
+    pub range_start: Option<u64>,
 }
 
 /// Outcome of an RDMA transfer.
@@ -402,6 +405,9 @@ pub async fn rdma_get(
     headers.add(X_AMZ_DATE, to_amz_date(date));
     headers.add(X_AMZ_CONTENT_SHA256, UNSIGNED_PAYLOAD);
     headers.add(X_AMZ_RDMA_TOKEN, rdma_token);
+    if let Some(start) = ctx.range_start {
+        headers.add(RANGE, format!("bytes={start}-{}", start + size.max(1) - 1));
+    }
 
     let creds = match fetch_credentials(client).await {
         Ok(creds) => creds,
@@ -676,6 +682,7 @@ mod tests {
             part_number: 0,
             checksum_crc64nvme: None,
             etag: String::new(),
+            range_start: None,
         }
     }
 
@@ -782,6 +789,62 @@ mod tests {
         assert!(
             request.contains(REFRESHED_SESSION_TOKEN),
             "session token from the refresh was not sent:\n{request}"
+        );
+    }
+
+    /// A GET with a range start sends a signed `Range` header that ends where
+    /// the buffer ends, and a 206 reply reports the bytes moved.
+    #[tokio::test]
+    async fn a_ranged_get_sends_a_signed_range_header() {
+        let response: &'static [u8] = b"HTTP/1.1 200 OK\r\nx-amz-rdma-reply: 206\r\nx-amz-rdma-bytes-transferred: 4096\r\nContent-Length: 0\r\n\r\n";
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let seen = Arc::new(Mutex::new(String::new()));
+        let server = tokio::spawn(serve_one(listener, response, Arc::clone(&seen)));
+
+        let client = client_for(addr, Some(RefreshOnlyProvider));
+        let mut ctx = test_ctx();
+        ctx.range_start = Some(1 << 20);
+        let outcome = rdma_get(&client, &mut ctx, &test_token(), 4096).await;
+
+        server.await.unwrap();
+        let request = seen.lock().unwrap().to_ascii_lowercase();
+        assert_eq!(outcome, 4096);
+        assert!(
+            request.contains("range: bytes=1048576-1052671"),
+            "no range header:\n{request}"
+        );
+        let signed = request
+            .split("signedheaders=")
+            .nth(1)
+            .and_then(|s| s.split(',').next())
+            .unwrap_or_default();
+        assert!(
+            signed.split(';').any(|h| h == "range"),
+            "range is not signed: {signed}"
+        );
+    }
+
+    /// A GET without a range start sends no `Range` header, so it still reads
+    /// from the start of the object.
+    #[tokio::test]
+    async fn a_get_without_a_range_sends_no_range_header() {
+        let response: &'static [u8] =
+            b"HTTP/1.1 200 OK\r\nx-amz-rdma-reply: 200\r\nContent-Length: 0\r\n\r\n";
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let seen = Arc::new(Mutex::new(String::new()));
+        let server = tokio::spawn(serve_one(listener, response, Arc::clone(&seen)));
+
+        let client = client_for(addr, Some(RefreshOnlyProvider));
+        let outcome = rdma_get(&client, &mut test_ctx(), &test_token(), 4096).await;
+
+        server.await.unwrap();
+        let request = seen.lock().unwrap().to_ascii_lowercase();
+        assert_eq!(outcome, 4096);
+        assert!(
+            !request.contains("\r\nrange:"),
+            "unexpected range header:\n{request}"
         );
     }
 
