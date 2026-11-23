@@ -196,6 +196,9 @@ pub struct RdmaToken {
     ptr: *mut c_char,
 }
 
+// SAFETY: the token owns its C string, which libs3rdma frees from any thread.
+unsafe impl Send for RdmaToken {}
+
 impl RdmaToken {
     pub fn as_cstr(&self) -> &CStr {
         unsafe { CStr::from_ptr(self.ptr) }
@@ -231,6 +234,10 @@ pub struct ScopedRegistration<'a> {
     ptr: *mut c_void,
     released: bool,
 }
+
+// SAFETY: deregistration goes through `RdmaClient`, which is `Send + Sync`;
+// the pointer only names the registered region and is never dereferenced here.
+unsafe impl Send for ScopedRegistration<'_> {}
 
 impl<'a> ScopedRegistration<'a> {
     /// # Safety

@@ -22,6 +22,7 @@ use dashmap::DashMap;
 use http::Method;
 use std::sync::LazyLock;
 
+use super::buffer::RdmaBuffer;
 use crate::s3::client::MinioClient;
 use crate::s3::creds::Credentials;
 use crate::s3::header_constants::*;
@@ -500,37 +501,42 @@ pub async fn rdma_get(
 /// registration covering it -- see [`ScopedRegistration`](super::ScopedRegistration).
 /// The remote reads that memory directly, so a stale pointer is a use-after-free
 /// the caller never observes locally.
-pub async unsafe fn rdma_put_with_retry(
-    rdma: &RdmaClient,
-    client: &MinioClient,
-    ctx: &mut S3RdmaClientCtx,
+pub unsafe fn rdma_put_with_retry<'a>(
+    rdma: &'a RdmaClient,
+    client: &'a MinioClient,
+    ctx: &'a mut S3RdmaClientCtx,
     buf_ptr: *mut libc::c_void,
     size: usize,
-) -> RdmaOutcome {
-    let mut last: isize = -1;
-    for _ in 0..RDMA_MAX_ATTEMPTS {
-        let token = match unsafe { rdma.get_rdma_token(buf_ptr, size, 0) } {
-            Some(t) => t,
-            None => return RdmaOutcome::Failed,
-        };
-        last = rdma_put(client, ctx, token.as_cstr(), size as u64).await;
-        if last > 0 || last == RDMA_NOT_SUPPORTED || last == RDMA_NO_RAIL_FAULT {
+) -> impl Future<Output = RdmaOutcome> + Send + 'a {
+    // SAFETY: the caller guarantees `buf_ptr` names a live, registered region
+    // for the whole call. Holding it as an `RdmaBuffer` keeps the future `Send`.
+    let buf = unsafe { RdmaBuffer::from_raw(buf_ptr, size) };
+    async move {
+        let mut last: isize = -1;
+        for _ in 0..RDMA_MAX_ATTEMPTS {
+            let token = match unsafe { rdma.get_rdma_token(buf.ptr(), size, 0) } {
+                Some(t) => t,
+                None => return RdmaOutcome::Failed,
+            };
+            last = rdma_put(client, ctx, token.as_cstr(), size as u64).await;
+            if last > 0 || last == RDMA_NOT_SUPPORTED || last == RDMA_NO_RAIL_FAULT {
+                drop(token);
+                break;
+            }
+            // The transfer failed on the wire. Charge it to the rail this token
+            // named, so the next request skips that rail rather than
+            // round-robinning back onto it. Two results are excluded above: a 501,
+            // because the server declining RDMA says nothing about the rail, and a
+            // local error, because nothing was ever sent.
+            //
+            // A server-side failure marks every rail in turn, which is safe: the
+            // library clears all marks once no rail is left usable, so a fault
+            // that was never the fabric's heals itself.
+            rdma.report_token_failure(token.as_cstr());
             drop(token);
-            break;
         }
-        // The transfer failed on the wire. Charge it to the rail this token
-        // named, so the next request skips that rail rather than
-        // round-robinning back onto it. Two results are excluded above: a 501,
-        // because the server declining RDMA says nothing about the rail, and a
-        // local error, because nothing was ever sent.
-        //
-        // A server-side failure marks every rail in turn, which is safe: the
-        // library clears all marks once no rail is left usable, so a fault
-        // that was never the fabric's heals itself.
-        rdma.report_token_failure(token.as_cstr());
-        drop(token);
+        RdmaOutcome::from_ssize(last, size)
     }
-    RdmaOutcome::from_ssize(last, size)
 }
 
 /// GET into a registered buffer.
@@ -539,29 +545,34 @@ pub async unsafe fn rdma_put_with_retry(
 /// Same contract as [`rdma_put_with_retry`]: `buf_ptr` must name a live,
 /// registered `size`-byte region for the whole call. The remote writes into
 /// that memory directly.
-pub async unsafe fn rdma_get_with_retry(
-    rdma: &RdmaClient,
-    client: &MinioClient,
-    ctx: &mut S3RdmaClientCtx,
+pub unsafe fn rdma_get_with_retry<'a>(
+    rdma: &'a RdmaClient,
+    client: &'a MinioClient,
+    ctx: &'a mut S3RdmaClientCtx,
     buf_ptr: *mut libc::c_void,
     size: usize,
-) -> RdmaOutcome {
-    let mut last: isize = -1;
-    for _ in 0..RDMA_MAX_ATTEMPTS {
-        let token = match unsafe { rdma.get_rdma_token(buf_ptr, size, 0) } {
-            Some(t) => t,
-            None => return RdmaOutcome::Failed,
-        };
-        last = rdma_get(client, ctx, token.as_cstr(), size as u64).await;
-        if last > 0 || last == RDMA_NOT_SUPPORTED || last == RDMA_NO_RAIL_FAULT {
+) -> impl Future<Output = RdmaOutcome> + Send + 'a {
+    // SAFETY: the caller guarantees `buf_ptr` names a live, registered region
+    // for the whole call. Holding it as an `RdmaBuffer` keeps the future `Send`.
+    let buf = unsafe { RdmaBuffer::from_raw(buf_ptr, size) };
+    async move {
+        let mut last: isize = -1;
+        for _ in 0..RDMA_MAX_ATTEMPTS {
+            let token = match unsafe { rdma.get_rdma_token(buf.ptr(), size, 0) } {
+                Some(t) => t,
+                None => return RdmaOutcome::Failed,
+            };
+            last = rdma_get(client, ctx, token.as_cstr(), size as u64).await;
+            if last > 0 || last == RDMA_NOT_SUPPORTED || last == RDMA_NO_RAIL_FAULT {
+                drop(token);
+                break;
+            }
+            // See rdma_put_with_retry: take the failing rail out of rotation.
+            rdma.report_token_failure(token.as_cstr());
             drop(token);
-            break;
         }
-        // See rdma_put_with_retry: take the failing rail out of rotation.
-        rdma.report_token_failure(token.as_cstr());
-        drop(token);
+        RdmaOutcome::from_ssize(last, size)
     }
-    RdmaOutcome::from_ssize(last, size)
 }
 
 #[cfg(test)]

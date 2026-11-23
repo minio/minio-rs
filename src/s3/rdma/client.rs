@@ -503,3 +503,26 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod send_tests {
+    use super::*;
+    use crate::s3::creds::StaticProvider;
+    use crate::s3::http::BaseUrl;
+
+    fn assert_send<T: Send>(_: &T) {}
+
+    /// The RDMA calls must be usable from tasks on a multi-threaded runtime,
+    /// such as `tokio::spawn`, so the futures they return must be `Send`.
+    #[test]
+    fn rdma_futures_are_send() {
+        let base: BaseUrl = "http://127.0.0.1:9000".parse().unwrap();
+        let client =
+            MinioClient::new(base, Some(StaticProvider::new("a", "b", None)), None, None).unwrap();
+        let buf = unsafe { RdmaBuffer::from_raw(std::ptr::null_mut(), 0) };
+        assert_send(&client.rdma_put_object("b", "o", buf));
+        assert_send(&client.rdma_get_object("b", "o", buf));
+        assert_send(&client.rdma_get_object_range("b", "o", 0, buf));
+        assert_send(&client.rdma_upload_part("b", "o", "u", 1, buf, None));
+    }
+}
