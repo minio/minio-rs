@@ -138,6 +138,10 @@ name = "get_put_rdma"
 required-features = ["rdma"]
 
 [[example]]
+name = "rdma_range_get"
+required-features = ["rdma"]
+
+[[example]]
 name = "gpu_host_disk"
 required-features = ["rdma"]
 
