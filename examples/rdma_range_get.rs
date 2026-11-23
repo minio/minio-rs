@@ -77,7 +77,11 @@ async fn main() -> ExitCode {
         return ExitCode::from(2);
     }
 
-    let object = format!("rdma-range-{}", std::process::id());
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let object = format!("rdma-range-{nanos:x}-{}", std::process::id());
     let mut src = Aligned::new(SIZE);
     for (i, b) in src.bytes().iter_mut().enumerate() {
         *b = pattern(i);

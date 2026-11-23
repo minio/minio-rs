@@ -406,7 +406,10 @@ pub async fn rdma_get(
     headers.add(X_AMZ_CONTENT_SHA256, UNSIGNED_PAYLOAD);
     headers.add(X_AMZ_RDMA_TOKEN, rdma_token);
     if let Some(start) = ctx.range_start {
-        headers.add(RANGE, format!("bytes={start}-{}", start + size.max(1) - 1));
+        let Some(end) = start.checked_add(size.max(1) - 1) else {
+            return RDMA_NO_RAIL_FAULT;
+        };
+        headers.add(RANGE, format!("bytes={start}-{end}"));
     }
 
     let creds = match fetch_credentials(client).await {
@@ -861,6 +864,20 @@ mod tests {
         );
         assert_eq!(
             rdma_get(&client, &mut test_ctx(), &test_token(), 4096).await,
+            RDMA_NO_RAIL_FAULT
+        );
+    }
+
+    /// A range whose end does not fit in a u64 is refused before anything is
+    /// sent, as a failure that is not the rail's. The address has no listener,
+    /// so a request that did go out would report -1 instead.
+    #[tokio::test]
+    async fn a_range_past_the_largest_offset_is_refused() {
+        let client = client_for(unreachable_addr().await, Some(RefreshOnlyProvider));
+        let mut ctx = test_ctx();
+        ctx.range_start = Some(u64::MAX - 100);
+        assert_eq!(
+            rdma_get(&client, &mut ctx, &test_token(), 4096).await,
             RDMA_NO_RAIL_FAULT
         );
     }
